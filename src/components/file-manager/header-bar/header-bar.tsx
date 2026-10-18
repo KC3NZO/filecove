@@ -1,16 +1,22 @@
+import type { ReactNode } from "react";
+
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { Icon } from "../../icons";
 import { HEADER_HEIGHT, rootMedium, rootWide } from "../layout";
-import PathBar from "./path-bar";
 
-import type { PathSegment, ViewMode } from "../types";
+import type { ViewMode } from "../types";
 
 interface HeaderBarProps {
-    path: PathSegment[];
+    /** Centre slot, normally the path bar. */
+    pathBar: ReactNode;
+    canGoBack: boolean;
+    canGoForward: boolean;
     view: ViewMode;
+    onBack: () => void;
+    onForward: () => void;
     onToggleView: () => void;
     onOpenSidebar: () => void;
 }
@@ -49,20 +55,29 @@ const mediumUpSx: SxProps<Theme> = {
     [rootMedium]: { display: "inline-flex" },
 };
 
-const HeaderBar = ({ path, view, onToggleView, onOpenSidebar }: HeaderBarProps) => (
+const HeaderBar = ({
+    pathBar,
+    canGoBack,
+    canGoForward,
+    view,
+    onBack,
+    onForward,
+    onToggleView,
+    onOpenSidebar,
+}: HeaderBarProps) => (
     <Box sx={headerSx}>
         <Box sx={startGroupSx}>
             <IconButton aria-label="Show sidebar" sx={collapsedOnlySx} onClick={onOpenSidebar}>
                 <Icon name="menu" fontSize="small" />
             </IconButton>
-            <IconButton aria-label="Back">
+            <IconButton aria-label="Back" disabled={!canGoBack} onClick={onBack}>
                 <Icon name="arrowBack" fontSize="small" />
             </IconButton>
-            <IconButton aria-label="Forward" sx={mediumUpSx}>
+            <IconButton aria-label="Forward" disabled={!canGoForward} sx={mediumUpSx} onClick={onForward}>
                 <Icon name="arrowForward" fontSize="small" />
             </IconButton>
         </Box>
-        <PathBar path={path} />
+        {pathBar}
         <Box sx={endGroupSx}>
             <IconButton aria-label="Search" sx={collapsedOnlySx}>
                 <Icon name="search" fontSize="small" />

@@ -4,6 +4,8 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { Icon } from "../../icons";
+import { belowElement, pointerPosition } from "../context-menu/position";
+import { describeDate, describeSize, describeType } from "../format";
 import { viewMedium, viewWide } from "../layout";
 import { selectedBackground, stripeBackground } from "../styles";
 import ItemIcon from "./item-icon";
@@ -11,9 +13,9 @@ import ItemIcon from "./item-icon";
 import type { FileViewProps } from "../types";
 
 // `--columns` holds the tracks shared by the header and every row. It grows with the view:
-// name only, then size, modified and star, then type as well.
+// name and menu button, then size and modified, then type as well.
 const listSx: SxProps<Theme> = {
-    "--columns": "minmax(0, 1fr)",
+    "--columns": "minmax(0, 1fr) 2.5rem",
     px: 1,
     pt: 1,
     pb: 2,
@@ -66,6 +68,11 @@ const rowSx: SxProps<Theme> = (theme) => ({
     "&:nth-of-type(odd)": { bgcolor: stripeBackground(theme) },
     "&:hover": { bgcolor: "action.hover" },
     '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
+    // The menu button shows on hover, on focus and for the selected row; always on touch screens.
+    "& [data-menu-button]": { opacity: 0 },
+    '&:hover [data-menu-button], &[data-selected="true"] [data-menu-button], & [data-menu-button].Mui-focusVisible':
+        { opacity: 1 },
+    "@media (hover: none)": { "& [data-menu-button]": { opacity: 1 } },
     [viewMedium]: { minHeight: 44 },
 });
 
@@ -116,21 +123,16 @@ const modifiedCellSx: SxProps<Theme> = {
     [viewMedium]: { display: "block" },
 };
 
-const starCellSx: SxProps<Theme> = {
-    display: "none",
+const menuCellSx: SxProps<Theme> = {
+    display: "flex",
     justifyContent: "center",
-    [viewMedium]: { display: "flex" },
 };
 
-const starSx: SxProps<Theme> = {
+const menuButtonSx: SxProps<Theme> = {
     color: "text.secondary",
 };
 
-const starredSx: SxProps<Theme> = {
-    color: "primary.main",
-};
-
-const FileList = ({ items, selectedId, onSelect }: FileViewProps) => (
+const FileList = ({ entries, selectedId, hasActions, onSelect, onOpen, onMenu }: FileViewProps) => (
     <Box sx={listSx}>
         <Box sx={headerRowSx}>
             <Box sx={nameHeaderSx}>
@@ -140,45 +142,64 @@ const FileList = ({ items, selectedId, onSelect }: FileViewProps) => (
             <Box sx={sizeCellSx}>Size</Box>
             <Box sx={typeCellSx}>Type</Box>
             <Box sx={modifiedCellSx}>Modified</Box>
-            <Box sx={starCellSx} />
+            <Box />
         </Box>
         <Box sx={rowsSx}>
-            {items.map((item) => (
+            {entries.map((entry) => (
                 <Box
-                    key={item.id}
+                    key={entry.id}
                     sx={rowSx}
-                    data-selected={item.id === selectedId}
-                    onClick={() => onSelect(item.id)}
+                    data-selected={entry.id === selectedId}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onSelect(entry.id);
+                    }}
+                    onDoubleClick={() => onOpen(entry)}
+                    onContextMenu={(event) => {
+                        event.stopPropagation();
+
+                        if (onMenu(pointerPosition(event), entry)) {
+                            event.preventDefault();
+                        }
+                    }}
                 >
                     <Box sx={nameCellSx}>
-                        <ItemIcon item={item} size="1.75rem" />
+                        <ItemIcon entry={entry} size="1.75rem" />
                         <Box sx={nameTextSx}>
                             <Typography variant="body2" noWrap>
-                                {item.name}
+                                {entry.name}
                             </Typography>
                             <Typography variant="caption" noWrap sx={secondaryLineSx}>
-                                {item.size} · {item.modified}
+                                {describeSize(entry)} · {describeDate(entry)}
                             </Typography>
                         </Box>
                     </Box>
                     <Typography variant="body2" color="text.secondary" noWrap sx={sizeCellSx}>
-                        {item.size}
+                        {describeSize(entry)}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" noWrap sx={typeCellSx}>
-                        {item.type}
+                        {describeType(entry)}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" noWrap sx={modifiedCellSx}>
-                        {item.modified}
+                        {describeDate(entry)}
                     </Typography>
-                    <Box sx={starCellSx}>
-                        <IconButton
-                            size="small"
-                            aria-label={item.starred ? "Unstar" : "Star"}
-                            aria-pressed={!!item.starred}
-                            sx={item.starred ? starredSx : starSx}
-                        >
-                            <Icon name={item.starred ? "star" : "starBorder"} fontSize="small" />
-                        </IconButton>
+                    <Box sx={menuCellSx}>
+                        {hasActions && (
+                            <IconButton
+                                size="small"
+                                aria-label={`Actions for ${entry.name}`}
+                                data-menu-button
+                                sx={menuButtonSx}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onSelect(entry.id);
+                                    onMenu(belowElement(event.currentTarget), entry);
+                                }}
+                                onDoubleClick={(event) => event.stopPropagation()}
+                            >
+                                <Icon name="more" fontSize="small" />
+                            </IconButton>
+                        )}
                     </Box>
                 </Box>
             ))}

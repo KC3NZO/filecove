@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useState } from "react";
+import { Fragment, useCallback } from "react";
 import type { KeyboardEvent } from "react";
 
 import Box from "@mui/material/Box";
@@ -9,18 +9,22 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { Icon } from "../../icons";
 import { HEADER_HEIGHT, SIDEBAR_WIDTH, rootWide } from "../layout";
-import LocationItem from "./location-item";
+import SectionItem from "./location-item";
 
-import type { LocationSection } from "../types";
+import type { OpenMenu, Place, SectionGroup } from "../types";
 
 interface SidebarProps {
     title: string;
-    sections: LocationSection[];
+    groups: SectionGroup[];
+    expanded: ReadonlySet<string>;
+    /** `folderKey` of the open folder. */
+    selectedKey: string | null;
     /** Whether the overlay is showing while the sidebar is collapsed; has no effect once it docks. */
     open: boolean;
+    onToggle: (key: string) => void;
+    onNavigate: (place: Place) => void;
+    onOpenMenu: OpenMenu;
     onClose: () => void;
-    defaultSelected?: string;
-    defaultExpanded?: string[];
 }
 
 const sidebarSx: SxProps<Theme> = (theme) => ({
@@ -87,10 +91,10 @@ const navSx: SxProps<Theme> = {
     pb: 1,
 };
 
-const sectionTitleSx: SxProps<Theme> = {
+const groupTitleSx: SxProps<Theme> = {
     display: "block",
     px: 1.5,
-    pt: 1,
+    pt: 0.5,
     pb: 0.5,
     color: "text.secondary",
     fontWeight: 600,
@@ -109,32 +113,24 @@ const dividerSx: SxProps<Theme> = {
     my: 1,
 };
 
-const Sidebar = ({ title, sections, open, onClose, defaultSelected, defaultExpanded }: SidebarProps) => {
-    const [selected, setSelected] = useState(defaultSelected);
-    const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(defaultExpanded));
-
-    const handleToggle = useCallback((id: string) => {
-        setExpanded((prev) => {
-            const next = new Set(prev);
-
-            if (next.has(id)) {
-                next.delete(id);
-            } else {
-                next.add(id);
-            }
-
-            return next;
-        });
-    }, []);
-
-    // Opening a location also reveals its sub-tree, the way Explorer's navigation pane does.
-    const handleSelect = useCallback(
-        (id: string) => {
-            setSelected(id);
-            setExpanded((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+const Sidebar = ({
+    title,
+    groups,
+    expanded,
+    selectedKey,
+    open,
+    onToggle,
+    onNavigate,
+    onOpenMenu,
+    onClose,
+}: SidebarProps) => {
+    // Picking a location closes the overlay; expanding a folder doesn't, so the tree can be browsed in it.
+    const handleNavigate = useCallback(
+        (place: Place) => {
+            onNavigate(place);
             onClose();
         },
-        [onClose],
+        [onNavigate, onClose],
     );
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -156,25 +152,25 @@ const Sidebar = ({ title, sections, open, onClose, defaultSelected, defaultExpan
                     <Icon name="menu" fontSize="small" />
                 </IconButton>
             </Box>
-            <Box component="nav" aria-label="Locations" sx={navSx}>
-                {sections.map((section, index) => (
-                    <Fragment key={section.id}>
+            <Box component="nav" aria-label="Sections" sx={navSx}>
+                {groups.map((group, index) => (
+                    <Fragment key={group.id}>
                         {index > 0 && <Divider sx={dividerSx} />}
-                        {section.title && (
-                            <Typography variant="caption" sx={sectionTitleSx}>
-                                {section.title}
+                        {group.title && (
+                            <Typography variant="caption" sx={groupTitleSx}>
+                                {group.title}
                             </Typography>
                         )}
                         <Box component="ul" sx={listSx}>
-                            {section.locations.map((node) => (
-                                <LocationItem
-                                    key={node.id}
-                                    node={node}
-                                    depth={0}
-                                    selected={selected}
+                            {group.sections.map((section) => (
+                                <SectionItem
+                                    key={section.id}
+                                    section={section}
                                     expanded={expanded}
-                                    onSelect={handleSelect}
-                                    onToggle={handleToggle}
+                                    selectedKey={selectedKey}
+                                    onToggle={onToggle}
+                                    onNavigate={handleNavigate}
+                                    onOpenMenu={onOpenMenu}
                                 />
                             ))}
                         </Box>

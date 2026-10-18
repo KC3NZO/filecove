@@ -4,12 +4,24 @@ import IconButton from "@mui/material/IconButton";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { Icon } from "../../icons";
+import { belowElement } from "../context-menu/position";
+import IconSlot from "../icon-slot";
 import { focusRing } from "../styles";
 
-import type { PathSegment } from "../types";
+import type { FolderRef, IconSource, OpenMenu, Place, Section } from "../types";
 
 interface PathBarProps {
-    path: PathSegment[];
+    section: Section;
+    trail: FolderRef[];
+    hasActions: boolean;
+    onNavigate: (place: Place) => void;
+    onOpenMenu: OpenMenu;
+}
+
+interface Segment {
+    id: string;
+    label: string;
+    icon?: IconSource;
 }
 
 const barSx: SxProps<Theme> = {
@@ -17,7 +29,7 @@ const barSx: SxProps<Theme> = {
     alignItems: "center",
     minWidth: 0,
     height: 34,
-    pl: 0.5,
+    px: 0.5,
     borderRadius: 2,
     bgcolor: "action.hover",
 };
@@ -68,7 +80,6 @@ const segmentSx: SxProps<Theme> = {
     whiteSpace: "nowrap",
     "&:hover": { bgcolor: "action.hover", color: "text.primary" },
     '&[aria-current="location"]': { color: "text.primary", fontWeight: 700 },
-    "& > svg": { flexShrink: 0 },
     ...focusRing,
 };
 
@@ -79,37 +90,60 @@ const labelSx: SxProps<Theme> = {
 };
 
 const menuButtonSx: SxProps<Theme> = {
-    mx: 0.25,
+    ml: 0.25,
 };
 
-const PathBar = ({ path }: PathBarProps) => (
-    <Box component="nav" aria-label="Path" sx={barSx}>
-        <Box sx={scrollerSx}>
-            <Box component="ol" sx={trackSx}>
-                {path.map((segment, index) => (
-                    <Box component="li" key={segment.id} sx={itemSx}>
-                        {index > 0 && (
-                            <Box component="span" aria-hidden sx={separatorSx}>
-                                /
-                            </Box>
-                        )}
-                        <ButtonBase
-                            sx={segmentSx}
-                            aria-current={index === path.length - 1 ? "location" : undefined}
-                        >
-                            {segment.icon && <Icon name={segment.icon} fontSize="small" />}
-                            <Box component="span" sx={labelSx}>
-                                {segment.label}
-                            </Box>
-                        </ButtonBase>
-                    </Box>
-                ))}
+/** The section's name first, then the folders opened below its root. */
+const PathBar = ({ section, trail, hasActions, onNavigate, onOpenMenu }: PathBarProps) => {
+    const segments: Segment[] = [
+        { id: section.rootId, label: section.label, icon: section.icon },
+        ...trail.map((folder) => ({ id: folder.id, label: folder.name })),
+    ];
+
+    return (
+        <Box component="nav" aria-label="Path" sx={barSx}>
+            <Box sx={scrollerSx}>
+                <Box component="ol" sx={trackSx}>
+                    {segments.map((segment, index) => (
+                        <Box component="li" key={segment.id} sx={itemSx}>
+                            {index > 0 && (
+                                <Box component="span" aria-hidden sx={separatorSx}>
+                                    /
+                                </Box>
+                            )}
+                            <ButtonBase
+                                sx={segmentSx}
+                                aria-current={index === segments.length - 1 ? "location" : undefined}
+                                onClick={() => onNavigate({ sectionId: section.id, trail: trail.slice(0, index) })}
+                            >
+                                {segment.icon && <IconSlot icon={segment.icon} />}
+                                <Box component="span" sx={labelSx}>
+                                    {segment.label}
+                                </Box>
+                            </ButtonBase>
+                        </Box>
+                    ))}
+                </Box>
             </Box>
+            {hasActions && (
+                <IconButton
+                    size="small"
+                    aria-label="Folder menu"
+                    sx={menuButtonSx}
+                    onClick={(event) =>
+                        onOpenMenu(belowElement(event.currentTarget), {
+                            target: "folder",
+                            section,
+                            trail,
+                            entries: [],
+                        })
+                    }
+                >
+                    <Icon name="more" fontSize="small" />
+                </IconButton>
+            )}
         </Box>
-        <IconButton size="small" aria-label="Folder menu" sx={menuButtonSx}>
-            <Icon name="more" fontSize="small" />
-        </IconButton>
-    </Box>
-);
+    );
+};
 
 export default PathBar;

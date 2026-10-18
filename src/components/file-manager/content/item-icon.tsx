@@ -1,17 +1,17 @@
 import { FileTypeIcon, FolderTypeIcon } from "../../icons";
 
-import type { FileItem } from "../types";
+import type { FileEntry } from "../adapter";
 
 interface ItemIconProps {
-    item: FileItem;
+    entry: FileEntry;
     size: string;
 }
 
-const ItemIcon = ({ item, size }: ItemIconProps) =>
-    item.kind === "folder" ? (
-        <FolderTypeIcon folderName={item.name} size={size} />
+const ItemIcon = ({ entry, size }: ItemIconProps) =>
+    entry.kind === "folder" ? (
+        <FolderTypeIcon folderName={entry.name} size={size} />
     ) : (
-        <FileTypeIcon fileName={item.name} size={size} />
+        <FileTypeIcon fileName={entry.name} size={size} />
     );
 
 export default ItemIcon;

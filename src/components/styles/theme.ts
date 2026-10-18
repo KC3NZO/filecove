@@ -29,6 +29,11 @@ const theme = createTheme({
         MuiButtonBase: {
             defaultProps: { disableRipple: true },
         },
+        MuiButton: {
+            styleOverrides: {
+                root: { textTransform: "none" },
+            },
+        },
         MuiIconButton: {
             styleOverrides: {
                 root: ({ theme }) => ({

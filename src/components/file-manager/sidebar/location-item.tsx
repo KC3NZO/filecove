@@ -1,36 +1,80 @@
-import type { CSSProperties } from "react";
+import { useMemo } from "react";
+import type { CSSProperties, MouseEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
+import CircularProgress from "@mui/material/CircularProgress";
 import Collapse from "@mui/material/Collapse";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { FolderTypeIcon, Icon } from "../../icons";
+import { pointerPosition } from "../context-menu/position";
+import { useFolder } from "../data/data-context";
+import { folderKey } from "../data/folder-store";
+import { compareEntries } from "../format";
+import IconSlot from "../icon-slot";
 import { focusRing, selectedBackground } from "../styles";
 
-import type { LocationNode } from "../types";
+import type { FileEntry } from "../adapter";
+import type { FolderState } from "../data/folder-store";
+import type { FolderRef, MenuPosition, OpenMenu, Place, Section } from "../types";
 
-interface LocationItemProps {
-    node: LocationNode;
-    /** 0 for a top-level place, 1 and up for folders in its tree. */
-    depth: number;
-    selected: string | undefined;
+/** Props every item of a section's tree passes down unchanged. */
+interface TreeProps {
+    section: Section;
     expanded: ReadonlySet<string>;
-    onSelect: (id: string) => void;
-    onToggle: (id: string) => void;
+    /** `folderKey` of the open folder. */
+    selectedKey: string | null;
+    onToggle: (key: string) => void;
+    onNavigate: (place: Place) => void;
+    onOpenMenu: OpenMenu;
+}
+
+interface FolderItemProps extends TreeProps {
+    entry: FileEntry;
+    depth: number;
+    parentTrail: FolderRef[];
+}
+
+interface FolderChildrenProps extends TreeProps {
+    state: FolderState | undefined;
+    /** Depth of the child rows. */
+    depth: number;
+    /** Trail to the folder whose children these are. */
+    trail: FolderRef[];
+    onRetry: () => void;
+}
+
+interface TreeRowProps {
+    variant: "section" | "folder";
+    icon: ReactNode;
+    label: string;
+    selected: boolean;
+    expandable: boolean;
+    expanded: boolean;
+    loading: boolean;
+    onSelect: () => void;
+    onToggle: () => void;
+    onMenu: (position: MenuPosition) => boolean;
 }
 
 /*
  * Tree geometry, in px. Each `<li>` sets `--depth`, and every offset below is derived from it.
- * A level's guide line runs through the centre of its parent's chevron, or through the place
- * icon for the first level, so the tree visibly hangs from the place it belongs to.
+ * A level's guide line runs through the centre of its parent's chevron, or through the section
+ * icon for the first level, so the tree visibly hangs from the section it belongs to.
  */
 const INSET = 12;
 const INDENT = 16;
 const CHEVRON = 20;
 
+const ROOT_TRAIL: FolderRef[] = [];
+
 const indent = (extra: number) => `calc(${INSET + extra}px + var(--depth) * ${INDENT}px)`;
+
+const depthStyle = (depth: number) => ({ "--depth": depth }) as CSSProperties;
+
+const isFolder = (entry: FileEntry) => entry.kind === "folder";
 
 const itemSx: SxProps<Theme> = {
     listStyle: "none",
@@ -47,7 +91,7 @@ const rowSx: SxProps<Theme> = (theme) => ({
     },
 });
 
-const placeButtonSx: SxProps<Theme> = {
+const sectionButtonSx: SxProps<Theme> = {
     width: "100%",
     minHeight: 36,
     justifyContent: "flex-start",
@@ -59,7 +103,7 @@ const placeButtonSx: SxProps<Theme> = {
     ...focusRing,
 };
 
-const nodeButtonSx: SxProps<Theme> = {
+const folderButtonSx: SxProps<Theme> = {
     width: "100%",
     minHeight: 30,
     justifyContent: "flex-start",
@@ -71,19 +115,19 @@ const nodeButtonSx: SxProps<Theme> = {
     ...focusRing,
 };
 
-const placeLabelSx: SxProps<Theme> = {
+const sectionLabelSx: SxProps<Theme> = {
     minWidth: 0,
     fontSize: "0.875rem",
 };
 
-const nodeLabelSx: SxProps<Theme> = {
+const folderLabelSx: SxProps<Theme> = {
     minWidth: 0,
     fontSize: "0.8125rem",
 };
 
-// Places keep the plain GNOME look, so their toggle only shows on hover, on keyboard focus,
+// Sections keep the plain GNOME look, so their toggle only shows on hover, on keyboard focus,
 // while expanded, or always on touch screens where there is no hover.
-const placeToggleSx: SxProps<Theme> = {
+const sectionToggleSx: SxProps<Theme> = {
     position: "absolute",
     top: "50%",
     right: 6,
@@ -102,7 +146,7 @@ const placeToggleSx: SxProps<Theme> = {
     ...focusRing,
 };
 
-const nodeToggleSx: SxProps<Theme> = {
+const folderToggleSx: SxProps<Theme> = {
     position: "absolute",
     top: "50%",
     left: indent(0),
@@ -133,56 +177,127 @@ const childListSx: SxProps<Theme> = {
     },
 };
 
-const LocationItem = ({ node, depth, selected, expanded, onSelect, onToggle }: LocationItemProps) => {
-    const isPlace = depth === 0;
-    const isSelected = selected === node.id;
-    const hasChildren = !!node.children?.length;
-    const isExpanded = hasChildren && expanded.has(node.id);
+const errorRowSx: SxProps<Theme> = {
+    listStyle: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: 1,
+    minHeight: 30,
+    pl: indent(CHEVRON + 4),
+    color: "error.main",
+    fontSize: "0.8125rem",
+};
 
-    const toggle = hasChildren && (
-        <ButtonBase
-            sx={isPlace ? placeToggleSx : nodeToggleSx}
-            aria-label={`${node.label} folders`}
-            aria-expanded={isExpanded}
-            onClick={() => onToggle(node.id)}
-        >
-            <Icon name="chevronRight" />
-        </ButtonBase>
-    );
+const retrySx: SxProps<Theme> = {
+    px: 0.75,
+    borderRadius: 1,
+    color: "text.secondary",
+    fontSize: "inherit",
+    textDecoration: "underline",
+    "&:hover": { color: "text.primary" },
+    ...focusRing,
+};
+
+const TreeRow = ({
+    variant,
+    icon,
+    label,
+    selected,
+    expandable,
+    expanded,
+    loading,
+    onSelect,
+    onToggle,
+    onMenu,
+}: TreeRowProps) => {
+    const isSection = variant === "section";
+
+    const handleContextMenu = (event: MouseEvent) => {
+        if (onMenu(pointerPosition(event))) {
+            event.preventDefault();
+        }
+    };
 
     return (
-        <Box component="li" sx={itemSx} style={{ "--depth": depth } as CSSProperties}>
-            <Box sx={rowSx} data-selected={isSelected}>
+        <Box sx={rowSx} data-selected={selected} onContextMenu={handleContextMenu}>
+            <ButtonBase
+                sx={isSection ? sectionButtonSx : folderButtonSx}
+                aria-current={selected ? "page" : undefined}
+                onClick={onSelect}
+            >
+                {icon}
+                <Typography component="span" noWrap sx={isSection ? sectionLabelSx : folderLabelSx}>
+                    {label}
+                </Typography>
+            </ButtonBase>
+            {expandable && (
                 <ButtonBase
-                    sx={isPlace ? placeButtonSx : nodeButtonSx}
-                    aria-current={isSelected ? "page" : undefined}
-                    onClick={() => onSelect(node.id)}
+                    sx={isSection ? sectionToggleSx : folderToggleSx}
+                    aria-label={`${label} folders`}
+                    aria-expanded={expanded}
+                    onClick={onToggle}
                 >
-                    {node.icon ? (
-                        <Icon name={node.icon} fontSize="small" />
-                    ) : (
-                        <FolderTypeIcon folderName={node.label} size={isPlace ? "1.25rem" : "1.125rem"} />
-                    )}
-                    <Typography component="span" noWrap sx={isPlace ? placeLabelSx : nodeLabelSx}>
-                        {node.label}
-                    </Typography>
+                    {loading ? <CircularProgress size={12} color="inherit" /> : <Icon name="chevronRight" />}
                 </ButtonBase>
-                {toggle}
+            )}
+        </Box>
+    );
+};
+
+/** The sub-folders of a listed folder, or why they couldn't be listed. */
+const FolderChildren = ({ state, depth, trail, onRetry, ...tree }: FolderChildrenProps) => {
+    const folders = useMemo(() => state?.entries?.filter(isFolder).sort(compareEntries) ?? [], [state?.entries]);
+
+    if (state?.status === "error") {
+        return (
+            <Box component="li" sx={errorRowSx} style={depthStyle(depth)}>
+                Couldn't load
+                <ButtonBase sx={retrySx} onClick={onRetry}>
+                    Retry
+                </ButtonBase>
             </Box>
-            {hasChildren && (
+        );
+    }
+
+    return folders.map((entry) => (
+        <FolderItem key={entry.id} entry={entry} depth={depth} parentTrail={trail} {...tree} />
+    ));
+};
+
+const FolderItem = ({ entry, depth, parentTrail, ...tree }: FolderItemProps) => {
+    const { section, expanded, selectedKey, onToggle, onNavigate, onOpenMenu } = tree;
+    const key = folderKey(section.id, entry.id);
+    const isExpanded = expanded.has(key);
+    const { state, reload } = useFolder(section, entry.id, isExpanded && entry.hasSubfolders !== false);
+
+    const trail = useMemo(
+        () => [...parentTrail, { id: entry.id, name: entry.name }],
+        [parentTrail, entry.id, entry.name],
+    );
+
+    const hasNoFolders =
+        entry.hasSubfolders === false || (state?.status === "ready" && !state.entries?.some(isFolder));
+
+    return (
+        <Box component="li" sx={itemSx} style={depthStyle(depth)}>
+            <TreeRow
+                variant="folder"
+                icon={<FolderTypeIcon folderName={entry.name} size="1.125rem" />}
+                label={entry.name}
+                selected={selectedKey === key}
+                expandable={!hasNoFolders}
+                expanded={isExpanded}
+                loading={state?.status === "loading" && !state.entries}
+                onSelect={() => onNavigate({ sectionId: section.id, trail })}
+                onToggle={() => onToggle(key)}
+                onMenu={(position) =>
+                    onOpenMenu(position, { target: "selection", section, trail: parentTrail, entries: [entry] })
+                }
+            />
+            {!hasNoFolders && (
                 <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                     <Box component="ul" sx={childListSx}>
-                        {node.children?.map((child) => (
-                            <LocationItem
-                                key={child.id}
-                                node={child}
-                                depth={depth + 1}
-                                selected={selected}
-                                expanded={expanded}
-                                onSelect={onSelect}
-                                onToggle={onToggle}
-                            />
-                        ))}
+                        <FolderChildren {...tree} state={state} depth={depth + 1} trail={trail} onRetry={reload} />
                     </Box>
                 </Collapse>
             )}
@@ -190,4 +305,40 @@ const LocationItem = ({ node, depth, selected, expanded, onSelect, onToggle }: L
     );
 };
 
-export default LocationItem;
+/** A section's row, with its root's folders as a lazily loaded tree beneath it. */
+const SectionItem = (tree: TreeProps) => {
+    const { section, expanded, selectedKey, onToggle, onNavigate, onOpenMenu } = tree;
+    const key = folderKey(section.id, section.rootId);
+    const isExpanded = expanded.has(key);
+    const { state, reload } = useFolder(section, section.rootId, isExpanded);
+
+    const hasNoFolders = state?.status === "ready" && !state.entries?.some(isFolder);
+
+    return (
+        <Box component="li" sx={itemSx} style={depthStyle(0)}>
+            <TreeRow
+                variant="section"
+                icon={<IconSlot icon={section.icon ?? "folder"} />}
+                label={section.label}
+                selected={selectedKey === key}
+                expandable={!hasNoFolders}
+                expanded={isExpanded}
+                loading={state?.status === "loading" && !state.entries}
+                onSelect={() => onNavigate({ sectionId: section.id, trail: ROOT_TRAIL })}
+                onToggle={() => onToggle(key)}
+                onMenu={(position) =>
+                    onOpenMenu(position, { target: "folder", section, trail: ROOT_TRAIL, entries: [] })
+                }
+            />
+            {!hasNoFolders && (
+                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                    <Box component="ul" sx={childListSx}>
+                        <FolderChildren {...tree} state={state} depth={1} trail={ROOT_TRAIL} onRetry={reload} />
+                    </Box>
+                </Collapse>
+            )}
+        </Box>
+    );
+};
+
+export default SectionItem;

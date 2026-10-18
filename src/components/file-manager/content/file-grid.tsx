@@ -2,6 +2,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { pointerPosition } from "../context-menu/position";
 import { viewMedium } from "../layout";
 import { selectedBackground } from "../styles";
 import ItemIcon from "./item-icon";
@@ -47,18 +48,29 @@ const nameSx: SxProps<Theme> = {
     lineHeight: 1.35,
 };
 
-const FileGrid = ({ items, selectedId, onSelect }: FileViewProps) => (
+const FileGrid = ({ entries, selectedId, onSelect, onOpen, onMenu }: FileViewProps) => (
     <Box sx={gridSx}>
-        {items.map((item) => (
+        {entries.map((entry) => (
             <Box
-                key={item.id}
+                key={entry.id}
                 sx={tileSx}
-                data-selected={item.id === selectedId}
-                onClick={() => onSelect(item.id)}
+                data-selected={entry.id === selectedId}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(entry.id);
+                }}
+                onDoubleClick={() => onOpen(entry)}
+                onContextMenu={(event) => {
+                    event.stopPropagation();
+
+                    if (onMenu(pointerPosition(event), entry)) {
+                        event.preventDefault();
+                    }
+                }}
             >
-                <ItemIcon item={item} size="3.5rem" />
+                <ItemIcon entry={entry} size="3.5rem" />
                 <Typography variant="body2" sx={nameSx}>
-                    {item.name}
+                    {entry.name}
                 </Typography>
             </Box>
         ))}
