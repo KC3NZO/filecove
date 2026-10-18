@@ -3,7 +3,7 @@ import LanguageOutlined from "@mui/icons-material/LanguageOutlined";
 
 import { createMockAdapter, file, folder } from "./mock-adapter";
 
-import type { ActionContext, ActionGroup, SectionGroup } from "../file-manager";
+import type { ActionContext, ActionGroup, SectionGroup } from "../../src/components/file-manager";
 import type { MockNode } from "./mock-adapter";
 
 // Placeholder backends and configuration for the dev host.

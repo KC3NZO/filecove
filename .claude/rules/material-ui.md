@@ -1,6 +1,7 @@
 ---
 paths: 
 	- "src/**/*.{ts,tsx}"
+	- "playground/**/*.{ts,tsx}"
 ---
 
 # Material UL Styling

@@ -1,4 +1,4 @@
-import type { FileAdapter, FileEntry, ListResult } from "../file-manager";
+import type { FileAdapter, FileEntry, ListResult } from "../../src/components/file-manager";
 
 /** A file or folder of the fake backend, written as nested literals. */
 export interface MockNode {

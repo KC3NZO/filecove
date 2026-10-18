@@ -4,8 +4,8 @@ import Box from "@mui/material/Box";
 import Snackbar from "@mui/material/Snackbar";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { FileManager } from "../file-manager";
-import { createDemoActions, sections, serverAdapter } from "./mock-data";
+import { FileManager } from "../src/components/file-manager";
+import { createDemoActions, sections, serverAdapter } from "./mocks/mock-data";
 
 const appSx: SxProps<Theme> = {
     height: "100dvh",
