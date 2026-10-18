@@ -26,18 +26,25 @@ There is no test runner configured.
 - `index.html` loads `src/main.tsx`, which mounts `<App />` from `src/components/main/app.tsx` inside the `Theme` wrapper and `StrictMode`.
 - `src/components/main/theme.tsx` is the `Theme` wrapper: `ThemeProvider` plus `CssBaseline` around `children`.
 - `src/components/styles/theme.ts` is the host app's MUI theme: CSS variables on, light and dark color schemes following the OS, GNOME-like colors, ripples off. It styles the dev host only.
-- `App` renders `<FileManager>` full-viewport with placeholder data from `src/components/main/mock-data.ts`.
+- `App` renders `<FileManager>` full-viewport. Its data comes from `src/components/main/mock-adapter.ts` (an in-memory adapter with simulated latency, keyed by full paths) and `mock-data.tsx` (the fake backends, section groups and demo actions). A folder named `restricted` deliberately fails to load, to show the error state.
 
 Components live under `src/components/<area>/` (`main/` for the app shell, `styles/` for the theme, `file-manager/` for the component being built, `icons/`). File names are lowercase.
 
 ### File manager
 
-`src/components/file-manager/` is the component headed for the package; `index.ts` is its public entry. It is currently a **layout mock-up**: data comes in through props (`sections`, `items`, `path`), and only view state exists (sidebar overlay open, list/grid toggle, selection, tree expansion). There is no navigation, data loading or file actions yet.
+`src/components/file-manager/` is the component headed for the package; `index.ts` is its public entry. It is a file manager for the web, so it has no built-in locations (no Home, Trash or Network): the consumer supplies everything through three props.
 
-- `file-manager.tsx` is the frame: sidebar, header bar, and the content as an inset rounded panel.
-- `sidebar/` holds GNOME-style places whose children render as an Explorer-style folder tree under them (`location-item.tsx`). Selecting a location expands its tree.
-- `header-bar/` holds back/forward, the path bar and the view buttons.
-- `content/` holds the list view (columns via a shared `--columns` grid template) and the grid view.
+- **`adapter`** (`adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal })` returns `{ entries }` for one folder, called only when a folder is first opened or expanded. `FileEntry.id` is opaque to the component (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working.
+- **`sections`** is `SectionGroup[]`. Each `Section` (id, label, icon, `rootId`, optional own `adapter`) is an independent root, and sections have no connection to each other even when they share an adapter (e.g. `/server/project/a` and `/server/project/b`). The path bar starts with the section label, followed by the folders below its root.
+- **`actions`** is `ActionGroup[]` for the context menu. An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`. The menu opens on right-click (items, content background, sidebar rows) and from the ⋮ buttons (list rows, path bar). When no action applies, the browser's own menu is left alone.
+
+Internals:
+
+- `data/folder-store.ts` caches listings per `folderKey(sectionId, folderId)`, shared by the sidebar tree and the content view, with request de-duplication and abort-on-unmount. Components read it through `useFolder` in `data/data-context.ts` (`useSyncExternalStore`, per-folder snapshots).
+- `navigation.ts` holds the current `Place` (section plus a trail of `FolderRef`s) and back/forward history. Breadcrumbs come from the trail, not from parsing ids. Navigating expands every folder along the trail in the sidebar.
+- `file-manager.tsx` is the frame (sidebar, header bar, inset content panel) and owns navigation, tree expansion, selection and the context menu state.
+- `sidebar/location-item.tsx` renders a section row and its lazily loaded folder tree (`TreeRow` is the shared row). `header-bar/` holds back/forward, the path bar and view buttons. `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`--columns` grid template) or the grid view. `context-menu/` renders the grouped action menu.
+- `format.ts` formats sizes, dates and type labels. These are English-only for now.
 
 **Responsiveness uses CSS container queries, not media queries,** so the component adapts to the box it is placed in rather than the viewport. `layout.ts` defines two named containers and their breakpoints: the root (`rootMedium`, `rootWide`: the sidebar docks at 900px or wider, otherwise it is an in-component overlay) and the content view (`viewMedium`, `viewWide`: which list columns show). Use these constants as `sx` keys; don't use `theme.breakpoints` or `useMediaQuery` inside the component. Dynamic geometry (tree depth) goes through CSS custom properties set in `style`, so the `sx` objects stay static at module scope.
 
