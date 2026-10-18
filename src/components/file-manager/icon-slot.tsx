@@ -1,9 +1,9 @@
 import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { Icon } from "../icons";
+import Icon from "../icons/icon";
 
-import type { IconSource } from "./types";
+import type { IconSource } from "../../types";
 
 interface IconSlotProps {
     icon: IconSource;

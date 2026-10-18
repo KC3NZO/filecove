@@ -1,4 +1,4 @@
-import type { FileEntry } from "./adapter";
+import type { FileEntry } from "../types";
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const sizeFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });

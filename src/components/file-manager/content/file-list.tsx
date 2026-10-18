@@ -3,14 +3,14 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { Icon } from "../../icons";
-import { belowElement, pointerPosition } from "../context-menu/position";
-import { describeDate, describeSize, describeType } from "../format";
-import { viewMedium, viewWide } from "../layout";
-import { selectedBackground, stripeBackground } from "../styles";
+import { viewMedium, viewWide } from "../../../styles/layout";
+import { selectedBackground, stripeBackground } from "../../../styles/mixins";
+import { describeDate, describeSize, describeType } from "../../../utils/format";
+import { belowElement, pointerPosition } from "../../../utils/menu-position";
+import Icon from "../../icons/icon";
 import ItemIcon from "./item-icon";
 
-import type { FileViewProps } from "../types";
+import type { FileViewProps } from "../../../types";
 
 // `--columns` holds the tracks shared by the header and every row. It grows with the view:
 // name and menu button, then size and modified, then type as well.

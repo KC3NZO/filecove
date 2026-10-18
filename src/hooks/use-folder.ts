@@ -1,18 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useSyncExternalStore } from "react";
+import { useCallback, useContext, useEffect, useSyncExternalStore } from "react";
 
-import { folderKey } from "./folder-store";
+import { DataContext } from "../contexts/data-context";
+import { folderKey } from "../store/folder-store";
 
-import type { FileAdapter } from "../adapter";
 import type { Section } from "../types";
-import type { FolderStore } from "./folder-store";
-
-interface DataContextValue {
-    store: FolderStore;
-    /** Used by sections that don't bring their own adapter. */
-    adapter: FileAdapter;
-}
-
-export const DataContext = createContext<DataContextValue | null>(null);
 
 const useData = () => {
     const value = useContext(DataContext);

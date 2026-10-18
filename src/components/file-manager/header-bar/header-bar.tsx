@@ -4,10 +4,10 @@ import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { Icon } from "../../icons";
-import { HEADER_HEIGHT, rootMedium, rootWide } from "../layout";
+import { HEADER_HEIGHT, rootMedium, rootWide } from "../../../styles/layout";
+import Icon from "../../icons/icon";
 
-import type { ViewMode } from "../types";
+import type { ViewMode } from "../../../types";
 
 interface HeaderBarProps {
     /** Centre slot, normally the path bar. */

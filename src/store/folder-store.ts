@@ -1,11 +1,4 @@
-import type { FileAdapter, FileEntry } from "../adapter";
-
-export interface FolderState {
-    status: "loading" | "ready" | "error";
-    /** The latest listing. Kept while a refresh is loading so the view doesn't blank out. */
-    entries?: FileEntry[];
-    error?: unknown;
-}
+import type { FileAdapter, FolderState } from "../types";
 
 /** Cache key of a folder. Sections are independent roots, so one id in two sections is two folders. */
 export const folderKey = (sectionId: string, folderId: string) => `${sectionId}\u0000${folderId}`;

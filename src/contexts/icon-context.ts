@@ -1,6 +1,11 @@
-import { createContext, useContext } from "react";
+import { createContext } from "react";
 
-import type { IconConfig, IconOverrides, IconVariant } from "./types";
+import type { IconOverrides, IconVariant } from "../types";
+
+export interface IconConfig {
+    variant: IconVariant;
+    overrides: IconOverrides;
+}
 
 export const DEFAULT_ICON_VARIANT: IconVariant = "outlined";
 
@@ -13,5 +18,3 @@ const defaultConfig: IconConfig = {
 };
 
 export const IconContext = createContext<IconConfig>(defaultConfig);
-
-export const useIconConfig = (): IconConfig => useContext(IconContext);

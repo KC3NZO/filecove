@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import type { PropsWithChildren } from "react";
 
-import { IconContext, useIconConfig } from "./context";
+import { IconContext } from "../../contexts/icon-context";
+import { useIconConfig } from "../../hooks/use-icon-config";
 
-import type { IconOverrides, IconVariant } from "./types";
+import type { IconOverrides, IconVariant } from "../../types";
 
 interface IconProviderProps extends PropsWithChildren {
     /** Icon variant for everything below; inherits from a parent provider when omitted. */

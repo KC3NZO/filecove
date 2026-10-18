@@ -7,11 +7,11 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { Icon } from "../../icons";
-import { HEADER_HEIGHT, SIDEBAR_WIDTH, rootWide } from "../layout";
+import { HEADER_HEIGHT, SIDEBAR_WIDTH, rootWide } from "../../../styles/layout";
+import Icon from "../../icons/icon";
 import SectionItem from "./location-item";
 
-import type { OpenMenu, Place, SectionGroup } from "../types";
+import type { OpenMenu, Place, SectionGroup } from "../../../types";
 
 interface SidebarProps {
     title: string;

@@ -8,17 +8,16 @@ import Collapse from "@mui/material/Collapse";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { FolderTypeIcon, Icon } from "../../icons";
-import { pointerPosition } from "../context-menu/position";
-import { useFolder } from "../data/data-context";
-import { folderKey } from "../data/folder-store";
-import { compareEntries } from "../format";
+import { useFolder } from "../../../hooks/use-folder";
+import { folderKey } from "../../../store/folder-store";
+import { focusRing, selectedBackground } from "../../../styles/mixins";
+import { compareEntries } from "../../../utils/format";
+import { pointerPosition } from "../../../utils/menu-position";
+import { FolderTypeIcon } from "../../icons/file-icon";
+import Icon from "../../icons/icon";
 import IconSlot from "../icon-slot";
-import { focusRing, selectedBackground } from "../styles";
 
-import type { FileEntry } from "../adapter";
-import type { FolderState } from "../data/folder-store";
-import type { FolderRef, MenuPosition, OpenMenu, Place, Section } from "../types";
+import type { FileEntry, FolderRef, FolderState, MenuPosition, OpenMenu, Place, Section } from "../../../types";
 
 /** Props every item of a section's tree passes down unchanged. */
 interface TreeProps {

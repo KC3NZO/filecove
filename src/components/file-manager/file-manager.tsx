@@ -4,20 +4,29 @@ import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DataContext } from "../../contexts/data-context";
+import { usePlaceHistory } from "../../hooks/use-place-history";
+import { createFolderStore, folderKey } from "../../store/folder-store";
+import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
+import { visibleActionGroups } from "../../utils/action-groups";
+import { folderOf } from "../../utils/navigation";
 import FolderView from "./content/folder-view";
-import { visibleActionGroups } from "./context-menu/actions";
 import ContextMenu from "./context-menu/context-menu";
-import { DataContext } from "./data/data-context";
-import { createFolderStore, folderKey } from "./data/folder-store";
 import HeaderBar from "./header-bar/header-bar";
 import PathBar from "./header-bar/path-bar";
-import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "./layout";
-import { folderOf, usePlaceHistory } from "./navigation";
 import Sidebar from "./sidebar/sidebar";
 
-import type { FileAdapter } from "./adapter";
+import type {
+    ActionContext,
+    ActionGroup,
+    FileAdapter,
+    OpenMenu,
+    Place,
+    Section,
+    SectionGroup,
+    ViewMode,
+} from "../../types";
 import type { MenuState } from "./context-menu/context-menu";
-import type { ActionContext, ActionGroup, OpenMenu, Place, Section, SectionGroup, ViewMode } from "./types";
 
 export interface FileManagerProps {
     /** Backend for every section that doesn't bring its own. */

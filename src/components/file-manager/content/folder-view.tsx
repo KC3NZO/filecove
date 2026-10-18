@@ -8,16 +8,15 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { Icon } from "../../icons";
-import { pointerPosition } from "../context-menu/position";
-import { useFolder } from "../data/data-context";
-import { compareEntries } from "../format";
-import { folderOf } from "../navigation";
+import { useFolder } from "../../../hooks/use-folder";
+import { compareEntries } from "../../../utils/format";
+import { pointerPosition } from "../../../utils/menu-position";
+import { folderOf } from "../../../utils/navigation";
+import Icon from "../../icons/icon";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
 
-import type { FileEntry } from "../adapter";
-import type { FolderRef, MenuPosition, OpenMenu, Place, Section, ViewMode } from "../types";
+import type { FileEntry, FolderRef, MenuPosition, OpenMenu, Place, Section, ViewMode } from "../../../types";
 
 interface FolderViewProps {
     section: Section;

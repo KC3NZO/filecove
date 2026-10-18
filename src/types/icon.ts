@@ -1,3 +1,5 @@
+import type { ReactElement } from "react";
+
 import type SvgIcon from "@mui/material/SvgIcon";
 
 export type IconComponent = typeof SvgIcon;
@@ -56,7 +58,8 @@ export type IconSet = Record<IconName, IconComponent>;
 /** Consumer-supplied replacements for individual icons, applied on top of any variant. */
 export type IconOverrides = Partial<IconSet>;
 
-export interface IconConfig {
-    variant: IconVariant;
-    overrides: IconOverrides;
-}
+/**
+ * A semantic name from the icon set, which follows the consumer's icon variant, or any element
+ * such as `<CloudOutlined />`, which is fitted to the same box.
+ */
+export type IconSource = IconName | ReactElement;

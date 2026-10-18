@@ -11,7 +11,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import IconSlot from "../icon-slot";
 
-import type { ActionContext, ActionGroup, MenuPosition } from "../types";
+import type { ActionContext, ActionGroup, MenuPosition } from "../../../types";
 
 export interface MenuState {
     /** False while the menu plays its closing transition; the rest is kept so it doesn't empty mid-fade. */

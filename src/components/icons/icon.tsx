@@ -1,9 +1,9 @@
 import type { SvgIconProps } from "@mui/material/SvgIcon";
 
-import { useIconConfig } from "./context";
-import iconSets from "./registry";
+import { useIconConfig } from "../../hooks/use-icon-config";
+import iconSets from "../../icon-sets/registry";
 
-import type { IconName, IconVariant } from "./types";
+import type { IconName, IconVariant } from "../../types";
 
 interface IconProps extends SvgIconProps {
     name: IconName;

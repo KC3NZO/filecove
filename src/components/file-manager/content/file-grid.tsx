@@ -2,12 +2,12 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { pointerPosition } from "../context-menu/position";
-import { viewMedium } from "../layout";
-import { selectedBackground } from "../styles";
+import { viewMedium } from "../../../styles/layout";
+import { selectedBackground } from "../../../styles/mixins";
+import { pointerPosition } from "../../../utils/menu-position";
 import ItemIcon from "./item-icon";
 
-import type { FileViewProps } from "../types";
+import type { FileViewProps } from "../../../types";
 
 const gridSx: SxProps<Theme> = {
     display: "grid",

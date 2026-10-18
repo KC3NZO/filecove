@@ -4,7 +4,7 @@ import Box from "@mui/material/Box";
 import Snackbar from "@mui/material/Snackbar";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { FileManager } from "../src/components/file-manager";
+import { FileManager } from "../src";
 import { createDemoActions, sections, serverAdapter } from "./mocks/mock-data";
 
 const appSx: SxProps<Theme> = {

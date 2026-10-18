@@ -1,6 +1,6 @@
-import { FileTypeIcon, FolderTypeIcon } from "../../icons";
+import { FileTypeIcon, FolderTypeIcon } from "../../icons/file-icon";
 
-import type { FileEntry } from "../adapter";
+import type { FileEntry } from "../../../types";
 
 interface ItemIconProps {
     entry: FileEntry;

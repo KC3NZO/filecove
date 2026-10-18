@@ -3,12 +3,12 @@ import ButtonBase from "@mui/material/ButtonBase";
 import IconButton from "@mui/material/IconButton";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { Icon } from "../../icons";
-import { belowElement } from "../context-menu/position";
+import { focusRing } from "../../../styles/mixins";
+import { belowElement } from "../../../utils/menu-position";
+import Icon from "../../icons/icon";
 import IconSlot from "../icon-slot";
-import { focusRing } from "../styles";
 
-import type { FolderRef, IconSource, OpenMenu, Place, Section } from "../types";
+import type { FolderRef, IconSource, OpenMenu, Place, Section } from "../../../types";
 
 interface PathBarProps {
     section: Section;
