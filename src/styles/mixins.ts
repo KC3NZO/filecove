@@ -36,6 +36,21 @@ export const selectedHoverBackground = (theme: Theme) => {
 export const stripeBackground = (theme: Theme) =>
     theme.alpha((theme.vars || theme).palette.text.primary, 0.03);
 
+/**
+ * Marks a row or tile whose entry is cut, until it's pasted: its contents fade, as in desktop file
+ * managers, and a dashed outline traces it. Only the children fade, so its hover and selection
+ * backgrounds keep their strength. Spread into an `sx` object of an element with `data-cut`.
+ */
+export const cutMarker = {
+    "& > *": { transition: "opacity 150ms" },
+    '&[data-cut="true"]': {
+        outline: "1px dashed",
+        outlineColor: "text.secondary",
+        outlineOffset: "-1px",
+        "& > *": { opacity: 0.45 },
+    },
+};
+
 /** Keyboard focus ring for ButtonBase elements; works whether or not ripples are enabled. */
 export const focusRing = {
     "&.Mui-focusVisible": {

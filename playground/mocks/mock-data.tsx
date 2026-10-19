@@ -188,7 +188,8 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 icon: "cut",
                 shortcut: "Ctrl+X",
                 target: "selection",
-                onSelect: (context) => notify(`Cut ${names(context)}`),
+                visible: (context) => !!context.cut,
+                onSelect: (context) => context.cut?.(),
             },
             {
                 id: "copy",
@@ -196,7 +197,8 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 icon: "copy",
                 shortcut: "Ctrl+C",
                 target: "selection",
-                onSelect: (context) => notify(`Copy ${names(context)}`),
+                visible: (context) => !!context.copy,
+                onSelect: (context) => context.copy?.(),
             },
             {
                 id: "paste",
@@ -204,9 +206,19 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 icon: "paste",
                 shortcut: "Ctrl+V",
                 target: "folder",
-                // Nothing is ever cut or copied in the demo, so this shows the disabled state.
-                disabled: () => true,
-                onSelect: () => undefined,
+                // Stays in the menu, greyed out, while there is nothing to paste here.
+                disabled: (context) => !context.paste,
+                onSelect: (context) => context.paste?.(),
+            },
+            {
+                id: "paste-into",
+                label: "Paste into folder",
+                icon: "paste",
+                target: "selection",
+                single: true,
+                visible: (context) => context.entries[0].kind === "folder",
+                disabled: (context) => !context.pasteInto,
+                onSelect: (context) => context.pasteInto?.(),
             },
         ],
     },

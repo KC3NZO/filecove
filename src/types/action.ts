@@ -39,6 +39,29 @@ export interface ActionContext {
      * has no `move`, or there are no entries.
      */
     moveTo?: () => void;
+    /**
+     * Puts `entries` on the file manager's clipboard to be moved where they're pasted, and shows
+     * them as cut meanwhile. Missing when the section's adapter has no `move`, or there are no entries.
+     */
+    cut?: () => void;
+    /**
+     * Puts `entries` on the file manager's clipboard to be copied where they're pasted. Missing when
+     * the section's adapter has no `copy`, or there are no entries.
+     */
+    copy?: () => void;
+    /**
+     * Moves or copies what was cut or copied into `folder`. Missing when there is nothing to paste
+     * here: the clipboard is empty, its entries came from another adapter, `folder` is one of them
+     * or inside one, cut entries are already in `folder`, or a paste is still running. An action
+     * can stay in the menu, greyed out, with `disabled: (context) => !context.paste`.
+     */
+    paste?: () => void;
+    /**
+     * Moves or copies what was cut or copied into the one folder in `entries`, for a "Paste into
+     * folder" action on a folder's menu. Missing unless `entries` is a single folder, and, as with
+     * `paste`, when there is nothing to paste there.
+     */
+    pasteInto?: () => void;
 }
 
 export interface FileAction {

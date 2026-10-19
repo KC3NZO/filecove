@@ -8,6 +8,7 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useCutIds } from "../../../hooks/use-cut-ids";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
@@ -45,6 +46,8 @@ interface FolderViewProps {
     hasActions: boolean;
     /** Touch selection mode: taps toggle entries, and the selection bar shows. */
     selecting: boolean;
+    /** Something is being pasted into the folder, so the progress bar shows. */
+    busy: boolean;
     /** An entry to select and scroll to once the listing has it, e.g. a folder just created. */
     revealId?: string;
     onSelectingChange: (selecting: boolean) => void;
@@ -133,6 +136,7 @@ const FolderView = ({
     sort,
     hasActions,
     selecting,
+    busy,
     revealId,
     onSelectingChange,
     onSortChange,
@@ -142,6 +146,7 @@ const FolderView = ({
     onRevealed,
 }: FolderViewProps) => {
     const { state, reload } = useFolder(section, folderOf(section, trail).id, true);
+    const cutIds = useCutIds(section);
 
     // Sorted here rather than in the store, since the sidebar tree shares the listing and keeps its own order.
     const entries = useMemo(
@@ -328,6 +333,7 @@ const FolderView = ({
             <ContentView
                 entries={entries}
                 selectedIds={selectedIds}
+                cutIds={cutIds}
                 hasActions={hasActions}
                 sort={sort}
                 onSelect={handleSelect}
@@ -385,7 +391,7 @@ const FolderView = ({
             onContextMenu={handleBackgroundMenu}
             onKeyDown={handleKeyDown}
         >
-            {state?.status === "loading" && entries && <LinearProgress sx={progressSx} />}
+            {(busy || state?.status === "loading") && entries && <LinearProgress sx={progressSx} />}
             {content}
             {selecting && (
                 <SelectionBar

@@ -8,6 +8,7 @@ export type {
     OperationOptions,
     TransferOptions,
 } from "./adapter";
+export type { Clipboard } from "./clipboard";
 export type { FolderState } from "./folder";
 export type { IconComponent, IconName, IconOverrides, IconSet, IconSource, IconVariant } from "./icon";
 export type { MenuPosition, MenuRequest, OpenMenu, RunShortcut } from "./menu";

@@ -8,9 +8,16 @@ import Collapse from "@mui/material/Collapse";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useCutIds } from "../../../hooks/use-cut-ids";
 import { useFolder } from "../../../hooks/use-folder";
 import { folderKey } from "../../../store/folder-store";
-import { focusRing, hoverBackground, selectedBackground, selectedHoverBackground } from "../../../styles/mixins";
+import {
+    cutMarker,
+    focusRing,
+    hoverBackground,
+    selectedBackground,
+    selectedHoverBackground,
+} from "../../../styles/mixins";
 import { pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { selectModifiers } from "../../../utils/selection";
@@ -78,6 +85,8 @@ interface TreeRowProps {
     selected: boolean;
     /** The open folder, which needn't be selected. */
     open: boolean;
+    /** Cut to the clipboard, and not pasted yet. */
+    cut?: boolean;
     expandable: boolean;
     expanded: boolean;
     loading: boolean;
@@ -116,6 +125,7 @@ const rowSx: SxProps<Theme> = (theme) => ({
     '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
     // The open folder keeps its accent text when the selection moves to other folders.
     '&[data-open="true"]': { color: "primary.main" },
+    ...cutMarker,
 });
 
 const sectionButtonSx: SxProps<Theme> = {
@@ -233,6 +243,7 @@ const TreeRow = ({
     label,
     selected,
     open,
+    cut = false,
     expandable,
     expanded,
     loading,
@@ -249,7 +260,7 @@ const TreeRow = ({
     };
 
     return (
-        <Box sx={rowSx} data-selected={selected} data-open={open} onContextMenu={handleContextMenu}>
+        <Box sx={rowSx} data-selected={selected} data-open={open} data-cut={cut} onContextMenu={handleContextMenu}>
             <ButtonBase
                 sx={isSection ? sectionButtonSx : folderButtonSx}
                 aria-current={open ? "page" : undefined}
@@ -309,6 +320,7 @@ const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree 
     const key = folderKey(section.id, entry.id);
     const isExpanded = expanded.has(key);
     const { state, reload } = useFolder(section, entry.id, isExpanded && entry.hasSubfolders !== false);
+    const cutIds = useCutIds(section);
 
     const trail = useMemo(
         () => [...parentTrail, { id: entry.id, name: entry.name }],
@@ -362,6 +374,7 @@ const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree 
                 label={entry.name}
                 selected={selected}
                 open={key === openKey}
+                cut={cutIds.has(entry.id)}
                 expandable={!hasNoFolders}
                 expanded={isExpanded}
                 loading={state?.status === "loading" && !state.entries}

@@ -18,6 +18,8 @@ export interface SortOrder {
 export interface FileViewProps {
     entries: FileEntry[];
     selectedIds: ReadonlySet<string>;
+    /** Entries cut to the clipboard, shown faded until they're pasted. */
+    cutIds: ReadonlySet<string>;
     hasActions: boolean;
     sort: SortOrder;
     onSelect: (id: string, modifiers: SelectModifiers) => void;

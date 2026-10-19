@@ -6,6 +6,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { viewMedium, viewWide } from "../../../styles/layout";
 import {
+    cutMarker,
     focusRing,
     hoverBackground,
     selectedBackground,
@@ -93,6 +94,7 @@ const rowSx: SxProps<Theme> = (theme) => ({
     "@media (hover: none)": { "& [data-menu-button]": { opacity: 1 } },
     // A row scrolled into view stops below the sticky column header rather than under it.
     [viewMedium]: { minHeight: 44, scrollMarginTop: "3rem" },
+    ...cutMarker,
 });
 
 // Only as wide as the icon and name, so the rest of the column is blank space a marquee can start from.
@@ -195,6 +197,7 @@ const ColumnHeader = ({ sortKey, sort, sx, onSortChange }: ColumnHeaderProps) =>
 const FileList = ({
     entries,
     selectedIds,
+    cutIds,
     hasActions,
     sort,
     onSelect,
@@ -217,6 +220,7 @@ const FileList = ({
                     sx={rowSx}
                     data-entry-id={entry.id}
                     data-selected={selectedIds.has(entry.id)}
+                    data-cut={cutIds.has(entry.id)}
                     onClick={(event) => {
                         event.stopPropagation();
                         onSelect(entry.id, selectModifiers(event));

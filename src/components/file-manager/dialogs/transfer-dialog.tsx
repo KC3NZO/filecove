@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import Box from "@mui/material/Box";
@@ -17,6 +17,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
+import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
 import { dialogPaperSx, hoverBackground } from "../../../styles/mixins";
 import { folderOf } from "../../../utils/navigation";
 import { compareEntries } from "../../../utils/sort";
@@ -24,17 +25,9 @@ import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import PathBar from "../header-bar/path-bar";
 import IconSlot from "../icon-slot";
+import { ConflictChoices, ConflictMessage } from "./conflict-step";
 
-import type {
-    ConflictPolicy,
-    FileAdapter,
-    FileEntry,
-    FolderRef,
-    OpenMenu,
-    Place,
-    Section,
-    TransferOptions,
-} from "../../../types";
+import type { ConflictPolicy, FileAdapter, FileEntry, FolderRef, OpenMenu, Place, Section } from "../../../types";
 
 export interface TransferRequest {
     kind: "copy" | "move";
@@ -140,20 +133,6 @@ const spacerSx: SxProps<Theme> = {
 
 const isFolder = (entry: FileEntry) => entry.kind === "folder";
 
-const transfer = (request: TransferRequest, targetId: string, options: TransferOptions) => {
-    const { adapter, entries } = request;
-
-    if (request.kind === "copy" && adapter.copy) {
-        return adapter.copy(entries, targetId, options);
-    }
-
-    if (request.kind === "move" && adapter.move) {
-        return adapter.move(entries, targetId, options);
-    }
-
-    throw new Error("Not supported here.");
-};
-
 /**
  * Asks where to copy or move entries, then has the adapter do it. It browses folders only, across
  * the sections the adapter serves, starting in the entries' own folder. The entries themselves
@@ -167,11 +146,6 @@ const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps)
     // Null on the list of sections, which is only reachable with more than one.
     const [place, setPlace] = useState<Place | null>({ sectionId: section.id, trail });
     const [conflicts, setConflicts] = useState<string[] | null>(null);
-    const [pending, setPending] = useState<ConflictPolicy | null>(null);
-    const [failure, setFailure] = useState<string | null>(null);
-    const controller = useRef<AbortController | null>(null);
-
-    useEffect(() => () => controller.current?.abort(), []);
 
     const target = destinations.find((candidate) => candidate.id === place?.sectionId) ?? section;
     const targetFolder = folderOf(target, place?.trail ?? []);
@@ -186,10 +160,21 @@ const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps)
     const verb = kind === "copy" ? "Copy" : "Move";
     const what = entries.length === 1 ? `“${entries[0].name}”` : `${entries.length} items`;
 
+    // The adapter can't undo a change it has made, so both folders are listed again however it ended.
+    const refresh = () => {
+        reload();
+
+        if (kind === "move") {
+            source.reload();
+        }
+    };
+
+    const { pending, failure, run: start, cancel, clearFailure } = useTransfer(request, refresh);
+
     const go = (next: Place | null) => {
         if (!pending) {
             setPlace(next);
-            setFailure(null);
+            clearFailure();
         }
     };
 
@@ -201,59 +186,26 @@ const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps)
         }
     };
 
-    // The adapter can't undo a change it has made, so both folders are listed again however it ended.
-    const refresh = () => {
-        reload();
-
-        if (kind === "move") {
-            source.reload();
-        }
-    };
-
     const run = (conflict: ConflictPolicy) => {
         if (!place) {
             return;
         }
 
         const destination = place;
-        const current = new AbortController();
 
-        controller.current = current;
-        setPending(conflict);
-        setFailure(null);
-
-        // Wrapped so an adapter that throws synchronously still ends up as a failure.
-        Promise.resolve()
-            .then(() => transfer(request, targetFolder.id, { signal: current.signal, conflict }))
-            .then(
-                () => {
-                    if (!current.signal.aborted) {
-                        controller.current = null;
-                        refresh();
-                        onDone(request, destination);
-                    }
-                },
-                (error: unknown) => {
-                    if (!current.signal.aborted) {
-                        controller.current = null;
-                        refresh();
-                        setPending(null);
-                        setConflicts(null);
-                        setFailure(
-                            error instanceof Error && error.message
-                                ? error.message
-                                : `Couldn't ${kind} ${entries.length === 1 ? "it" : "them"}.`,
-                        );
-                    }
-                },
-            );
+        start(targetFolder.id, conflict).then((outcome) => {
+            if (outcome === "done") {
+                onDone(request, destination);
+            } else if (outcome === "failed") {
+                setConflicts(null);
+            }
+        });
     };
 
     // Copying into the entries' own folder clashes with every one of them, and only makes sense as
     // a duplicate, so it keeps both without asking.
     const confirm = () => {
-        const taken = new Set(state?.entries?.map((entry) => entry.name));
-        const clashes = entries.filter((entry) => taken.has(entry.name)).map((entry) => entry.name);
+        const clashes = clashingNames(entries, state?.entries);
 
         if (clashes.length > 0 && !sameFolder) {
             setConflicts(clashes);
@@ -263,12 +215,7 @@ const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps)
     };
 
     const close = () => {
-        if (controller.current) {
-            controller.current.abort();
-            controller.current = null;
-            refresh();
-        }
-
+        cancel();
         onClose();
     };
 
@@ -277,14 +224,7 @@ const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps)
     if (conflicts) {
         body = (
             <Box sx={stateSx}>
-                <Typography color="text.primary" fontWeight={600}>
-                    {conflicts.length === 1
-                        ? `“${conflicts[0]}” already exists in “${targetFolder.name}”.`
-                        : `${conflicts.length} items already exist in “${targetFolder.name}”.`}
-                </Typography>
-                <Typography variant="body2">
-                    Replace what is there, keep both with new names, or skip {conflicts.length === 1 ? "it" : "them"}.
-                </Typography>
+                <ConflictMessage names={conflicts} folderName={targetFolder.name} />
             </Box>
         );
     } else if (!place) {
@@ -380,25 +320,7 @@ const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps)
                         Back
                     </Button>
                     <Box sx={spacerSx} />
-                    <Button color="inherit" disabled={!!pending} loading={pending === "skip"} onClick={() => run("skip")}>
-                        Skip
-                    </Button>
-                    <Button
-                        color="inherit"
-                        disabled={!!pending}
-                        loading={pending === "keepBoth"}
-                        onClick={() => run("keepBoth")}
-                    >
-                        Keep both
-                    </Button>
-                    <Button
-                        variant="contained"
-                        disabled={!!pending}
-                        loading={pending === "replace"}
-                        onClick={() => run("replace")}
-                    >
-                        Replace
-                    </Button>
+                    <ConflictChoices pending={pending} onChoose={run} />
                 </DialogActions>
             ) : (
                 <DialogActions>

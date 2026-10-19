@@ -4,17 +4,20 @@ import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { CutContext } from "../../contexts/cut-context";
 import { DataContext } from "../../contexts/data-context";
 import { usePlaceHistory } from "../../hooks/use-place-history";
 import { createFolderStore, folderKey } from "../../store/folder-store";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { visibleActionGroups } from "../../utils/action-groups";
+import { canPaste, withRenamed, withoutMoved } from "../../utils/clipboard";
 import { folderOf, renameInPlace } from "../../utils/navigation";
 import { matchesShortcut } from "../../utils/shortcut";
 import { DEFAULT_SORT } from "../../utils/sort";
 import FolderView from "./content/folder-view";
 import ContextMenu from "./context-menu/context-menu";
 import NameDialog from "./dialogs/name-dialog";
+import PasteDialog from "./dialogs/paste-dialog";
 import TransferDialog from "./dialogs/transfer-dialog";
 import HeaderBar from "./header-bar/header-bar";
 import PathBar from "./header-bar/path-bar";
@@ -23,8 +26,10 @@ import Sidebar from "./sidebar/sidebar";
 import type {
     ActionContext,
     ActionGroup,
+    Clipboard,
     FileAdapter,
     FileEntry,
+    FolderRef,
     MenuRequest,
     OpenMenu,
     Place,
@@ -36,6 +41,7 @@ import type {
 } from "../../types";
 import type { MenuState } from "./context-menu/context-menu";
 import type { NameDialogState, NameRequest } from "./dialogs/name-dialog";
+import type { PasteDialogState, PasteRequest } from "./dialogs/paste-dialog";
 import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-dialog";
 
 interface BaseProps {
@@ -174,6 +180,8 @@ const FileManager = ({
     const [menu, setMenu] = useState<MenuState | null>(null);
     const [naming, setNaming] = useState<NameDialogState | null>(null);
     const [transfer, setTransfer] = useState<TransferDialogState | null>(null);
+    const [clipboard, setClipboard] = useState<Clipboard | null>(null);
+    const [pasting, setPasting] = useState<PasteDialogState | null>(null);
     const [reveal, setReveal] = useState<Reveal | null>(null);
     // The folder in which touch selection mode is on, so opening another folder turns it off.
     const [selectingKey, setSelectingKey] = useState<string | null>(null);
@@ -185,6 +193,19 @@ const FileManager = ({
     }
 
     const hasActions = useMemo(() => actions.some((group) => group.actions.length > 0), [actions]);
+
+    const cut = useMemo(
+        () =>
+            clipboard?.kind === "cut"
+                ? { adapter: clipboard.adapter, ids: new Set(clipboard.entries.map((entry) => entry.id)) }
+                : null,
+        [clipboard],
+    );
+
+    // The folder a paste is running into, which shows a progress bar meanwhile.
+    const pasteKey = pasting?.open
+        ? folderKey(pasting.request.section.id, folderOf(pasting.request.section, pasting.request.trail).id)
+        : null;
 
     const toggleExpanded = useCallback((key: string) => {
         setExpanded((prev) => {
@@ -231,25 +252,53 @@ const FileManager = ({
 
     const closeTransfer = useCallback(() => setTransfer((prev) => prev && { ...prev, open: false }), []);
 
+    const askPaste = useCallback((request: PasteRequest) => {
+        setPasting((prev) => ({ open: true, id: (prev?.id ?? 0) + 1, request }));
+    }, []);
+
+    const closePaste = useCallback(() => setPasting((prev) => prev && { ...prev, open: false }), []);
+
     // With path ids, a moved folder's old id is free for another folder, so its cached listing is
     // dropped. A place inside a moved folder can't be followed, so it goes where the folder went.
+    // Moved entries leave the clipboard too, since their ids may have changed.
+    const handleMoved = useCallback(
+        (from: Section, fromAdapter: FileAdapter, entries: FileEntry[], destination: Place) => {
+            const movedIds = new Set(entries.map((entry) => entry.id));
+
+            entries
+                .filter((entry) => entry.kind === "folder")
+                .forEach((entry) => store.forget(folderKey(from.id, entry.id)));
+
+            if (place.sectionId === from.id && place.trail.some((step) => movedIds.has(step.id))) {
+                goTo(destination);
+            }
+
+            setClipboard((prev) => prev && withoutMoved(prev, fromAdapter, movedIds));
+        },
+        [store, place, goTo],
+    );
+
     const handleTransferred = useCallback(
         (request: TransferRequest, destination: Place) => {
             closeTransfer();
 
-            if (request.kind !== "move") {
-                return;
-            }
-
-            const movedIds = new Set(request.entries.filter((entry) => entry.kind === "folder").map((entry) => entry.id));
-
-            movedIds.forEach((id) => store.forget(folderKey(request.section.id, id)));
-
-            if (place.sectionId === request.section.id && place.trail.some((step) => movedIds.has(step.id))) {
-                goTo(destination);
+            if (request.kind === "move") {
+                handleMoved(request.section, request.adapter, request.entries, destination);
             }
         },
-        [closeTransfer, store, place, goTo],
+        [closeTransfer, handleMoved],
+    );
+
+    // A cut is pasted once, so its entries leave the clipboard; a copy can be pasted again.
+    const handlePasted = useCallback(
+        ({ clipboard: pasted, section: target, trail }: PasteRequest) => {
+            closePaste();
+
+            if (pasted.kind === "cut") {
+                handleMoved(pasted.section, pasted.adapter, pasted.entries, { sectionId: target.id, trail });
+            }
+        },
+        [closePaste, handleMoved],
     );
 
     // The new or renamed entry is selected if its folder is open. A renamed folder keeps its
@@ -264,6 +313,11 @@ const FileManager = ({
 
             if (parentKey === openKey) {
                 setReveal({ key: parentKey, id: entry.id });
+            }
+
+            // A renamed entry on the clipboard is pasted as it is now.
+            if (before) {
+                setClipboard((prev) => prev && withRenamed(prev, request.adapter, before, entry));
             }
 
             if (entry.kind !== "folder") {
@@ -321,6 +375,17 @@ const FileManager = ({
                     ),
                 });
 
+            // Pastes into the folder at `pasteTrail`, when what was cut or copied can go there.
+            const pasteTo = (pasteTrail: FolderRef[]) => {
+                const pasted = clipboard;
+
+                return pasted && !pasting?.open && canPaste(pasted, folderAdapter, menuSection, pasteTrail)
+                    ? () => askPaste({ clipboard: pasted, section: menuSection, trail: pasteTrail })
+                    : undefined;
+            };
+
+            const [only] = entries;
+
             return {
                 target,
                 entries,
@@ -339,9 +404,22 @@ const FileManager = ({
                         : undefined,
                 copyTo: folderAdapter.copy && entries.length > 0 ? transferTo("copy") : undefined,
                 moveTo: folderAdapter.move && entries.length > 0 ? transferTo("move") : undefined,
+                cut:
+                    folderAdapter.move && entries.length > 0
+                        ? () => setClipboard({ ...base, kind: "cut", entries })
+                        : undefined,
+                copy:
+                    folderAdapter.copy && entries.length > 0
+                        ? () => setClipboard({ ...base, kind: "copy", entries })
+                        : undefined,
+                paste: pasteTo(trail),
+                pasteInto:
+                    entries.length === 1 && only.kind === "folder"
+                        ? pasteTo([...trail, { id: only.id, name: only.name }])
+                        : undefined,
             };
         },
-        [adapter, store, goTo, askName, askDestination, sectionsById],
+        [adapter, store, goTo, askName, askDestination, askPaste, sectionsById, clipboard, pasting?.open],
     );
 
     const openMenu = useCallback<OpenMenu>(
@@ -380,92 +458,104 @@ const FileManager = ({
 
     return (
         <DataContext value={data}>
-            <Box sx={rootSx}>
-                <Box sx={frameSx}>
-                    <Backdrop open={sidebarOpen} sx={backdropSx} onClick={closeSidebar} />
-                    <Sidebar
-                        title={title}
-                        groups={sections}
-                        single={singleSection}
-                        expanded={expanded}
-                        openKey={openKey}
-                        open={sidebarOpen}
-                        onToggle={toggleExpanded}
-                        onNavigate={goTo}
-                        onOpenMenu={openMenu}
-                        onClose={closeSidebar}
-                    />
-                    <Box sx={mainSx}>
-                        <HeaderBar
-                            pathBar={
-                                section ? (
-                                    <PathBar
+            <CutContext value={cut}>
+                <Box sx={rootSx}>
+                    <Box sx={frameSx}>
+                        <Backdrop open={sidebarOpen} sx={backdropSx} onClick={closeSidebar} />
+                        <Sidebar
+                            title={title}
+                            groups={sections}
+                            single={singleSection}
+                            expanded={expanded}
+                            openKey={openKey}
+                            open={sidebarOpen}
+                            onToggle={toggleExpanded}
+                            onNavigate={goTo}
+                            onOpenMenu={openMenu}
+                            onClose={closeSidebar}
+                        />
+                        <Box sx={mainSx}>
+                            <HeaderBar
+                                pathBar={
+                                    section ? (
+                                        <PathBar
+                                            section={section}
+                                            trail={place.trail}
+                                            hasActions={hasActions}
+                                            onNavigate={goTo}
+                                            onOpenMenu={openMenu}
+                                        />
+                                    ) : (
+                                        <span />
+                                    )
+                                }
+                                canGoBack={canGoBack}
+                                canGoForward={canGoForward}
+                                view={view}
+                                sort={sort}
+                                showHidden={showHidden}
+                                selecting={selecting}
+                                onBack={back}
+                                onForward={forward}
+                                onToggleView={toggleView}
+                                onSortChange={setSort}
+                                onToggleHidden={toggleHidden}
+                                onToggleSelecting={toggleSelecting}
+                                onOpenSidebar={openSidebar}
+                            />
+                            {/* Keyed by folder so each one opens scrolled to the top, with nothing selected. */}
+                            <Box key={openKey ?? undefined} sx={viewSx}>
+                                {section && (
+                                    <FolderView
                                         section={section}
                                         trail={place.trail}
+                                        view={view}
+                                        sort={sort}
                                         hasActions={hasActions}
+                                        selecting={selecting}
+                                        busy={pasteKey !== null && pasteKey === openKey}
+                                        revealId={reveal?.id}
+                                        onSelectingChange={setSelecting}
+                                        onSortChange={setSort}
                                         onNavigate={goTo}
                                         onOpenMenu={openMenu}
+                                        onShortcut={runShortcut}
+                                        onRevealed={clearReveal}
                                     />
-                                ) : (
-                                    <span />
-                                )
-                            }
-                            canGoBack={canGoBack}
-                            canGoForward={canGoForward}
-                            view={view}
-                            sort={sort}
-                            showHidden={showHidden}
-                            selecting={selecting}
-                            onBack={back}
-                            onForward={forward}
-                            onToggleView={toggleView}
-                            onSortChange={setSort}
-                            onToggleHidden={toggleHidden}
-                            onToggleSelecting={toggleSelecting}
-                            onOpenSidebar={openSidebar}
-                        />
-                        {/* Keyed by folder so each one opens scrolled to the top, with nothing selected. */}
-                        <Box key={openKey ?? undefined} sx={viewSx}>
-                            {section && (
-                                <FolderView
-                                    section={section}
-                                    trail={place.trail}
-                                    view={view}
-                                    sort={sort}
-                                    hasActions={hasActions}
-                                    selecting={selecting}
-                                    revealId={reveal?.id}
-                                    onSelectingChange={setSelecting}
-                                    onSortChange={setSort}
-                                    onNavigate={goTo}
-                                    onOpenMenu={openMenu}
-                                    onShortcut={runShortcut}
-                                    onRevealed={clearReveal}
-                                />
-                            )}
+                                )}
+                            </Box>
                         </Box>
                     </Box>
+                    <ContextMenu menu={menu} onClose={closeMenu} />
+                    {naming && (
+                        <NameDialog
+                            key={`name:${naming.id}`}
+                            open={naming.open}
+                            request={naming.request}
+                            onClose={closeNaming}
+                            onDone={handleNamed}
+                        />
+                    )}
+                    {transfer && (
+                        <TransferDialog
+                            key={`transfer:${transfer.id}`}
+                            open={transfer.open}
+                            request={transfer.request}
+                            onClose={closeTransfer}
+                            onDone={handleTransferred}
+                        />
+                    )}
+                    {pasting && (
+                        <PasteDialog
+                            key={`paste:${pasting.id}`}
+                            open={pasting.open}
+                            request={pasting.request}
+                            onClose={closePaste}
+                            onDone={handlePasted}
+                        />
+                    )}
                 </Box>
-                <ContextMenu menu={menu} onClose={closeMenu} />
-                {naming && (
-                    <NameDialog
-                        key={`name:${naming.id}`}
-                        open={naming.open}
-                        request={naming.request}
-                        onClose={closeNaming}
-                        onDone={handleNamed}
-                    />
-                )}
-                {transfer && (
-                    <TransferDialog
-                        key={`transfer:${transfer.id}`}
-                        open={transfer.open}
-                        request={transfer.request}
-                        onClose={closeTransfer}
-                        onDone={handleTransferred}
-                    />
-                )}
-            </Box>
+            </CutContext>
         </DataContext>
     );
 };
