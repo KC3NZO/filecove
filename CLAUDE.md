@@ -70,6 +70,11 @@ Internals:
 
   In both panes, right-clicking a selected item (or using its ⋮) acts on that pane's whole selection, and any other item is selected alone first.
   - **Content:** `content/folder-view.tsx` holds the selection through `hooks/use-selection.ts`. The view remounts per folder, so every folder opens with nothing selected.
+  - **Marquee (rubber band):** `hooks/use-marquee.ts`, content only, mouse only (on touch a drag scrolls). A press on blank space that moves 4px draws a rectangle, and every entry it touches is selected (`marqueeSelection`): plain replaces, Shift adds, Ctrl or ⌘ flips.
+    - Entries are found by `data-entry-id`. Presses on `data-no-marquee` parts (a grid tile, a list row's icon and name) or on buttons stay clicks.
+    - Dragging near the panel's top or bottom edge scrolls it.
+    - The rectangle is moved through CSS custom properties without re-rendering. The view only re-renders when the covered entries change.
+    - The click that ends a drag is swallowed so it doesn't clear the new selection.
   - **Sidebar:** `sidebar/sidebar.tsx` holds the selection through `hooks/use-tree-selection.ts`, keyed by `folderKey`.
     - A plain click opens a folder; only Ctrl and Shift select without opening.
     - Until then, and again after any navigation, the open folder alone counts as selected.
