@@ -89,7 +89,7 @@ Internals:
     - Rows show the selection as a background and the open folder as accent text, since the two can differ.
 - The parts, in `components/file-manager/`:
   - `sidebar/location-item.tsx` renders a section row and its lazily loaded folder tree (`TreeRow` is the shared row).
-  - `header-bar/` holds back/forward, the path bar and view buttons.
+  - `header-bar/` holds back/forward, the path bar and view buttons. Below `rootMedium` the path bar gets a full-width row under the buttons; from it, the path bar sits centred between them.
   - `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`--columns` grid template) or the grid view.
   - `context-menu/` renders the grouped action menu, from the groups that `utils/action-groups.ts` leaves visible.
 - `utils/format.ts` formats sizes, dates and type labels. These are English-only for now.

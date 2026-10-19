@@ -24,24 +24,43 @@ interface HeaderBarProps {
     onOpenSidebar: () => void;
 }
 
+// Narrow: the buttons on top and the path bar on a row of its own below them, just above the
+// content it describes, since beside the buttons it would only have room for one segment.
+// From `rootMedium` it moves between the buttons and stays centred while there is room, giving
+// way to the buttons when there isn't.
 const headerSx: SxProps<Theme> = {
     display: "grid",
-    // The path bar stays centred while there is room and gives way to the buttons when there isn't.
-    gridTemplateColumns: "minmax(max-content, 1fr) minmax(0, 48rem) minmax(max-content, 1fr)",
+    gridTemplateAreas: '"start . end" "path path path"',
+    gridTemplateColumns: "max-content minmax(0, 1fr) max-content",
+    gridTemplateRows: `${HEADER_HEIGHT}px auto`,
     alignItems: "center",
     columnGap: 1,
     flexShrink: 0,
     minHeight: HEADER_HEIGHT,
     px: 1,
+    pb: 0.75,
+    [rootMedium]: {
+        gridTemplateAreas: '"start path end"',
+        gridTemplateColumns: "minmax(max-content, 1fr) minmax(0, 48rem) minmax(max-content, 1fr)",
+        gridTemplateRows: "auto",
+        pb: 0,
+    },
 };
 
 const startGroupSx: SxProps<Theme> = {
+    gridArea: "start",
     display: "flex",
     alignItems: "center",
     gap: 0.25,
 };
 
+const pathSlotSx: SxProps<Theme> = {
+    gridArea: "path",
+    minWidth: 0,
+};
+
 const endGroupSx: SxProps<Theme> = {
+    gridArea: "end",
     display: "flex",
     alignItems: "center",
     justifyContent: "flex-end",
@@ -90,7 +109,7 @@ const HeaderBar = ({
                 <Icon name="arrowForward" fontSize="small" />
             </IconButton>
         </Box>
-        {pathBar}
+        <Box sx={pathSlotSx}>{pathBar}</Box>
         <Box sx={endGroupSx}>
             <IconButton
                 aria-label={selecting ? "Done selecting" : "Select"}
