@@ -28,7 +28,7 @@ paths:
 
 ## Context menu and actions
 
-An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`. It also offers `createFolder()` and `rename()`, which are left out when the section's adapter lacks the matching method (and `rename` when there isn't exactly one entry), so actions hide with `visible: (context) => !!context.rename`. The consumer still places, labels and gates these actions; the file manager adds nothing to the menu itself.
+An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`. It also offers `createFolder()`, `rename()`, `copyTo()` and `moveTo()`, which are left out when the section's adapter lacks the matching method (`rename` also when there isn't exactly one entry, `copyTo` and `moveTo` when there are none), so actions hide with `visible: (context) => !!context.rename`. The consumer still places, labels and gates these actions; the file manager adds nothing to the menu itself.
 
 - Actions apply to any number of selected entries (copy, move, delete, compress...). Only actions marked `single: true`, such as rename, hide while several entries are selected.
 - The menu opens on right-click (items, content background, sidebar rows) and from the ⋮ buttons (list rows, path bar).
@@ -45,6 +45,17 @@ Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names i
 - While the adapter works, the button shows a spinner and the field is read-only. Cancelling aborts the `signal`, but the folder is listed again anyway, since the change may already have been made.
 - Afterwards the folder is listed again, and so is its parent's listing when cached, for the item count. If the folder is open, `file-manager.tsx` asks `FolderView` (`revealId`) to select the entry and scroll to it once the refreshed listing has it.
 - A renamed folder keeps its place: `renameInPlace` (`utils/navigation.ts`) rewrites every place in the history, and its expanded state carries over. When its id changed, as path ids do, the ids below it can't be worked out, so trails into it end at the renamed folder. Listings cached under the old id and the new one are dropped, since with path ids either could hold another folder's contents.
+
+## Copying and moving
+
+"Copy to…" and "Move to…" ask for a destination in `dialogs/transfer-dialog.tsx`, then call the adapter's optional `copy(entries, targetId, { signal, conflict })` or `move(...)`.
+
+- The picker browses folders only, starting in the entries' own folder, with the path bar and a back arrow to the folder above. Only sections served by the same adapter object are offered (ids mean nothing to another adapter); with more than one, going back from a root reaches a list of them.
+- The entries being copied or moved can't be opened, so a folder can never go into itself or below itself, without the component parsing ids. Moving into the entries' own folder is disabled.
+- Before running, the destination's cached listing is checked for names the entries share. Clashes get a second step with Replace, Keep both and Skip, passed as `conflict`; otherwise `conflict` is "keepBoth", so a clash the cache missed never overwrites anything. Copying into the entries' own folder keeps both without asking, as a duplicate.
+- Progress, cancelling and errors work as in the name dialog. Afterwards the destination is listed again, and for a move the source too.
+- After a move, listings cached under moved folders' ids are dropped, and a place inside a moved folder goes to the destination instead.
+- Not yet: a New folder button in the picker, cut/copy/paste and drag and drop, an operations panel for long transfers, and copying between adapters.
 
 ## Sorting
 
@@ -75,6 +86,6 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 The playground shows this mode with `?single` in the URL.
 - `header-bar/` holds back/forward, the path bar and the view buttons. Below `rootMedium` the path bar gets a full-width row under the buttons; from `rootMedium` up, it sits centred between them.
 - `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`file-list.tsx`, a `--columns` grid template) or the grid view (`file-grid.tsx`).
-- `dialogs/` holds the modals, which portal to `<body>` like the context menu: for now only `name-dialog.tsx`.
+- `dialogs/` holds the modals, which portal to `<body>` like the context menu: `name-dialog.tsx` and `transfer-dialog.tsx`.
 - `icon-slot.tsx` fits consumer-supplied icons to the same 1.25rem box as the built-in ones.
 - `utils/format.ts` formats sizes, dates and type labels. These are English-only for now.

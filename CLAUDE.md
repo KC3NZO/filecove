@@ -39,7 +39,7 @@ Imports are relative, with no path alias. The only barrels are `src/index.ts` an
 
 `FileManager` (`src/components/file-manager/file-manager.tsx`) is a file manager for the web, so it has no built-in locations (no Home, Trash or Network). The consumer supplies everything:
 
-- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal })` returns `{ entries }` for one folder, called only when a folder is first opened or expanded. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working. Optional members switch features on: `createFolder` and `rename` so far.
+- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal })` returns `{ entries }` for one folder, called only when a folder is first opened or expanded. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working. Optional members switch features on: `createFolder`, `rename`, `copy` and `move` so far.
 - **`sections`** is `SectionGroup[]`. Each `Section` (id, label, icon, `rootId`, optional own `adapter`, optional `showFolders`) is an independent root, with no connection to other sections even when they share an adapter. A single `section` can be passed instead, and its folders then fill the sidebar (see `file-manager.md`).
 - **`actions`** is `ActionGroup[]` for the context menu.
 
