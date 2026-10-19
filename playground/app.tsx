@@ -11,13 +11,20 @@ const appSx: SxProps<Theme> = {
     height: "100dvh",
 };
 
+// `?single` in the URL shows the file manager with one section, whose folders fill the sidebar.
+const single = new URLSearchParams(window.location.search).has("single");
+
 const App = () => {
     const [notice, setNotice] = useState({ open: false, message: "" });
     const [actions] = useState(() => createDemoActions((message) => setNotice({ open: true, message })));
 
     return (
         <Box sx={appSx}>
-            <FileManager adapter={serverAdapter} sections={sections} actions={actions} />
+            {single ? (
+                <FileManager adapter={serverAdapter} section={sections[0].sections[0]} actions={actions} />
+            ) : (
+                <FileManager adapter={serverAdapter} sections={sections} actions={actions} />
+            )}
             <Snackbar
                 open={notice.open}
                 message={notice.message}

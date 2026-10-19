@@ -23,27 +23,45 @@ import type {
     FileAdapter,
     OpenMenu,
     Place,
+    Section,
     SectionGroup,
     SortOrder,
     ViewMode,
 } from "../../types";
 import type { MenuState } from "./context-menu/context-menu";
 
-export interface FileManagerProps {
+interface BaseProps {
     /** Backend for every section that doesn't bring its own. */
     adapter: FileAdapter;
-    /** Sidebar sections, in groups. Each section is an independent root. */
-    sections: SectionGroup[];
     /** Context menu actions, in groups. */
     actions?: ActionGroup[];
     /** Shown at the top of the sidebar. */
     title?: string;
-    /** Section open at first; the first one when omitted. */
-    defaultSectionId?: string;
     defaultView?: ViewMode;
     /** Content order at first; name, A to Z, when omitted. The sidebar tree is always by name. */
     defaultSort?: SortOrder;
 }
+
+interface MultiSectionProps extends BaseProps {
+    /** Sidebar sections, in groups. Each section is an independent root. */
+    sections: SectionGroup[];
+    section?: never;
+    /** Section open at first; the first one when omitted. */
+    defaultSectionId?: string;
+}
+
+interface SingleSectionProps extends BaseProps {
+    /**
+     * The one root to browse. The sidebar shows its folders as the tree itself, with no section
+     * row above them, unless the section sets `showFolders: false`.
+     */
+    section: Section;
+    sections?: never;
+    defaultSectionId?: never;
+}
+
+/** Either `sections`, for a sidebar of independent roots, or a single `section`. */
+export type FileManagerProps = MultiSectionProps | SingleSectionProps;
 
 const NO_ACTIONS: ActionGroup[] = [];
 
@@ -94,7 +112,8 @@ const viewSx: SxProps<Theme> = {
 
 const FileManager = ({
     adapter,
-    sections,
+    sections: groups,
+    section: singleSection,
     actions = NO_ACTIONS,
     title = "Files",
     defaultSectionId,
@@ -105,6 +124,12 @@ const FileManager = ({
     const data = useMemo(() => ({ store, adapter }), [store, adapter]);
 
     useEffect(() => () => store.abortAll(), [store]);
+
+    // A single section is handled as one group of one, so only the sidebar needs to tell them apart.
+    const sections = useMemo<SectionGroup[]>(
+        () => (singleSection ? [{ id: singleSection.id, sections: [singleSection] }] : (groups ?? [])),
+        [singleSection, groups],
+    );
 
     const sectionsById = useMemo(
         () => new Map(sections.flatMap((group) => group.sections.map((section) => [section.id, section] as const))),
@@ -208,6 +233,7 @@ const FileManager = ({
                     <Sidebar
                         title={title}
                         groups={sections}
+                        single={singleSection}
                         expanded={expanded}
                         openKey={openKey}
                         open={sidebarOpen}

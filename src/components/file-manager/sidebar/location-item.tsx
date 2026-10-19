@@ -203,15 +203,17 @@ const childListSx: SxProps<Theme> = {
     },
 };
 
-const errorRowSx: SxProps<Theme> = {
+// A row in place of folders: a load error, or the root tree's loading and empty states.
+const statusRowSx: SxProps<Theme> = {
     listStyle: "none",
     display: "flex",
     alignItems: "center",
     gap: 1,
     minHeight: 30,
     pl: indent(CHEVRON + 4),
-    color: "error.main",
+    color: "text.secondary",
     fontSize: "0.8125rem",
+    '&[data-error="true"]': { color: "error.main" },
 };
 
 const retrySx: SxProps<Theme> = {
@@ -279,7 +281,7 @@ const FolderChildren = ({ state, depth, trail, onRetry, ...tree }: FolderChildre
 
     if (state?.status === "error") {
         return (
-            <Box component="li" sx={errorRowSx} style={depthStyle(depth)}>
+            <Box component="li" sx={statusRowSx} style={depthStyle(depth)} data-error>
                 Couldn't load
                 <ButtonBase sx={retrySx} onClick={onRetry}>
                     Retry
@@ -420,6 +422,34 @@ const SectionItem = (tree: TreeProps) => {
             )}
         </Box>
     );
+};
+
+/**
+ * A section's folders as the sidebar's top level, with no section row above them, for a file
+ * manager with a single section. The root is always listed; its own place is the path bar's first crumb.
+ */
+export const SectionTree = (tree: TreeProps) => {
+    const { section } = tree;
+    const { state, reload } = useFolder(section, section.rootId, true);
+
+    if (!state || (state.status === "loading" && !state.entries)) {
+        return (
+            <Box component="li" sx={statusRowSx} style={depthStyle(0)}>
+                <CircularProgress size={12} color="inherit" />
+                Loading
+            </Box>
+        );
+    }
+
+    if (state.status === "ready" && !state.entries?.some(isFolder)) {
+        return (
+            <Box component="li" sx={statusRowSx} style={depthStyle(0)}>
+                No folders
+            </Box>
+        );
+    }
+
+    return <FolderChildren {...tree} state={state} depth={0} trail={ROOT_TRAIL} onRetry={reload} />;
 };
 
 export default SectionItem;

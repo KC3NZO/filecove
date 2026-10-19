@@ -10,13 +10,15 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { useTreeSelection } from "../../../hooks/use-tree-selection";
 import { HEADER_HEIGHT, SIDEBAR_WIDTH, rootWide } from "../../../styles/layout";
 import Icon from "../../icons/icon";
-import SectionItem from "./location-item";
+import SectionItem, { SectionTree } from "./location-item";
 
-import type { OpenMenu, Place, SectionGroup } from "../../../types";
+import type { OpenMenu, Place, Section, SectionGroup } from "../../../types";
 
 interface SidebarProps {
     title: string;
     groups: SectionGroup[];
+    /** The file manager's only section, whose folders then fill the sidebar in place of `groups`. */
+    single?: Section;
     expanded: ReadonlySet<string>;
     /** `folderKey` of the open folder. */
     openKey: string | null;
@@ -109,6 +111,11 @@ const listSx: SxProps<Theme> = {
     p: 0,
 };
 
+const treeSx: SxProps<Theme> = {
+    m: 0,
+    p: 0,
+};
+
 const dividerSx: SxProps<Theme> = {
     mx: 1.25,
     my: 1,
@@ -117,6 +124,7 @@ const dividerSx: SxProps<Theme> = {
 const Sidebar = ({
     title,
     groups,
+    single,
     expanded,
     openKey,
     open,
@@ -144,6 +152,9 @@ const Sidebar = ({
         }
     };
 
+    // A single section that hides its folders still gets its row, so the sidebar isn't left empty.
+    const tree = single && single.showFolders !== false ? single : null;
+
     return (
         <Box sx={sidebarSx} data-open={open} onKeyDown={handleKeyDown}>
             <Box sx={headerSx}>
@@ -157,8 +168,23 @@ const Sidebar = ({
                     <Icon name="menu" fontSize="small" />
                 </IconButton>
             </Box>
-            <Box component="nav" aria-label="Sections" sx={navSx}>
-                {groups.map((group, index) => (
+            <Box component="nav" aria-label={tree ? tree.label : "Sections"} sx={navSx}>
+                {tree && (
+                    <Box component="ul" sx={treeSx}>
+                        <SectionTree
+                            section={tree}
+                            expanded={expanded}
+                            openKey={openKey}
+                            selection={selection}
+                            onToggle={onToggle}
+                            onNavigate={handleNavigate}
+                            onSelectFolder={select}
+                            onSelectSection={selectSection}
+                            onOpenMenu={onOpenMenu}
+                        />
+                    </Box>
+                )}
+                {!tree && groups.map((group, index) => (
                     <Fragment key={group.id}>
                         {index > 0 && <Divider sx={dividerSx} />}
                         {group.title && (
