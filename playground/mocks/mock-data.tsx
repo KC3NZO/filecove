@@ -118,7 +118,7 @@ export const sections: SectionGroup[] = [
         id: "storage",
         title: "Storage",
         sections: [
-            { id: "design", label: "Design assets", icon: "pictures", rootId: "/shared/design" },
+            { id: "design", label: "Design assets", icon: "pictures", rootId: "/shared/design", showFolders: false },
             { id: "media", label: "Media bucket", icon: <CloudOutlined />, rootId: "/", adapter: mediaAdapter },
         ],
     },

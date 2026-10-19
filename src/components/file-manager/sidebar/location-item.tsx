@@ -383,10 +383,11 @@ const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree 
 const SectionItem = (tree: TreeProps) => {
     const { section, expanded, openKey, selection, onToggle, onNavigate, onSelectSection, onOpenMenu } = tree;
     const key = folderKey(section.id, section.rootId);
-    const isExpanded = expanded.has(key);
+    const showFolders = section.showFolders !== false;
+    const isExpanded = showFolders && expanded.has(key);
     const { state, reload } = useFolder(section, section.rootId, isExpanded);
 
-    const hasNoFolders = state?.status === "ready" && !state.entries?.some(isFolder);
+    const hasNoFolders = !showFolders || (state?.status === "ready" && !state.entries?.some(isFolder));
 
     // Its menu is about the section's root folder, so it alone becomes the selection meanwhile.
     const handleMenu = (position: MenuPosition) => {

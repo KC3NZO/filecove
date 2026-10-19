@@ -120,9 +120,10 @@ const FileManager = ({
     const folder = section && folderOf(section, place.trail);
     const openKey = section && folder ? folderKey(section.id, folder.id) : null;
 
-    // Only the first section shown starts expanded; after that, only the chevrons change the tree.
+    // Only the first section shown starts expanded, if it shows its folders at all; after that,
+    // only the chevrons change the tree.
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(
-        () => new Set(section ? [folderKey(section.id, section.rootId)] : []),
+        () => new Set(section && section.showFolders !== false ? [folderKey(section.id, section.rootId)] : []),
     );
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [view, setView] = useState<ViewMode>(defaultView);

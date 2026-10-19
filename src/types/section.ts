@@ -13,6 +13,12 @@ export interface Section {
     rootId: string;
     /** Backend for this section; the file manager's `adapter` when omitted. */
     adapter?: FileAdapter;
+    /**
+     * Whether the sidebar shows the section's folders as an expandable tree beneath its row.
+     * When false, the row is a plain place, as in GNOME Files, and has no expand toggle.
+     * @default true
+     */
+    showFolders?: boolean;
 }
 
 /** Sections shown together in the sidebar, divided from the next group by a rule. */
