@@ -1,17 +1,26 @@
 import Box from "@mui/material/Box";
+import ButtonBase from "@mui/material/ButtonBase";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { viewMedium, viewWide } from "../../../styles/layout";
-import { selectedBackground, stripeBackground } from "../../../styles/mixins";
+import { focusRing, selectedBackground, stripeBackground } from "../../../styles/mixins";
 import { describeDate, describeSize, describeType } from "../../../utils/format";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
+import { SORT_KEY_INFO, toggleSortKey } from "../../../utils/sort";
 import Icon from "../../icons/icon";
 import ItemIcon from "./item-icon";
 
-import type { FileViewProps } from "../../../types";
+import type { FileViewProps, SortKey, SortOrder } from "../../../types";
+
+interface ColumnHeaderProps {
+    sortKey: SortKey;
+    sort: SortOrder;
+    sx?: SxProps<Theme>;
+    onSortChange: (sort: SortOrder) => void;
+}
 
 // `--columns` holds the tracks shared by the header and every row. It grows with the view:
 // name and menu button, then size and modified, then type as well.
@@ -89,12 +98,28 @@ const nameCellSx: SxProps<Theme> = {
     "& > svg": { flexShrink: 0 },
 };
 
+// Lines the label up with the file names: 1.75rem icon plus the 12px gap.
 const nameHeaderSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 0.5,
-    // Lines the label up with the file names: 1.75rem icon plus the 12px gap.
     pl: 5,
+};
+
+// The arrow goes before the label here, so the label stays flush with the right-aligned dates.
+const modifiedHeaderSx: SxProps<Theme> = {
+    textAlign: "right",
+    "& > button": { flexDirection: "row-reverse" },
+};
+
+// Padded for the focus ring and hover area, and pulled back by as much so the label stays in line.
+const columnButtonSx: SxProps<Theme> = {
+    gap: 0.5,
+    mx: -0.75,
+    px: 0.75,
+    py: 0.25,
+    borderRadius: 1,
+    font: "inherit",
+    color: "inherit",
+    '&:hover, &[data-active="true"]': { color: "text.primary" },
+    ...focusRing,
 };
 
 const sortIconSx: SxProps<Theme> = {
@@ -137,16 +162,44 @@ const menuButtonSx: SxProps<Theme> = {
     color: "text.secondary",
 };
 
-const FileList = ({ entries, selectedIds, hasActions, onSelect, onOpen, onMenu }: FileViewProps) => (
+/** A sortable column label: picks its key, or reverses the order when it already sorts by it. */
+const ColumnHeader = ({ sortKey, sort, sx, onSortChange }: ColumnHeaderProps) => {
+    const active = sortKey === sort.key;
+
+    return (
+        <Box sx={sx}>
+            <ButtonBase
+                sx={columnButtonSx}
+                data-active={active}
+                onClick={(event) => {
+                    // The surface behind the list would take the click as one on empty space and clear the selection.
+                    event.stopPropagation();
+                    onSortChange(toggleSortKey(sort, sortKey));
+                }}
+            >
+                {SORT_KEY_INFO[sortKey].label}
+                {active && <Icon name={sort.direction === "asc" ? "arrowUp" : "arrowDown"} sx={sortIconSx} />}
+            </ButtonBase>
+        </Box>
+    );
+};
+
+const FileList = ({
+    entries,
+    selectedIds,
+    hasActions,
+    sort,
+    onSelect,
+    onOpen,
+    onMenu,
+    onSortChange,
+}: FileViewProps) => (
     <Box sx={listSx}>
         <Box sx={headerRowSx}>
-            <Box sx={nameHeaderSx}>
-                Name
-                <Icon name="arrowUp" sx={sortIconSx} />
-            </Box>
-            <Box sx={sizeCellSx}>Size</Box>
-            <Box sx={typeCellSx}>Type</Box>
-            <Box sx={modifiedCellSx}>Modified</Box>
+            <ColumnHeader sortKey="name" sort={sort} sx={nameHeaderSx} onSortChange={onSortChange} />
+            <ColumnHeader sortKey="size" sort={sort} onSortChange={onSortChange} />
+            <ColumnHeader sortKey="type" sort={sort} sx={typeCellSx} onSortChange={onSortChange} />
+            <ColumnHeader sortKey="modified" sort={sort} sx={modifiedHeaderSx} onSortChange={onSortChange} />
             <Box />
         </Box>
         <Box sx={rowsSx}>

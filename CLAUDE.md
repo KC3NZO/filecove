@@ -38,7 +38,7 @@ There is no test runner configured.
 - `components/` has `file-manager/` (the frame and its parts) and `icons/` (`Icon`, `IconProvider`, the file-type icons).
 - `types/` holds the shared and exported types, one file per domain (`adapter`, `section`, `action`, `navigation`, `menu`, `view`, `folder`, `icon`), all re-exported from `types/index.ts`. Files marked internal stay out of `src/index.ts`. A component's or context's own props and state types stay in its own file.
 - `hooks/`, `contexts/` and `store/` hold the React hooks, the contexts and the folder listing store.
-- `utils/` holds plain functions: formatting, menu positions, action filtering, `folderOf`.
+- `utils/` holds plain functions: formatting, sorting, menu positions, action filtering, `folderOf`.
 - `styles/` holds the container-query constants (`layout.ts`) and shared style helpers (`mixins.ts`).
 - `icon-sets/` holds the per-variant icon maps and their registry.
 
@@ -87,6 +87,12 @@ Internals:
     - Selected folders are always siblings, so a menu's `ActionContext` has one parent `folder`. A modifier click under another parent starts a new selection.
     - Section rows are roots and never join a folder selection.
     - Rows show the selection as a background and the open folder as accent text, since the two can differ.
+- **Sorting** is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrder` (a key of name, size, type or modified, plus a direction), which persists across folders, and `folder-view.tsx` sorts the listing with `entryComparator`.
+  - Folders always come first. Ties fall back to the name, A to Z.
+  - Picking a key starts it in its own direction: names and types A to Z, sizes and dates largest and newest first.
+  - Two controls share the order. One is the header's chevron menu (`header-bar/view-menu.tsx`), with radios for the key and the direction. The other is the list view's column headers, where a click on the active column reverses it. The menu is the only control in the grid view, and in a list too narrow for its header row.
+  - The sidebar tree ignores it and stays by name (`compareEntries`). Section order is the consumer's.
+  - The same menu has a "Show hidden files" checkbox whose state isn't applied to listings yet.
 - The parts, in `components/file-manager/`:
   - `sidebar/location-item.tsx` renders a section row and its lazily loaded folder tree (`TreeRow` is the shared row).
   - `header-bar/` holds back/forward, the path bar and view buttons. Below `rootMedium` the path bar gets a full-width row under the buttons; from it, the path bar sits centred between them.

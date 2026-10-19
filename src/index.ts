@@ -18,5 +18,8 @@ export type {
     ListResult,
     Section,
     SectionGroup,
+    SortDirection,
+    SortKey,
+    SortOrder,
     ViewMode,
 } from "./types";

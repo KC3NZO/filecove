@@ -10,6 +10,7 @@ import { createFolderStore, folderKey } from "../../store/folder-store";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { visibleActionGroups } from "../../utils/action-groups";
 import { folderOf } from "../../utils/navigation";
+import { DEFAULT_SORT } from "../../utils/sort";
 import FolderView from "./content/folder-view";
 import ContextMenu from "./context-menu/context-menu";
 import HeaderBar from "./header-bar/header-bar";
@@ -23,6 +24,7 @@ import type {
     OpenMenu,
     Place,
     SectionGroup,
+    SortOrder,
     ViewMode,
 } from "../../types";
 import type { MenuState } from "./context-menu/context-menu";
@@ -39,6 +41,8 @@ export interface FileManagerProps {
     /** Section open at first; the first one when omitted. */
     defaultSectionId?: string;
     defaultView?: ViewMode;
+    /** Content order at first; name, A to Z, when omitted. The sidebar tree is always by name. */
+    defaultSort?: SortOrder;
 }
 
 const NO_ACTIONS: ActionGroup[] = [];
@@ -95,6 +99,7 @@ const FileManager = ({
     title = "Files",
     defaultSectionId,
     defaultView = "list",
+    defaultSort = DEFAULT_SORT,
 }: FileManagerProps) => {
     const [store] = useState(createFolderStore);
     const data = useMemo(() => ({ store, adapter }), [store, adapter]);
@@ -121,6 +126,10 @@ const FileManager = ({
     );
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [view, setView] = useState<ViewMode>(defaultView);
+    // Kept across folders, as the view is.
+    const [sort, setSort] = useState<SortOrder>(defaultSort);
+    // Only the view menu's checkbox for now; listings aren't filtered by it yet.
+    const [showHidden, setShowHidden] = useState(false);
     const [menu, setMenu] = useState<MenuState | null>(null);
     // The folder in which touch selection mode is on, so opening another folder turns it off.
     const [selectingKey, setSelectingKey] = useState<string | null>(null);
@@ -155,6 +164,7 @@ const FileManager = ({
     const openSidebar = useCallback(() => setSidebarOpen(true), []);
     const closeSidebar = useCallback(() => setSidebarOpen(false), []);
     const toggleView = useCallback(() => setView((prev) => (prev === "list" ? "grid" : "list")), []);
+    const toggleHidden = useCallback(() => setShowHidden((prev) => !prev), []);
     const closeMenu = useCallback(() => setMenu((prev) => prev && { ...prev, open: false }), []);
     const setSelecting = useCallback((on: boolean) => setSelectingKey(on ? openKey : null), [openKey]);
     const toggleSelecting = useCallback(() => setSelecting(!selecting), [setSelecting, selecting]);
@@ -223,10 +233,14 @@ const FileManager = ({
                             canGoBack={canGoBack}
                             canGoForward={canGoForward}
                             view={view}
+                            sort={sort}
+                            showHidden={showHidden}
                             selecting={selecting}
                             onBack={back}
                             onForward={forward}
                             onToggleView={toggleView}
+                            onSortChange={setSort}
+                            onToggleHidden={toggleHidden}
                             onToggleSelecting={toggleSelecting}
                             onOpenSidebar={openSidebar}
                         />
@@ -237,9 +251,11 @@ const FileManager = ({
                                     section={section}
                                     trail={place.trail}
                                     view={view}
+                                    sort={sort}
                                     hasActions={hasActions}
                                     selecting={selecting}
                                     onSelectingChange={setSelecting}
+                                    onSortChange={setSort}
                                     onNavigate={goTo}
                                     onOpenMenu={openMenu}
                                 />

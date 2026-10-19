@@ -6,8 +6,9 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { HEADER_HEIGHT, rootMedium, rootWide } from "../../../styles/layout";
 import Icon from "../../icons/icon";
+import ViewMenu from "./view-menu";
 
-import type { ViewMode } from "../../../types";
+import type { SortOrder, ViewMode } from "../../../types";
 
 interface HeaderBarProps {
     /** Centre slot, normally the path bar. */
@@ -15,11 +16,15 @@ interface HeaderBarProps {
     canGoBack: boolean;
     canGoForward: boolean;
     view: ViewMode;
+    sort: SortOrder;
+    showHidden: boolean;
     /** Whether touch selection mode is on. */
     selecting: boolean;
     onBack: () => void;
     onForward: () => void;
     onToggleView: () => void;
+    onSortChange: (sort: SortOrder) => void;
+    onToggleHidden: () => void;
     onToggleSelecting: () => void;
     onOpenSidebar: () => void;
 }
@@ -90,10 +95,14 @@ const HeaderBar = ({
     canGoBack,
     canGoForward,
     view,
+    sort,
+    showHidden,
     selecting,
     onBack,
     onForward,
     onToggleView,
+    onSortChange,
+    onToggleHidden,
     onToggleSelecting,
     onOpenSidebar,
 }: HeaderBarProps) => (
@@ -125,9 +134,12 @@ const HeaderBar = ({
             <IconButton aria-label={view === "list" ? "Grid view" : "List view"} onClick={onToggleView}>
                 <Icon name={view === "list" ? "gridView" : "listView"} fontSize="small" />
             </IconButton>
-            <IconButton aria-label="View options">
-                <Icon name="expand" fontSize="small" />
-            </IconButton>
+            <ViewMenu
+                sort={sort}
+                showHidden={showHidden}
+                onSortChange={onSortChange}
+                onToggleHidden={onToggleHidden}
+            />
         </Box>
     </Box>
 );

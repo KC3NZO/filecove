@@ -13,10 +13,10 @@ import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
 import { useSelection } from "../../../hooks/use-selection";
 import { selectedBackground } from "../../../styles/mixins";
-import { compareEntries } from "../../../utils/format";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { EMPTY_SELECTION, marqueeSelection, selectModifiers } from "../../../utils/selection";
+import { entryComparator } from "../../../utils/sort";
 import Icon from "../../icons/icon";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
@@ -31,6 +31,7 @@ import type {
     Place,
     Section,
     SelectModifiers,
+    SortOrder,
     ViewMode,
 } from "../../../types";
 
@@ -38,10 +39,12 @@ interface FolderViewProps {
     section: Section;
     trail: FolderRef[];
     view: ViewMode;
+    sort: SortOrder;
     hasActions: boolean;
     /** Touch selection mode: taps toggle entries, and the selection bar shows. */
     selecting: boolean;
     onSelectingChange: (selecting: boolean) => void;
+    onSortChange: (sort: SortOrder) => void;
     onNavigate: (place: Place) => void;
     onOpenMenu: OpenMenu;
 }
@@ -118,15 +121,21 @@ const FolderView = ({
     section,
     trail,
     view,
+    sort,
     hasActions,
     selecting,
     onSelectingChange,
+    onSortChange,
     onNavigate,
     onOpenMenu,
 }: FolderViewProps) => {
     const { state, reload } = useFolder(section, folderOf(section, trail).id, true);
 
-    const entries = useMemo(() => (state?.entries ? [...state.entries].sort(compareEntries) : undefined), [state?.entries]);
+    // Sorted here rather than in the store, since the sidebar tree shares the listing and keeps its own order.
+    const entries = useMemo(
+        () => (state?.entries ? [...state.entries].sort(entryComparator(sort)) : undefined),
+        [state?.entries, sort],
+    );
 
     const { selection, selectedIds, selected, select, replace, selectAll, clear } = useSelection(entries);
 
@@ -275,9 +284,11 @@ const FolderView = ({
                 entries={entries}
                 selectedIds={selectedIds}
                 hasActions={hasActions}
+                sort={sort}
                 onSelect={handleSelect}
                 onOpen={handleDoubleOpen}
                 onMenu={handleEntryMenu}
+                onSortChange={onSortChange}
             />
         );
     } else if (entries) {

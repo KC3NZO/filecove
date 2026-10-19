@@ -1,6 +1,5 @@
 import type { FileEntry } from "../types";
 
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const sizeFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" });
 
@@ -15,15 +14,6 @@ const MIME_LABELS: [prefix: string, label: string][] = [
     ["application/json", "JSON"],
     ["application/zip", "Archive"],
 ];
-
-/** Folders first, then by name in natural order, so "file2" sorts before "file10". */
-export const compareEntries = (a: FileEntry, b: FileEntry) => {
-    if (a.kind !== b.kind) {
-        return a.kind === "folder" ? -1 : 1;
-    }
-
-    return collator.compare(a.name, b.name);
-};
 
 /** Decimal units, as GNOME Files shows them. */
 export const formatSize = (bytes: number) => {
