@@ -449,7 +449,7 @@ const FileManager = ({
                 <ContextMenu menu={menu} onClose={closeMenu} />
                 {naming && (
                     <NameDialog
-                        key={naming.id}
+                        key={`name:${naming.id}`}
                         open={naming.open}
                         request={naming.request}
                         onClose={closeNaming}
@@ -458,7 +458,7 @@ const FileManager = ({
                 )}
                 {transfer && (
                     <TransferDialog
-                        key={transfer.id}
+                        key={`transfer:${transfer.id}`}
                         open={transfer.open}
                         request={transfer.request}
                         onClose={closeTransfer}
