@@ -15,6 +15,10 @@ paths:
 
 `store/folder-store.ts` caches listings per `folderKey(sectionId, folderId)`. The cache is shared by the sidebar tree and the content view, with request de-duplication and abort-on-unmount. `file-manager.tsx` provides the store through `DataContext` (`contexts/data-context.ts`), and components read it with `useFolder` (`hooks/use-folder.ts`), which uses `useSyncExternalStore` with per-folder snapshots.
 
+- `load(..., force)` lists a folder again even while a request is in flight, replacing it, since that request's result could predate a change just made.
+- `forget(key)` drops a listing. Only use it on keys no enabled `useFolder` is showing, since nothing reloads them on its own.
+- In the sidebar, a folder's listing, once there is one, overrides the adapter's `hasSubfolders` hint for its chevron.
+
 ## Navigation
 
 `hooks/use-place-history.ts` holds the current `Place` (a section plus a trail of `FolderRef`s) and the back/forward history. `utils/navigation.ts` has `folderOf`, which returns the folder a place points at.
@@ -24,12 +28,23 @@ paths:
 
 ## Context menu and actions
 
-An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`.
+An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`. It also offers `createFolder()` and `rename()`, which are left out when the section's adapter lacks the matching method (and `rename` when there isn't exactly one entry), so actions hide with `visible: (context) => !!context.rename`. The consumer still places, labels and gates these actions; the file manager adds nothing to the menu itself.
 
 - Actions apply to any number of selected entries (copy, move, delete, compress...). Only actions marked `single: true`, such as rename, hide while several entries are selected.
 - The menu opens on right-click (items, content background, sidebar rows) and from the ⋮ buttons (list rows, path bar).
 - When no action applies, the browser's own menu is left alone.
 - `context-menu/` renders the grouped menu from the groups that `utils/action-groups.ts` leaves visible.
+- An action's `shortcut` is also a key binding (`utils/shortcut.ts`; Ctrl matches ⌘ too). `folder-view.tsx` takes focus on any press (`tabIndex={-1}`) and hands key presses to `runShortcut` in `file-manager.tsx`, which tries the selection first and then the open folder, through the same `contextFor` and visibility rules as the menu. Shortcuts only work in the content for now, not the sidebar. Browsers keep some keys for themselves: Chrome never passes Shift+Ctrl+N (or Ctrl+N, Ctrl+T, Ctrl+W) to a page.
+
+## Creating and renaming
+
+Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names inline, because the listing only holds what the adapter returned, and an inline edit has nowhere to keep a failed name. The adapter's optional `createFolder(parentId, name, { signal })` and `rename(entry, name, { signal })` resolve with the entry as it now is.
+
+- The name is trimmed and checked as it's typed (`utils/names.ts`): not ".", "..", or containing "/", and no clash with the folder's cached listing. An empty name only disables the button. The adapter has the final say, and the message of an `Error` it rejects with shows under the field, with the name kept.
+- The field is focused with the name selected once the dialog has faded in (the transition's `onEntered`), not with `autoFocus`, which the closing context menu steals focus back from. Rename selects a file's name up to its extension. New folder starts with an unused "New folder" (`newFolderName`). An unchanged name just closes.
+- While the adapter works, the button shows a spinner and the field is read-only. Cancelling aborts the `signal`, but the folder is listed again anyway, since the change may already have been made.
+- Afterwards the folder is listed again, and so is its parent's listing when cached, for the item count. If the folder is open, `file-manager.tsx` asks `FolderView` (`revealId`) to select the entry and scroll to it once the refreshed listing has it.
+- A renamed folder keeps its place: `renameInPlace` (`utils/navigation.ts`) rewrites every place in the history, and its expanded state carries over. When its id changed, as path ids do, the ids below it can't be worked out, so trails into it end at the renamed folder. Listings cached under the old id and the new one are dropped, since with path ids either could hold another folder's contents.
 
 ## Sorting
 
@@ -60,5 +75,6 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 The playground shows this mode with `?single` in the URL.
 - `header-bar/` holds back/forward, the path bar and the view buttons. Below `rootMedium` the path bar gets a full-width row under the buttons; from `rootMedium` up, it sits centred between them.
 - `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`file-list.tsx`, a `--columns` grid template) or the grid view (`file-grid.tsx`).
+- `dialogs/` holds the modals, which portal to `<body>` like the context menu: for now only `name-dialog.tsx`.
 - `icon-slot.tsx` fits consumer-supplied icons to the same 1.25rem box as the built-in ones.
 - `utils/format.ts` formats sizes, dates and type labels. These are English-only for now.

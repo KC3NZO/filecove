@@ -28,7 +28,7 @@ There is no test runner configured.
 **Source.** `src/` is organised by kind of code, and `src/components/` holds only components. File names are lowercase.
 
 - `index.ts` is the public entry. It exports `FileManager`, `IconProvider` and the public types, and nothing else is public.
-- `components/file-manager/` is the frame and its parts (`sidebar/`, `header-bar/`, `content/`, `context-menu/`).
+- `components/file-manager/` is the frame and its parts (`sidebar/`, `header-bar/`, `content/`, `context-menu/`, `dialogs/`).
 - `components/icons/` has `Icon`, `IconProvider`, and `FileTypeIcon` / `FolderTypeIcon`, the only way to render `@react-symbols/icons`.
 - `types/` holds shared and exported types, one file per domain, re-exported from `types/index.ts`. Files marked internal stay out of `src/index.ts`.
 - `hooks/`, `contexts/`, `store/` (the folder listing cache), `utils/` (plain functions), `styles/` (container-query constants, style helpers) and `icon-sets/`.
@@ -39,7 +39,7 @@ Imports are relative, with no path alias. The only barrels are `src/index.ts` an
 
 `FileManager` (`src/components/file-manager/file-manager.tsx`) is a file manager for the web, so it has no built-in locations (no Home, Trash or Network). The consumer supplies everything:
 
-- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal })` returns `{ entries }` for one folder, called only when a folder is first opened or expanded. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working.
+- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal })` returns `{ entries }` for one folder, called only when a folder is first opened or expanded. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working. Optional members switch features on: `createFolder` and `rename` so far.
 - **`sections`** is `SectionGroup[]`. Each `Section` (id, label, icon, `rootId`, optional own `adapter`, optional `showFolders`) is an independent root, with no connection to other sections even when they share an adapter. A single `section` can be passed instead, and its folders then fill the sidebar (see `file-manager.md`).
 - **`actions`** is `ActionGroup[]` for the context menu.
 
