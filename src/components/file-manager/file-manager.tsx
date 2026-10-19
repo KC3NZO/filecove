@@ -118,6 +118,7 @@ const FileManager = ({
 
     const section = sectionsById.get(place.sectionId);
     const folder = section && folderOf(section, place.trail);
+    const openKey = section && folder ? folderKey(section.id, folder.id) : null;
 
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(
         () => new Set(section ? keysAlong(section, place) : []),
@@ -125,6 +126,9 @@ const FileManager = ({
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [view, setView] = useState<ViewMode>(defaultView);
     const [menu, setMenu] = useState<MenuState | null>(null);
+    // The folder in which touch selection mode is on, so opening another folder turns it off.
+    const [selectingKey, setSelectingKey] = useState<string | null>(null);
+    const selecting = openKey !== null && selectingKey === openKey;
 
     const hasActions = useMemo(() => actions.some((group) => group.actions.length > 0), [actions]);
 
@@ -165,6 +169,8 @@ const FileManager = ({
     const closeSidebar = useCallback(() => setSidebarOpen(false), []);
     const toggleView = useCallback(() => setView((prev) => (prev === "list" ? "grid" : "list")), []);
     const closeMenu = useCallback(() => setMenu((prev) => prev && { ...prev, open: false }), []);
+    const setSelecting = useCallback((on: boolean) => setSelectingKey(on ? openKey : null), [openKey]);
+    const toggleSelecting = useCallback(() => setSelecting(!selecting), [setSelecting, selecting]);
 
     const openMenu = useCallback<OpenMenu>(
         (position, { target, section: menuSection, trail, entries }) => {
@@ -205,7 +211,7 @@ const FileManager = ({
                         title={title}
                         groups={sections}
                         expanded={expanded}
-                        openKey={section && folder ? folderKey(section.id, folder.id) : null}
+                        openKey={openKey}
                         open={sidebarOpen}
                         onToggle={toggleExpanded}
                         onNavigate={goTo}
@@ -230,19 +236,23 @@ const FileManager = ({
                             canGoBack={canGoBack}
                             canGoForward={canGoForward}
                             view={view}
+                            selecting={selecting}
                             onBack={back}
                             onForward={forward}
                             onToggleView={toggleView}
+                            onToggleSelecting={toggleSelecting}
                             onOpenSidebar={openSidebar}
                         />
                         {/* Keyed by folder so each one opens scrolled to the top, with nothing selected. */}
-                        <Box key={section && folder ? folderKey(section.id, folder.id) : undefined} sx={viewSx}>
+                        <Box key={openKey ?? undefined} sx={viewSx}>
                             {section && (
                                 <FolderView
                                     section={section}
                                     trail={place.trail}
                                     view={view}
                                     hasActions={hasActions}
+                                    selecting={selecting}
+                                    onSelectingChange={setSelecting}
                                     onNavigate={goTo}
                                     onOpenMenu={openMenu}
                                 />

@@ -75,6 +75,12 @@ Internals:
     - Dragging near the panel's top or bottom edge scrolls it.
     - The rectangle is moved through CSS custom properties without re-rendering. The view only re-renders when the covered entries change.
     - The click that ends a drag is swallowed so it doesn't clear the new selection.
+  - **Touch:** there are no modifier keys, so the content has a selection mode instead. It is on while `file-manager.tsx`'s `selectingKey` equals the open folder's key, so opening another folder ends it.
+    - Two ways in: long-pressing an entry (`hooks/use-long-press.ts`, 500 ms on its own timer, since iOS never fires `contextmenu` for a long-press), which selects it; or the header's Select button, shown only under `@media (hover: none)`.
+    - In the mode every tap toggles, a tap on empty space does nothing, and `content/selection-bar.tsx` (sticky at the panel's bottom) offers ✕, the count, Select all or none, and ⋮ for the selection's menu. Leaving the mode clears the selection. Rows and tiles show check badges (`content/item-icon.tsx`, keyed off `data-selecting` and `data-selected`).
+    - Outside it, a touch tap opens a folder rather than selecting it.
+    - `folder-view.tsx` reads each press's `pointerType` rather than the device, so hybrid devices get both behaviours. A touch press's `contextmenu` is swallowed, since a long-press means select.
+    - The sidebar tree has no touch selection.
   - **Sidebar:** `sidebar/sidebar.tsx` holds the selection through `hooks/use-tree-selection.ts`, keyed by `folderKey`.
     - A plain click opens a folder; only Ctrl and Shift select without opening.
     - Until then, and again after any navigation, the open folder alone counts as selected.

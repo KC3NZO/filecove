@@ -35,6 +35,8 @@ import HistoryOutlined from "@mui/icons-material/HistoryOutlined";
 import RefreshOutlined from "@mui/icons-material/RefreshOutlined";
 import DriveFileRenameOutlineOutlined from "@mui/icons-material/DriveFileRenameOutlineOutlined";
 import SearchOutlined from "@mui/icons-material/SearchOutlined";
+import SelectAllOutlined from "@mui/icons-material/SelectAllOutlined";
+import ChecklistOutlined from "@mui/icons-material/ChecklistOutlined";
 import SettingsOutlined from "@mui/icons-material/SettingsOutlined";
 import ShareOutlined from "@mui/icons-material/ShareOutlined";
 import SortOutlined from "@mui/icons-material/SortOutlined";
@@ -83,6 +85,8 @@ const outlined: IconSet = {
     refresh: RefreshOutlined,
     rename: DriveFileRenameOutlineOutlined,
     search: SearchOutlined,
+    selectAll: SelectAllOutlined,
+    selectMode: ChecklistOutlined,
     settings: SettingsOutlined,
     share: ShareOutlined,
     sort: SortOutlined,

@@ -44,6 +44,8 @@ export type IconName =
     | "refresh"
     | "rename"
     | "search"
+    | "selectAll"
+    | "selectMode"
     | "settings"
     | "share"
     | "sort"

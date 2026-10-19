@@ -15,9 +15,12 @@ interface HeaderBarProps {
     canGoBack: boolean;
     canGoForward: boolean;
     view: ViewMode;
+    /** Whether touch selection mode is on. */
+    selecting: boolean;
     onBack: () => void;
     onForward: () => void;
     onToggleView: () => void;
+    onToggleSelecting: () => void;
     onOpenSidebar: () => void;
 }
 
@@ -50,6 +53,14 @@ const collapsedOnlySx: SxProps<Theme> = {
     [rootWide]: { display: "none" },
 };
 
+// Touch screens only, which have no Ctrl or Shift to select several entries with. This asks what
+// the input can do, not how wide the screen is, so it is a media query rather than a container one.
+const selectButtonSx: SxProps<Theme> = {
+    display: "none",
+    '&[aria-pressed="true"]': { color: "primary.main" },
+    "@media (hover: none)": { display: "inline-flex" },
+};
+
 const mediumUpSx: SxProps<Theme> = {
     display: "none",
     [rootMedium]: { display: "inline-flex" },
@@ -60,9 +71,11 @@ const HeaderBar = ({
     canGoBack,
     canGoForward,
     view,
+    selecting,
     onBack,
     onForward,
     onToggleView,
+    onToggleSelecting,
     onOpenSidebar,
 }: HeaderBarProps) => (
     <Box sx={headerSx}>
@@ -79,6 +92,14 @@ const HeaderBar = ({
         </Box>
         {pathBar}
         <Box sx={endGroupSx}>
+            <IconButton
+                aria-label={selecting ? "Done selecting" : "Select"}
+                aria-pressed={selecting}
+                sx={selectButtonSx}
+                onClick={onToggleSelecting}
+            >
+                <Icon name="selectMode" fontSize="small" />
+            </IconButton>
             <IconButton aria-label="Search" sx={collapsedOnlySx}>
                 <Icon name="search" fontSize="small" />
             </IconButton>

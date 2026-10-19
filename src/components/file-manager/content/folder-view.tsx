@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import type { MouseEvent, PointerEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -9,16 +9,18 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
+import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
 import { useSelection } from "../../../hooks/use-selection";
 import { selectedBackground } from "../../../styles/mixins";
 import { compareEntries } from "../../../utils/format";
-import { pointerPosition } from "../../../utils/menu-position";
+import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { EMPTY_SELECTION, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import Icon from "../../icons/icon";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
+import SelectionBar from "./selection-bar";
 
 import type {
     EntrySelection,
@@ -28,6 +30,7 @@ import type {
     OpenMenu,
     Place,
     Section,
+    SelectModifiers,
     ViewMode,
 } from "../../../types";
 
@@ -36,17 +39,25 @@ interface FolderViewProps {
     trail: FolderRef[];
     view: ViewMode;
     hasActions: boolean;
+    /** Touch selection mode: taps toggle entries, and the selection bar shows. */
+    selecting: boolean;
+    onSelectingChange: (selecting: boolean) => void;
     onNavigate: (place: Place) => void;
     onOpenMenu: OpenMenu;
 }
 
 // Fills the scroll panel even when the folder is short, so its empty space takes clicks,
 // right-clicks and marquee drags. Positioned so the marquee is placed in content coordinates.
+// On touch, a long-press selects, so iOS's callout and the tap flash are turned off, and a double
+// tap doesn't zoom.
 const surfaceSx: SxProps<Theme> = {
     position: "relative",
     display: "flex",
     flexDirection: "column",
     minHeight: "100%",
+    WebkitTouchCallout: "none",
+    WebkitTapHighlightColor: "transparent",
+    touchAction: "manipulation",
 };
 
 // Geometry comes from custom properties that `useMarquee` sets while dragging.
@@ -99,13 +110,40 @@ const stateTitleSx: SxProps<Theme> = {
 /**
  * The open folder's contents. It owns the selection, so the selection starts empty in every
  * folder (the file manager remounts this per folder) and is never shared with the sidebar.
+ *
+ * On touch there are no modifier keys, so a long-press (or the header's Select button) starts a
+ * selection mode in which taps toggle entries. Outside it, a tap opens a folder.
  */
-const FolderView = ({ section, trail, view, hasActions, onNavigate, onOpenMenu }: FolderViewProps) => {
+const FolderView = ({
+    section,
+    trail,
+    view,
+    hasActions,
+    selecting,
+    onSelectingChange,
+    onNavigate,
+    onOpenMenu,
+}: FolderViewProps) => {
     const { state, reload } = useFolder(section, folderOf(section, trail).id, true);
 
     const entries = useMemo(() => (state?.entries ? [...state.entries].sort(compareEntries) : undefined), [state?.entries]);
 
-    const { selection, selectedIds, selected, select, replace, clear } = useSelection(entries);
+    const { selection, selectedIds, selected, select, replace, selectAll, clear } = useSelection(entries);
+
+    // Leaving selection mode, however it is left, drops the selection made in it.
+    const [wasSelecting, setWasSelecting] = useState(selecting);
+
+    if (selecting !== wasSelecting) {
+        setWasSelecting(selecting);
+
+        if (!selecting) {
+            clear();
+        }
+    }
+
+    // The pointer of the latest press, which the click and contextmenu that follow it come from.
+    // Read per press rather than from the device, so a tablet with a trackpad gets both behaviours.
+    const pointerType = useRef("mouse");
 
     // Shift and Ctrl marquees build on what was selected when the drag began.
     const marqueeBase = useRef<EntrySelection>(EMPTY_SELECTION);
@@ -117,6 +155,17 @@ const FolderView = ({ section, trail, view, hasActions, onNavigate, onOpenMenu }
         onChange: (ids, modifiers) => replace(marqueeSelection(marqueeBase.current, ids, modifiers)),
     });
 
+    const longPress = useLongPress({
+        onLongPress: (id) => {
+            if (selecting) {
+                select(id, { toggle: true, range: false });
+            } else {
+                replace({ ids: new Set([id]), anchor: id });
+                onSelectingChange(true);
+            }
+        },
+    });
+
     const handleOpen = useCallback(
         (entry: FileEntry) => {
             if (entry.kind === "folder") {
@@ -124,6 +173,37 @@ const FolderView = ({ section, trail, view, hasActions, onNavigate, onOpenMenu }
             }
         },
         [onNavigate, section.id, trail],
+    );
+
+    // In selection mode every tap toggles. Outside it, a touch tap opens a folder, as double-click
+    // does with a mouse, and otherwise selects as a click does.
+    const handleSelect = useCallback(
+        (id: string, modifiers: SelectModifiers) => {
+            if (selecting) {
+                select(id, { toggle: true, range: modifiers.range });
+
+                return;
+            }
+
+            const entry = pointerType.current === "mouse" ? undefined : entries?.find((item) => item.id === id);
+
+            if (entry?.kind === "folder") {
+                handleOpen(entry);
+            } else {
+                select(id, modifiers);
+            }
+        },
+        [selecting, select, entries, handleOpen],
+    );
+
+    // A double tap in selection mode is two toggles, not an open.
+    const handleDoubleOpen = useCallback(
+        (entry: FileEntry) => {
+            if (!selecting) {
+                handleOpen(entry);
+            }
+        },
+        [selecting, handleOpen],
     );
 
     // As in desktop file managers, the menu of a selected entry acts on the whole selection, while
@@ -151,9 +231,31 @@ const FolderView = ({ section, trail, view, hasActions, onNavigate, onOpenMenu }
     const handleBackgroundClick = (event: MouseEvent) => {
         const { toggle, range } = selectModifiers(event);
 
-        if (!toggle && !range) {
+        if (!toggle && !range && !selecting) {
             clear();
         }
+    };
+
+    const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+        marquee.onPointerDown(event);
+        longPress.onPointerDown(event);
+    };
+
+    const handleClickCapture = (event: MouseEvent) => {
+        marquee.onClickCapture(event);
+        longPress.onClickCapture(event);
+    };
+
+    // A touch long-press is ours, so neither the browser's menu nor ours opens on top of it.
+    const handleContextMenuCapture = (event: MouseEvent) => {
+        if (pointerType.current !== "mouse") {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    };
+
+    const handleSelectionMenu = (button: HTMLElement) => {
+        onOpenMenu(belowElement(button), { target: "selection", section, trail, entries: selected });
     };
 
     const handleBackgroundMenu = (event: MouseEvent) => {
@@ -173,8 +275,8 @@ const FolderView = ({ section, trail, view, hasActions, onNavigate, onOpenMenu }
                 entries={entries}
                 selectedIds={selectedIds}
                 hasActions={hasActions}
-                onSelect={select}
-                onOpen={handleOpen}
+                onSelect={handleSelect}
+                onOpen={handleDoubleOpen}
                 onMenu={handleEntryMenu}
             />
         );
@@ -215,13 +317,29 @@ const FolderView = ({ section, trail, view, hasActions, onNavigate, onOpenMenu }
         <Box
             ref={marquee.surfaceRef}
             sx={surfaceSx}
-            onPointerDown={marquee.onPointerDown}
-            onClickCapture={marquee.onClickCapture}
+            data-selecting={selecting}
+            onPointerDownCapture={(event) => {
+                pointerType.current = event.pointerType;
+            }}
+            onPointerDown={handlePointerDown}
+            onClickCapture={handleClickCapture}
             onClick={handleBackgroundClick}
+            onContextMenuCapture={handleContextMenuCapture}
             onContextMenu={handleBackgroundMenu}
         >
             {state?.status === "loading" && entries && <LinearProgress sx={progressSx} />}
             {content}
+            {selecting && (
+                <SelectionBar
+                    count={selected.length}
+                    total={entries?.length ?? 0}
+                    hasActions={hasActions}
+                    onClose={() => onSelectingChange(false)}
+                    onSelectAll={selectAll}
+                    onSelectNone={clear}
+                    onMenu={handleSelectionMenu}
+                />
+            )}
             <Box ref={marquee.marqueeRef} sx={marqueeSx} />
         </Box>
     );
