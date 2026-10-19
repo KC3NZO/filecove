@@ -29,6 +29,16 @@ export interface ActionContext {
      * `rename`, or when there isn't exactly one entry.
      */
     rename?: () => void;
+    /**
+     * Asks for a destination folder and copies `entries` there. Missing when the section's adapter
+     * has no `copy`, or there are no entries.
+     */
+    copyTo?: () => void;
+    /**
+     * Asks for a destination folder and moves `entries` there. Missing when the section's adapter
+     * has no `move`, or there are no entries.
+     */
+    moveTo?: () => void;
 }
 
 export interface FileAction {

@@ -218,14 +218,16 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 label: "Copy to…",
                 icon: <FileCopyOutlined />,
                 target: "selection",
-                onSelect: (context) => notify(`Copy ${names(context)} to…`),
+                visible: (context) => !!context.copyTo,
+                onSelect: (context) => context.copyTo?.(),
             },
             {
                 id: "move-to",
                 label: "Move to…",
                 icon: "move",
                 target: "selection",
-                onSelect: (context) => notify(`Move ${names(context)} to…`),
+                visible: (context) => !!context.moveTo,
+                onSelect: (context) => context.moveTo?.(),
             },
             {
                 id: "compress",

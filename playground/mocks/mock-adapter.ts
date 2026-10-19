@@ -1,4 +1,4 @@
-import type { FileAdapter, FileEntry, ListResult } from "../../src";
+import type { ConflictPolicy, FileAdapter, FileEntry, ListResult } from "../../src";
 
 /** A file or folder of the fake backend, written as nested literals. */
 export interface MockNode {
@@ -34,6 +34,8 @@ const parentOf = (path: string) => {
 
     return cut > 0 ? path.slice(0, cut) : "/";
 };
+
+const clone = (node: MockNode): MockNode => ({ ...node, children: node.children?.map(clone) });
 
 const toEntry = (parentPath: string, node: MockNode): FileEntry => ({
     id: join(parentPath, node.name),
@@ -116,6 +118,63 @@ export const createMockAdapter = (
         }
     };
 
+    /** An entry's node and the folder it is in. */
+    const locate = (entry: FileEntry) => {
+        const parentId = parentOf(entry.id);
+        const parent = folderAt(parentId);
+        const node = parent.children?.find((child) => child.name === entry.name);
+
+        if (!node) {
+            throw new Error(`No file or folder at ${entry.id}`);
+        }
+
+        if (node.fails) {
+            throw new Error("Permission denied");
+        }
+
+        return { parentId, parent, node };
+    };
+
+    const detach = (parent: MockNode, parentId: string, node: MockNode) => {
+        parent.children = parent.children?.filter((child) => child !== node);
+
+        if (node.children) {
+            unindex(join(parentId, node.name));
+        }
+    };
+
+    // A name the folder doesn't have yet, e.g. "notes (2).txt", for keeping both.
+    const freeName = (parent: MockNode, node: MockNode) => {
+        const dot = node.children ? -1 : node.name.lastIndexOf(".");
+        const [base, extension] = dot > 0 ? [node.name.slice(0, dot), node.name.slice(dot)] : [node.name, ""];
+        let name = node.name;
+
+        for (let count = 2; parent.children?.some((child) => child.name === name); count += 1) {
+            name = `${base} (${count})${extension}`;
+        }
+
+        return name;
+    };
+
+    /** Puts a node into a folder, settling a name clash by `conflict`. */
+    const insert = (target: MockNode, targetId: string, node: MockNode, conflict: ConflictPolicy) => {
+        const existing = target.children?.find((child) => child.name === node.name);
+
+        if (existing && conflict === "replace") {
+            detach(target, targetId, existing);
+        } else if (existing) {
+            node.name = freeName(target, node);
+        }
+
+        target.children = [...(target.children ?? []), node];
+
+        if (node.children) {
+            index(join(targetId, node.name), node);
+        }
+    };
+
+    const clashes = (target: MockNode, node: MockNode) => !!target.children?.some((child) => child.name === node.name);
+
     return {
         list: (folderId, { signal }) =>
             respond<ListResult>(signal, () => ({
@@ -138,17 +197,7 @@ export const createMockAdapter = (
 
         rename: (entry, name, { signal }) =>
             respond(signal, () => {
-                const parentId = parentOf(entry.id);
-                const parent = folderAt(parentId);
-                const node = parent.children?.find((child) => child.name === entry.name);
-
-                if (!node) {
-                    throw new Error(`No file or folder at ${entry.id}`);
-                }
-
-                if (node.fails) {
-                    throw new Error("Permission denied");
-                }
+                const { parentId, parent, node } = locate(entry);
 
                 ensureFree(parent, name, node);
                 node.name = name;
@@ -159,6 +208,39 @@ export const createMockAdapter = (
                 }
 
                 return toEntry(parentId, node);
+            }),
+
+        copy: (entries, targetId, { signal, conflict }) =>
+            respond(signal, () => {
+                const target = folderAt(targetId);
+
+                entries.forEach((entry) => {
+                    const { node } = locate(entry);
+
+                    if (!(conflict === "skip" && clashes(target, node))) {
+                        insert(target, targetId, clone(node), conflict);
+                    }
+                });
+            }),
+
+        move: (entries, targetId, { signal, conflict }) =>
+            respond(signal, () => {
+                const target = folderAt(targetId);
+
+                entries.forEach((entry) => {
+                    const { parentId, parent, node } = locate(entry);
+
+                    if (targetId === entry.id || targetId.startsWith(`${entry.id}/`)) {
+                        throw new Error(`"${entry.name}" can't go into itself.`);
+                    }
+
+                    if (parent === target || (conflict === "skip" && clashes(target, node))) {
+                        return;
+                    }
+
+                    detach(parent, parentId, node);
+                    insert(target, targetId, node, conflict);
+                });
             }),
     };
 };

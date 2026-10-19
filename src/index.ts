@@ -6,6 +6,7 @@ export type {
     ActionContext,
     ActionGroup,
     ActionTarget,
+    ConflictPolicy,
     FileAction,
     FileAdapter,
     FileEntry,
@@ -22,5 +23,6 @@ export type {
     SortDirection,
     SortKey,
     SortOrder,
+    TransferOptions,
     ViewMode,
 } from "./types";

@@ -49,6 +49,21 @@ export interface OperationOptions {
     signal: AbortSignal;
 }
 
+/**
+ * What to do with an entry whose name the destination folder already has: replace what is there,
+ * keep both by giving the incoming entry a free name, or leave that entry out.
+ */
+export type ConflictPolicy = "replace" | "keepBoth" | "skip";
+
+/** Passed to `copy` and `move`. */
+export interface TransferOptions extends OperationOptions {
+    /**
+     * Chosen by the user when the destination's cached listing showed a clash, and "keepBoth"
+     * otherwise, so a clash the cache missed never overwrites anything.
+     */
+    conflict: ConflictPolicy;
+}
+
 export interface FileAdapter {
     /** Lists the direct children of a folder. Reject to show the folder as failed to load. */
     list(folderId: string, options: ListOptions): Promise<ListResult>;
@@ -64,4 +79,16 @@ export interface FileAdapter {
      * message to the user.
      */
     rename?(entry: FileEntry, name: string, options: OperationOptions): Promise<FileEntry>;
+    /**
+     * Copies entries, folders with everything in them, into `targetId`. The entries share a
+     * parent. Without it, the file manager has no way to copy. Reject with an `Error` to show its
+     * message to the user.
+     */
+    copy?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<void>;
+    /**
+     * Moves entries into `targetId`; never into themselves, nor into the folder they're in. The
+     * entries share a parent. Without it, the file manager has no way to move. Reject with an
+     * `Error` to show its message to the user.
+     */
+    move?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<void>;
 }

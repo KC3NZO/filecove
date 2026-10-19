@@ -15,6 +15,7 @@ import { DEFAULT_SORT } from "../../utils/sort";
 import FolderView from "./content/folder-view";
 import ContextMenu from "./context-menu/context-menu";
 import NameDialog from "./dialogs/name-dialog";
+import TransferDialog from "./dialogs/transfer-dialog";
 import HeaderBar from "./header-bar/header-bar";
 import PathBar from "./header-bar/path-bar";
 import Sidebar from "./sidebar/sidebar";
@@ -35,6 +36,7 @@ import type {
 } from "../../types";
 import type { MenuState } from "./context-menu/context-menu";
 import type { NameDialogState, NameRequest } from "./dialogs/name-dialog";
+import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-dialog";
 
 interface BaseProps {
     /** Backend for every section that doesn't bring its own. */
@@ -171,6 +173,7 @@ const FileManager = ({
     const [showHidden, setShowHidden] = useState(false);
     const [menu, setMenu] = useState<MenuState | null>(null);
     const [naming, setNaming] = useState<NameDialogState | null>(null);
+    const [transfer, setTransfer] = useState<TransferDialogState | null>(null);
     const [reveal, setReveal] = useState<Reveal | null>(null);
     // The folder in which touch selection mode is on, so opening another folder turns it off.
     const [selectingKey, setSelectingKey] = useState<string | null>(null);
@@ -221,6 +224,33 @@ const FileManager = ({
     }, []);
 
     const closeNaming = useCallback(() => setNaming((prev) => prev && { ...prev, open: false }), []);
+
+    const askDestination = useCallback((request: TransferRequest) => {
+        setTransfer((prev) => ({ open: true, id: (prev?.id ?? 0) + 1, request }));
+    }, []);
+
+    const closeTransfer = useCallback(() => setTransfer((prev) => prev && { ...prev, open: false }), []);
+
+    // With path ids, a moved folder's old id is free for another folder, so its cached listing is
+    // dropped. A place inside a moved folder can't be followed, so it goes where the folder went.
+    const handleTransferred = useCallback(
+        (request: TransferRequest, destination: Place) => {
+            closeTransfer();
+
+            if (request.kind !== "move") {
+                return;
+            }
+
+            const movedIds = new Set(request.entries.filter((entry) => entry.kind === "folder").map((entry) => entry.id));
+
+            movedIds.forEach((id) => store.forget(folderKey(request.section.id, id)));
+
+            if (place.sectionId === request.section.id && place.trail.some((step) => movedIds.has(step.id))) {
+                goTo(destination);
+            }
+        },
+        [closeTransfer, store, place, goTo],
+    );
 
     // The new or renamed entry is selected if its folder is open. A renamed folder keeps its
     // place in the path, the history and the sidebar tree.
@@ -281,6 +311,15 @@ const FileManager = ({
             const menuFolder = folderOf(menuSection, trail);
             const folderAdapter = menuSection.adapter ?? adapter;
             const base = { section: menuSection, adapter: folderAdapter, trail };
+            const transferTo = (kind: TransferRequest["kind"]) => () =>
+                askDestination({
+                    ...base,
+                    kind,
+                    entries,
+                    destinations: [...sectionsById.values()].filter(
+                        (candidate) => (candidate.adapter ?? adapter) === folderAdapter,
+                    ),
+                });
 
             return {
                 target,
@@ -298,9 +337,11 @@ const FileManager = ({
                     folderAdapter.rename && entries.length === 1
                         ? () => askName({ ...base, kind: "rename", entry: entries[0] })
                         : undefined,
+                copyTo: folderAdapter.copy && entries.length > 0 ? transferTo("copy") : undefined,
+                moveTo: folderAdapter.move && entries.length > 0 ? transferTo("move") : undefined,
             };
         },
-        [adapter, store, goTo, askName],
+        [adapter, store, goTo, askName, askDestination, sectionsById],
     );
 
     const openMenu = useCallback<OpenMenu>(
@@ -413,6 +454,15 @@ const FileManager = ({
                         request={naming.request}
                         onClose={closeNaming}
                         onDone={handleNamed}
+                    />
+                )}
+                {transfer && (
+                    <TransferDialog
+                        key={transfer.id}
+                        open={transfer.open}
+                        request={transfer.request}
+                        onClose={closeTransfer}
+                        onDone={handleTransferred}
                     />
                 )}
             </Box>
