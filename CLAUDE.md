@@ -50,7 +50,10 @@ Imports are relative, with no path alias. The only barrels are `src/index.ts` an
 
 - **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal })` returns `{ entries }` for one folder, called only when a folder is first opened or expanded. `FileEntry.id` is opaque to the component (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working.
 - **`sections`** is `SectionGroup[]`. Each `Section` (id, label, icon, `rootId`, optional own `adapter`) is an independent root, and sections have no connection to each other even when they share an adapter (e.g. `/server/project/a` and `/server/project/b`). The path bar starts with the section label, followed by the folders below its root.
-- **`actions`** is `ActionGroup[]` for the context menu. An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`. The menu opens on right-click (items, content background, sidebar rows) and from the ⋮ buttons (list rows, path bar). When no action applies, the browser's own menu is left alone.
+- **`actions`** is `ActionGroup[]` for the context menu. An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`.
+  - Actions apply to any number of selected entries (copy, move, delete, compress...). Only actions marked `single: true`, such as rename, hide while several entries are selected.
+  - The menu opens on right-click (items, content background, sidebar rows) and from the ⋮ buttons (list rows, path bar).
+  - When no action applies, the browser's own menu is left alone.
 
 Internals:
 
@@ -58,7 +61,21 @@ Internals:
 - `hooks/use-place-history.ts` holds the current `Place` (a section plus a trail of `FolderRef`s) and the back/forward history. `utils/navigation.ts` has `folderOf`, which returns the folder a place points at.
   - Breadcrumbs come from the trail, not from parsing ids.
   - Navigating expands every folder along the trail in the sidebar.
-- `file-manager.tsx` is the frame (sidebar, header bar, inset content panel) and owns navigation, tree expansion, selection and the context menu state.
+- `file-manager.tsx` is the frame (sidebar, header bar, inset content panel) and owns navigation, tree expansion and the context menu state.
+- **The content and the sidebar tree each have their own selection, and the two are never merged.** Both follow `nextSelection` (`utils/selection.ts`):
+  - a click selects one entry;
+  - Ctrl or ⌘ toggles one;
+  - Shift selects a range from the anchor;
+  - Ctrl+Shift adds the range to the selection.
+
+  In both panes, right-clicking a selected item (or using its ⋮) acts on that pane's whole selection, and any other item is selected alone first.
+  - **Content:** `content/folder-view.tsx` holds the selection through `hooks/use-selection.ts`. The view remounts per folder, so every folder opens with nothing selected.
+  - **Sidebar:** `sidebar/sidebar.tsx` holds the selection through `hooks/use-tree-selection.ts`, keyed by `folderKey`.
+    - A plain click opens a folder; only Ctrl and Shift select without opening.
+    - Until then, and again after any navigation, the open folder alone counts as selected.
+    - Selected folders are always siblings, so a menu's `ActionContext` has one parent `folder`. A modifier click under another parent starts a new selection.
+    - Section rows are roots and never join a folder selection.
+    - Rows show the selection as a background and the open folder as accent text, since the two can differ.
 - The parts, in `components/file-manager/`:
   - `sidebar/location-item.tsx` renders a section row and its lazily loaded folder tree (`TreeRow` is the shared row).
   - `header-bar/` holds back/forward, the path bar and view buttons.
