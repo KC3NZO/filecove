@@ -10,7 +10,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
 import { folderKey } from "../../../store/folder-store";
-import { focusRing, selectedBackground } from "../../../styles/mixins";
+import { focusRing, hoverBackground, selectedBackground, selectedHoverBackground } from "../../../styles/mixins";
 import { pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { selectModifiers } from "../../../utils/selection";
@@ -111,8 +111,9 @@ const rowSx: SxProps<Theme> = (theme) => ({
     position: "relative",
     borderRadius: 2,
     color: "text.primary",
-    "&:hover": { bgcolor: "action.hover" },
+    "&:hover": { bgcolor: hoverBackground(theme) },
     '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
+    '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
     // The open folder keeps its accent text when the selection moves to other folders.
     '&[data-open="true"]': { color: "primary.main" },
 });

@@ -5,7 +5,13 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { viewMedium, viewWide } from "../../../styles/layout";
-import { focusRing, selectedBackground, stripeBackground } from "../../../styles/mixins";
+import {
+    focusRing,
+    hoverBackground,
+    selectedBackground,
+    selectedHoverBackground,
+    stripeBackground,
+} from "../../../styles/mixins";
 import { describeDate, describeSize, describeType } from "../../../utils/format";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
@@ -77,8 +83,9 @@ const rowSx: SxProps<Theme> = (theme) => ({
     borderRadius: 2,
     cursor: "default",
     "&:nth-of-type(odd)": { bgcolor: stripeBackground(theme) },
-    "&:hover": { bgcolor: "action.hover" },
+    "&:hover": { bgcolor: hoverBackground(theme) },
     '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
+    '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
     // The menu button shows on hover, on focus and for the selected row; always on touch screens.
     "& [data-menu-button]": { opacity: 0 },
     '&:hover [data-menu-button], &[data-selected="true"] [data-menu-button], & [data-menu-button].Mui-focusVisible':

@@ -3,7 +3,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { viewMedium } from "../../../styles/layout";
-import { selectedBackground } from "../../../styles/mixins";
+import { hoverBackground, selectedBackground, selectedHoverBackground } from "../../../styles/mixins";
 import { pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
 import ItemIcon from "./item-icon";
@@ -35,8 +35,9 @@ const tileSx: SxProps<Theme> = (theme) => ({
     borderRadius: 2,
     textAlign: "center",
     cursor: "default",
-    "&:hover": { bgcolor: "action.hover" },
+    "&:hover": { bgcolor: hoverBackground(theme) },
     '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
+    '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
     "& > svg": { flexShrink: 0 },
 });
 

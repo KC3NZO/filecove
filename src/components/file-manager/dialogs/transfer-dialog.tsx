@@ -17,6 +17,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
+import { dialogPaperSx, hoverBackground } from "../../../styles/mixins";
 import { folderOf } from "../../../utils/navigation";
 import { compareEntries } from "../../../utils/sort";
 import { FolderTypeIcon } from "../../icons/file-icon";
@@ -65,12 +66,8 @@ interface TransferDialogProps {
 
 const NO_MENU: OpenMenu = () => false;
 
-const paperSx: SxProps<Theme> = {
-    borderRadius: 3,
-};
-
 const slotProps = {
-    paper: { sx: paperSx },
+    paper: { sx: dialogPaperSx },
 };
 
 const contentSx: SxProps<Theme> = {
@@ -93,12 +90,14 @@ const locationSx: SxProps<Theme> = {
 };
 
 // The bordered box the folders fill, shared by the list and its loading, empty and error states.
+// It takes the content panel's surface, as the dialog takes the window's, so it reads as the same view.
 const frame = {
     flex: 1,
     minHeight: 0,
     border: 1,
     borderColor: "divider",
     borderRadius: 2,
+    bgcolor: "background.paper",
 };
 
 // Not a flex container: `ListItemButton` grows along a flex axis, which would stretch every row.
@@ -113,10 +112,11 @@ const emptySx: SxProps<Theme> = {
     display: "flex",
 };
 
-const rowSx: SxProps<Theme> = {
+const rowSx: SxProps<Theme> = (theme) => ({
     mx: 0.5,
     borderRadius: 1.5,
-};
+    "&:hover": { bgcolor: hoverBackground(theme) },
+});
 
 const rowIconSx: SxProps<Theme> = {
     minWidth: 36,
@@ -376,14 +376,19 @@ const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps)
             </DialogContent>
             {conflicts ? (
                 <DialogActions>
-                    <Button disabled={!!pending} onClick={() => setConflicts(null)}>
+                    <Button color="inherit" disabled={!!pending} onClick={() => setConflicts(null)}>
                         Back
                     </Button>
                     <Box sx={spacerSx} />
-                    <Button disabled={!!pending} loading={pending === "skip"} onClick={() => run("skip")}>
+                    <Button color="inherit" disabled={!!pending} loading={pending === "skip"} onClick={() => run("skip")}>
                         Skip
                     </Button>
-                    <Button disabled={!!pending} loading={pending === "keepBoth"} onClick={() => run("keepBoth")}>
+                    <Button
+                        color="inherit"
+                        disabled={!!pending}
+                        loading={pending === "keepBoth"}
+                        onClick={() => run("keepBoth")}
+                    >
                         Keep both
                     </Button>
                     <Button
@@ -397,7 +402,9 @@ const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps)
                 </DialogActions>
             ) : (
                 <DialogActions>
-                    <Button onClick={close}>Cancel</Button>
+                    <Button color="inherit" onClick={close}>
+                        Cancel
+                    </Button>
                     <Button
                         variant="contained"
                         disabled={!place || (kind === "move" && sameFolder)}

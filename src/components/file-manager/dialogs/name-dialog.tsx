@@ -10,6 +10,7 @@ import TextField from "@mui/material/TextField";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
+import { dialogPaperSx } from "../../../styles/mixins";
 import { nameProblem, newFolderName, stemLength } from "../../../utils/names";
 import { folderOf } from "../../../utils/navigation";
 
@@ -41,10 +42,6 @@ interface NameDialogProps {
     /** Called with the entry as the adapter returned it, once created or renamed. */
     onDone: (request: NameRequest, entry: FileEntry) => void;
 }
-
-const paperSx: SxProps<Theme> = {
-    borderRadius: 3,
-};
 
 // Outlined labels sit on the field's top edge, so the field needs room below the title.
 const fieldSx: SxProps<Theme> = {
@@ -103,7 +100,7 @@ const NameDialog = ({ open, request, onClose, onDone }: NameDialogProps) => {
     // where it was opened from as it closes, which would win over `autoFocus`.
     const slotProps = useMemo(
         () => ({
-            paper: { sx: paperSx },
+            paper: { sx: dialogPaperSx },
             transition: {
                 onEntered: () => {
                     const input = inputRef.current;
@@ -205,7 +202,9 @@ const NameDialog = ({ open, request, onClose, onDone }: NameDialogProps) => {
                 </form>
             </DialogContent>
             <DialogActions>
-                <Button onClick={close}>Cancel</Button>
+                <Button color="inherit" onClick={close}>
+                    Cancel
+                </Button>
                 <Button type="submit" form={formId} variant="contained" disabled={!trimmed || !!problem} loading={pending}>
                     {entry ? "Rename" : "Create"}
                 </Button>

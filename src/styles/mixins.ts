@@ -1,13 +1,35 @@
-import type { Theme } from "@mui/material/styles";
+import type { SxProps, Theme } from "@mui/material/styles";
 
 // `theme.vars` is set when the consumer's theme uses CSS variables; read tokens from it
 // when present so the colors follow light/dark switching without a re-render.
+//
+// MUI's `action` opacities are tuned for menus and lists on a plain surface. Over the striped
+// rows of a file view they barely show, light mode especially, so the helpers below build on
+// them with a fixed boost. They stay relative to the theme's own values, so a theme that
+// raises or lowers them still moves these.
+
+/** Neutral tint for a hovered row or tile, clearly stronger than the list's zebra stripe. */
+export const hoverBackground = (theme: Theme) => {
+    const tokens = theme.vars || theme;
+
+    return theme.alpha(tokens.palette.text.primary, `${tokens.palette.action.hoverOpacity} + 0.04`);
+};
 
 /** Accent-tinted background for the selected location or file. */
 export const selectedBackground = (theme: Theme) => {
     const tokens = theme.vars || theme;
 
-    return theme.alpha(tokens.palette.primary.main, tokens.palette.action.selectedOpacity);
+    return theme.alpha(tokens.palette.primary.main, `${tokens.palette.action.selectedOpacity} + 0.12`);
+};
+
+/** A selected row or tile under the pointer, a step stronger than selected alone. */
+export const selectedHoverBackground = (theme: Theme) => {
+    const tokens = theme.vars || theme;
+
+    return theme.alpha(
+        tokens.palette.primary.main,
+        `${tokens.palette.action.selectedOpacity} + ${tokens.palette.action.hoverOpacity} + 0.12`,
+    );
 };
 
 /** Faint zebra stripe for alternate list rows. */
@@ -21,4 +43,17 @@ export const focusRing = {
         outlineColor: "primary.main",
         outlineOffset: "-2px",
     },
+};
+
+/**
+ * The paper of the file manager's dialogs. It takes the window's own surface instead of MUI's
+ * elevated Paper, whose white overlay turns any dark background grey, and an outline marks its
+ * edge where a shadow doesn't show against a dark backdrop.
+ */
+export const dialogPaperSx: SxProps<Theme> = {
+    borderRadius: 3,
+    border: 1,
+    borderColor: "divider",
+    bgcolor: "background.default",
+    backgroundImage: "none",
 };
