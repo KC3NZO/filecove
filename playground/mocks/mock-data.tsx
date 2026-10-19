@@ -1,4 +1,6 @@
 import CloudOutlined from "@mui/icons-material/CloudOutlined";
+import FileCopyOutlined from "@mui/icons-material/FileCopyOutlined";
+import FolderZipOutlined from "@mui/icons-material/FolderZipOutlined";
 import LanguageOutlined from "@mui/icons-material/LanguageOutlined";
 
 import { createMockAdapter, file, folder } from "./mock-adapter";
@@ -122,12 +124,17 @@ export const sections: SectionGroup[] = [
     },
 ];
 
-const names = (context: ActionContext) =>
-    context.target === "folder" ? context.folder.name : context.entries.map((entry) => entry.name).join(", ");
+const names = (context: ActionContext) => {
+    if (context.target === "folder") {
+        return context.folder.name;
+    }
 
-const isSingle = (context: ActionContext) => context.entries.length === 1;
+    return context.entries.length > 3
+        ? `${context.entries.length} items`
+        : context.entries.map((entry) => entry.name).join(", ");
+};
 
-/** Demo actions; most only report that they ran. */
+/** Demo actions; most only report that they ran. Those marked `single` hide while several entries are selected. */
 export const createDemoActions = (notify: (message: string) => void): ActionGroup[] => [
     {
         id: "open",
@@ -137,7 +144,8 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 label: "Open",
                 icon: "folderOpen",
                 target: "selection",
-                visible: (context) => isSingle(context) && context.entries[0].kind === "folder",
+                single: true,
+                visible: (context) => context.entries[0].kind === "folder",
                 onSelect: (context) => context.openFolder(context.entries[0]),
             },
             {
@@ -202,6 +210,32 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
         ],
     },
     {
+        id: "organize",
+        actions: [
+            {
+                id: "copy-to",
+                label: "Copy to…",
+                icon: <FileCopyOutlined />,
+                target: "selection",
+                onSelect: (context) => notify(`Copy ${names(context)} to…`),
+            },
+            {
+                id: "move-to",
+                label: "Move to…",
+                icon: "move",
+                target: "selection",
+                onSelect: (context) => notify(`Move ${names(context)} to…`),
+            },
+            {
+                id: "compress",
+                label: "Compress…",
+                icon: <FolderZipOutlined />,
+                target: "selection",
+                onSelect: (context) => notify(`Compress ${names(context)}`),
+            },
+        ],
+    },
+    {
         id: "edit",
         actions: [
             {
@@ -210,7 +244,7 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 icon: "rename",
                 shortcut: "F2",
                 target: "selection",
-                visible: isSingle,
+                single: true,
                 onSelect: (context) => notify(`Rename ${names(context)}`),
             },
             {

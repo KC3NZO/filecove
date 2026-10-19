@@ -7,7 +7,9 @@ export const visibleActionGroups = (groups: ActionGroup[], context: ActionContex
             ...group,
             actions: group.actions.filter(
                 (action) =>
-                    (!action.target || action.target === context.target) && (action.visible?.(context) ?? true),
+                    (!action.target || action.target === context.target) &&
+                    (!action.single || context.entries.length <= 1) &&
+                    (action.visible?.(context) ?? true),
             ),
         }))
         .filter((group) => group.actions.length > 0);

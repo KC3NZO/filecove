@@ -27,6 +27,11 @@ export interface FileAction {
     icon?: IconSource;
     /** Only offer the action for this kind of target; offered for both when omitted. */
     target?: ActionTarget;
+    /**
+     * Only offer the action when a single entry is targeted, for actions such as rename. Without
+     * it the action is offered for any number of selected entries, as copy, move or delete are.
+     */
+    single?: boolean;
     /** Narrows when it is offered, e.g. to files only or to a single entry. */
     visible?: (context: ActionContext) => boolean;
     disabled?: (context: ActionContext) => boolean;
