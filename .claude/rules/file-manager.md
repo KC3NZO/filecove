@@ -47,7 +47,7 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 
 ## The parts
 
-- `sidebar/location-item.tsx` renders a section row and its lazily loaded folder tree (`TreeRow` is the shared row).
+- `sidebar/location-item.tsx` renders a section row and its lazily loaded folder tree (`TreeRow` is the shared row). A section with `showFolders: false` is a plain GNOME-style place: no chevron, no tree, and it never starts expanded. The default is `true`.
 - `header-bar/` holds back/forward, the path bar and the view buttons. Below `rootMedium` the path bar gets a full-width row under the buttons; from `rootMedium` up, it sits centred between them.
 - `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`file-list.tsx`, a `--columns` grid template) or the grid view (`file-grid.tsx`).
 - `icon-slot.tsx` fits consumer-supplied icons to the same 1.25rem box as the built-in ones.
