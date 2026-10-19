@@ -13,20 +13,41 @@ import { folderKey } from "../../../store/folder-store";
 import { focusRing, selectedBackground } from "../../../styles/mixins";
 import { compareEntries } from "../../../utils/format";
 import { pointerPosition } from "../../../utils/menu-position";
+import { folderOf } from "../../../utils/navigation";
+import { selectModifiers } from "../../../utils/selection";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import IconSlot from "../icon-slot";
 
-import type { FileEntry, FolderRef, FolderState, MenuPosition, OpenMenu, Place, Section } from "../../../types";
+import type {
+    FileEntry,
+    FolderRef,
+    FolderState,
+    MenuPosition,
+    OpenMenu,
+    Place,
+    Section,
+    SelectModifiers,
+    TreeSelection,
+    TreeTarget,
+} from "../../../types";
 
-/** Props every item of a section's tree passes down unchanged. */
+/**
+ * Props every item of a section's tree passes down unchanged. The tree's selection is its own:
+ * selecting here never touches what is selected in the content, and a menu opened here acts on
+ * the tree's selection only.
+ */
 interface TreeProps {
     section: Section;
     expanded: ReadonlySet<string>;
     /** `folderKey` of the open folder. */
-    selectedKey: string | null;
+    openKey: string | null;
+    /** The tree's selection; null while the open folder alone counts as selected. */
+    selection: TreeSelection | null;
     onToggle: (key: string) => void;
     onNavigate: (place: Place) => void;
+    onSelectFolder: (target: TreeTarget, modifiers?: SelectModifiers) => void;
+    onSelectSection: (key: string) => void;
     onOpenMenu: OpenMenu;
 }
 
@@ -34,6 +55,10 @@ interface FolderItemProps extends TreeProps {
     entry: FileEntry;
     depth: number;
     parentTrail: FolderRef[];
+    /** The row and its sibling folders, in display order. */
+    siblings: FileEntry[];
+    /** `folderKey`s of `siblings`. */
+    siblingKeys: string[];
 }
 
 interface FolderChildrenProps extends TreeProps {
@@ -49,11 +74,14 @@ interface TreeRowProps {
     variant: "section" | "folder";
     icon: ReactNode;
     label: string;
+    /** Part of the tree's selection. */
     selected: boolean;
+    /** The open folder, which needn't be selected. */
+    open: boolean;
     expandable: boolean;
     expanded: boolean;
     loading: boolean;
-    onSelect: () => void;
+    onSelect: (event: MouseEvent) => void;
     onToggle: () => void;
     onMenu: (position: MenuPosition) => boolean;
 }
@@ -84,10 +112,9 @@ const rowSx: SxProps<Theme> = (theme) => ({
     borderRadius: 2,
     color: "text.primary",
     "&:hover": { bgcolor: "action.hover" },
-    '&[data-selected="true"]': {
-        bgcolor: selectedBackground(theme),
-        color: "primary.main",
-    },
+    '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
+    // The open folder keeps its accent text when the selection moves to other folders.
+    '&[data-open="true"]': { color: "primary.main" },
 });
 
 const sectionButtonSx: SxProps<Theme> = {
@@ -202,6 +229,7 @@ const TreeRow = ({
     icon,
     label,
     selected,
+    open,
     expandable,
     expanded,
     loading,
@@ -218,10 +246,10 @@ const TreeRow = ({
     };
 
     return (
-        <Box sx={rowSx} data-selected={selected} onContextMenu={handleContextMenu}>
+        <Box sx={rowSx} data-selected={selected} data-open={open} onContextMenu={handleContextMenu}>
             <ButtonBase
                 sx={isSection ? sectionButtonSx : folderButtonSx}
-                aria-current={selected ? "page" : undefined}
+                aria-current={open ? "page" : undefined}
                 onClick={onSelect}
             >
                 {icon}
@@ -245,7 +273,9 @@ const TreeRow = ({
 
 /** The sub-folders of a listed folder, or why they couldn't be listed. */
 const FolderChildren = ({ state, depth, trail, onRetry, ...tree }: FolderChildrenProps) => {
+    const sectionId = tree.section.id;
     const folders = useMemo(() => state?.entries?.filter(isFolder).sort(compareEntries) ?? [], [state?.entries]);
+    const keys = useMemo(() => folders.map((entry) => folderKey(sectionId, entry.id)), [folders, sectionId]);
 
     if (state?.status === "error") {
         return (
@@ -259,12 +289,20 @@ const FolderChildren = ({ state, depth, trail, onRetry, ...tree }: FolderChildre
     }
 
     return folders.map((entry) => (
-        <FolderItem key={entry.id} entry={entry} depth={depth} parentTrail={trail} {...tree} />
+        <FolderItem
+            key={entry.id}
+            entry={entry}
+            depth={depth}
+            parentTrail={trail}
+            siblings={folders}
+            siblingKeys={keys}
+            {...tree}
+        />
     ));
 };
 
-const FolderItem = ({ entry, depth, parentTrail, ...tree }: FolderItemProps) => {
-    const { section, expanded, selectedKey, onToggle, onNavigate, onOpenMenu } = tree;
+const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree }: FolderItemProps) => {
+    const { section, expanded, openKey, selection, onToggle, onNavigate, onSelectFolder, onOpenMenu } = tree;
     const key = folderKey(section.id, entry.id);
     const isExpanded = expanded.has(key);
     const { state, reload } = useFolder(section, entry.id, isExpanded && entry.hasSubfolders !== false);
@@ -277,21 +315,55 @@ const FolderItem = ({ entry, depth, parentTrail, ...tree }: FolderItemProps) => 
     const hasNoFolders =
         entry.hasSubfolders === false || (state?.status === "ready" && !state.entries?.some(isFolder));
 
+    const selected = selection ? selection.ids.has(key) : key === openKey;
+
+    const target: TreeTarget = {
+        key,
+        parentKey: folderKey(section.id, folderOf(section, parentTrail).id),
+        parentTrail,
+        order: siblingKeys,
+    };
+
+    // Ctrl and Shift select without opening anything; a plain click opens the folder.
+    const handleSelect = (event: MouseEvent) => {
+        const modifiers = selectModifiers(event);
+
+        if (modifiers.toggle || modifiers.range) {
+            onSelectFolder(target, modifiers);
+        } else {
+            onNavigate({ sectionId: section.id, trail });
+        }
+    };
+
+    // As in the content, a selected folder's menu acts on every selected folder, while any
+    // other folder is selected on its own first and the menu acts on it alone.
+    const handleMenu = (position: MenuPosition) => {
+        if (!selected) {
+            onSelectFolder(target);
+        }
+
+        const entries =
+            selected && selection
+                ? siblings.filter((sibling) => selection.ids.has(folderKey(section.id, sibling.id)))
+                : [entry];
+
+        return onOpenMenu(position, { target: "selection", section, trail: parentTrail, entries });
+    };
+
     return (
         <Box component="li" sx={itemSx} style={depthStyle(depth)}>
             <TreeRow
                 variant="folder"
                 icon={<FolderTypeIcon folderName={entry.name} size="1.125rem" />}
                 label={entry.name}
-                selected={selectedKey === key}
+                selected={selected}
+                open={key === openKey}
                 expandable={!hasNoFolders}
                 expanded={isExpanded}
                 loading={state?.status === "loading" && !state.entries}
-                onSelect={() => onNavigate({ sectionId: section.id, trail })}
+                onSelect={handleSelect}
                 onToggle={() => onToggle(key)}
-                onMenu={(position) =>
-                    onOpenMenu(position, { target: "selection", section, trail: parentTrail, entries: [entry] })
-                }
+                onMenu={handleMenu}
             />
             {!hasNoFolders && (
                 <Collapse in={isExpanded} timeout="auto" unmountOnExit>
@@ -304,14 +376,24 @@ const FolderItem = ({ entry, depth, parentTrail, ...tree }: FolderItemProps) => 
     );
 };
 
-/** A section's row, with its root's folders as a lazily loaded tree beneath it. */
+/**
+ * A section's row, with its root's folders as a lazily loaded tree beneath it. The row itself is
+ * a root, not a folder that can be selected with others, so Ctrl and Shift just open it.
+ */
 const SectionItem = (tree: TreeProps) => {
-    const { section, expanded, selectedKey, onToggle, onNavigate, onOpenMenu } = tree;
+    const { section, expanded, openKey, selection, onToggle, onNavigate, onSelectSection, onOpenMenu } = tree;
     const key = folderKey(section.id, section.rootId);
     const isExpanded = expanded.has(key);
     const { state, reload } = useFolder(section, section.rootId, isExpanded);
 
     const hasNoFolders = state?.status === "ready" && !state.entries?.some(isFolder);
+
+    // Its menu is about the section's root folder, so it alone becomes the selection meanwhile.
+    const handleMenu = (position: MenuPosition) => {
+        onSelectSection(key);
+
+        return onOpenMenu(position, { target: "folder", section, trail: ROOT_TRAIL, entries: [] });
+    };
 
     return (
         <Box component="li" sx={itemSx} style={depthStyle(0)}>
@@ -319,15 +401,14 @@ const SectionItem = (tree: TreeProps) => {
                 variant="section"
                 icon={<IconSlot icon={section.icon ?? "folder"} />}
                 label={section.label}
-                selected={selectedKey === key}
+                selected={selection ? selection.ids.has(key) : key === openKey}
+                open={key === openKey}
                 expandable={!hasNoFolders}
                 expanded={isExpanded}
                 loading={state?.status === "loading" && !state.entries}
                 onSelect={() => onNavigate({ sectionId: section.id, trail: ROOT_TRAIL })}
                 onToggle={() => onToggle(key)}
-                onMenu={(position) =>
-                    onOpenMenu(position, { target: "folder", section, trail: ROOT_TRAIL, entries: [] })
-                }
+                onMenu={handleMenu}
             />
             {!hasNoFolders && (
                 <Collapse in={isExpanded} timeout="auto" unmountOnExit>

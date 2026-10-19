@@ -7,6 +7,7 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useTreeSelection } from "../../../hooks/use-tree-selection";
 import { HEADER_HEIGHT, SIDEBAR_WIDTH, rootWide } from "../../../styles/layout";
 import Icon from "../../icons/icon";
 import SectionItem from "./location-item";
@@ -18,7 +19,7 @@ interface SidebarProps {
     groups: SectionGroup[];
     expanded: ReadonlySet<string>;
     /** `folderKey` of the open folder. */
-    selectedKey: string | null;
+    openKey: string | null;
     /** Whether the overlay is showing while the sidebar is collapsed; has no effect once it docks. */
     open: boolean;
     onToggle: (key: string) => void;
@@ -117,20 +118,24 @@ const Sidebar = ({
     title,
     groups,
     expanded,
-    selectedKey,
+    openKey,
     open,
     onToggle,
     onNavigate,
     onOpenMenu,
     onClose,
 }: SidebarProps) => {
-    // Picking a location closes the overlay; expanding a folder doesn't, so the tree can be browsed in it.
+    // The sidebar's own selection; the content's lives in its folder view, and neither sees the other.
+    const { selection, select, selectSection, reset } = useTreeSelection(openKey);
+
+    // Picking a location closes the overlay; expanding or selecting a folder doesn't, so the tree can be browsed in it.
     const handleNavigate = useCallback(
         (place: Place) => {
+            reset();
             onNavigate(place);
             onClose();
         },
-        [onNavigate, onClose],
+        [reset, onNavigate, onClose],
     );
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -167,9 +172,12 @@ const Sidebar = ({
                                     key={section.id}
                                     section={section}
                                     expanded={expanded}
-                                    selectedKey={selectedKey}
+                                    openKey={openKey}
+                                    selection={selection}
                                     onToggle={onToggle}
                                     onNavigate={handleNavigate}
+                                    onSelectFolder={select}
+                                    onSelectSection={selectSection}
                                     onOpenMenu={onOpenMenu}
                                 />
                             ))}

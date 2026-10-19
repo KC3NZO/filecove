@@ -7,6 +7,7 @@ import { viewMedium, viewWide } from "../../../styles/layout";
 import { selectedBackground, stripeBackground } from "../../../styles/mixins";
 import { describeDate, describeSize, describeType } from "../../../utils/format";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
+import { selectModifiers } from "../../../utils/selection";
 import Icon from "../../icons/icon";
 import ItemIcon from "./item-icon";
 
@@ -14,8 +15,10 @@ import type { FileViewProps } from "../../../types";
 
 // `--columns` holds the tracks shared by the header and every row. It grows with the view:
 // name and menu button, then size and modified, then type as well.
+// Text can't be selected anywhere in the list, or Shift-click would select it across rows.
 const listSx: SxProps<Theme> = {
     "--columns": "minmax(0, 1fr) 2.5rem",
+    userSelect: "none",
     px: 1,
     pt: 1,
     pb: 2,
@@ -64,7 +67,6 @@ const rowSx: SxProps<Theme> = (theme) => ({
     px: 1.5,
     borderRadius: 2,
     cursor: "default",
-    userSelect: "none",
     "&:nth-of-type(odd)": { bgcolor: stripeBackground(theme) },
     "&:hover": { bgcolor: "action.hover" },
     '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
@@ -132,7 +134,7 @@ const menuButtonSx: SxProps<Theme> = {
     color: "text.secondary",
 };
 
-const FileList = ({ entries, selectedId, hasActions, onSelect, onOpen, onMenu }: FileViewProps) => (
+const FileList = ({ entries, selectedIds, hasActions, onSelect, onOpen, onMenu }: FileViewProps) => (
     <Box sx={listSx}>
         <Box sx={headerRowSx}>
             <Box sx={nameHeaderSx}>
@@ -149,10 +151,10 @@ const FileList = ({ entries, selectedId, hasActions, onSelect, onOpen, onMenu }:
                 <Box
                     key={entry.id}
                     sx={rowSx}
-                    data-selected={entry.id === selectedId}
+                    data-selected={selectedIds.has(entry.id)}
                     onClick={(event) => {
                         event.stopPropagation();
-                        onSelect(entry.id);
+                        onSelect(entry.id, selectModifiers(event));
                     }}
                     onDoubleClick={() => onOpen(entry)}
                     onContextMenu={(event) => {
@@ -190,9 +192,9 @@ const FileList = ({ entries, selectedId, hasActions, onSelect, onOpen, onMenu }:
                                 aria-label={`Actions for ${entry.name}`}
                                 data-menu-button
                                 sx={menuButtonSx}
+                                // Like a right-click: the menu decides whether it acts on the whole selection.
                                 onClick={(event) => {
                                     event.stopPropagation();
-                                    onSelect(entry.id);
                                     onMenu(belowElement(event.currentTarget), entry);
                                 }}
                                 onDoubleClick={(event) => event.stopPropagation()}

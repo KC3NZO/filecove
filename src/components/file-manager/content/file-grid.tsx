@@ -5,12 +5,15 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { viewMedium } from "../../../styles/layout";
 import { selectedBackground } from "../../../styles/mixins";
 import { pointerPosition } from "../../../utils/menu-position";
+import { selectModifiers } from "../../../utils/selection";
 import ItemIcon from "./item-icon";
 
 import type { FileViewProps } from "../../../types";
 
+// Text can't be selected anywhere in the grid, or Shift-click would select it across tiles.
 const gridSx: SxProps<Theme> = {
     display: "grid",
+    userSelect: "none",
     gridTemplateColumns: "repeat(auto-fill, minmax(6.5rem, 1fr))",
     gap: 0.5,
     p: 1,
@@ -32,7 +35,6 @@ const tileSx: SxProps<Theme> = (theme) => ({
     borderRadius: 2,
     textAlign: "center",
     cursor: "default",
-    userSelect: "none",
     "&:hover": { bgcolor: "action.hover" },
     '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
     "& > svg": { flexShrink: 0 },
@@ -48,16 +50,16 @@ const nameSx: SxProps<Theme> = {
     lineHeight: 1.35,
 };
 
-const FileGrid = ({ entries, selectedId, onSelect, onOpen, onMenu }: FileViewProps) => (
+const FileGrid = ({ entries, selectedIds, onSelect, onOpen, onMenu }: FileViewProps) => (
     <Box sx={gridSx}>
         {entries.map((entry) => (
             <Box
                 key={entry.id}
                 sx={tileSx}
-                data-selected={entry.id === selectedId}
+                data-selected={selectedIds.has(entry.id)}
                 onClick={(event) => {
                     event.stopPropagation();
-                    onSelect(entry.id);
+                    onSelect(entry.id, selectModifiers(event));
                 }}
                 onDoubleClick={() => onOpen(entry)}
                 onContextMenu={(event) => {

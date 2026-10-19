@@ -5,4 +5,5 @@ export type { IconComponent, IconName, IconOverrides, IconSet, IconSource, IconV
 export type { MenuPosition, MenuRequest, OpenMenu } from "./menu";
 export type { Place } from "./navigation";
 export type { FolderRef, Section, SectionGroup } from "./section";
+export type { EntrySelection, SelectModifiers, TreeSelection, TreeTarget } from "./selection";
 export type { FileViewProps, ViewMode } from "./view";

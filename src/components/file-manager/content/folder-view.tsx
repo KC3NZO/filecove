@@ -9,9 +9,11 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
+import { useSelection } from "../../../hooks/use-selection";
 import { compareEntries } from "../../../utils/format";
 import { pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
+import { selectModifiers } from "../../../utils/selection";
 import Icon from "../../icons/icon";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
@@ -22,9 +24,7 @@ interface FolderViewProps {
     section: Section;
     trail: FolderRef[];
     view: ViewMode;
-    selectedId: string | null;
     hasActions: boolean;
-    onSelect: (id: string | null) => void;
     onNavigate: (place: Place) => void;
     onOpenMenu: OpenMenu;
 }
@@ -66,19 +66,16 @@ const stateTitleSx: SxProps<Theme> = {
     fontWeight: 600,
 };
 
-const FolderView = ({
-    section,
-    trail,
-    view,
-    selectedId,
-    hasActions,
-    onSelect,
-    onNavigate,
-    onOpenMenu,
-}: FolderViewProps) => {
+/**
+ * The open folder's contents. It owns the selection, so the selection starts empty in every
+ * folder (the file manager remounts this per folder) and is never shared with the sidebar.
+ */
+const FolderView = ({ section, trail, view, hasActions, onNavigate, onOpenMenu }: FolderViewProps) => {
     const { state, reload } = useFolder(section, folderOf(section, trail).id, true);
 
     const entries = useMemo(() => (state?.entries ? [...state.entries].sort(compareEntries) : undefined), [state?.entries]);
+
+    const { selectedIds, selected, select, clear } = useSelection(entries);
 
     const handleOpen = useCallback(
         (entry: FileEntry) => {
@@ -89,18 +86,38 @@ const FolderView = ({
         [onNavigate, section.id, trail],
     );
 
-    // Right-clicking an entry selects it first, as desktop file managers do.
+    // As in desktop file managers, the menu of a selected entry acts on the whole selection, while
+    // any other entry is selected on its own first and the menu acts on it alone.
     const handleEntryMenu = useCallback(
         (position: MenuPosition, entry: FileEntry) => {
-            onSelect(entry.id);
+            const inSelection = selectedIds.has(entry.id);
 
-            return onOpenMenu(position, { target: "selection", section, trail, entries: [entry] });
+            if (!inSelection) {
+                select(entry.id);
+            }
+
+            return onOpenMenu(position, {
+                target: "selection",
+                section,
+                trail,
+                entries: inSelection ? selected : [entry],
+            });
         },
-        [onSelect, onOpenMenu, section, trail],
+        [selectedIds, selected, select, onOpenMenu, section, trail],
     );
 
+    // Clicking empty space clears the selection, unless Ctrl or Shift is held: a modifier click
+    // that just misses an entry shouldn't throw a built-up selection away.
+    const handleBackgroundClick = (event: MouseEvent) => {
+        const { toggle, range } = selectModifiers(event);
+
+        if (!toggle && !range) {
+            clear();
+        }
+    };
+
     const handleBackgroundMenu = (event: MouseEvent) => {
-        onSelect(null);
+        clear();
 
         if (onOpenMenu(pointerPosition(event), { target: "folder", section, trail, entries: [] })) {
             event.preventDefault();
@@ -114,9 +131,9 @@ const FolderView = ({
         content = (
             <ContentView
                 entries={entries}
-                selectedId={selectedId}
+                selectedIds={selectedIds}
                 hasActions={hasActions}
-                onSelect={onSelect}
+                onSelect={select}
                 onOpen={handleOpen}
                 onMenu={handleEntryMenu}
             />
@@ -155,7 +172,7 @@ const FolderView = ({
     }
 
     return (
-        <Box sx={surfaceSx} onClick={() => onSelect(null)} onContextMenu={handleBackgroundMenu}>
+        <Box sx={surfaceSx} onClick={handleBackgroundClick} onContextMenu={handleBackgroundMenu}>
             {state?.status === "loading" && entries && <LinearProgress sx={progressSx} />}
             {content}
         </Box>

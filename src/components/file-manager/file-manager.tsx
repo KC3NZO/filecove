@@ -124,7 +124,6 @@ const FileManager = ({
     );
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [view, setView] = useState<ViewMode>(defaultView);
-    const [selectedId, setSelectedId] = useState<string | null>(null);
     const [menu, setMenu] = useState<MenuState | null>(null);
 
     const hasActions = useMemo(() => actions.some((group) => group.actions.length > 0), [actions]);
@@ -153,7 +152,6 @@ const FileManager = ({
             }
 
             navigate(target);
-            setSelectedId(null);
             setExpanded((prev) => {
                 const keys = keysAlong(targetSection, target);
 
@@ -162,16 +160,6 @@ const FileManager = ({
         },
         [navigate, sectionsById],
     );
-
-    const goBack = useCallback(() => {
-        back();
-        setSelectedId(null);
-    }, [back]);
-
-    const goForward = useCallback(() => {
-        forward();
-        setSelectedId(null);
-    }, [forward]);
 
     const openSidebar = useCallback(() => setSidebarOpen(true), []);
     const closeSidebar = useCallback(() => setSidebarOpen(false), []);
@@ -217,7 +205,7 @@ const FileManager = ({
                         title={title}
                         groups={sections}
                         expanded={expanded}
-                        selectedKey={section && folder ? folderKey(section.id, folder.id) : null}
+                        openKey={section && folder ? folderKey(section.id, folder.id) : null}
                         open={sidebarOpen}
                         onToggle={toggleExpanded}
                         onNavigate={goTo}
@@ -242,21 +230,19 @@ const FileManager = ({
                             canGoBack={canGoBack}
                             canGoForward={canGoForward}
                             view={view}
-                            onBack={goBack}
-                            onForward={goForward}
+                            onBack={back}
+                            onForward={forward}
                             onToggleView={toggleView}
                             onOpenSidebar={openSidebar}
                         />
-                        {/* Keyed by folder so each one opens scrolled to the top. */}
+                        {/* Keyed by folder so each one opens scrolled to the top, with nothing selected. */}
                         <Box key={section && folder ? folderKey(section.id, folder.id) : undefined} sx={viewSx}>
                             {section && (
                                 <FolderView
                                     section={section}
                                     trail={place.trail}
                                     view={view}
-                                    selectedId={selectedId}
                                     hasActions={hasActions}
-                                    onSelect={setSelectedId}
                                     onNavigate={goTo}
                                     onOpenMenu={openMenu}
                                 />
