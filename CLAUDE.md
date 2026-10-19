@@ -60,7 +60,7 @@ Internals:
 - `store/folder-store.ts` caches listings per `folderKey(sectionId, folderId)`, shared by the sidebar tree and the content view, with request de-duplication and abort-on-unmount. `file-manager.tsx` provides the store through `DataContext` (`contexts/data-context.ts`), and components read it with `useFolder` (`hooks/use-folder.ts`), which uses `useSyncExternalStore` with per-folder snapshots.
 - `hooks/use-place-history.ts` holds the current `Place` (a section plus a trail of `FolderRef`s) and the back/forward history. `utils/navigation.ts` has `folderOf`, which returns the folder a place points at.
   - Breadcrumbs come from the trail, not from parsing ids.
-  - Navigating expands every folder along the trail in the sidebar.
+  - Navigating never expands or collapses the sidebar tree; only its chevrons do, and the path bar shows where you are. Only the first section shown starts expanded.
 - `file-manager.tsx` is the frame (sidebar, header bar, inset content panel) and owns navigation, tree expansion and the context menu state.
 - **The content and the sidebar tree each have their own selection, and the two are never merged.** Both follow `nextSelection` (`utils/selection.ts`):
   - a click selects one entry;

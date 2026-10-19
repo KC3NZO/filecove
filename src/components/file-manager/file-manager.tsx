@@ -22,7 +22,6 @@ import type {
     FileAdapter,
     OpenMenu,
     Place,
-    Section,
     SectionGroup,
     ViewMode,
 } from "../../types";
@@ -89,10 +88,6 @@ const viewSx: SxProps<Theme> = {
     [rootWide]: { ml: 0 },
 };
 
-/** Folder keys of a place's section root and every folder on its trail. */
-const keysAlong = (section: Section, place: Place) =>
-    [section.rootId, ...place.trail.map((folder) => folder.id)].map((id) => folderKey(section.id, id));
-
 const FileManager = ({
     adapter,
     sections,
@@ -120,8 +115,9 @@ const FileManager = ({
     const folder = section && folderOf(section, place.trail);
     const openKey = section && folder ? folderKey(section.id, folder.id) : null;
 
+    // Only the first section shown starts expanded; after that, only the chevrons change the tree.
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(
-        () => new Set(section ? keysAlong(section, place) : []),
+        () => new Set(section ? [folderKey(section.id, section.rootId)] : []),
     );
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [view, setView] = useState<ViewMode>(defaultView);
@@ -146,21 +142,12 @@ const FileManager = ({
         });
     }, []);
 
-    // Going somewhere also reveals it in the sidebar tree, like Explorer's navigation pane.
+    // Going somewhere leaves the sidebar tree as the user left it; the path bar shows where it is.
     const goTo = useCallback(
         (target: Place) => {
-            const targetSection = sectionsById.get(target.sectionId);
-
-            if (!targetSection) {
-                return;
+            if (sectionsById.has(target.sectionId)) {
+                navigate(target);
             }
-
-            navigate(target);
-            setExpanded((prev) => {
-                const keys = keysAlong(targetSection, target);
-
-                return keys.every((key) => prev.has(key)) ? prev : new Set([...prev, ...keys]);
-            });
         },
         [navigate, sectionsById],
     );
