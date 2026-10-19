@@ -48,6 +48,16 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 ## The parts
 
 - `sidebar/location-item.tsx` renders a section row and its lazily loaded folder tree (`TreeRow` is the shared row). A section with `showFolders: false` is a plain GNOME-style place: no chevron, no tree, and it never starts expanded. The default is `true`.
+
+## Single section
+
+`FileManager` takes either `sections` (groups) or a single `section`, never both; `FileManagerProps` is a union that enforces it, and `defaultSectionId` only exists with `sections`. Inside, a single section becomes one group of one, so navigation, the store and the path bar don't tell the modes apart. Only the sidebar does:
+
+- `SectionTree` (in `location-item.tsx`) lists the root's folders as the sidebar's top level, with no section row and nothing to collapse. The root loads straight away and shows loading, empty ("No folders") and error rows in place of the tree.
+- The root itself is reached through the path bar's first crumb, since there is no row for it. There is no sidebar menu for the root either; the content background's menu covers it.
+- With `showFolders: false`, the single section falls back to its plain row, so the sidebar isn't empty.
+
+The playground shows this mode with `?single` in the URL.
 - `header-bar/` holds back/forward, the path bar and the view buttons. Below `rootMedium` the path bar gets a full-width row under the buttons; from `rootMedium` up, it sits centred between them.
 - `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`file-list.tsx`, a `--columns` grid template) or the grid view (`file-grid.tsx`).
 - `icon-slot.tsx` fits consumer-supplied icons to the same 1.25rem box as the built-in ones.
