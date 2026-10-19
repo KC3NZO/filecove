@@ -9,10 +9,12 @@ import { usePlaceHistory } from "../../hooks/use-place-history";
 import { createFolderStore, folderKey } from "../../store/folder-store";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { visibleActionGroups } from "../../utils/action-groups";
-import { folderOf } from "../../utils/navigation";
+import { folderOf, renameInPlace } from "../../utils/navigation";
+import { matchesShortcut } from "../../utils/shortcut";
 import { DEFAULT_SORT } from "../../utils/sort";
 import FolderView from "./content/folder-view";
 import ContextMenu from "./context-menu/context-menu";
+import NameDialog from "./dialogs/name-dialog";
 import HeaderBar from "./header-bar/header-bar";
 import PathBar from "./header-bar/path-bar";
 import Sidebar from "./sidebar/sidebar";
@@ -21,14 +23,18 @@ import type {
     ActionContext,
     ActionGroup,
     FileAdapter,
+    FileEntry,
+    MenuRequest,
     OpenMenu,
     Place,
+    RunShortcut,
     Section,
     SectionGroup,
     SortOrder,
     ViewMode,
 } from "../../types";
 import type { MenuState } from "./context-menu/context-menu";
+import type { NameDialogState, NameRequest } from "./dialogs/name-dialog";
 
 interface BaseProps {
     /** Backend for every section that doesn't bring its own. */
@@ -62,6 +68,13 @@ interface SingleSectionProps extends BaseProps {
 
 /** Either `sections`, for a sidebar of independent roots, or a single `section`. */
 export type FileManagerProps = MultiSectionProps | SingleSectionProps;
+
+/** An entry to select in the open folder once its listing has it. */
+interface Reveal {
+    /** `folderKey` of the folder it was meant for. */
+    key: string;
+    id: string;
+}
 
 const NO_ACTIONS: ActionGroup[] = [];
 
@@ -136,7 +149,7 @@ const FileManager = ({
         [sections],
     );
 
-    const { place, canGoBack, canGoForward, navigate, back, forward } = usePlaceHistory(() => ({
+    const { place, canGoBack, canGoForward, navigate, back, forward, rewrite } = usePlaceHistory(() => ({
         sectionId: defaultSectionId ?? sections[0]?.sections[0]?.id ?? "",
         trail: [],
     }));
@@ -157,9 +170,16 @@ const FileManager = ({
     // Only the view menu's checkbox for now; listings aren't filtered by it yet.
     const [showHidden, setShowHidden] = useState(false);
     const [menu, setMenu] = useState<MenuState | null>(null);
+    const [naming, setNaming] = useState<NameDialogState | null>(null);
+    const [reveal, setReveal] = useState<Reveal | null>(null);
     // The folder in which touch selection mode is on, so opening another folder turns it off.
     const [selectingKey, setSelectingKey] = useState<string | null>(null);
     const selecting = openKey !== null && selectingKey === openKey;
+
+    // An entry still waiting to be selected is forgotten once another folder opens.
+    if (reveal && reveal.key !== openKey) {
+        setReveal(null);
+    }
 
     const hasActions = useMemo(() => actions.some((group) => group.actions.length > 0), [actions]);
 
@@ -194,24 +214,98 @@ const FileManager = ({
     const closeMenu = useCallback(() => setMenu((prev) => prev && { ...prev, open: false }), []);
     const setSelecting = useCallback((on: boolean) => setSelectingKey(on ? openKey : null), [openKey]);
     const toggleSelecting = useCallback(() => setSelecting(!selecting), [setSelecting, selecting]);
+    const clearReveal = useCallback(() => setReveal(null), []);
 
-    const openMenu = useCallback<OpenMenu>(
-        (position, { target, section: menuSection, trail, entries }) => {
+    const askName = useCallback((request: NameRequest) => {
+        setNaming((prev) => ({ open: true, id: (prev?.id ?? 0) + 1, request }));
+    }, []);
+
+    const closeNaming = useCallback(() => setNaming((prev) => prev && { ...prev, open: false }), []);
+
+    // The new or renamed entry is selected if its folder is open. A renamed folder keeps its
+    // place in the path, the history and the sidebar tree.
+    const handleNamed = useCallback(
+        (request: NameRequest, entry: FileEntry) => {
+            const { section: target, trail } = request;
+            const parentKey = folderKey(target.id, folderOf(target, trail).id);
+            const before = request.kind === "rename" ? request.entry : undefined;
+
+            closeNaming();
+
+            if (parentKey === openKey) {
+                setReveal({ key: parentKey, id: entry.id });
+            }
+
+            if (entry.kind !== "folder") {
+                return;
+            }
+
+            // A folder's new id may have named another folder before, as a path does after that
+            // folder was renamed away, so anything cached under it is stale. So is the old id.
+            if (entry.id !== before?.id) {
+                store.forget(folderKey(target.id, entry.id));
+
+                if (before) {
+                    store.forget(folderKey(target.id, before.id));
+                }
+            }
+
+            if (!before) {
+                return;
+            }
+
+            rewrite((visited) => renameInPlace(visited, target.id, before, entry));
+
+            if (entry.id !== before.id) {
+                const oldKey = folderKey(target.id, before.id);
+
+                setExpanded((prev) => {
+                    if (!prev.has(oldKey)) {
+                        return prev;
+                    }
+
+                    const next = new Set(prev);
+
+                    next.delete(oldKey);
+                    next.add(folderKey(target.id, entry.id));
+
+                    return next;
+                });
+            }
+        },
+        [closeNaming, openKey, store, rewrite],
+    );
+
+    const contextFor = useCallback(
+        ({ target, section: menuSection, trail, entries }: MenuRequest): ActionContext => {
             const menuFolder = folderOf(menuSection, trail);
-            const context: ActionContext = {
+            const folderAdapter = menuSection.adapter ?? adapter;
+            const base = { section: menuSection, adapter: folderAdapter, trail };
+
+            return {
                 target,
                 entries,
                 folder: menuFolder,
                 section: menuSection,
                 refresh: () => {
-                    const folderAdapter = menuSection.adapter ?? adapter;
-
                     store.load(folderKey(menuSection.id, menuFolder.id), folderAdapter, menuFolder.id, true);
                 },
                 openFolder: (entry) => {
                     goTo({ sectionId: menuSection.id, trail: [...trail, { id: entry.id, name: entry.name }] });
                 },
+                createFolder: folderAdapter.createFolder ? () => askName({ ...base, kind: "create" }) : undefined,
+                rename:
+                    folderAdapter.rename && entries.length === 1
+                        ? () => askName({ ...base, kind: "rename", entry: entries[0] })
+                        : undefined,
             };
+        },
+        [adapter, store, goTo, askName],
+    );
+
+    const openMenu = useCallback<OpenMenu>(
+        (position, request) => {
+            const context = contextFor(request);
             const groups = visibleActionGroups(actions, context);
 
             if (groups.length === 0) {
@@ -222,7 +316,25 @@ const FileManager = ({
 
             return true;
         },
-        [actions, adapter, store, goTo],
+        [actions, contextFor],
+    );
+
+    // Offered exactly as the menu would offer it, so a shortcut never runs a hidden action.
+    const runShortcut = useCallback<RunShortcut>(
+        (event, requests) =>
+            requests.some((request) => {
+                const context = contextFor(request);
+                const action = visibleActionGroups(actions, context)
+                    .flatMap((group) => group.actions)
+                    .find((candidate) => candidate.shortcut && matchesShortcut(event, candidate.shortcut));
+
+                if (action && !action.disabled?.(context)) {
+                    action.onSelect(context);
+                }
+
+                return !!action;
+            }),
+        [actions, contextFor],
     );
 
     return (
@@ -281,16 +393,28 @@ const FileManager = ({
                                     sort={sort}
                                     hasActions={hasActions}
                                     selecting={selecting}
+                                    revealId={reveal?.id}
                                     onSelectingChange={setSelecting}
                                     onSortChange={setSort}
                                     onNavigate={goTo}
                                     onOpenMenu={openMenu}
+                                    onShortcut={runShortcut}
+                                    onRevealed={clearReveal}
                                 />
                             )}
                         </Box>
                     </Box>
                 </Box>
                 <ContextMenu menu={menu} onClose={closeMenu} />
+                {naming && (
+                    <NameDialog
+                        key={naming.id}
+                        open={naming.open}
+                        request={naming.request}
+                        onClose={closeNaming}
+                        onDone={handleNamed}
+                    />
+                )}
             </Box>
         </DataContext>
     );

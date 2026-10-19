@@ -19,6 +19,16 @@ export interface ActionContext {
     refresh: () => void;
     /** Opens a folder entry of `folder` in the file manager. */
     openFolder: (entry: FileEntry) => void;
+    /**
+     * Asks for a name and creates a folder in `folder`. Missing when the section's adapter has no
+     * `createFolder`, so an action can hide with `visible: (context) => !!context.createFolder`.
+     */
+    createFolder?: () => void;
+    /**
+     * Asks for a new name for the one entry in `entries`. Missing when the section's adapter has no
+     * `rename`, or when there isn't exactly one entry.
+     */
+    rename?: () => void;
 }
 
 export interface FileAction {
@@ -35,7 +45,11 @@ export interface FileAction {
     /** Narrows when it is offered, e.g. to files only or to a single entry. */
     visible?: (context: ActionContext) => boolean;
     disabled?: (context: ActionContext) => boolean;
-    /** Hint shown beside the label, e.g. "Ctrl+C". Display only; it is not bound to the keyboard. */
+    /**
+     * Shown beside the label, e.g. "Ctrl+C" or "Shift+Ctrl+N", and bound to the keyboard while the
+     * content has focus. A press runs the action for the selection if it applies there, or else for
+     * the open folder. Ctrl also matches ⌘.
+     */
     shortcut?: string;
     /** Styles the item as destructive, for actions such as delete. */
     destructive?: boolean;

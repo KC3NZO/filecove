@@ -16,6 +16,7 @@ export type {
     IconVariant,
     ListOptions,
     ListResult,
+    OperationOptions,
     Section,
     SectionGroup,
     SortDirection,

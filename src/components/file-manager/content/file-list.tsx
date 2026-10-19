@@ -84,7 +84,8 @@ const rowSx: SxProps<Theme> = (theme) => ({
     '&:hover [data-menu-button], &[data-selected="true"] [data-menu-button], & [data-menu-button].Mui-focusVisible':
         { opacity: 1 },
     "@media (hover: none)": { "& [data-menu-button]": { opacity: 1 } },
-    [viewMedium]: { minHeight: 44 },
+    // A row scrolled into view stops below the sticky column header rather than under it.
+    [viewMedium]: { minHeight: 44, scrollMarginTop: "3rem" },
 });
 
 // Only as wide as the icon and name, so the rest of the column is blank space a marquee can start from.

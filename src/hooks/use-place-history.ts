@@ -32,6 +32,15 @@ export const usePlaceHistory = (initial: () => Place) => {
         setHistory((prev) => (prev.index < prev.places.length - 1 ? { ...prev, index: prev.index + 1 } : prev));
     }, []);
 
+    /** Rewrites every place, the current one included, e.g. after a folder on their trails was renamed. */
+    const rewrite = useCallback((update: (place: Place) => Place) => {
+        setHistory((prev) => {
+            const places = prev.places.map(update);
+
+            return places.every((place, index) => place === prev.places[index]) ? prev : { ...prev, places };
+        });
+    }, []);
+
     return {
         place: history.places[history.index],
         canGoBack: history.index > 0,
@@ -39,5 +48,6 @@ export const usePlaceHistory = (initial: () => Place) => {
         navigate,
         back,
         forward,
+        rewrite,
     };
 };

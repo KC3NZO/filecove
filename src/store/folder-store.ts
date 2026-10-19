@@ -26,13 +26,18 @@ export const createFolderStore = () => {
             };
         },
 
-        /** Lists a folder unless it is loaded or already loading; `force` lists a loaded one again. */
+        /**
+         * Lists a folder unless it is loaded or already loading. `force` lists it again either way,
+         * replacing a request in flight, whose result could predate a change just made.
+         */
         load(key: string, adapter: FileAdapter, folderId: string, force = false) {
             const current = states.get(key);
 
-            if (requests.has(key) || (current?.status === "ready" && !force)) {
+            if (!force && (requests.has(key) || current?.status === "ready")) {
                 return;
             }
+
+            requests.get(key)?.abort();
 
             const controller = new AbortController();
             const settle = (state: FolderState) => {
@@ -57,6 +62,16 @@ export const createFolderStore = () => {
                     ({ entries }) => settle({ status: "ready", entries }),
                     (error: unknown) => settle({ status: "error", error }),
                 );
+        },
+
+        /** Drops a folder's listing and cancels its request, e.g. when its id may now name another folder. */
+        forget(key: string) {
+            requests.get(key)?.abort();
+            requests.delete(key);
+
+            if (states.delete(key)) {
+                notify();
+            }
         },
 
         /** Cancels every request in flight, e.g. on unmount, and forgets their loading state. */

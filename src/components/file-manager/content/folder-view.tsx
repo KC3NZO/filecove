@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from "react";
-import type { MouseEvent, PointerEvent, ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -27,8 +27,10 @@ import type {
     FileEntry,
     FolderRef,
     MenuPosition,
+    MenuRequest,
     OpenMenu,
     Place,
+    RunShortcut,
     Section,
     SelectModifiers,
     SortOrder,
@@ -43,10 +45,15 @@ interface FolderViewProps {
     hasActions: boolean;
     /** Touch selection mode: taps toggle entries, and the selection bar shows. */
     selecting: boolean;
+    /** An entry to select and scroll to once the listing has it, e.g. a folder just created. */
+    revealId?: string;
     onSelectingChange: (selecting: boolean) => void;
     onSortChange: (sort: SortOrder) => void;
     onNavigate: (place: Place) => void;
     onOpenMenu: OpenMenu;
+    onShortcut: RunShortcut;
+    /** Called once `revealId` has been selected. */
+    onRevealed: () => void;
 }
 
 // Fills the scroll panel even when the folder is short, so its empty space takes clicks,
@@ -61,6 +68,8 @@ const surfaceSx: SxProps<Theme> = {
     WebkitTouchCallout: "none",
     WebkitTapHighlightColor: "transparent",
     touchAction: "manipulation",
+    // Focused by presses, for the keyboard shortcuts, but never tabbed to, so no ring.
+    outline: "none",
 };
 
 // Geometry comes from custom properties that `useMarquee` sets while dragging.
@@ -124,10 +133,13 @@ const FolderView = ({
     sort,
     hasActions,
     selecting,
+    revealId,
     onSelectingChange,
     onSortChange,
     onNavigate,
     onOpenMenu,
+    onShortcut,
+    onRevealed,
 }: FolderViewProps) => {
     const { state, reload } = useFolder(section, folderOf(section, trail).id, true);
 
@@ -163,6 +175,21 @@ const FolderView = ({
         },
         onChange: (ids, modifiers) => replace(marqueeSelection(marqueeBase.current, ids, modifiers)),
     });
+
+    // Waits for the refreshed listing, which arrives after the entry was created or renamed.
+    const revealListed = revealId !== undefined && !!entries?.some((entry) => entry.id === revealId);
+
+    useEffect(() => {
+        if (revealId === undefined || !revealListed) {
+            return;
+        }
+
+        replace({ ids: new Set([revealId]), anchor: revealId });
+        marquee.surfaceRef.current
+            ?.querySelector(`[data-entry-id="${CSS.escape(revealId)}"]`)
+            ?.scrollIntoView({ block: "nearest" });
+        onRevealed();
+    }, [revealId, revealListed, replace, marquee.surfaceRef, onRevealed]);
 
     const longPress = useLongPress({
         onLongPress: (id) => {
@@ -246,6 +273,11 @@ const FolderView = ({
     };
 
     const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+        // Any press focuses the view, so the shortcuts work after clicking an entry or empty space.
+        if (!event.currentTarget.contains(document.activeElement)) {
+            event.currentTarget.focus({ preventScroll: true });
+        }
+
         marquee.onPointerDown(event);
         longPress.onPointerDown(event);
     };
@@ -260,6 +292,19 @@ const FolderView = ({
         if (pointerType.current !== "mouse") {
             event.preventDefault();
             event.stopPropagation();
+        }
+    };
+
+    // A shortcut acts on the selection when it applies there, or else on the open folder, so
+    // "New folder" works with entries selected.
+    const handleKeyDown = (event: KeyboardEvent) => {
+        const folderRequest: MenuRequest = { target: "folder", section, trail, entries: [] };
+        const requests: MenuRequest[] = selected.length
+            ? [{ target: "selection", section, trail, entries: selected }, folderRequest]
+            : [folderRequest];
+
+        if (onShortcut(event, requests)) {
+            event.preventDefault();
         }
     };
 
@@ -328,6 +373,7 @@ const FolderView = ({
         <Box
             ref={marquee.surfaceRef}
             sx={surfaceSx}
+            tabIndex={-1}
             data-selecting={selecting}
             onPointerDownCapture={(event) => {
                 pointerType.current = event.pointerType;
@@ -337,6 +383,7 @@ const FolderView = ({
             onClick={handleBackgroundClick}
             onContextMenuCapture={handleContextMenuCapture}
             onContextMenu={handleBackgroundMenu}
+            onKeyDown={handleKeyDown}
         >
             {state?.status === "loading" && entries && <LinearProgress sx={progressSx} />}
             {content}

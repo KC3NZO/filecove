@@ -163,11 +163,12 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
         actions: [
             {
                 id: "new-folder",
-                label: "New folder",
+                label: "New folder…",
                 icon: "newFolder",
                 shortcut: "Shift+Ctrl+N",
                 target: "folder",
-                onSelect: (context) => notify(`New folder in ${context.folder.name}`),
+                visible: (context) => !!context.createFolder,
+                onSelect: (context) => context.createFolder?.(),
             },
             {
                 id: "upload",
@@ -245,7 +246,8 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 shortcut: "F2",
                 target: "selection",
                 single: true,
-                onSelect: (context) => notify(`Rename ${names(context)}`),
+                visible: (context) => !!context.rename,
+                onSelect: (context) => context.rename?.(),
             },
             {
                 id: "share",

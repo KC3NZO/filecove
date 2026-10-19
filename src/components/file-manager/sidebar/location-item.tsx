@@ -314,8 +314,9 @@ const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree 
         [parentTrail, entry.id, entry.name],
     );
 
-    const hasNoFolders =
-        entry.hasSubfolders === false || (state?.status === "ready" && !state.entries?.some(isFolder));
+    // Once the folder has been listed, the listing wins over the adapter's hint, e.g. after a
+    // folder was created in it.
+    const hasNoFolders = state?.entries ? !state.entries.some(isFolder) : entry.hasSubfolders === false;
 
     const selected = selection ? selection.ids.has(key) : key === openKey;
 

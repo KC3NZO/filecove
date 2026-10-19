@@ -1,5 +1,7 @@
 // Internal to the package, not exported from the package entry.
 
+import type { KeyboardEvent } from "react";
+
 import type { ActionTarget } from "./action";
 import type { FileEntry } from "./adapter";
 import type { FolderRef, Section } from "./section";
@@ -20,3 +22,9 @@ export interface MenuRequest {
 
 /** Opens the context menu. Returns false when no action applies, so the browser's own menu can show instead. */
 export type OpenMenu = (position: MenuPosition, request: MenuRequest) => boolean;
+
+/**
+ * Runs the action whose `shortcut` matches a key press, trying each request in turn, e.g. the
+ * selection and then the open folder. Returns false when none matched.
+ */
+export type RunShortcut = (event: KeyboardEvent, requests: MenuRequest[]) => boolean;

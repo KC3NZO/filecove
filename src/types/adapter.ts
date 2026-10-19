@@ -40,7 +40,28 @@ export interface ListResult {
     entries: FileEntry[];
 }
 
+/** Passed to calls that change the backend. */
+export interface OperationOptions {
+    /**
+     * Aborted when the user cancels while the call is in flight. The change may have been made by
+     * then, so the folder is listed again either way.
+     */
+    signal: AbortSignal;
+}
+
 export interface FileAdapter {
     /** Lists the direct children of a folder. Reject to show the folder as failed to load. */
     list(folderId: string, options: ListOptions): Promise<ListResult>;
+    /**
+     * Creates a folder named `name` in `parentId` and resolves with its entry. Without it, the file
+     * manager has no way to create folders. Reject with an `Error` to show its message to the user,
+     * e.g. when the name is taken or not allowed.
+     */
+    createFolder?(parentId: string, name: string, options: OperationOptions): Promise<FileEntry>;
+    /**
+     * Renames an entry and resolves with it as it is now. Its id may change, as it does when ids are
+     * paths. Without it, the file manager has no way to rename. Reject with an `Error` to show its
+     * message to the user.
+     */
+    rename?(entry: FileEntry, name: string, options: OperationOptions): Promise<FileEntry>;
 }
