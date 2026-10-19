@@ -78,10 +78,13 @@ const rowSx: SxProps<Theme> = (theme) => ({
     [viewMedium]: { minHeight: 44 },
 });
 
+// Only as wide as the icon and name, so the rest of the column is blank space a marquee can start from.
 const nameCellSx: SxProps<Theme> = {
     display: "flex",
     alignItems: "center",
     gap: 1.5,
+    justifySelf: "start",
+    maxWidth: "100%",
     minWidth: 0,
     "& > svg": { flexShrink: 0 },
 };
@@ -151,6 +154,7 @@ const FileList = ({ entries, selectedIds, hasActions, onSelect, onOpen, onMenu }
                 <Box
                     key={entry.id}
                     sx={rowSx}
+                    data-entry-id={entry.id}
                     data-selected={selectedIds.has(entry.id)}
                     onClick={(event) => {
                         event.stopPropagation();
@@ -165,7 +169,7 @@ const FileList = ({ entries, selectedIds, hasActions, onSelect, onOpen, onMenu }
                         }
                     }}
                 >
-                    <Box sx={nameCellSx}>
+                    <Box sx={nameCellSx} data-no-marquee>
                         <ItemIcon entry={entry} size="1.75rem" />
                         <Box sx={nameTextSx}>
                             <Typography variant="body2" noWrap>

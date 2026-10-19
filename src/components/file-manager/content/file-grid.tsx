@@ -56,6 +56,8 @@ const FileGrid = ({ entries, selectedIds, onSelect, onOpen, onMenu }: FileViewPr
             <Box
                 key={entry.id}
                 sx={tileSx}
+                data-entry-id={entry.id}
+                data-no-marquee
                 data-selected={selectedIds.has(entry.id)}
                 onClick={(event) => {
                     event.stopPropagation();

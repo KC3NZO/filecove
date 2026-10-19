@@ -23,9 +23,12 @@ export const useSelection = (entries: FileEntry[] | undefined) => {
         [order],
     );
 
+    /** Sets the whole selection, e.g. from a marquee. */
+    const replace = useCallback((next: EntrySelection) => setSelection(next), []);
+
     const clear = useCallback(() => {
         setSelection((prev) => (prev.ids.size === 0 ? prev : EMPTY_SELECTION));
     }, []);
 
-    return { selectedIds: selection.ids, selected, select, clear };
+    return { selection, selectedIds: selection.ids, selected, select, replace, clear };
 };

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
@@ -9,16 +9,27 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
+import { useMarquee } from "../../../hooks/use-marquee";
 import { useSelection } from "../../../hooks/use-selection";
+import { selectedBackground } from "../../../styles/mixins";
 import { compareEntries } from "../../../utils/format";
 import { pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
-import { selectModifiers } from "../../../utils/selection";
+import { EMPTY_SELECTION, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import Icon from "../../icons/icon";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
 
-import type { FileEntry, FolderRef, MenuPosition, OpenMenu, Place, Section, ViewMode } from "../../../types";
+import type {
+    EntrySelection,
+    FileEntry,
+    FolderRef,
+    MenuPosition,
+    OpenMenu,
+    Place,
+    Section,
+    ViewMode,
+} from "../../../types";
 
 interface FolderViewProps {
     section: Section;
@@ -29,12 +40,31 @@ interface FolderViewProps {
     onOpenMenu: OpenMenu;
 }
 
-// Fills the scroll panel even when the folder is short, so its empty space takes clicks and right-clicks.
+// Fills the scroll panel even when the folder is short, so its empty space takes clicks,
+// right-clicks and marquee drags. Positioned so the marquee is placed in content coordinates.
 const surfaceSx: SxProps<Theme> = {
+    position: "relative",
     display: "flex",
     flexDirection: "column",
     minHeight: "100%",
 };
+
+// Geometry comes from custom properties that `useMarquee` sets while dragging.
+const marqueeSx: SxProps<Theme> = (theme) => ({
+    display: "none",
+    position: "absolute",
+    zIndex: 3,
+    left: "var(--marquee-left)",
+    top: "var(--marquee-top)",
+    width: "var(--marquee-width)",
+    height: "var(--marquee-height)",
+    border: "1px solid",
+    borderColor: "primary.main",
+    borderRadius: 0.5,
+    bgcolor: selectedBackground(theme),
+    pointerEvents: "none",
+    '&[data-active="true"]': { display: "block" },
+});
 
 // Overlays the top edge while a loaded folder refreshes, without pushing the content down.
 const progressSx: SxProps<Theme> = {
@@ -75,7 +105,17 @@ const FolderView = ({ section, trail, view, hasActions, onNavigate, onOpenMenu }
 
     const entries = useMemo(() => (state?.entries ? [...state.entries].sort(compareEntries) : undefined), [state?.entries]);
 
-    const { selectedIds, selected, select, clear } = useSelection(entries);
+    const { selection, selectedIds, selected, select, replace, clear } = useSelection(entries);
+
+    // Shift and Ctrl marquees build on what was selected when the drag began.
+    const marqueeBase = useRef<EntrySelection>(EMPTY_SELECTION);
+    const marquee = useMarquee({
+        enabled: Boolean(entries?.length),
+        onStart: () => {
+            marqueeBase.current = selection;
+        },
+        onChange: (ids, modifiers) => replace(marqueeSelection(marqueeBase.current, ids, modifiers)),
+    });
 
     const handleOpen = useCallback(
         (entry: FileEntry) => {
@@ -172,9 +212,17 @@ const FolderView = ({ section, trail, view, hasActions, onNavigate, onOpenMenu }
     }
 
     return (
-        <Box sx={surfaceSx} onClick={handleBackgroundClick} onContextMenu={handleBackgroundMenu}>
+        <Box
+            ref={marquee.surfaceRef}
+            sx={surfaceSx}
+            onPointerDown={marquee.onPointerDown}
+            onClickCapture={marquee.onClickCapture}
+            onClick={handleBackgroundClick}
+            onContextMenu={handleBackgroundMenu}
+        >
             {state?.status === "loading" && entries && <LinearProgress sx={progressSx} />}
             {content}
+            <Box ref={marquee.marqueeRef} sx={marqueeSx} />
         </Box>
     );
 };

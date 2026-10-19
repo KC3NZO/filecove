@@ -53,6 +53,33 @@ export const nextSelection = (
 };
 
 /**
+ * The selection while a marquee covers `hits` (ids in display order), built on `base`, the
+ * selection when the drag began. A plain marquee selects just what it covers, Shift adds that to
+ * `base`, and Ctrl or ⌘ flips it in `base`.
+ */
+export const marqueeSelection = (
+    base: EntrySelection,
+    hits: string[],
+    { toggle, range }: SelectModifiers,
+): EntrySelection => {
+    if (!toggle && !range) {
+        return { ids: new Set(hits), anchor: hits[0] ?? null };
+    }
+
+    const ids = new Set(base.ids);
+
+    hits.forEach((id) => {
+        if (toggle && base.ids.has(id)) {
+            ids.delete(id);
+        } else {
+            ids.add(id);
+        }
+    });
+
+    return { ids, anchor: hits[0] ?? base.anchor };
+};
+
+/**
  * The sidebar tree's selection after clicking a folder row. `prev` only counts while the folder
  * it was made in is still open; without it, the open folder is what Ctrl and Shift build from.
  * Selected folders stay siblings, so a click under another parent starts a new selection.
