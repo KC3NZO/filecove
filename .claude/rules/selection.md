@@ -55,6 +55,6 @@ There are no modifier keys on touch, so the content has a selection mode instead
 
 - A plain click opens a folder; only Ctrl and Shift select without opening.
 - Until then, and again after any navigation, the open folder alone counts as selected.
-- Selected folders are always siblings, so a menu's `ActionContext` has one parent `folder`. A modifier click under another parent starts a new selection.
+- Selected folders are always siblings, so a menu's `ActionContext` has one parent `folder`, and a drag from one of them carries them all from that folder. A modifier click under another parent starts a new selection.
 - Section rows are roots and never join a folder selection.
 - Rows show the selection as a background and the open folder as accent text, since the two can differ.
