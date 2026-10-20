@@ -50,18 +50,27 @@ Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names i
 
 "Copy to…" and "Move to…" ask for a destination in `dialogs/transfer-dialog.tsx`, then call the adapter's optional `copy(entries, targetId, { signal, conflict })` or `move(...)`. The call itself, with cancelling, the error and the refresh afterwards, is `hooks/use-transfer.ts`, shared with pasting; the Replace / Keep both / Skip step is `dialogs/conflict-step.tsx`.
 
-- The picker browses folders only, starting in the entries' own folder, with the path bar and a back arrow to the folder above. Only sections served by the same adapter object are offered (ids mean nothing to another adapter); with more than one, going back from a root reaches a list of them.
+- The picker browses folders only, starting in the entries' own folder, with the path bar and a back arrow to the folder above. Only sections served by the same adapter object are offered (ids mean nothing to another adapter), and of those only the ones whose `importFrom` takes the entries' section (see "Sections taking entries from each other"); with more than one, going back from a root reaches a list of them.
 - The entries being copied or moved can't be opened, so a folder can never go into itself or below itself, without the component parsing ids. Moving into the entries' own folder is disabled.
 - Before running, the destination's cached listing is checked for names the entries share. Clashes get a second step with Replace, Keep both and Skip, passed as `conflict`; otherwise `conflict` is "keepBoth", so a clash the cache missed never overwrites anything. Copying into the entries' own folder keeps both without asking, as a duplicate.
 - Progress, cancelling and errors work as in the name dialog. Afterwards the destination is listed again, and for a move the source too.
 - After a move, listings cached under moved folders' ids are dropped, and a place inside a moved folder goes to the destination instead.
 - Not yet: a New folder button in the picker, an operations panel for long transfers, and copying between adapters.
 
+## Sections taking entries from each other
+
+Entries only ever move or copy between sections served by the same adapter object. A section's optional `importFrom` (`SectionImports` in `types/section.ts`, public) narrows which of those it takes entries from: `true` (the default) every one, `false` none, `{ allow }` only the sections with those ids, `{ deny }` all but those. The type lets a section give `allow` or `deny`, not both. Moving or copying within a section is always allowed, and unknown ids are ignored.
+
+- `importsFrom(target, source)` in `utils/sections.ts` decides it, by section id. The source is the section the entries were listed in when they were cut, copied, dragged or picked for "Move to…" / "Copy to…", even when the same folders show in other sections too.
+- It's checked wherever entries go into a section: in `canPaste`, so pasting and drag and drop, where a refused target shows the no-drop cursor, and in the destinations `contextFor` hands the transfer picker.
+- It only covers entries coming in. Nothing yet stops a section's entries from leaving.
+- The playground shows each kind on the server sections: Website takes only from API service, API service from anything but Design assets, and Design assets from nothing else.
+
 ## Cut, copy and paste
 
 `ActionContext.cut()` and `copy()` put the entries on a clipboard held in `file-manager.tsx` (`Clipboard`, `types/clipboard.ts`), not the system clipboard, since ids mean nothing outside their adapter. `paste()` moves (cut) or copies them into the context's `folder`, and `pasteInto()` into the one folder in `entries`, so a folder's menu can offer "Paste into folder", in the content and the sidebar tree alike. Both go through the same adapter methods as "Move to…" and "Copy to…". The consumer's actions bind Ctrl+X, Ctrl+C and Ctrl+V like any other shortcut.
 
-- `paste` is offered (`utils/clipboard.ts`, `canPaste`) only through the adapter the entries came from, never into one of them or below one (the target's trail holds every folder above it, so no id is parsed), not into cut entries' own folder, and not while another paste runs. Copying into the entries' own folder duplicates them, as "keep both".
+- `paste` is offered (`utils/clipboard.ts`, `canPaste`) only through the adapter the entries came from, into a section whose `importFrom` takes the entries' section, never into one of them or below one (the target's trail holds every folder above it, so no id is parsed), not into cut entries' own folder, and not while another paste runs. Copying into the entries' own folder duplicates them, as "keep both".
 - `dialogs/paste-dialog.tsx` runs the paste unseen and only shows to ask about clashing names or to report the adapter's error. Clashes are looked for in the target's listing, which it loads first when it isn't cached (a folder pasted into from its menu, or dropped onto, may never have been opened). Afterwards the target is listed again, so is its parent when cached (for its item count), and the source after a cut, once if it's that same parent.
 - While a paste runs, the open folder shows its progress bar (`busy`) if the paste changes it: it's the target, the folder listing the target, or the folder a cut leaves.
 - A cut is pasted once and leaves the clipboard; a copy can be pasted again. Entries moved by either route leave the clipboard (their ids may have changed), and a renamed entry is replaced by its new self. Entries below a renamed folder keep their stale ids, and pasting them reports the adapter's error.
