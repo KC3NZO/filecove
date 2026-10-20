@@ -8,7 +8,6 @@ import DialogTitle from "@mui/material/DialogTitle";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { useFolder } from "../../../hooks/use-folder";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { folderOf } from "../../../utils/navigation";
 
@@ -35,6 +34,11 @@ interface DeleteDialogProps {
     open: boolean;
     request: DeleteRequest;
     onClose: () => void;
+    /**
+     * Called whenever the adapter may have changed folders, done, failed or cancelled, with their
+     * ids, to list them again wherever they're shown.
+     */
+    onChanged: (adapter: FileAdapter, folderIds: string[]) => void;
     /** Called once the adapter has deleted the entries. */
     onDone: (request: DeleteRequest) => void;
 }
@@ -50,12 +54,8 @@ const contentSx: SxProps<Theme> = {
  * nothing is deleted without asking. Anything the adapter rejects with is shown in the dialog,
  * which stays open to try again.
  */
-const DeleteDialog = ({ open, request, onClose, onDone }: DeleteDialogProps) => {
+const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialogProps) => {
     const { section, adapter, trail, entries } = request;
-    const parent = folderOf(section, trail);
-
-    const { reload } = useFolder(section, parent.id, false);
-    const grandparent = useFolder(section, folderOf(section, trail.slice(0, -1)).id, false);
 
     const [pending, setPending] = useState(false);
     const [failure, setFailure] = useState<string | null>(null);
@@ -75,14 +75,7 @@ const DeleteDialog = ({ open, request, onClose, onDone }: DeleteDialogProps) => 
         [],
     );
 
-    // The folder is listed again, and so is its parent's listing when cached, for its item count.
-    const refresh = () => {
-        reload();
-
-        if (trail.length > 0 && grandparent.state) {
-            grandparent.reload();
-        }
-    };
+    const refresh = () => onChanged(adapter, [folderOf(section, trail).id]);
 
     // Cancelling can't bring back what the backend has already deleted, so the folder is listed again.
     const close = () => {

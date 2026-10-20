@@ -39,6 +39,11 @@ interface NameDialogProps {
     open: boolean;
     request: NameRequest;
     onClose: () => void;
+    /**
+     * Called whenever the adapter may have changed folders, done, failed or cancelled, with their
+     * ids, to list them again wherever they're shown.
+     */
+    onChanged: (adapter: FileAdapter, folderIds: string[]) => void;
     /** Called with the entry as the adapter returned it, once created or renamed. */
     onDone: (request: NameRequest, entry: FileEntry) => void;
 }
@@ -67,15 +72,14 @@ const run = (request: NameRequest, parentId: string, name: string, signal: Abort
  * change. Names are checked as they are typed against the folder's cached listing, and anything
  * the adapter rejects is shown under the field, with the name kept.
  */
-const NameDialog = ({ open, request, onClose, onDone }: NameDialogProps) => {
+const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogProps) => {
     const { section, trail } = request;
     const entry = request.kind === "rename" ? request.entry : undefined;
     const kind = entry?.kind ?? "folder";
     const parent = folderOf(section, trail);
 
     const formId = useId();
-    const { state, reload } = useFolder(section, parent.id, true);
-    const grandparent = useFolder(section, folderOf(section, trail.slice(0, -1)).id, false);
+    const { state } = useFolder(section, parent.id, true);
 
     const [name, setName] = useState(() => entry?.name ?? newFolderName(state?.entries));
     const [failure, setFailure] = useState<string | null>(null);
@@ -115,14 +119,7 @@ const NameDialog = ({ open, request, onClose, onDone }: NameDialogProps) => {
         [entry],
     );
 
-    const refresh = () => {
-        reload();
-
-        // A new folder changes its parent's item count, as listed one level up.
-        if (request.kind === "create" && trail.length > 0 && grandparent.state) {
-            grandparent.reload();
-        }
-    };
+    const refresh = () => onChanged(request.adapter, [parent.id]);
 
     // Cancelling can't undo a change the backend has already made, so the folder is listed again.
     const close = () => {

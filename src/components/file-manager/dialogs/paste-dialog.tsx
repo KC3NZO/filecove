@@ -11,12 +11,11 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
 import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
-import { folderKey } from "../../../store/folder-store";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { folderOf } from "../../../utils/navigation";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 
-import type { Clipboard, ConflictPolicy, FolderRef, Section } from "../../../types";
+import type { Clipboard, ConflictPolicy, FileAdapter, FolderRef, Section } from "../../../types";
 
 export interface PasteRequest {
     /** What is pasted, as it was when the paste began: the clipboard, or entries dropped onto a folder. */
@@ -39,6 +38,11 @@ interface PasteDialogProps {
     open: boolean;
     request: PasteRequest;
     onClose: () => void;
+    /**
+     * Called whenever the adapter may have changed folders, done, failed or cancelled, with their
+     * ids, to list them again wherever they're shown.
+     */
+    onChanged: (adapter: FileAdapter, folderIds: string[]) => void;
     /** Called once the adapter has moved or copied the entries. */
     onDone: (request: PasteRequest) => void;
 }
@@ -62,43 +66,23 @@ const spacerSx: SxProps<Theme> = {
  * folder. Most pastes need nothing from the user, so they run unseen and the dialog only shows to
  * ask about names the folder already has (replace, keep both or skip) or to report the adapter's error.
  */
-const PasteDialog = ({ open, request, onClose, onDone }: PasteDialogProps) => {
+const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogProps) => {
     const { clipboard, section, trail } = request;
     const { entries } = clipboard;
     const kind = clipboard.kind === "cut" ? "move" : "copy";
     const target = folderOf(section, trail);
     const sourceId = folderOf(clipboard.section, clipboard.trail).id;
 
-    const parentId = folderOf(section, trail.slice(0, -1)).id;
-
     // The target is listed first when it isn't cached, as a folder dropped onto may never have been opened.
-    const { state, reload } = useFolder(section, target.id, true);
-    const parent = useFolder(section, parentId, false);
-    const source = useFolder(clipboard.section, sourceId, false);
+    const { state } = useFolder(section, target.id, true);
     const listed = !!state?.entries || state?.status === "error";
 
     const [checked, setChecked] = useState(false);
     const [conflicts, setConflicts] = useState<string[] | null>(null);
 
-    // The adapter can't undo a change it has made, so both folders are listed again however it
-    // ended, and so is the target's parent when cached, for its item count. That parent is often
-    // where a move came from, when entries were dropped onto a folder beside them.
-    const refresh = () => {
-        const parentListed = trail.length > 0 && !!parent.state;
-
-        reload();
-
-        if (parentListed) {
-            parent.reload();
-        }
-
-        if (
-            kind === "move" &&
-            !(parentListed && folderKey(clipboard.section.id, sourceId) === folderKey(section.id, parentId))
-        ) {
-            source.reload();
-        }
-    };
+    // The adapter can't undo a change it has made, so however it ended, the target is listed again,
+    // and so is the source after a move.
+    const refresh = () => onChanged(clipboard.adapter, kind === "move" ? [target.id, sourceId] : [target.id]);
 
     const { pending, failure, run, cancel } = useTransfer({ kind, adapter: clipboard.adapter, entries }, refresh);
 

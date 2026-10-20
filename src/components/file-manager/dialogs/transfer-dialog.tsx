@@ -56,6 +56,11 @@ interface TransferDialogProps {
     open: boolean;
     request: TransferRequest;
     onClose: () => void;
+    /**
+     * Called whenever the adapter may have changed folders, done, failed or cancelled, with their
+     * ids, to list them again wherever they're shown.
+     */
+    onChanged: (adapter: FileAdapter, folderIds: string[]) => void;
     /** Called once the adapter has copied or moved the entries into `destination`. */
     onDone: (request: TransferRequest, destination: Place) => void;
 }
@@ -142,8 +147,8 @@ const isFolder = (entry: FileEntry) => entry.kind === "folder";
  * folder. The entries themselves can't be opened, so a folder can never go into itself. Names the
  * destination already has are settled in a second step: replace, keep both, or skip.
  */
-const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps) => {
-    const { kind, section, trail, entries, destinations } = request;
+const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferDialogProps) => {
+    const { kind, section, adapter, trail, entries, destinations } = request;
     const sourceId = folderOf(section, trail).id;
 
     // Null on the list of sections, which is only reachable with more than one.
@@ -152,8 +157,7 @@ const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps)
 
     const target = destinations.find((candidate) => candidate.id === place?.sectionId) ?? section;
     const targetFolder = folderOf(target, place?.trail ?? []);
-    const { state, reload } = useFolder(target, targetFolder.id, place !== null);
-    const source = useFolder(section, sourceId, false);
+    const { state } = useFolder(target, targetFolder.id, place !== null);
 
     const folders = useMemo(() => state?.entries?.filter(isFolder).sort(compareEntries), [state?.entries]);
     const movingIds = useMemo(() => new Set(entries.map((entry) => entry.id)), [entries]);
@@ -164,13 +168,7 @@ const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps)
     const what = entries.length === 1 ? `“${entries[0].name}”` : `${entries.length} items`;
 
     // The adapter can't undo a change it has made, so both folders are listed again however it ended.
-    const refresh = () => {
-        reload();
-
-        if (kind === "move") {
-            source.reload();
-        }
-    };
+    const refresh = () => onChanged(adapter, kind === "move" ? [targetFolder.id, sourceId] : [targetFolder.id]);
 
     const { pending, failure, run: start, cancel, clearFailure } = useTransfer(request, refresh);
 

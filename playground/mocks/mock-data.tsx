@@ -143,6 +143,12 @@ export const sections: SectionGroup[] = [
             { id: "media", label: "Media bucket", icon: <CloudOutlined />, rootId: "/", adapter: mediaAdapter },
         ],
     },
+    // A bookmark rooted inside Website, so the same folders show in two sections, under the same ids.
+    {
+        id: "bookmarks",
+        title: "Bookmarks",
+        sections: [{ id: "website-src", label: "Website source", icon: "folder", rootId: "/server/project/a/src" }],
+    },
 ];
 
 const names = (context: ActionContext) => {

@@ -95,6 +95,9 @@ interface Reveal {
 
 const NO_ACTIONS: ActionGroup[] = [];
 
+const folderIdsOf = (entries: FileEntry[]) =>
+    entries.filter((entry) => entry.kind === "folder").map((entry) => entry.id);
+
 // While entries are dragged, the backdrop of the overlay sidebar lets drops through to the content,
 // so a folder dragged out of the sidebar can land there.
 const PASS_THROUGH: CSSProperties = { pointerEvents: "none" };
@@ -237,26 +240,26 @@ const FileManager = ({
         [clipboard],
     );
 
-    // Folders a running paste changes, whose view shows a progress bar meanwhile: the one it goes
-    // into, the one listing that folder (where it was dropped onto, or pasted into from its menu),
-    // and, for a move, the one the entries leave.
-    const pasteKeys = useMemo(() => {
+    // Folders a running paste changes, whose view shows a progress bar meanwhile, in any section
+    // showing them: the one it goes into, the one listing that folder (where it was dropped onto,
+    // or pasted into from its menu), and, for a move, the one the entries leave.
+    const pasteIds = useMemo(() => {
         if (!pasting?.open) {
             return null;
         }
 
         const { clipboard: pasted, section: target, trail } = pasting.request;
-        const keys = new Set([
-            folderKey(target.id, folderOf(target, trail).id),
-            folderKey(target.id, folderOf(target, trail.slice(0, -1)).id),
-        ]);
+        const ids = new Set([folderOf(target, trail).id, folderOf(target, trail.slice(0, -1)).id]);
 
         if (pasted.kind === "cut") {
-            keys.add(folderKey(pasted.section.id, folderOf(pasted.section, pasted.trail).id));
+            ids.add(folderOf(pasted.section, pasted.trail).id);
         }
 
-        return keys;
+        return { adapter: pasted.adapter, ids };
     }, [pasting]);
+
+    const busy =
+        !!folder && !!pasteIds && pasteIds.adapter === (section?.adapter ?? adapter) && pasteIds.ids.has(folder.id);
 
     // Expands without ever collapsing, for a drag resting on a collapsed folder or section.
     const expand = useCallback((key: string) => {
@@ -338,24 +341,80 @@ const FileManager = ({
 
     const drag = useEntryDrag(adapter, dropInto);
 
-    // With path ids, a moved folder's old id is free for another folder, so its cached listing is
-    // dropped. A place inside a moved folder can't be followed, so it goes where the folder went.
-    // Moved entries leave the clipboard too, since their ids may have changed.
+    // Sections served by one adapter can show the same folders, under the same ids, since ids are
+    // unique within an adapter, so a change made in one of them shows in all of them.
+    const sectionsOf = useCallback(
+        (served: FileAdapter) =>
+            [...sectionsById.values()].filter((candidate) => (candidate.adapter ?? adapter) === served),
+        [adapter, sectionsById],
+    );
+
+    // Folders a dialog may have changed are listed again wherever they're cached, in every section
+    // the adapter serves, and so is every listing holding one of them, for its item count.
+    const relist = useCallback(
+        (served: FileAdapter, folderIds: string[]) => {
+            sectionsOf(served).forEach((shown) => store.relist(shown.id, served, folderIds));
+        },
+        [sectionsOf, store],
+    );
+
+    // With path ids, a change can leave an id naming another folder: a deleted or moved folder's id
+    // is free for a new one, as is a renamed folder's old id, and a new or renamed folder's id may
+    // have named one before. So can the ids below them, so the listings cached for them, and for
+    // every folder any section has cached below them, are dropped in every section the adapter
+    // serves. A section rooted in one of them can't follow it, since its root is the consumer's:
+    // its places go back to the root, which is listed again, as nothing would list it on its own,
+    // to show what the adapter now has there. Returns the dropped ids, for the places inside them.
+    const dropFolders = useCallback(
+        (served: FileAdapter, folderIds: string[]) => {
+            const showing = sectionsOf(served);
+            const dropped = new Set([
+                ...folderIds,
+                ...showing.flatMap((shown) => folderIds.flatMap((id) => store.cachedTree(shown.id, id))),
+            ]);
+            const lostRoots = new Set(showing.filter((shown) => dropped.has(shown.rootId)).map((shown) => shown.id));
+
+            showing.forEach((shown) => {
+                const rootKey = folderKey(shown.id, shown.rootId);
+                const relistRoot = lostRoots.has(shown.id) && !!store.get(rootKey);
+
+                store.forget(shown.id, dropped);
+
+                if (relistRoot) {
+                    store.load(rootKey, served, shown.rootId, true);
+                }
+            });
+
+            if (lostRoots.size > 0) {
+                rewrite((visited) =>
+                    lostRoots.has(visited.sectionId) && visited.trail.length > 0 ? { ...visited, trail: [] } : visited,
+                );
+            }
+
+            return dropped;
+        },
+        [rewrite, sectionsOf, store],
+    );
+
+    // Moved folders go from the cache (`dropFolders`). The open place, in whichever section shows
+    // them, can't follow a moved folder it's inside, so it goes where the folder went. Moved entries
+    // leave the clipboard too, since their ids may have changed.
     const handleMoved = useCallback(
-        (from: Section, fromAdapter: FileAdapter, entries: FileEntry[], destination: Place) => {
+        (fromAdapter: FileAdapter, entries: FileEntry[], destination: Place) => {
             const movedIds = new Set(entries.map((entry) => entry.id));
+            const dropped = dropFolders(fromAdapter, folderIdsOf(entries));
 
-            entries
-                .filter((entry) => entry.kind === "folder")
-                .forEach((entry) => store.forget(folderKey(from.id, entry.id)));
-
-            if (place.sectionId === from.id && place.trail.some((step) => movedIds.has(step.id))) {
+            if (
+                section &&
+                (section.adapter ?? adapter) === fromAdapter &&
+                [section.rootId, ...place.trail.map((step) => step.id)].some((id) => dropped.has(id))
+            ) {
                 goTo(destination);
             }
 
             setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, movedIds));
         },
-        [store, place, goTo],
+        [adapter, section, place, dropFolders, goTo],
     );
 
     const handleTransferred = useCallback(
@@ -363,7 +422,7 @@ const FileManager = ({
             closeTransfer();
 
             if (request.kind === "move") {
-                handleMoved(request.section, request.adapter, request.entries, destination);
+                handleMoved(request.adapter, request.entries, destination);
             }
         },
         [closeTransfer, handleMoved],
@@ -376,88 +435,89 @@ const FileManager = ({
             closePaste();
 
             if (pasted.kind === "cut") {
-                handleMoved(pasted.section, pasted.adapter, pasted.entries, { sectionId: target.id, trail });
+                handleMoved(pasted.adapter, pasted.entries, { sectionId: target.id, trail });
             }
         },
         [closePaste, handleMoved],
     );
 
-    // A deleted folder's id is free for a new folder, as a path is, so its cached listing is dropped.
-    // Places inside a deleted folder, in the history too, end at the folder that held it. Deleted
-    // entries leave the clipboard.
+    // Deleted folders go from the cache (`dropFolders`), and places inside one, in the history too,
+    // end at the folder that held it, in every section showing it. Deleted entries leave the clipboard.
     const handleDeleted = useCallback(
-        ({ section: from, adapter: fromAdapter, entries }: DeleteRequest) => {
+        ({ adapter: fromAdapter, entries }: DeleteRequest) => {
             const deletedIds = new Set(entries.map((entry) => entry.id));
+            const showing = new Set(sectionsOf(fromAdapter).map((shown) => shown.id));
 
             closeDelete();
-            rewrite((visited) => outsideDeleted(visited, from.id, deletedIds));
 
-            entries
-                .filter((entry) => entry.kind === "folder")
-                .forEach((entry) => store.forget(folderKey(from.id, entry.id)));
+            const dropped = dropFolders(fromAdapter, folderIdsOf(entries));
 
+            rewrite((visited) => (showing.has(visited.sectionId) ? outsideDeleted(visited, dropped) : visited));
             setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, deletedIds));
         },
-        [closeDelete, rewrite, store],
+        [closeDelete, dropFolders, rewrite, sectionsOf],
     );
 
-    // The new or renamed entry is selected if its folder is open. A renamed folder keeps its
-    // place in the path, the history and the sidebar tree.
+    // The new or renamed entry is selected if its folder is open, in whichever section shows it. A
+    // renamed folder keeps its place in the path, the history and the sidebar tree, in every
+    // section showing it.
     const handleNamed = useCallback(
         (request: NameRequest, entry: FileEntry) => {
-            const { section: target, trail } = request;
-            const parentKey = folderKey(target.id, folderOf(target, trail).id);
+            const { section: target, adapter: served, trail } = request;
+            const parentId = folderOf(target, trail).id;
             const before = request.kind === "rename" ? request.entry : undefined;
+            const showing = sectionsOf(served);
 
             closeNaming();
 
-            if (parentKey === openKey) {
-                setReveal({ key: parentKey, id: entry.id });
+            if (openKey && showing.some((shown) => folderKey(shown.id, parentId) === openKey)) {
+                setReveal({ key: openKey, id: entry.id });
             }
 
             // A renamed entry on the clipboard is pasted as it is now.
             if (before) {
-                setClipboard((prev) => prev && withRenamed(prev, request.adapter, before, entry));
+                setClipboard((prev) => prev && withRenamed(prev, served, before, entry));
             }
 
             if (entry.kind !== "folder") {
                 return;
             }
 
-            // A folder's new id may have named another folder before, as a path does after that
-            // folder was renamed away, so anything cached under it is stale. So is the old id.
             if (entry.id !== before?.id) {
-                store.forget(folderKey(target.id, entry.id));
-
-                if (before) {
-                    store.forget(folderKey(target.id, before.id));
-                }
+                dropFolders(served, before ? [entry.id, before.id] : [entry.id]);
             }
 
             if (!before) {
                 return;
             }
 
-            rewrite((visited) => renameInPlace(visited, target.id, before, entry));
+            const showingIds = new Set(showing.map((shown) => shown.id));
 
+            rewrite((visited) => (showingIds.has(visited.sectionId) ? renameInPlace(visited, before, entry) : visited));
+
+            // A section rooted in the folder keeps its root expanded as it is, under the old id.
             if (entry.id !== before.id) {
-                const oldKey = folderKey(target.id, before.id);
-
                 setExpanded((prev) => {
-                    if (!prev.has(oldKey)) {
+                    const renamed = showing.filter(
+                        (shown) => shown.rootId !== before.id && prev.has(folderKey(shown.id, before.id)),
+                    );
+
+                    if (renamed.length === 0) {
                         return prev;
                     }
 
                     const next = new Set(prev);
 
-                    next.delete(oldKey);
-                    next.add(folderKey(target.id, entry.id));
+                    renamed.forEach((shown) => {
+                        next.delete(folderKey(shown.id, before.id));
+                        next.add(folderKey(shown.id, entry.id));
+                    });
 
                     return next;
                 });
             }
         },
-        [closeNaming, openKey, store, rewrite],
+        [closeNaming, openKey, sectionsOf, dropFolders, rewrite],
     );
 
     const contextFor = useCallback(
@@ -623,7 +683,7 @@ const FileManager = ({
                                                 sort={sort}
                                                 hasActions={hasActions}
                                                 selecting={selecting}
-                                                busy={openKey !== null && !!pasteKeys?.has(openKey)}
+                                                busy={busy}
                                                 revealId={reveal?.id}
                                                 onSelectingChange={setSelecting}
                                                 onSortChange={setSort}
@@ -644,6 +704,7 @@ const FileManager = ({
                                 open={naming.open}
                                 request={naming.request}
                                 onClose={closeNaming}
+                                onChanged={relist}
                                 onDone={handleNamed}
                             />
                         )}
@@ -653,6 +714,7 @@ const FileManager = ({
                                 open={transfer.open}
                                 request={transfer.request}
                                 onClose={closeTransfer}
+                                onChanged={relist}
                                 onDone={handleTransferred}
                             />
                         )}
@@ -662,6 +724,7 @@ const FileManager = ({
                                 open={deleting.open}
                                 request={deleting.request}
                                 onClose={closeDelete}
+                                onChanged={relist}
                                 onDone={handleDeleted}
                             />
                         )}
@@ -671,6 +734,7 @@ const FileManager = ({
                                 open={pasting.open}
                                 request={pasting.request}
                                 onClose={closePaste}
+                                onChanged={relist}
                                 onDone={handlePasted}
                             />
                         )}

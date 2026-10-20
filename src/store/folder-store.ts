@@ -15,6 +15,72 @@ export const createFolderStore = () => {
 
     const notify = () => listeners.forEach((listener) => listener());
 
+    /**
+     * Ids of a folder and of the folders below it whose listings a section has cached, found
+     * through the cached listings themselves, so no id is parsed. Empty when the folder's own
+     * listing isn't cached.
+     */
+    const cachedTree = (sectionId: string, folderId: string) => {
+        const found = new Set<string>();
+
+        const visit = (id: string) => {
+            const state = states.get(folderKey(sectionId, id));
+
+            if (!state || found.has(id)) {
+                return;
+            }
+
+            found.add(id);
+            state.entries?.forEach((entry) => {
+                if (entry.kind === "folder") {
+                    visit(entry.id);
+                }
+            });
+        };
+
+        visit(folderId);
+
+        return [...found];
+    };
+
+    /**
+     * Lists a folder unless it is loaded or already loading. `force` lists it again either way,
+     * replacing a request in flight, whose result could predate a change just made.
+     */
+    const load = (key: string, adapter: FileAdapter, folderId: string, force = false) => {
+        const current = states.get(key);
+
+        if (!force && (requests.has(key) || current?.status === "ready")) {
+            return;
+        }
+
+        requests.get(key)?.abort();
+
+        const controller = new AbortController();
+        const settle = (state: FolderState) => {
+            // A request that was aborted or replaced no longer owns the folder.
+            if (requests.get(key) !== controller) {
+                return;
+            }
+
+            requests.delete(key);
+            states.set(key, state);
+            notify();
+        };
+
+        requests.set(key, controller);
+        states.set(key, { status: "loading", entries: current?.entries });
+        notify();
+
+        // Wrapped so an adapter that throws synchronously still ends up as an error state.
+        Promise.resolve()
+            .then(() => adapter.list(folderId, { signal: controller.signal }))
+            .then(
+                ({ entries }) => settle({ status: "ready", entries }),
+                (error: unknown) => settle({ status: "error", error }),
+            );
+    };
+
     return {
         get: (key: string) => states.get(key),
 
@@ -26,50 +92,50 @@ export const createFolderStore = () => {
             };
         },
 
+        load,
+
         /**
-         * Lists a folder unless it is loaded or already loading. `force` lists it again either way,
-         * replacing a request in flight, whose result could predate a change just made.
+         * Lists again, through `adapter`, a section's cached listings of the folders, and every
+         * cached listing holding one of them, for its item count, e.g. after their contents changed.
+         * All of the section's listings are looked through, found by the section's part of their
+         * key, so none is missed and no folder id is parsed.
          */
-        load(key: string, adapter: FileAdapter, folderId: string, force = false) {
-            const current = states.get(key);
+        relist(sectionId: string, adapter: FileAdapter, folderIds: Iterable<string>) {
+            const changed = new Set(folderIds);
+            const prefix = folderKey(sectionId, "");
 
-            if (!force && (requests.has(key) || current?.status === "ready")) {
-                return;
-            }
+            [...states].forEach(([key, state]) => {
+                const folderId = key.slice(prefix.length);
 
-            requests.get(key)?.abort();
-
-            const controller = new AbortController();
-            const settle = (state: FolderState) => {
-                // A request that was aborted or replaced no longer owns the folder.
-                if (requests.get(key) !== controller) {
-                    return;
+                if (
+                    key.startsWith(prefix) &&
+                    (changed.has(folderId) || state.entries?.some((entry) => changed.has(entry.id)))
+                ) {
+                    load(key, adapter, folderId, true);
                 }
-
-                requests.delete(key);
-                states.set(key, state);
-                notify();
-            };
-
-            requests.set(key, controller);
-            states.set(key, { status: "loading", entries: current?.entries });
-            notify();
-
-            // Wrapped so an adapter that throws synchronously still ends up as an error state.
-            Promise.resolve()
-                .then(() => adapter.list(folderId, { signal: controller.signal }))
-                .then(
-                    ({ entries }) => settle({ status: "ready", entries }),
-                    (error: unknown) => settle({ status: "error", error }),
-                );
+            });
         },
 
-        /** Drops a folder's listing and cancels its request, e.g. when its id may now name another folder. */
-        forget(key: string) {
-            requests.get(key)?.abort();
-            requests.delete(key);
+        cachedTree,
 
-            if (states.delete(key)) {
+        /**
+         * Drops the listings a section has cached for folders and for every folder below them, and
+         * cancels their requests, e.g. when the folders were deleted, or their ids may now name others.
+         */
+        forget(sectionId: string, folderIds: Iterable<string>) {
+            let dropped = false;
+
+            [...folderIds]
+                .flatMap((folderId) => cachedTree(sectionId, folderId))
+                .forEach((id) => {
+                    const key = folderKey(sectionId, id);
+
+                    requests.get(key)?.abort();
+                    requests.delete(key);
+                    dropped = states.delete(key) || dropped;
+                });
+
+            if (dropped) {
                 notify();
             }
         },
