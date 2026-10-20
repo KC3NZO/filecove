@@ -91,4 +91,10 @@ export interface FileAdapter {
      * `Error` to show its message to the user.
      */
     move?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<void>;
+    /**
+     * Deletes entries for good, folders with everything in them. The entries share a parent, and
+     * the user has already confirmed. Without it, the file manager has no way to delete. Reject
+     * with an `Error` to show its message to the user.
+     */
+    delete?(entries: FileEntry[], options: OperationOptions): Promise<void>;
 }

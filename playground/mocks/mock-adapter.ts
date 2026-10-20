@@ -52,7 +52,7 @@ const toEntry = (parentPath: string, node: MockNode): FileEntry => ({
  * An in-memory adapter over one or more unrelated root paths, with simulated latency so the
  * lazy loading can be seen. Entry ids are full paths, as a path-based backend would use, so a
  * renamed folder's id changes along with every id below it. Folders marked `fails` refuse to be
- * listed, renamed or written to.
+ * listed, renamed, deleted or written to.
  */
 export const createMockAdapter = (
     roots: Record<string, MockNode[]>,
@@ -240,6 +240,15 @@ export const createMockAdapter = (
 
                     detach(parent, parentId, node);
                     insert(target, targetId, node, conflict);
+                });
+            }),
+
+        delete: (entries, { signal }) =>
+            respond(signal, () => {
+                entries.forEach((entry) => {
+                    const { parentId, parent, node } = locate(entry);
+
+                    detach(parent, parentId, node);
                 });
             }),
     };

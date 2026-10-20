@@ -50,6 +50,11 @@ export interface ActionContext {
      */
     copy?: () => void;
     /**
+     * Asks to confirm, then deletes `entries` for good. Missing when the section's adapter has no
+     * `delete`, or there are no entries.
+     */
+    delete?: () => void;
+    /**
      * Moves or copies what was cut or copied into `folder`. Missing when there is nothing to paste
      * here: the clipboard is empty, its entries came from another adapter, `folder` is one of them
      * or inside one, cut entries are already in `folder`, or a paste is still running. An action

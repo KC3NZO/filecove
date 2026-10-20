@@ -14,13 +14,14 @@ import { usePlaceHistory } from "../../hooks/use-place-history";
 import { createFolderStore, folderKey } from "../../store/folder-store";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { visibleActionGroups } from "../../utils/action-groups";
-import { canPaste, withRenamed, withoutMoved } from "../../utils/clipboard";
-import { folderOf, renameInPlace } from "../../utils/navigation";
+import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
+import { folderOf, outsideDeleted, renameInPlace } from "../../utils/navigation";
 import { importsFrom } from "../../utils/sections";
 import { matchesShortcut } from "../../utils/shortcut";
 import { DEFAULT_SORT } from "../../utils/sort";
 import FolderView from "./content/folder-view";
 import ContextMenu from "./context-menu/context-menu";
+import DeleteDialog from "./dialogs/delete-dialog";
 import NameDialog from "./dialogs/name-dialog";
 import PasteDialog from "./dialogs/paste-dialog";
 import TransferDialog from "./dialogs/transfer-dialog";
@@ -47,6 +48,7 @@ import type {
     ViewMode,
 } from "../../types";
 import type { MenuState } from "./context-menu/context-menu";
+import type { DeleteDialogState, DeleteRequest } from "./dialogs/delete-dialog";
 import type { NameDialogState, NameRequest } from "./dialogs/name-dialog";
 import type { PasteDialogState, PasteRequest } from "./dialogs/paste-dialog";
 import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-dialog";
@@ -212,6 +214,7 @@ const FileManager = ({
     const [menu, setMenu] = useState<MenuState | null>(null);
     const [naming, setNaming] = useState<NameDialogState | null>(null);
     const [transfer, setTransfer] = useState<TransferDialogState | null>(null);
+    const [deleting, setDeleting] = useState<DeleteDialogState | null>(null);
     const [clipboard, setClipboard] = useState<Clipboard | null>(null);
     const [pasting, setPasting] = useState<PasteDialogState | null>(null);
     const [reveal, setReveal] = useState<Reveal | null>(null);
@@ -305,6 +308,12 @@ const FileManager = ({
 
     const closeTransfer = useCallback(() => setTransfer((prev) => prev && { ...prev, open: false }), []);
 
+    const askDelete = useCallback((request: DeleteRequest) => {
+        setDeleting((prev) => ({ open: true, id: (prev?.id ?? 0) + 1, request }));
+    }, []);
+
+    const closeDelete = useCallback(() => setDeleting((prev) => prev && { ...prev, open: false }), []);
+
     const askPaste = useCallback((request: PasteRequest) => {
         setPasting((prev) => ({ open: true, id: (prev?.id ?? 0) + 1, request }));
     }, []);
@@ -344,7 +353,7 @@ const FileManager = ({
                 goTo(destination);
             }
 
-            setClipboard((prev) => prev && withoutMoved(prev, fromAdapter, movedIds));
+            setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, movedIds));
         },
         [store, place, goTo],
     );
@@ -371,6 +380,25 @@ const FileManager = ({
             }
         },
         [closePaste, handleMoved],
+    );
+
+    // A deleted folder's id is free for a new folder, as a path is, so its cached listing is dropped.
+    // Places inside a deleted folder, in the history too, end at the folder that held it. Deleted
+    // entries leave the clipboard.
+    const handleDeleted = useCallback(
+        ({ section: from, adapter: fromAdapter, entries }: DeleteRequest) => {
+            const deletedIds = new Set(entries.map((entry) => entry.id));
+
+            closeDelete();
+            rewrite((visited) => outsideDeleted(visited, from.id, deletedIds));
+
+            entries
+                .filter((entry) => entry.kind === "folder")
+                .forEach((entry) => store.forget(folderKey(from.id, entry.id)));
+
+            setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, deletedIds));
+        },
+        [closeDelete, rewrite, store],
     );
 
     // The new or renamed entry is selected if its folder is open. A renamed folder keeps its
@@ -480,6 +508,7 @@ const FileManager = ({
                     folderAdapter.copy && entries.length > 0
                         ? () => setClipboard({ ...base, kind: "copy", entries })
                         : undefined,
+                delete: folderAdapter.delete && entries.length > 0 ? () => askDelete({ ...base, entries }) : undefined,
                 paste: pasteTo(trail),
                 pasteInto:
                     entries.length === 1 && only.kind === "folder"
@@ -487,7 +516,7 @@ const FileManager = ({
                         : undefined,
             };
         },
-        [adapter, store, goTo, askName, askDestination, offerPaste, sectionsById, clipboard],
+        [adapter, store, goTo, askName, askDestination, askDelete, offerPaste, sectionsById, clipboard],
     );
 
     const openMenu = useCallback<OpenMenu>(
@@ -625,6 +654,15 @@ const FileManager = ({
                                 request={transfer.request}
                                 onClose={closeTransfer}
                                 onDone={handleTransferred}
+                            />
+                        )}
+                        {deleting && (
+                            <DeleteDialog
+                                key={`delete:${deleting.id}`}
+                                open={deleting.open}
+                                request={deleting.request}
+                                onClose={closeDelete}
+                                onDone={handleDeleted}
                             />
                         )}
                         {pasting && (

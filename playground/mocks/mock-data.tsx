@@ -298,12 +298,13 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
         actions: [
             {
                 id: "delete",
-                label: "Delete",
+                label: "Delete…",
                 icon: "delete",
                 shortcut: "Delete",
                 target: "selection",
                 destructive: true,
-                onSelect: (context) => notify(`Delete ${names(context)}`),
+                visible: (context) => !!context.delete,
+                onSelect: (context) => context.delete?.(),
             },
         ],
     },

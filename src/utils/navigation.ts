@@ -24,3 +24,10 @@ export const renameInPlace = (place: Place, sectionId: string, before: FileEntry
 
     return { ...place, trail };
 };
+
+/** A place after folders of its section were deleted: a trail into one of them ends at the folder that held it. */
+export const outsideDeleted = (place: Place, sectionId: string, ids: ReadonlySet<string>): Place => {
+    const index = place.sectionId === sectionId ? place.trail.findIndex((folder) => ids.has(folder.id)) : -1;
+
+    return index < 0 ? place : { ...place, trail: place.trail.slice(0, index) };
+};

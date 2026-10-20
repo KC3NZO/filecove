@@ -28,8 +28,11 @@ export const canPaste = (clipboard: Clipboard, adapter: FileAdapter, section: Se
     return clipboard.kind === "copy" || folderOf(section, trail).id !== folderOf(clipboard.section, clipboard.trail).id;
 };
 
-/** The clipboard without entries that `adapter` moved, whose ids may have changed; null once it's empty. */
-export const withoutMoved = (clipboard: Clipboard, adapter: FileAdapter, ids: ReadonlySet<string>) => {
+/**
+ * The clipboard without entries that `adapter` moved, whose ids may have changed, or deleted; null
+ * once it's empty.
+ */
+export const withoutEntries =(clipboard: Clipboard, adapter: FileAdapter, ids: ReadonlySet<string>) => {
     if (clipboard.adapter !== adapter || !clipboard.entries.some((entry) => ids.has(entry.id))) {
         return clipboard;
     }
