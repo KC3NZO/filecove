@@ -20,6 +20,7 @@ export type {
     OperationOptions,
     Section,
     SectionGroup,
+    SectionImports,
     SortDirection,
     SortKey,
     SortOrder,

@@ -37,7 +37,10 @@ export interface TransferRequest {
     /** Trail to the folder the entries are in. */
     trail: FolderRef[];
     entries: FileEntry[];
-    /** Sections served by the same adapter, the only ones whose ids it understands. */
+    /**
+     * Sections served by the same adapter, the only ones whose ids it understands, that take
+     * entries from `section`, which is always among them.
+     */
     destinations: Section[];
 }
 
@@ -135,9 +138,9 @@ const isFolder = (entry: FileEntry) => entry.kind === "folder";
 
 /**
  * Asks where to copy or move entries, then has the adapter do it. It browses folders only, across
- * the sections the adapter serves, starting in the entries' own folder. The entries themselves
- * can't be opened, so a folder can never go into itself. Names the destination already has are
- * settled in a second step: replace, keep both, or skip.
+ * the sections the adapter serves that take entries from theirs, starting in the entries' own
+ * folder. The entries themselves can't be opened, so a folder can never go into itself. Names the
+ * destination already has are settled in a second step: replace, keep both, or skip.
  */
 const TransferDialog = ({ open, request, onClose, onDone }: TransferDialogProps) => {
     const { kind, section, trail, entries, destinations } = request;

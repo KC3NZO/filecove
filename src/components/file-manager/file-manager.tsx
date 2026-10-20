@@ -16,6 +16,7 @@ import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { visibleActionGroups } from "../../utils/action-groups";
 import { canPaste, withRenamed, withoutMoved } from "../../utils/clipboard";
 import { folderOf, renameInPlace } from "../../utils/navigation";
+import { importsFrom } from "../../utils/sections";
 import { matchesShortcut } from "../../utils/shortcut";
 import { DEFAULT_SORT } from "../../utils/sort";
 import FolderView from "./content/folder-view";
@@ -442,7 +443,8 @@ const FileManager = ({
                     kind,
                     entries,
                     destinations: [...sectionsById.values()].filter(
-                        (candidate) => (candidate.adapter ?? adapter) === folderAdapter,
+                        (candidate) =>
+                            (candidate.adapter ?? adapter) === folderAdapter && importsFrom(candidate, menuSection),
                     ),
                 });
 

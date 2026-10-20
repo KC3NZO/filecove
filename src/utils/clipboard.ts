@@ -1,13 +1,19 @@
 import { folderOf } from "./navigation";
+import { importsFrom } from "./sections";
 
 import type { Clipboard, FileAdapter, FileEntry, FolderRef, Section } from "../types";
 
 /**
  * Whether the clipboard can be pasted into the folder at `trail`: only through the adapter its
- * entries came from, never into one of them or below one, and, when cut, not into their own folder.
+ * entries came from, into a section that takes entries from theirs, never into one of them or
+ * below one, and, when cut, not into their own folder.
  */
 export const canPaste = (clipboard: Clipboard, adapter: FileAdapter, section: Section, trail: FolderRef[]) => {
-    if (clipboard.adapter !== adapter || !(clipboard.kind === "cut" ? adapter.move : adapter.copy)) {
+    if (
+        clipboard.adapter !== adapter ||
+        !(clipboard.kind === "cut" ? adapter.move : adapter.copy) ||
+        !importsFrom(section, clipboard.section)
+    ) {
         return false;
     }
 

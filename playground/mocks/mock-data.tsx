@@ -105,20 +105,41 @@ const mediaAdapter = createMockAdapter(
     { latency: [600, 1200] },
 );
 
+// The three server sections show each kind of `importFrom`: Website takes entries only from API
+// service, API service from anything but Design assets, and Design assets from nothing else.
 export const sections: SectionGroup[] = [
     {
         id: "projects",
         title: "Projects",
         sections: [
-            { id: "project-a", label: "Website", icon: <LanguageOutlined />, rootId: "/server/project/a" },
-            { id: "project-b", label: "API service", icon: "network", rootId: "/server/project/b" },
+            {
+                id: "project-a",
+                label: "Website",
+                icon: <LanguageOutlined />,
+                rootId: "/server/project/a",
+                importFrom: { allow: ["project-b"] },
+            },
+            {
+                id: "project-b",
+                label: "API service",
+                icon: "network",
+                rootId: "/server/project/b",
+                importFrom: { deny: ["design"] },
+            },
         ],
     },
     {
         id: "storage",
         title: "Storage",
         sections: [
-            { id: "design", label: "Design assets", icon: "pictures", rootId: "/shared/design", showFolders: false },
+            {
+                id: "design",
+                label: "Design assets",
+                icon: "pictures",
+                rootId: "/shared/design",
+                showFolders: false,
+                importFrom: false,
+            },
             { id: "media", label: "Media bucket", icon: <CloudOutlined />, rootId: "/", adapter: mediaAdapter },
         ],
     },

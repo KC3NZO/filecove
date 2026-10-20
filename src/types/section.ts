@@ -2,6 +2,15 @@ import type { FileAdapter } from "./adapter";
 import type { IconSource } from "./icon";
 
 /**
+ * Which other sections a section takes entries from (`Section.importFrom`): every one (`true`),
+ * none (`false`), only the sections with the ids in `allow`, or all but those in `deny`.
+ */
+export type SectionImports =
+    | boolean
+    | { allow: readonly string[]; deny?: never }
+    | { deny: readonly string[]; allow?: never };
+
+/**
  * A sidebar entry with its own root folder. Sections are independent of each other, even when
  * they share an adapter: "/server/project/a" and "/server/project/b" can be two sections.
  */
@@ -19,6 +28,19 @@ export interface Section {
      * @default true
      */
     showFolders?: boolean;
+    /**
+     * Which other sections entries can be moved or copied into this one from, by dragging,
+     * pasting, "Move to…" or "Copy to…". Only sections served by the same adapter can ever be
+     * among them, since another adapter's ids mean nothing to this one's, and moving or copying
+     * within the section is always allowed.
+     *
+     * - `true`: every other section.
+     * - `false`: none.
+     * - `{ allow: [...] }`: only the sections with these ids.
+     * - `{ deny: [...] }`: every other section but these.
+     * @default true
+     */
+    importFrom?: SectionImports;
 }
 
 /** Sections shown together in the sidebar, divided from the next group by a rule. */
