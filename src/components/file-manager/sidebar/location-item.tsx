@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import type { CSSProperties, MouseEvent, ReactNode } from "react";
+import { useContext, useMemo } from "react";
+import type { CSSProperties, DOMAttributes, DragEvent, MouseEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
@@ -8,11 +8,16 @@ import Collapse from "@mui/material/Collapse";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DataContext } from "../../../contexts/data-context";
+import { DragContext } from "../../../contexts/drag-context";
 import { useCutIds } from "../../../hooks/use-cut-ids";
+import { useDraggedIds } from "../../../hooks/use-dragged-ids";
+import { useDropTarget } from "../../../hooks/use-drop-target";
 import { useFolder } from "../../../hooks/use-folder";
 import { folderKey } from "../../../store/folder-store";
 import {
     cutMarker,
+    dragMarkers,
     focusRing,
     hoverBackground,
     selectedBackground,
@@ -52,6 +57,8 @@ interface TreeProps {
     /** The tree's selection; null while the open folder alone counts as selected. */
     selection: TreeSelection | null;
     onToggle: (key: string) => void;
+    /** Expands the folder or section with that `folderKey`, without collapsing it if it's expanded. */
+    onExpand: (key: string) => void;
     onNavigate: (place: Place) => void;
     onSelectFolder: (target: TreeTarget, modifiers?: SelectModifiers) => void;
     onSelectSection: (key: string) => void;
@@ -77,6 +84,11 @@ interface FolderChildrenProps extends TreeProps {
     onRetry: () => void;
 }
 
+type DragHandlers = Pick<
+    DOMAttributes<HTMLElement>,
+    "onDragStart" | "onDragEnter" | "onDragOver" | "onDragLeave" | "onDrop"
+>;
+
 interface TreeRowProps {
     variant: "section" | "folder";
     icon: ReactNode;
@@ -87,6 +99,13 @@ interface TreeRowProps {
     open: boolean;
     /** Cut to the clipboard, and not pasted yet. */
     cut?: boolean;
+    /** Can be dragged, taking its folder along. */
+    draggable?: boolean;
+    /** Its folder is among the entries being dragged. */
+    dragged?: boolean;
+    /** Letting go of the dragged entries now would drop them into its folder. */
+    dropTarget: boolean;
+    dragHandlers: DragHandlers;
     expandable: boolean;
     expanded: boolean;
     loading: boolean;
@@ -126,6 +145,7 @@ const rowSx: SxProps<Theme> = (theme) => ({
     // The open folder keeps its accent text when the selection moves to other folders.
     '&[data-open="true"]': { color: "primary.main" },
     ...cutMarker,
+    ...dragMarkers(theme),
 });
 
 const sectionButtonSx: SxProps<Theme> = {
@@ -244,6 +264,10 @@ const TreeRow = ({
     selected,
     open,
     cut = false,
+    draggable = false,
+    dragged = false,
+    dropTarget,
+    dragHandlers,
     expandable,
     expanded,
     loading,
@@ -260,8 +284,20 @@ const TreeRow = ({
     };
 
     return (
-        <Box sx={rowSx} data-selected={selected} data-open={open} data-cut={cut} onContextMenu={handleContextMenu}>
+        <Box
+            sx={rowSx}
+            draggable={draggable}
+            data-selected={selected}
+            data-open={open}
+            data-cut={cut}
+            data-dragged={dragged}
+            data-drop-target={dropTarget}
+            onContextMenu={handleContextMenu}
+            {...dragHandlers}
+        >
+            {/* A div rather than a button, since Firefox starts no drag from a button. */}
             <ButtonBase
+                component="div"
                 sx={isSection ? sectionButtonSx : folderButtonSx}
                 aria-current={open ? "page" : undefined}
                 onClick={onSelect}
@@ -316,11 +352,19 @@ const FolderChildren = ({ state, depth, trail, onRetry, ...tree }: FolderChildre
 };
 
 const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree }: FolderItemProps) => {
-    const { section, expanded, openKey, selection, onToggle, onNavigate, onSelectFolder, onOpenMenu } = tree;
+    const { section, expanded, openKey, selection, onToggle, onExpand, onNavigate, onSelectFolder, onOpenMenu } =
+        tree;
     const key = folderKey(section.id, entry.id);
     const isExpanded = expanded.has(key);
     const { state, reload } = useFolder(section, entry.id, isExpanded && entry.hasSubfolders !== false);
     const cutIds = useCutIds(section);
+    const draggedIds = useDraggedIds(section);
+    const data = useContext(DataContext);
+    const drag = useContext(DragContext);
+
+    // A drag moves or copies, so it needs an adapter that does one or the other.
+    const adapter = section.adapter ?? data?.adapter;
+    const draggable = !!(adapter?.move || adapter?.copy);
 
     const trail = useMemo(
         () => [...parentTrail, { id: entry.id, name: entry.name }],
@@ -351,19 +395,29 @@ const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree 
         }
     };
 
-    // As in the content, a selected folder's menu acts on every selected folder, while any
-    // other folder is selected on its own first and the menu acts on it alone.
-    const handleMenu = (position: MenuPosition) => {
+    // A collapsed folder that a drag rests on expands, so the folders below it can be dropped into.
+    const drop = useDropTarget({
+        targetsAt: () => [{ key, section, trail }],
+        onHold: hasNoFolders || isExpanded ? undefined : onExpand,
+    });
+
+    // As in the content, a selected folder's menu acts on every selected folder, and so does a
+    // drag from it, while any other folder is selected on its own first and acted on alone.
+    const takeSelection = () => {
         if (!selected) {
             onSelectFolder(target);
         }
 
-        const entries =
-            selected && selection
-                ? siblings.filter((sibling) => selection.ids.has(folderKey(section.id, sibling.id)))
-                : [entry];
+        return selected && selection
+            ? siblings.filter((sibling) => selection.ids.has(folderKey(section.id, sibling.id)))
+            : [entry];
+    };
 
-        return onOpenMenu(position, { target: "selection", section, trail: parentTrail, entries });
+    const handleMenu = (position: MenuPosition) =>
+        onOpenMenu(position, { target: "selection", section, trail: parentTrail, entries: takeSelection() });
+
+    const handleDragStart = (event: DragEvent) => {
+        drag?.start(event, () => ({ section, trail: parentTrail, entries: takeSelection(), grabbed: entry }));
     };
 
     return (
@@ -375,6 +429,10 @@ const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree 
                 selected={selected}
                 open={key === openKey}
                 cut={cutIds.has(entry.id)}
+                draggable={draggable}
+                dragged={draggedIds.has(entry.id)}
+                dropTarget={drop.dropKey !== null}
+                dragHandlers={{ ...drop.handlers, onDragStart: draggable ? handleDragStart : undefined }}
                 expandable={!hasNoFolders}
                 expanded={isExpanded}
                 loading={state?.status === "loading" && !state.entries}
@@ -398,13 +456,20 @@ const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree 
  * a root, not a folder that can be selected with others, so Ctrl and Shift just open it.
  */
 const SectionItem = (tree: TreeProps) => {
-    const { section, expanded, openKey, selection, onToggle, onNavigate, onSelectSection, onOpenMenu } = tree;
+    const { section, expanded, openKey, selection, onToggle, onExpand, onNavigate, onSelectSection, onOpenMenu } =
+        tree;
     const key = folderKey(section.id, section.rootId);
     const showFolders = section.showFolders !== false;
     const isExpanded = showFolders && expanded.has(key);
     const { state, reload } = useFolder(section, section.rootId, isExpanded);
 
     const hasNoFolders = !showFolders || (state?.status === "ready" && !state.entries?.some(isFolder));
+
+    // Dropped onto, the entries go into the root. Its row isn't an entry, so it's never dragged.
+    const drop = useDropTarget({
+        targetsAt: () => [{ key, section, trail: ROOT_TRAIL }],
+        onHold: hasNoFolders || isExpanded ? undefined : onExpand,
+    });
 
     // Its menu is about the section's root folder, so it alone becomes the selection meanwhile.
     const handleMenu = (position: MenuPosition) => {
@@ -421,6 +486,8 @@ const SectionItem = (tree: TreeProps) => {
                 label={section.label}
                 selected={selection ? selection.ids.has(key) : key === openKey}
                 open={key === openKey}
+                dropTarget={drop.dropKey !== null}
+                dragHandlers={drop.handlers}
                 expandable={!hasNoFolders}
                 expanded={isExpanded}
                 loading={state?.status === "loading" && !state.entries}

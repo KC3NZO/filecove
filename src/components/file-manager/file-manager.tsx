@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
+import { createPortal } from "react-dom";
 
 import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
@@ -6,6 +8,8 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { CutContext } from "../../contexts/cut-context";
 import { DataContext } from "../../contexts/data-context";
+import { DragContext } from "../../contexts/drag-context";
+import { useEntryDrag } from "../../hooks/use-entry-drag";
 import { usePlaceHistory } from "../../hooks/use-place-history";
 import { createFolderStore, folderKey } from "../../store/folder-store";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
@@ -19,6 +23,7 @@ import ContextMenu from "./context-menu/context-menu";
 import NameDialog from "./dialogs/name-dialog";
 import PasteDialog from "./dialogs/paste-dialog";
 import TransferDialog from "./dialogs/transfer-dialog";
+import DragPreview from "./drag-preview";
 import HeaderBar from "./header-bar/header-bar";
 import PathBar from "./header-bar/path-bar";
 import Sidebar from "./sidebar/sidebar";
@@ -87,6 +92,10 @@ interface Reveal {
 
 const NO_ACTIONS: ActionGroup[] = [];
 
+// While entries are dragged, the backdrop of the overlay sidebar lets drops through to the content,
+// so a folder dragged out of the sidebar can land there.
+const PASS_THROUGH: CSSProperties = { pointerEvents: "none" };
+
 // The root only establishes the container; a container can't match its own queries, so the
 // visible frame is the child below it.
 const rootSx: SxProps<Theme> = {
@@ -118,18 +127,39 @@ const mainSx: SxProps<Theme> = {
     minWidth: 0,
 };
 
-// The content sits as an inset, rounded panel on the window background, as in GNOME Files.
+// The content sits as an inset, rounded panel on the window background, as in GNOME Files. The
+// panel itself doesn't scroll, so the outline it shows while the open folder would take a drop
+// stays put over the content scrolling under it, sticky column header included.
+const panelSx: SxProps<Theme> = {
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    minHeight: 0,
+    mx: 0.75,
+    mb: 0.75,
+    borderRadius: 3,
+    overflow: "hidden",
+    bgcolor: "background.paper",
+    [rootWide]: { ml: 0 },
+    // The folder view marks itself, inside the scrolling view, with `data-drop-target`.
+    '&:has(> * > [data-drop-target="true"])::after': {
+        content: '""',
+        position: "absolute",
+        inset: 0,
+        border: "2px solid",
+        borderColor: "primary.main",
+        borderRadius: "inherit",
+        pointerEvents: "none",
+    },
+};
+
 const viewSx: SxProps<Theme> = {
     containerType: "inline-size",
     containerName: VIEW_CONTAINER,
     flex: 1,
     minHeight: 0,
     overflowY: "auto",
-    mx: 0.75,
-    mb: 0.75,
-    borderRadius: 3,
-    bgcolor: "background.paper",
-    [rootWide]: { ml: 0 },
 };
 
 const FileManager = ({
@@ -224,6 +254,11 @@ const FileManager = ({
         return keys;
     }, [pasting]);
 
+    // Expands without ever collapsing, for a drag resting on a collapsed folder or section.
+    const expand = useCallback((key: string) => {
+        setExpanded((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+    }, []);
+
     const toggleExpanded = useCallback((key: string) => {
         setExpanded((prev) => {
             const next = new Set(prev);
@@ -287,20 +322,11 @@ const FileManager = ({
     // A drop is pasted like the clipboard, with the dragged entries as a clipboard of their own, so
     // the real one is left as it was.
     const dropInto = useCallback<DropInto>(
-        ({ kind, section: from, trail: fromTrail, entries }, target, trail) =>
-            offerPaste(
-                {
-                    kind: kind === "move" ? "cut" : "copy",
-                    section: from,
-                    adapter: from.adapter ?? adapter,
-                    trail: fromTrail,
-                    entries,
-                },
-                target,
-                trail,
-            ),
-        [adapter, offerPaste],
+        (dragged, copy, target, trail) => offerPaste({ ...dragged, kind: copy ? "copy" : "cut" }, target, trail),
+        [offerPaste],
     );
+
+    const drag = useEntryDrag(adapter, dropInto);
 
     // With path ids, a moved folder's old id is free for another folder, so its cached listing is
     // dropped. A place inside a moved folder can't be followed, so it goes where the folder went.
@@ -499,103 +525,126 @@ const FileManager = ({
     return (
         <DataContext value={data}>
             <CutContext value={cut}>
-                <Box sx={rootSx}>
-                    <Box sx={frameSx}>
-                        <Backdrop open={sidebarOpen} sx={backdropSx} onClick={closeSidebar} />
-                        <Sidebar
-                            title={title}
-                            groups={sections}
-                            single={singleSection}
-                            expanded={expanded}
-                            openKey={openKey}
-                            open={sidebarOpen}
-                            onToggle={toggleExpanded}
-                            onNavigate={goTo}
-                            onOpenMenu={openMenu}
-                            onClose={closeSidebar}
-                        />
-                        <Box sx={mainSx}>
-                            <HeaderBar
-                                pathBar={
-                                    section ? (
-                                        <PathBar
-                                            section={section}
-                                            trail={place.trail}
-                                            hasActions={hasActions}
-                                            onNavigate={goTo}
-                                            onOpenMenu={openMenu}
-                                        />
-                                    ) : (
-                                        <span />
-                                    )
-                                }
-                                canGoBack={canGoBack}
-                                canGoForward={canGoForward}
-                                view={view}
-                                sort={sort}
-                                showHidden={showHidden}
-                                selecting={selecting}
-                                onBack={back}
-                                onForward={forward}
-                                onToggleView={toggleView}
-                                onSortChange={setSort}
-                                onToggleHidden={toggleHidden}
-                                onToggleSelecting={toggleSelecting}
-                                onOpenSidebar={openSidebar}
+                <DragContext value={drag.context}>
+                    <Box
+                        sx={rootSx}
+                        onPointerDownCapture={drag.onPointerDownCapture}
+                        onDrop={drag.end}
+                        onDragEnd={drag.end}
+                    >
+                        <Box sx={frameSx}>
+                            <Backdrop
+                                open={sidebarOpen}
+                                sx={backdropSx}
+                                style={drag.context.dragged ? PASS_THROUGH : undefined}
+                                onClick={closeSidebar}
                             />
-                            {/* Keyed by folder so each one opens scrolled to the top, with nothing selected. */}
-                            <Box key={openKey ?? undefined} sx={viewSx}>
-                                {section && (
-                                    <FolderView
-                                        section={section}
-                                        trail={place.trail}
-                                        view={view}
-                                        sort={sort}
-                                        hasActions={hasActions}
-                                        selecting={selecting}
-                                        busy={openKey !== null && !!pasteKeys?.has(openKey)}
-                                        revealId={reveal?.id}
-                                        onSelectingChange={setSelecting}
-                                        onSortChange={setSort}
-                                        onNavigate={goTo}
-                                        onOpenMenu={openMenu}
-                                        onShortcut={runShortcut}
-                                        onDropInto={dropInto}
-                                        onRevealed={clearReveal}
-                                    />
-                                )}
+                            <Sidebar
+                                title={title}
+                                groups={sections}
+                                single={singleSection}
+                                expanded={expanded}
+                                openKey={openKey}
+                                open={sidebarOpen}
+                                onToggle={toggleExpanded}
+                                onExpand={expand}
+                                onNavigate={goTo}
+                                onOpenMenu={openMenu}
+                                onClose={closeSidebar}
+                            />
+                            <Box sx={mainSx}>
+                                <HeaderBar
+                                    pathBar={
+                                        section ? (
+                                            <PathBar
+                                                section={section}
+                                                trail={place.trail}
+                                                hasActions={hasActions}
+                                                onNavigate={goTo}
+                                                onOpenMenu={openMenu}
+                                            />
+                                        ) : (
+                                            <span />
+                                        )
+                                    }
+                                    canGoBack={canGoBack}
+                                    canGoForward={canGoForward}
+                                    view={view}
+                                    sort={sort}
+                                    showHidden={showHidden}
+                                    selecting={selecting}
+                                    onBack={back}
+                                    onForward={forward}
+                                    onToggleView={toggleView}
+                                    onSortChange={setSort}
+                                    onToggleHidden={toggleHidden}
+                                    onToggleSelecting={toggleSelecting}
+                                    onOpenSidebar={openSidebar}
+                                />
+                                <Box sx={panelSx}>
+                                    {/* Keyed by folder, so each opens scrolled to the top with nothing selected. */}
+                                    <Box key={openKey ?? undefined} sx={viewSx}>
+                                        {section && (
+                                            <FolderView
+                                                section={section}
+                                                trail={place.trail}
+                                                view={view}
+                                                sort={sort}
+                                                hasActions={hasActions}
+                                                selecting={selecting}
+                                                busy={openKey !== null && !!pasteKeys?.has(openKey)}
+                                                revealId={reveal?.id}
+                                                onSelectingChange={setSelecting}
+                                                onSortChange={setSort}
+                                                onNavigate={goTo}
+                                                onOpenMenu={openMenu}
+                                                onShortcut={runShortcut}
+                                                onRevealed={clearReveal}
+                                            />
+                                        )}
+                                    </Box>
+                                </Box>
                             </Box>
                         </Box>
+                        <ContextMenu menu={menu} onClose={closeMenu} />
+                        {naming && (
+                            <NameDialog
+                                key={`name:${naming.id}`}
+                                open={naming.open}
+                                request={naming.request}
+                                onClose={closeNaming}
+                                onDone={handleNamed}
+                            />
+                        )}
+                        {transfer && (
+                            <TransferDialog
+                                key={`transfer:${transfer.id}`}
+                                open={transfer.open}
+                                request={transfer.request}
+                                onClose={closeTransfer}
+                                onDone={handleTransferred}
+                            />
+                        )}
+                        {pasting && (
+                            <PasteDialog
+                                key={`paste:${pasting.id}`}
+                                open={pasting.open}
+                                request={pasting.request}
+                                onClose={closePaste}
+                                onDone={handlePasted}
+                            />
+                        )}
+                        {drag.preview &&
+                            createPortal(
+                                <DragPreview
+                                    ref={drag.previewRef}
+                                    entry={drag.preview.entry}
+                                    count={drag.preview.count}
+                                />,
+                                document.body,
+                            )}
                     </Box>
-                    <ContextMenu menu={menu} onClose={closeMenu} />
-                    {naming && (
-                        <NameDialog
-                            key={`name:${naming.id}`}
-                            open={naming.open}
-                            request={naming.request}
-                            onClose={closeNaming}
-                            onDone={handleNamed}
-                        />
-                    )}
-                    {transfer && (
-                        <TransferDialog
-                            key={`transfer:${transfer.id}`}
-                            open={transfer.open}
-                            request={transfer.request}
-                            onClose={closeTransfer}
-                            onDone={handleTransferred}
-                        />
-                    )}
-                    {pasting && (
-                        <PasteDialog
-                            key={`paste:${pasting.id}`}
-                            open={pasting.open}
-                            request={pasting.request}
-                            onClose={closePaste}
-                            onDone={handlePasted}
-                        />
-                    )}
-                </Box>
+                </DragContext>
             </CutContext>
         </DataContext>
     );

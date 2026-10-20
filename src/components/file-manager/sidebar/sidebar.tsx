@@ -25,6 +25,8 @@ interface SidebarProps {
     /** Whether the overlay is showing while the sidebar is collapsed; has no effect once it docks. */
     open: boolean;
     onToggle: (key: string) => void;
+    /** Expands a collapsed folder or section that a drag rests on. */
+    onExpand: (key: string) => void;
     onNavigate: (place: Place) => void;
     onOpenMenu: OpenMenu;
     onClose: () => void;
@@ -129,6 +131,7 @@ const Sidebar = ({
     openKey,
     open,
     onToggle,
+    onExpand,
     onNavigate,
     onOpenMenu,
     onClose,
@@ -177,6 +180,7 @@ const Sidebar = ({
                             openKey={openKey}
                             selection={selection}
                             onToggle={onToggle}
+                            onExpand={onExpand}
                             onNavigate={handleNavigate}
                             onSelectFolder={select}
                             onSelectSection={selectSection}
@@ -201,6 +205,7 @@ const Sidebar = ({
                                     openKey={openKey}
                                     selection={selection}
                                     onToggle={onToggle}
+                                    onExpand={onExpand}
                                     onNavigate={handleNavigate}
                                     onSelectFolder={select}
                                     onSelectSection={selectSection}

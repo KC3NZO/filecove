@@ -1,6 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
-import { createPortal } from "react-dom";
+import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -10,8 +9,10 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DataContext } from "../../../contexts/data-context";
+import { DragContext } from "../../../contexts/drag-context";
 import { useCutIds } from "../../../hooks/use-cut-ids";
-import { useEntryDrag } from "../../../hooks/use-entry-drag";
+import { useDraggedIds } from "../../../hooks/use-dragged-ids";
+import { useDropTarget } from "../../../hooks/use-drop-target";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
@@ -22,13 +23,12 @@ import { folderOf } from "../../../utils/navigation";
 import { EMPTY_SELECTION, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import { entryComparator } from "../../../utils/sort";
 import Icon from "../../icons/icon";
-import DragPreview from "./drag-preview";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
 import SelectionBar from "./selection-bar";
 
 import type {
-    DropInto,
+    DropTarget,
     EntrySelection,
     FileEntry,
     FolderRef,
@@ -60,13 +60,16 @@ interface FolderViewProps {
     onNavigate: (place: Place) => void;
     onOpenMenu: OpenMenu;
     onShortcut: RunShortcut;
-    onDropInto: DropInto;
     /** Called once `revealId` has been selected. */
     onRevealed: () => void;
 }
 
+/** The entry an event happened on, by its `data-entry-id`. */
+const entryIdAt = (target: EventTarget) =>
+    target instanceof Element ? target.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId : undefined;
+
 // Fills the scroll panel even when the folder is short, so its empty space takes clicks,
-// right-clicks and marquee drags. Positioned so the marquee is placed in content coordinates.
+// right-clicks, marquee drags and drops. Positioned so the marquee is placed in content coordinates.
 // On touch, a long-press selects, so iOS's callout and the tap flash are turned off, and a double
 // tap doesn't zoom.
 const surfaceSx: SxProps<Theme> = {
@@ -149,12 +152,14 @@ const FolderView = ({
     onNavigate,
     onOpenMenu,
     onShortcut,
-    onDropInto,
     onRevealed,
 }: FolderViewProps) => {
-    const { state, reload } = useFolder(section, folderOf(section, trail).id, true);
+    const folder = folderOf(section, trail);
+    const { state, reload } = useFolder(section, folder.id, true);
     const cutIds = useCutIds(section);
+    const draggedIds = useDraggedIds(section);
     const data = useContext(DataContext);
+    const drag = useContext(DragContext);
 
     // A drag moves or copies, so it needs an adapter that does one or the other.
     const adapter = section.adapter ?? data?.adapter;
@@ -208,38 +213,54 @@ const FolderView = ({
         onRevealed();
     }, [revealId, revealListed, replace, marquee.surfaceRef, onRevealed]);
 
+    // The entry an event happened on.
+    const entryAt = (event: DragEvent) => {
+        const id = entryIdAt(event.target);
+
+        return id === undefined ? undefined : entries?.find((entry) => entry.id === id);
+    };
+
     // A drag carries the selection when it starts on a selected entry, or else selects the entry and
-    // carries it alone, as the context menu does. Mouse only: on touch, a press scrolls or, held, selects.
-    // Dropped onto a folder, the entries go into it by the same rules as pasting.
-    const drag = useEntryDrag({
-        onStart: (id) => {
-            if (pointerType.current !== "mouse") {
-                return null;
-            }
-
-            if (selectedIds.has(id)) {
-                return selected;
-            }
-
-            const entry = entries?.find((item) => item.id === id);
+    // carries it alone, as the context menu does.
+    const handleDragStart = (event: DragEvent) => {
+        drag?.start(event, () => {
+            const entry = entryAt(event);
 
             if (!entry) {
                 return null;
             }
 
-            select(id);
+            if (selectedIds.has(entry.id)) {
+                return { section, trail, entries: selected, grabbed: entry };
+            }
 
-            return [entry];
-        },
-        dropOnto: (dragged, id, copy) => {
-            const target = entries?.find((item) => item.id === id);
+            select(entry.id);
 
-            return target?.kind === "folder"
-                ? onDropInto({ kind: copy ? "copy" : "move", section, trail, entries: dragged }, section, [
-                      ...trail,
-                      { id: target.id, name: target.name },
-                  ])
-                : undefined;
+            return { section, trail, entries: [entry], grabbed: entry };
+        });
+    };
+
+    // Dragged entries already listed here came from this folder, or are its folders dragged from the
+    // sidebar, so its empty space doesn't take them and a drag that ends where it began does nothing.
+    const listsDragged = useMemo(() => !!entries?.some((entry) => draggedIds.has(entry.id)), [entries, draggedIds]);
+
+    // Dropped onto a folder, the entries go into it, by the same rules as pasting. Dropped anywhere
+    // else, a file included, they go into the open folder, keyed by its id, which none of its
+    // entries has.
+    const drop = useDropTarget({
+        targetsAt: (event) => {
+            const entry = entryAt(event);
+            const targets: DropTarget[] = [];
+
+            if (entry?.kind === "folder") {
+                targets.push({ key: entry.id, section, trail: [...trail, { id: entry.id, name: entry.name }] });
+            }
+
+            if (!listsDragged) {
+                targets.push({ key: folder.id, section, trail });
+            }
+
+            return targets;
         },
     });
 
@@ -382,8 +403,8 @@ const FolderView = ({
                 selectedIds={selectedIds}
                 cutIds={cutIds}
                 draggable={draggable}
-                draggedIds={drag.draggedIds}
-                dropTargetId={drag.dropId}
+                draggedIds={draggedIds}
+                dropTargetId={drop.dropKey}
                 hasActions={hasActions}
                 sort={sort}
                 onSelect={handleSelect}
@@ -431,6 +452,8 @@ const FolderView = ({
             sx={surfaceSx}
             tabIndex={-1}
             data-selecting={selecting}
+            // Read by the panel around the view, which outlines itself while the open folder would take the drop.
+            data-drop-target={drop.dropKey === folder.id}
             onPointerDownCapture={(event) => {
                 pointerType.current = event.pointerType;
             }}
@@ -440,12 +463,8 @@ const FolderView = ({
             onContextMenuCapture={handleContextMenuCapture}
             onContextMenu={handleBackgroundMenu}
             onKeyDown={handleKeyDown}
-            onDragStart={drag.onDragStart}
-            onDragEnter={drag.onDragOver}
-            onDragOver={drag.onDragOver}
-            onDragLeave={drag.onDragLeave}
-            onDrop={drag.onDrop}
-            onDragEnd={drag.onDragEnd}
+            onDragStart={handleDragStart}
+            {...drop.handlers}
         >
             {(busy || state?.status === "loading") && entries && <LinearProgress sx={progressSx} />}
             {content}
@@ -461,11 +480,6 @@ const FolderView = ({
                 />
             )}
             <Box ref={marquee.marqueeRef} sx={marqueeSx} />
-            {drag.preview &&
-                createPortal(
-                    <DragPreview ref={drag.previewRef} entry={drag.preview.entry} count={drag.preview.count} />,
-                    document.body,
-                )}
         </Box>
     );
 };

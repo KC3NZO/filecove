@@ -4,9 +4,9 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import ItemIcon from "./item-icon";
+import ItemIcon from "./content/item-icon";
 
-import type { FileEntry } from "../../../types";
+import type { FileEntry } from "../../types";
 
 interface DragPreviewProps {
     ref: Ref<HTMLDivElement>;
