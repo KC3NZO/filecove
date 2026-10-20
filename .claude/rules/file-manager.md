@@ -16,8 +16,20 @@ paths:
 `store/folder-store.ts` caches listings per `folderKey(sectionId, folderId)`. The cache is shared by the sidebar tree and the content view, with request de-duplication and abort-on-unmount. `file-manager.tsx` provides the store through `DataContext` (`contexts/data-context.ts`), and components read it with `useFolder` (`hooks/use-folder.ts`), which uses `useSyncExternalStore` with per-folder snapshots.
 
 - `load(..., force)` lists a folder again even while a request is in flight, replacing it, since that request's result could predate a change just made.
-- `forget(key)` drops a listing. Only use it on keys no enabled `useFolder` is showing, since nothing reloads them on its own.
+- `relist(sectionId, adapter, folderIds)` lists again the section's cached listings of those folders, and every cached listing holding one of them, for its item count. It looks through all of the section's listings, found by the section's part of their key, so none is missed and no folder id is parsed.
+- `cachedTree(sectionId, folderId)` gives the ids of a folder and of every folder below it whose listing the section has cached, found by walking the cached listings, so the folders below one are known without parsing ids.
+- `forget(sectionId, folderIds)` drops the listings of those folders and of everything cached below them (`cachedTree`). Only use it on folders no enabled `useFolder` is showing, since nothing reloads them on its own.
 - In the sidebar, a folder's listing, once there is one, overrides the adapter's `hasSubfolders` hint for its chevron.
+
+### Changes show in every section sharing the adapter
+
+Sections served by the same adapter object can show the same folders, under the same ids (ids are unique within an adapter), so whatever a dialog changes is handled in all of them, through two helpers in `file-manager.tsx`:
+
+- `relist(adapter, folderIds)` is every dialog's `onChanged`, called done, failed or cancelled with the folders the adapter may have changed: the one created or renamed in, the one deleted from, a copy's or move's destination and, for a move, its source. It runs the store's `relist` in each section.
+- `dropFolders(adapter, folderIds)` is for folders whose ids may now name other folders, as path ids do: deleted and moved folders, a renamed folder's old and new id, and a new folder's id. Their cached listings, and those of every folder any section has cached below them, are dropped in each section (`forget`). A section rooted in one of them can't follow it, since its root is the consumer's: its places, in the history too, go back to its root, which is listed again to show what the adapter has there now, as nothing lists a dropped listing on its own.
+- Places in the history, the sidebar's expanded folders, selecting a new entry and a paste's progress bar go by folder id in every such section too.
+- A section rooted further below a changed folder is only caught when some section has its root cached under that folder; otherwise nothing ties the two together without parsing ids.
+- The playground's Website source bookmark is rooted in Website's `src`, to try these out.
 
 ## Navigation
 
@@ -43,8 +55,8 @@ Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names i
 - The name is trimmed and checked as it's typed (`utils/names.ts`): not ".", "..", or containing "/", and no clash with the folder's cached listing. An empty name only disables the button. The adapter has the final say, and the message of an `Error` it rejects with shows under the field, with the name kept.
 - The field is focused with the name selected once the dialog has faded in (the transition's `onEntered`), not with `autoFocus`, which the closing context menu steals focus back from. Rename selects a file's name up to its extension. New folder starts with an unused "New folder" (`newFolderName`). An unchanged name just closes.
 - While the adapter works, the button shows a spinner and the field is read-only. Cancelling aborts the `signal`, but the folder is listed again anyway, since the change may already have been made.
-- Afterwards the folder is listed again, and so is its parent's listing when cached, for the item count. If the folder is open, `file-manager.tsx` asks `FolderView` (`revealId`) to select the entry and scroll to it once the refreshed listing has it.
-- A renamed folder keeps its place: `renameInPlace` (`utils/navigation.ts`) rewrites every place in the history, and its expanded state carries over. When its id changed, as path ids do, the ids below it can't be worked out, so trails into it end at the renamed folder. Listings cached under the old id and the new one are dropped, since with path ids either could hold another folder's contents.
+- Afterwards the folder is listed again, with every listing holding it, for the item count (`relist`). If the folder is open, in whichever section, `file-manager.tsx` asks `FolderView` (`revealId`) to select the entry and scroll to it once the refreshed listing has it.
+- A renamed folder keeps its place in every section showing it: `renameInPlace` (`utils/navigation.ts`) rewrites every place in the history, and its expanded state carries over. When its id changed, as path ids do, the ids below it can't be worked out, so trails into it end at the renamed folder, and the old id and the new one go through `dropFolders`, since either could hold another folder's contents. A section rooted in the folder stays where it is, under the old id.
 
 ## Copying and moving
 
@@ -53,8 +65,8 @@ Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names i
 - The picker browses folders only, starting in the entries' own folder, with the path bar and a back arrow to the folder above. Only sections served by the same adapter object are offered (ids mean nothing to another adapter), and of those only the ones whose `importFrom` takes the entries' section (see "Sections taking entries from each other"); with more than one, going back from a root reaches a list of them.
 - The entries being copied or moved can't be opened, so a folder can never go into itself or below itself, without the component parsing ids. Moving into the entries' own folder is disabled.
 - Before running, the destination's cached listing is checked for names the entries share. Clashes get a second step with Replace, Keep both and Skip, passed as `conflict`; otherwise `conflict` is "keepBoth", so a clash the cache missed never overwrites anything. Copying into the entries' own folder keeps both without asking, as a duplicate.
-- Progress, cancelling and errors work as in the name dialog. Afterwards the destination is listed again, and for a move the source too.
-- After a move, listings cached under moved folders' ids are dropped, and a place inside a moved folder goes to the destination instead.
+- Progress, cancelling and errors work as in the name dialog. Afterwards the destination is listed again, and for a move the source too, with the listings holding them (`relist`).
+- After a move, moved folders go through `dropFolders`, and the open place, if it's inside one in any section showing it, goes to the destination instead.
 - Not yet: a New folder button in the picker, an operations panel for long transfers, and copying between adapters.
 
 ## Deleting
@@ -63,8 +75,8 @@ Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names i
 
 - The dialog names the entry, or counts them, says folders go with their contents, and that it can't be undone. Delete is focused once the dialog has faded in (`onEntered`, as in the name dialog), so the Delete key then Enter deletes, and Escape cancels.
 - Progress, cancelling and errors work as in the name dialog. A rejected call leaves the dialog open to try again, with the folder listed again in case some entries went anyway.
-- Afterwards the folder is listed again, and so is its parent's listing when cached, for the item count. Listings cached under deleted folders' ids are dropped, `outsideDeleted` (`utils/navigation.ts`) ends every trail in the history that goes into a deleted folder at the folder that held it (so deleting the open folder from the sidebar opens its parent), and deleted entries leave the clipboard (`withoutEntries`, shared with moving).
-- Not yet: listings cached for folders below a deleted one (their ids can't be worked out without parsing), and places in other sections that show the same folders.
+- Done, failed or cancelled, the entries' folder is listed again, with the listings holding it (`relist`).
+- Once done, deleted folders go through `dropFolders`, and `outsideDeleted` (`utils/navigation.ts`) ends every trail in the history that goes into one at the folder that held it, in every section showing it, so deleting the open folder from the sidebar opens its parent. Deleted entries leave the clipboard (`withoutEntries`, shared with moving).
 
 ## Sections taking entries from each other
 
@@ -80,8 +92,8 @@ Entries only ever move or copy between sections served by the same adapter objec
 `ActionContext.cut()` and `copy()` put the entries on a clipboard held in `file-manager.tsx` (`Clipboard`, `types/clipboard.ts`), not the system clipboard, since ids mean nothing outside their adapter. `paste()` moves (cut) or copies them into the context's `folder`, and `pasteInto()` into the one folder in `entries`, so a folder's menu can offer "Paste into folder", in the content and the sidebar tree alike. Both go through the same adapter methods as "Move to…" and "Copy to…". The consumer's actions bind Ctrl+X, Ctrl+C and Ctrl+V like any other shortcut.
 
 - `paste` is offered (`utils/clipboard.ts`, `canPaste`) only through the adapter the entries came from, into a section whose `importFrom` takes the entries' section, never into one of them or below one (the target's trail holds every folder above it, so no id is parsed), not into cut entries' own folder, and not while another paste runs. Copying into the entries' own folder duplicates them, as "keep both".
-- `dialogs/paste-dialog.tsx` runs the paste unseen and only shows to ask about clashing names or to report the adapter's error. Clashes are looked for in the target's listing, which it loads first when it isn't cached (a folder pasted into from its menu, or dropped onto, may never have been opened). Afterwards the target is listed again, so is its parent when cached (for its item count), and the source after a cut, once if it's that same parent.
-- While a paste runs, the open folder shows its progress bar (`busy`) if the paste changes it: it's the target, the folder listing the target, or the folder a cut leaves.
+- `dialogs/paste-dialog.tsx` runs the paste unseen and only shows to ask about clashing names or to report the adapter's error. Clashes are looked for in the target's listing, which it loads first when it isn't cached (a folder pasted into from its menu, or dropped onto, may never have been opened). Afterwards the target is listed again, and the source after a cut, with the listings holding them, such as the target's parent (`relist`).
+- While a paste runs, the open folder shows its progress bar (`busy`) if the paste changes it, in whichever section: it's the target, the folder listing the target, or the folder a cut leaves.
 - A cut is pasted once and leaves the clipboard; a copy can be pasted again. Entries moved by either route leave the clipboard (their ids may have changed), as do deleted ones, and a renamed entry is replaced by its new self. Entries below a renamed folder keep their stale ids, and pasting them reports the adapter's error.
 - Cut entries are marked wherever they're listed: `CutContext` (`contexts/cut-context.ts`) carries their ids and adapter, `hooks/use-cut-ids.ts` gives a section the ids it could be showing, and list rows, grid tiles and sidebar tree rows set `data-cut` for `cutMarker` (see `component-styling.md`).
 - Ctrl+V pastes into the open folder even with a folder selected, as in GNOME; the playground's "Paste into folder" has no shortcut.
