@@ -28,7 +28,7 @@ paths:
 
 ## Context menu and actions
 
-An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`. It also offers `createFolder()`, `rename()`, `copyTo()`, `moveTo()`, `cut()`, `copy()`, `paste()` and `pasteInto()`, which are left out when the section's adapter lacks the matching method (`rename` also when there isn't exactly one entry, `copyTo`, `moveTo`, `cut` and `copy` when there are none, `paste` and `pasteInto` when there's nothing to paste there, `pasteInto` also unless the entries are a single folder), so actions hide with `visible: (context) => !!context.rename`, or grey out with `disabled`. The consumer still places, labels and gates these actions; the file manager adds nothing to the menu itself.
+An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`. It also offers `createFolder()`, `rename()`, `copyTo()`, `moveTo()`, `cut()`, `copy()`, `delete()`, `paste()` and `pasteInto()`, which are left out when the section's adapter lacks the matching method (`rename` also when there isn't exactly one entry, `copyTo`, `moveTo`, `cut`, `copy` and `delete` when there are none, `paste` and `pasteInto` when there's nothing to paste there, `pasteInto` also unless the entries are a single folder), so actions hide with `visible: (context) => !!context.rename`, or grey out with `disabled`. The consumer still places, labels and gates these actions; the file manager adds nothing to the menu itself.
 
 - Actions apply to any number of selected entries (copy, move, delete, compress...). Only actions marked `single: true`, such as rename, hide while several entries are selected.
 - The menu opens on right-click (items, content background, sidebar rows) and from the ⋮ buttons (list rows, path bar).
@@ -57,6 +57,15 @@ Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names i
 - After a move, listings cached under moved folders' ids are dropped, and a place inside a moved folder goes to the destination instead.
 - Not yet: a New folder button in the picker, an operations panel for long transfers, and copying between adapters.
 
+## Deleting
+
+`ActionContext.delete()` asks to confirm in `dialogs/delete-dialog.tsx`, then calls the adapter's optional `delete(entries, { signal })`, which deletes for good, folders with everything in them. Nothing is deleted without asking, shortcut included; a consumer that wants a trash can build it from `move` and a section of its own.
+
+- The dialog names the entry, or counts them, says folders go with their contents, and that it can't be undone. Delete is focused once the dialog has faded in (`onEntered`, as in the name dialog), so the Delete key then Enter deletes, and Escape cancels.
+- Progress, cancelling and errors work as in the name dialog. A rejected call leaves the dialog open to try again, with the folder listed again in case some entries went anyway.
+- Afterwards the folder is listed again, and so is its parent's listing when cached, for the item count. Listings cached under deleted folders' ids are dropped, `outsideDeleted` (`utils/navigation.ts`) ends every trail in the history that goes into a deleted folder at the folder that held it (so deleting the open folder from the sidebar opens its parent), and deleted entries leave the clipboard (`withoutEntries`, shared with moving).
+- Not yet: listings cached for folders below a deleted one (their ids can't be worked out without parsing), and places in other sections that show the same folders.
+
 ## Sections taking entries from each other
 
 Entries only ever move or copy between sections served by the same adapter object. A section's optional `importFrom` (`SectionImports` in `types/section.ts`, public) narrows which of those it takes entries from: `true` (the default) every one, `false` none, `{ allow }` only the sections with those ids, `{ deny }` all but those. The type lets a section give `allow` or `deny`, not both. Moving or copying within a section is always allowed, and unknown ids are ignored.
@@ -73,7 +82,7 @@ Entries only ever move or copy between sections served by the same adapter objec
 - `paste` is offered (`utils/clipboard.ts`, `canPaste`) only through the adapter the entries came from, into a section whose `importFrom` takes the entries' section, never into one of them or below one (the target's trail holds every folder above it, so no id is parsed), not into cut entries' own folder, and not while another paste runs. Copying into the entries' own folder duplicates them, as "keep both".
 - `dialogs/paste-dialog.tsx` runs the paste unseen and only shows to ask about clashing names or to report the adapter's error. Clashes are looked for in the target's listing, which it loads first when it isn't cached (a folder pasted into from its menu, or dropped onto, may never have been opened). Afterwards the target is listed again, so is its parent when cached (for its item count), and the source after a cut, once if it's that same parent.
 - While a paste runs, the open folder shows its progress bar (`busy`) if the paste changes it: it's the target, the folder listing the target, or the folder a cut leaves.
-- A cut is pasted once and leaves the clipboard; a copy can be pasted again. Entries moved by either route leave the clipboard (their ids may have changed), and a renamed entry is replaced by its new self. Entries below a renamed folder keep their stale ids, and pasting them reports the adapter's error.
+- A cut is pasted once and leaves the clipboard; a copy can be pasted again. Entries moved by either route leave the clipboard (their ids may have changed), as do deleted ones, and a renamed entry is replaced by its new self. Entries below a renamed folder keep their stale ids, and pasting them reports the adapter's error.
 - Cut entries are marked wherever they're listed: `CutContext` (`contexts/cut-context.ts`) carries their ids and adapter, `hooks/use-cut-ids.ts` gives a section the ids it could be showing, and list rows, grid tiles and sidebar tree rows set `data-cut` for `cutMarker` (see `component-styling.md`).
 - Ctrl+V pastes into the open folder even with a folder selected, as in GNOME; the playground's "Paste into folder" has no shortcut.
 - Not yet: the shortcuts in the sidebar.
@@ -123,6 +132,6 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 The playground shows this mode with `?single` in the URL.
 - `header-bar/` holds back/forward, the path bar and the view buttons. Below `rootMedium` the path bar gets a full-width row under the buttons; from `rootMedium` up, it sits centred between them.
 - `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`file-list.tsx`, a `--columns` grid template) or the grid view (`file-grid.tsx`).
-- `dialogs/` holds the modals, which portal to `<body>` like the context menu: `name-dialog.tsx`, `transfer-dialog.tsx` and `paste-dialog.tsx`, with `conflict-step.tsx` shared by the last two.
+- `dialogs/` holds the modals, which portal to `<body>` like the context menu: `name-dialog.tsx`, `transfer-dialog.tsx`, `paste-dialog.tsx` and `delete-dialog.tsx`, with `conflict-step.tsx` shared by the last two.
 - `icon-slot.tsx` fits consumer-supplied icons to the same 1.25rem box as the built-in ones.
 - `utils/format.ts` formats sizes, dates and type labels. These are English-only for now.
