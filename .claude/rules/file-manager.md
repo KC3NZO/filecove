@@ -55,18 +55,30 @@ Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names i
 - Before running, the destination's cached listing is checked for names the entries share. Clashes get a second step with Replace, Keep both and Skip, passed as `conflict`; otherwise `conflict` is "keepBoth", so a clash the cache missed never overwrites anything. Copying into the entries' own folder keeps both without asking, as a duplicate.
 - Progress, cancelling and errors work as in the name dialog. Afterwards the destination is listed again, and for a move the source too.
 - After a move, listings cached under moved folders' ids are dropped, and a place inside a moved folder goes to the destination instead.
-- Not yet: a New folder button in the picker, drag and drop, an operations panel for long transfers, and copying between adapters.
+- Not yet: a New folder button in the picker, an operations panel for long transfers, and copying between adapters.
 
 ## Cut, copy and paste
 
 `ActionContext.cut()` and `copy()` put the entries on a clipboard held in `file-manager.tsx` (`Clipboard`, `types/clipboard.ts`), not the system clipboard, since ids mean nothing outside their adapter. `paste()` moves (cut) or copies them into the context's `folder`, and `pasteInto()` into the one folder in `entries`, so a folder's menu can offer "Paste into folder", in the content and the sidebar tree alike. Both go through the same adapter methods as "Move to…" and "Copy to…". The consumer's actions bind Ctrl+X, Ctrl+C and Ctrl+V like any other shortcut.
 
 - `paste` is offered (`utils/clipboard.ts`, `canPaste`) only through the adapter the entries came from, never into one of them or below one (the target's trail holds every folder above it, so no id is parsed), not into cut entries' own folder, and not while another paste runs. Copying into the entries' own folder duplicates them, as "keep both".
-- `dialogs/paste-dialog.tsx` runs the paste unseen, with the open folder's progress bar showing (`busy`), and only shows to ask about clashing names, found in the target's cached listing, or to report the adapter's error. Afterwards the target is listed again, so is its parent when cached (for its item count), and the source after a cut.
+- `dialogs/paste-dialog.tsx` runs the paste unseen and only shows to ask about clashing names or to report the adapter's error. Clashes are looked for in the target's listing, which it loads first when it isn't cached (a folder pasted into from its menu, or dropped onto, may never have been opened). Afterwards the target is listed again, so is its parent when cached (for its item count), and the source after a cut, once if it's that same parent.
+- While a paste runs, the open folder shows its progress bar (`busy`) if the paste changes it: it's the target, the folder listing the target, or the folder a cut leaves.
 - A cut is pasted once and leaves the clipboard; a copy can be pasted again. Entries moved by either route leave the clipboard (their ids may have changed), and a renamed entry is replaced by its new self. Entries below a renamed folder keep their stale ids, and pasting them reports the adapter's error.
 - Cut entries are marked wherever they're listed: `CutContext` (`contexts/cut-context.ts`) carries their ids and adapter, `hooks/use-cut-ids.ts` gives a section the ids it could be showing, and list rows, grid tiles and sidebar tree rows set `data-cut` for `cutMarker` (see `component-styling.md`).
 - Ctrl+V pastes into the open folder even with a folder selected, as in GNOME; the playground's "Paste into folder" has no shortcut.
 - Not yet: the shortcuts in the sidebar.
+
+## Drag and drop
+
+Entries in the content can be dragged onto a folder in the same view, which moves them into it, or copies them while Ctrl or Option (Alt) is held over the target. It's native HTML5 drag and drop, in `hooks/use-entry-drag.ts`, with the handlers on `folder-view.tsx`'s surface finding entries by `data-entry-id`. A drop runs as a paste (`DropInto` in `types/drag.ts`, `dropInto` in `file-manager.tsx`): the dragged entries become a clipboard of their own, offered by the same `canPaste` rules and run by `paste-dialog.tsx`, so clashes, errors, refreshing and leaving the real clipboard work as they do there, and the real clipboard is left alone. There's no consumer action for it; an adapter with neither `move` nor `copy` has nothing draggable.
+
+- A drag carries the selection when it starts on a selected entry; otherwise that entry is selected and dragged alone, as with the context menu. Entries drag by any part of their list row or grid tile, which also take drops for a folder; a marquee starts only from the empty space around them.
+- Mouse only, like the marquee. A drag that starts from a touch or pen press is cancelled, since a press there scrolls or, held, selects.
+- Dragged entries fade, and the folder they'd go into is highlighted, through `dragMarkers` (see `component-styling.md`). A folder that can't take them (one of them, or while another paste runs) isn't highlighted and the browser shows its no-drop cursor; files and empty space never take drops.
+- The drag image is `content/drag-preview.tsx`: the grabbed entry's icon and name on a card, stacked on a card per other entry (5 cards at most, each 4px further down and right and fainter), with a count of them all when more go along. It's rendered into `<body>` at the top left for a single frame (`flushSync`), handed to `setDragImage`, and removed in the next animation frame, before it's painted. Safari cancels a drag whose image is wholly off screen, so it isn't placed off screen.
+- Drag state ends on `drop` as well as `dragend`, since a move can remove the source row before `dragend` arrives. Drags from outside (files from the desktop, text) are ignored and left to the browser.
+- Not yet: the sidebar and the path bar as drop targets, dragging from the sidebar, opening a folder by hovering over it, dropping files from the desktop (upload), and touch.
 
 ## Sorting
 

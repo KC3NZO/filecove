@@ -26,10 +26,11 @@ Colors come only from palette tokens:
 - `background.paper` for the content panel.
 - `primary` for selection, `text.primary` for hover and the zebra stripe, at strengths built on the `action` opacities.
 
-Shared color helpers are in `src/styles/mixins.ts`: `hoverBackground`, `selectedBackground`, `selectedHoverBackground`, `stripeBackground`, `focusRing`, `cutMarker` and `dialogPaperSx`. They read `theme.vars` when present, so they work with or without CSS variables. Write new helpers the same way.
+Shared color helpers are in `src/styles/mixins.ts`: `hoverBackground`, `selectedBackground`, `selectedHoverBackground`, `stripeBackground`, `focusRing`, `cutMarker`, `dragMarkers` and `dialogPaperSx`. They read `theme.vars` when present, so they work with or without CSS variables. Write new helpers the same way.
 
 - Rows, tiles and tree rows take their hover and selection from these helpers, never from `action.hover` or `action.selected`. MUI's opacities (hover 0.04 and selected 0.08 in light mode) are tuned for menus, and over a striped white list a hovered row looked like a stripe. The helpers add a fixed boost to the theme's opacities (written as `"a + b"`, which `theme.alpha` sums with or without CSS variables), so a theme that changes them still moves them. A selected item under the pointer gets a step stronger.
 - Cut entries take `cutMarker`, keyed off `data-cut`: their contents fade to 0.45 and a dashed `text.secondary` outline traces them. Only the children fade, so hover and selection backgrounds stay as strong.
+- `dragMarkers(theme)` is keyed off `data-dragged` and `data-drop-target`: dragged entries fade as cut ones do, and the drop target folder gets the selected-hover background inside a 2px `primary` outline. It's spread last in a row's or tile's `sx`, after `cutMarker`, so the drop target wins over hover, selection and the cut outline at equal specificity.
 - Dialogs use `dialogPaperSx`: the window's `background.default` with a `divider` outline, and no `backgroundImage`. MUI's elevated Paper lays a white overlay over it in dark mode that turns any dark background grey. A view inside a dialog, like the transfer picker's folder list, sits on `background.paper`, so a dialog is laid out like the window: chrome on default, view on paper.
 - Dialog buttons other than the main action are `color="inherit"`, so only the one that does the work is accented.
 - Menus still use MUI's Paper as it comes, overlay included.
