@@ -7,6 +7,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { viewMedium, viewWide } from "../../../styles/layout";
 import {
     cutMarker,
+    dragMarkers,
     focusRing,
     hoverBackground,
     selectedBackground,
@@ -95,9 +96,10 @@ const rowSx: SxProps<Theme> = (theme) => ({
     // A row scrolled into view stops below the sticky column header rather than under it.
     [viewMedium]: { minHeight: 44, scrollMarginTop: "3rem" },
     ...cutMarker,
+    ...dragMarkers(theme),
 });
 
-// Only as wide as the icon and name, so the rest of the column is blank space a marquee can start from.
+// Only as wide as the icon and name, so a long name truncates within the column.
 const nameCellSx: SxProps<Theme> = {
     display: "flex",
     alignItems: "center",
@@ -198,6 +200,9 @@ const FileList = ({
     entries,
     selectedIds,
     cutIds,
+    draggable,
+    draggedIds,
+    dropTargetId,
     hasActions,
     sort,
     onSelect,
@@ -218,9 +223,15 @@ const FileList = ({
                 <Box
                     key={entry.id}
                     sx={rowSx}
+                    // The whole row is the entry's: it's dragged by any part, and a marquee only
+                    // starts from the empty space around the rows.
+                    draggable={draggable}
                     data-entry-id={entry.id}
+                    data-no-marquee
                     data-selected={selectedIds.has(entry.id)}
                     data-cut={cutIds.has(entry.id)}
+                    data-dragged={draggedIds.has(entry.id)}
+                    data-drop-target={dropTargetId === entry.id}
                     onClick={(event) => {
                         event.stopPropagation();
                         onSelect(entry.id, selectModifiers(event));
@@ -234,7 +245,7 @@ const FileList = ({
                         }
                     }}
                 >
-                    <Box sx={nameCellSx} data-no-marquee>
+                    <Box sx={nameCellSx}>
                         <ItemIcon entry={entry} size="1.75rem" />
                         <Box sx={nameTextSx}>
                             <Typography variant="body2" noWrap>

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -8,7 +9,9 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DataContext } from "../../../contexts/data-context";
 import { useCutIds } from "../../../hooks/use-cut-ids";
+import { useEntryDrag } from "../../../hooks/use-entry-drag";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
@@ -19,11 +22,13 @@ import { folderOf } from "../../../utils/navigation";
 import { EMPTY_SELECTION, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import { entryComparator } from "../../../utils/sort";
 import Icon from "../../icons/icon";
+import DragPreview from "./drag-preview";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
 import SelectionBar from "./selection-bar";
 
 import type {
+    DropInto,
     EntrySelection,
     FileEntry,
     FolderRef,
@@ -55,6 +60,7 @@ interface FolderViewProps {
     onNavigate: (place: Place) => void;
     onOpenMenu: OpenMenu;
     onShortcut: RunShortcut;
+    onDropInto: DropInto;
     /** Called once `revealId` has been selected. */
     onRevealed: () => void;
 }
@@ -143,10 +149,16 @@ const FolderView = ({
     onNavigate,
     onOpenMenu,
     onShortcut,
+    onDropInto,
     onRevealed,
 }: FolderViewProps) => {
     const { state, reload } = useFolder(section, folderOf(section, trail).id, true);
     const cutIds = useCutIds(section);
+    const data = useContext(DataContext);
+
+    // A drag moves or copies, so it needs an adapter that does one or the other.
+    const adapter = section.adapter ?? data?.adapter;
+    const draggable = !!(adapter?.move || adapter?.copy);
 
     // Sorted here rather than in the store, since the sidebar tree shares the listing and keeps its own order.
     const entries = useMemo(
@@ -195,6 +207,41 @@ const FolderView = ({
             ?.scrollIntoView({ block: "nearest" });
         onRevealed();
     }, [revealId, revealListed, replace, marquee.surfaceRef, onRevealed]);
+
+    // A drag carries the selection when it starts on a selected entry, or else selects the entry and
+    // carries it alone, as the context menu does. Mouse only: on touch, a press scrolls or, held, selects.
+    // Dropped onto a folder, the entries go into it by the same rules as pasting.
+    const drag = useEntryDrag({
+        onStart: (id) => {
+            if (pointerType.current !== "mouse") {
+                return null;
+            }
+
+            if (selectedIds.has(id)) {
+                return selected;
+            }
+
+            const entry = entries?.find((item) => item.id === id);
+
+            if (!entry) {
+                return null;
+            }
+
+            select(id);
+
+            return [entry];
+        },
+        dropOnto: (dragged, id, copy) => {
+            const target = entries?.find((item) => item.id === id);
+
+            return target?.kind === "folder"
+                ? onDropInto({ kind: copy ? "copy" : "move", section, trail, entries: dragged }, section, [
+                      ...trail,
+                      { id: target.id, name: target.name },
+                  ])
+                : undefined;
+        },
+    });
 
     const longPress = useLongPress({
         onLongPress: (id) => {
@@ -334,6 +381,9 @@ const FolderView = ({
                 entries={entries}
                 selectedIds={selectedIds}
                 cutIds={cutIds}
+                draggable={draggable}
+                draggedIds={drag.draggedIds}
+                dropTargetId={drag.dropId}
                 hasActions={hasActions}
                 sort={sort}
                 onSelect={handleSelect}
@@ -390,6 +440,12 @@ const FolderView = ({
             onContextMenuCapture={handleContextMenuCapture}
             onContextMenu={handleBackgroundMenu}
             onKeyDown={handleKeyDown}
+            onDragStart={drag.onDragStart}
+            onDragEnter={drag.onDragOver}
+            onDragOver={drag.onDragOver}
+            onDragLeave={drag.onDragLeave}
+            onDrop={drag.onDrop}
+            onDragEnd={drag.onDragEnd}
         >
             {(busy || state?.status === "loading") && entries && <LinearProgress sx={progressSx} />}
             {content}
@@ -405,6 +461,11 @@ const FolderView = ({
                 />
             )}
             <Box ref={marquee.marqueeRef} sx={marqueeSx} />
+            {drag.preview &&
+                createPortal(
+                    <DragPreview ref={drag.previewRef} entry={drag.preview.entry} count={drag.preview.count} />,
+                    document.body,
+                )}
         </Box>
     );
 };

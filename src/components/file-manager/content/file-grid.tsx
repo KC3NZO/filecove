@@ -3,7 +3,13 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { viewMedium } from "../../../styles/layout";
-import { cutMarker, hoverBackground, selectedBackground, selectedHoverBackground } from "../../../styles/mixins";
+import {
+    cutMarker,
+    dragMarkers,
+    hoverBackground,
+    selectedBackground,
+    selectedHoverBackground,
+} from "../../../styles/mixins";
 import { pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
 import ItemIcon from "./item-icon";
@@ -40,6 +46,7 @@ const tileSx: SxProps<Theme> = (theme) => ({
     '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
     "& > svg": { flexShrink: 0 },
     ...cutMarker,
+    ...dragMarkers(theme),
 });
 
 const nameSx: SxProps<Theme> = {
@@ -52,16 +59,29 @@ const nameSx: SxProps<Theme> = {
     lineHeight: 1.35,
 };
 
-const FileGrid = ({ entries, selectedIds, cutIds, onSelect, onOpen, onMenu }: FileViewProps) => (
+const FileGrid = ({
+    entries,
+    selectedIds,
+    cutIds,
+    draggable,
+    draggedIds,
+    dropTargetId,
+    onSelect,
+    onOpen,
+    onMenu,
+}: FileViewProps) => (
     <Box sx={gridSx}>
         {entries.map((entry) => (
             <Box
                 key={entry.id}
                 sx={tileSx}
+                draggable={draggable}
                 data-entry-id={entry.id}
                 data-no-marquee
                 data-selected={selectedIds.has(entry.id)}
                 data-cut={cutIds.has(entry.id)}
+                data-dragged={draggedIds.has(entry.id)}
+                data-drop-target={dropTargetId === entry.id}
                 onClick={(event) => {
                     event.stopPropagation();
                     onSelect(entry.id, selectModifiers(event));

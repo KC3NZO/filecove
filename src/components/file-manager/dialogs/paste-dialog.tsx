@@ -11,6 +11,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
 import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
+import { folderKey } from "../../../store/folder-store";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { folderOf } from "../../../utils/navigation";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
@@ -18,7 +19,7 @@ import { ConflictChoices, ConflictMessage } from "./conflict-step";
 import type { Clipboard, ConflictPolicy, FolderRef, Section } from "../../../types";
 
 export interface PasteRequest {
-    /** What is pasted, as it was when the paste began. */
+    /** What is pasted, as it was when the paste began: the clipboard, or entries dropped onto a folder. */
     clipboard: Clipboard;
     /** The section of the folder pasted into. */
     section: Section;
@@ -57,9 +58,9 @@ const spacerSx: SxProps<Theme> = {
 };
 
 /**
- * Pastes what was cut or copied: the adapter moves or copies it into the folder. Most pastes need
- * nothing from the user, so they run unseen and the dialog only shows to ask about names the folder
- * already has (replace, keep both or skip) or to report the adapter's error.
+ * Pastes what was cut or copied, or dropped onto a folder: the adapter moves or copies it into the
+ * folder. Most pastes need nothing from the user, so they run unseen and the dialog only shows to
+ * ask about names the folder already has (replace, keep both or skip) or to report the adapter's error.
  */
 const PasteDialog = ({ open, request, onClose, onDone }: PasteDialogProps) => {
     const { clipboard, section, trail } = request;
@@ -68,28 +69,33 @@ const PasteDialog = ({ open, request, onClose, onDone }: PasteDialogProps) => {
     const target = folderOf(section, trail);
     const sourceId = folderOf(clipboard.section, clipboard.trail).id;
 
-    const { state, reload } = useFolder(section, target.id, false);
-    const parent = useFolder(section, folderOf(section, trail.slice(0, -1)).id, false);
+    const parentId = folderOf(section, trail.slice(0, -1)).id;
+
+    // The target is listed first when it isn't cached, as a folder dropped onto may never have been opened.
+    const { state, reload } = useFolder(section, target.id, true);
+    const parent = useFolder(section, parentId, false);
     const source = useFolder(clipboard.section, sourceId, false);
+    const listed = !!state?.entries || state?.status === "error";
 
-    // Checked against the folder's cached listing as it is now. Copying into the entries' own folder
-    // clashes with every one of them, and only makes sense as a duplicate, so it keeps both without asking.
-    const [conflicts, setConflicts] = useState<string[] | null>(() => {
-        const clashes = clashingNames(entries, state?.entries);
-
-        return clashes.length > 0 && target.id !== sourceId ? clashes : null;
-    });
+    const [checked, setChecked] = useState(false);
+    const [conflicts, setConflicts] = useState<string[] | null>(null);
 
     // The adapter can't undo a change it has made, so both folders are listed again however it
-    // ended, and so is the target's parent when cached, for its item count.
+    // ended, and so is the target's parent when cached, for its item count. That parent is often
+    // where a move came from, when entries were dropped onto a folder beside them.
     const refresh = () => {
+        const parentListed = trail.length > 0 && !!parent.state;
+
         reload();
 
-        if (trail.length > 0 && parent.state) {
+        if (parentListed) {
             parent.reload();
         }
 
-        if (kind === "move") {
+        if (
+            kind === "move" &&
+            !(parentListed && folderKey(clipboard.section.id, sourceId) === folderKey(section.id, parentId))
+        ) {
             source.reload();
         }
     };
@@ -106,13 +112,25 @@ const PasteDialog = ({ open, request, onClose, onDone }: PasteDialogProps) => {
         });
     };
 
-    // With nothing to ask, the paste starts as soon as it is requested. Each paste mounts a new
+    // Once the target's listing is there, it's checked for names the entries share, and with nothing
+    // to ask, the paste starts. Copying into the entries' own folder clashes with every one of them,
+    // and only makes sense as a duplicate, so it keeps both without asking. Each paste mounts a new
     // dialog, so this runs once per paste.
     useEffect(() => {
-        if (!conflicts) {
+        if (checked || !listed) {
+            return;
+        }
+
+        const clashes = target.id === sourceId ? [] : clashingNames(entries, state?.entries);
+
+        setChecked(true);
+
+        if (clashes.length > 0) {
+            setConflicts(clashes);
+        } else {
             paste("keepBoth");
         }
-    }, []);
+    }, [checked, listed]);
 
     const close = () => {
         cancel();
@@ -120,10 +138,11 @@ const PasteDialog = ({ open, request, onClose, onDone }: PasteDialogProps) => {
     };
 
     const what = entries.length === 1 ? `“${entries[0].name}”` : `${entries.length} items`;
+    const title = failure ? `Couldn't ${kind} ${what}` : `${kind === "move" ? "Move" : "Copy"} ${what}`;
 
     return (
         <Dialog open={open && (!!conflicts || !!failure)} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
-            <DialogTitle>{failure ? "Couldn't paste" : `Paste ${what}`}</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
             <DialogContent sx={contentSx}>
                 {failure ? (
                     <Typography variant="body2" color="error">

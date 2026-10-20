@@ -51,6 +51,22 @@ export const cutMarker = {
     },
 };
 
+/**
+ * Marks rows or tiles while entries are dragged: the dragged ones fade, as cut ones do, and the
+ * folder they'd be dropped into takes the selection's color inside an accent outline. Keyed off
+ * `data-dragged` and `data-drop-target`. Spread last into the `sx` object, so the drop target wins
+ * over hover, selection and the cut outline.
+ */
+export const dragMarkers = (theme: Theme) => ({
+    '&[data-dragged="true"] > *': { opacity: 0.45 },
+    '&[data-drop-target="true"], &[data-drop-target="true"]:hover': {
+        bgcolor: selectedHoverBackground(theme),
+        outline: "2px solid",
+        outlineColor: "primary.main",
+        outlineOffset: "-2px",
+    },
+});
+
 /** Keyboard focus ring for ButtonBase elements; works whether or not ripples are enabled. */
 export const focusRing = {
     "&.Mui-focusVisible": {

@@ -27,6 +27,7 @@ import type {
     ActionContext,
     ActionGroup,
     Clipboard,
+    DropInto,
     FileAdapter,
     FileEntry,
     FolderRef,
@@ -202,10 +203,26 @@ const FileManager = ({
         [clipboard],
     );
 
-    // The folder a paste is running into, which shows a progress bar meanwhile.
-    const pasteKey = pasting?.open
-        ? folderKey(pasting.request.section.id, folderOf(pasting.request.section, pasting.request.trail).id)
-        : null;
+    // Folders a running paste changes, whose view shows a progress bar meanwhile: the one it goes
+    // into, the one listing that folder (where it was dropped onto, or pasted into from its menu),
+    // and, for a move, the one the entries leave.
+    const pasteKeys = useMemo(() => {
+        if (!pasting?.open) {
+            return null;
+        }
+
+        const { clipboard: pasted, section: target, trail } = pasting.request;
+        const keys = new Set([
+            folderKey(target.id, folderOf(target, trail).id),
+            folderKey(target.id, folderOf(target, trail.slice(0, -1)).id),
+        ]);
+
+        if (pasted.kind === "cut") {
+            keys.add(folderKey(pasted.section.id, folderOf(pasted.section, pasted.trail).id));
+        }
+
+        return keys;
+    }, [pasting]);
 
     const toggleExpanded = useCallback((key: string) => {
         setExpanded((prev) => {
@@ -258,6 +275,33 @@ const FileManager = ({
 
     const closePaste = useCallback(() => setPasting((prev) => prev && { ...prev, open: false }), []);
 
+    // Pastes `pasted` into the folder at `trail`, when it can go there and no other paste is running.
+    const offerPaste = useCallback(
+        (pasted: Clipboard, target: Section, trail: FolderRef[]) =>
+            !pasting?.open && canPaste(pasted, target.adapter ?? adapter, target, trail)
+                ? () => askPaste({ clipboard: pasted, section: target, trail })
+                : undefined,
+        [adapter, pasting?.open, askPaste],
+    );
+
+    // A drop is pasted like the clipboard, with the dragged entries as a clipboard of their own, so
+    // the real one is left as it was.
+    const dropInto = useCallback<DropInto>(
+        ({ kind, section: from, trail: fromTrail, entries }, target, trail) =>
+            offerPaste(
+                {
+                    kind: kind === "move" ? "cut" : "copy",
+                    section: from,
+                    adapter: from.adapter ?? adapter,
+                    trail: fromTrail,
+                    entries,
+                },
+                target,
+                trail,
+            ),
+        [adapter, offerPaste],
+    );
+
     // With path ids, a moved folder's old id is free for another folder, so its cached listing is
     // dropped. A place inside a moved folder can't be followed, so it goes where the folder went.
     // Moved entries leave the clipboard too, since their ids may have changed.
@@ -289,7 +333,8 @@ const FileManager = ({
         [closeTransfer, handleMoved],
     );
 
-    // A cut is pasted once, so its entries leave the clipboard; a copy can be pasted again.
+    // A cut is pasted once, so its entries leave the clipboard, as do entries moved by a drop; a
+    // copy can be pasted again.
     const handlePasted = useCallback(
         ({ clipboard: pasted, section: target, trail }: PasteRequest) => {
             closePaste();
@@ -376,13 +421,8 @@ const FileManager = ({
                 });
 
             // Pastes into the folder at `pasteTrail`, when what was cut or copied can go there.
-            const pasteTo = (pasteTrail: FolderRef[]) => {
-                const pasted = clipboard;
-
-                return pasted && !pasting?.open && canPaste(pasted, folderAdapter, menuSection, pasteTrail)
-                    ? () => askPaste({ clipboard: pasted, section: menuSection, trail: pasteTrail })
-                    : undefined;
-            };
+            const pasteTo = (pasteTrail: FolderRef[]) =>
+                clipboard ? offerPaste(clipboard, menuSection, pasteTrail) : undefined;
 
             const [only] = entries;
 
@@ -419,7 +459,7 @@ const FileManager = ({
                         : undefined,
             };
         },
-        [adapter, store, goTo, askName, askDestination, askPaste, sectionsById, clipboard, pasting?.open],
+        [adapter, store, goTo, askName, askDestination, offerPaste, sectionsById, clipboard],
     );
 
     const openMenu = useCallback<OpenMenu>(
@@ -513,13 +553,14 @@ const FileManager = ({
                                         sort={sort}
                                         hasActions={hasActions}
                                         selecting={selecting}
-                                        busy={pasteKey !== null && pasteKey === openKey}
+                                        busy={openKey !== null && !!pasteKeys?.has(openKey)}
                                         revealId={reveal?.id}
                                         onSelectingChange={setSelecting}
                                         onSortChange={setSort}
                                         onNavigate={goTo}
                                         onOpenMenu={openMenu}
                                         onShortcut={runShortcut}
+                                        onDropInto={dropInto}
                                         onRevealed={clearReveal}
                                     />
                                 )}

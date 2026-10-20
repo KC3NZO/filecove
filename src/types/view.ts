@@ -20,6 +20,12 @@ export interface FileViewProps {
     selectedIds: ReadonlySet<string>;
     /** Entries cut to the clipboard, shown faded until they're pasted. */
     cutIds: ReadonlySet<string>;
+    /** Entries can be dragged onto a folder, to be moved or copied into it. */
+    draggable: boolean;
+    /** Entries being dragged, shown faded until the drag ends. */
+    draggedIds: ReadonlySet<string>;
+    /** The folder the dragged entries would be dropped into at this moment. */
+    dropTargetId: string | null;
     hasActions: boolean;
     sort: SortOrder;
     onSelect: (id: string, modifiers: SelectModifiers) => void;
