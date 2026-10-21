@@ -88,32 +88,8 @@ export const matchName = (names: string[], from: number, query: string) => {
     return -1;
 };
 
-/** The rows of a tree that show, those not inside a collapsed row, in display order. */
-export const shownTreeItems = (tree: Element) =>
-    Array.from(tree.querySelectorAll<HTMLElement>('[role="treeitem"]')).filter(
-        (item) => !item.parentElement?.closest('[role="treeitem"][aria-expanded="false"]'),
-    );
-
-/**
- * Focuses a tree item, scrolling its own row into view rather than the whole item, which holds
- * the rows below it too.
- */
+/** Focuses a tree item and scrolls it into view. */
 export const focusTreeItem = (item: HTMLElement) => {
     item.focus({ preventScroll: true });
-    (item.firstElementChild ?? item).scrollIntoView({ block: "nearest" });
-};
-
-/** The tree row to focus in place of `item` as it goes: the one shown before it, or else the one after it. */
-export const neighbourTreeItem = (item: HTMLElement) => {
-    const tree = item.closest('[role="tree"]');
-
-    if (!tree) {
-        return undefined;
-    }
-
-    // Its own rows go with it.
-    const rows = shownTreeItems(tree).filter((row) => row === item || !item.contains(row));
-    const index = rows.indexOf(item);
-
-    return index < 0 ? rows[0] : (rows[index - 1] ?? rows[index + 1]);
+    item.scrollIntoView({ block: "nearest" });
 };

@@ -20,6 +20,7 @@ import { useSelection } from "../../../hooks/use-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { focusOutline, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
+import { focusLost } from "../../../utils/dom";
 import { isMenuKey, isRtl, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { belowElement, insideElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
@@ -91,9 +92,6 @@ const entryIdAt = (target: EventTarget) =>
 
 const entryElement = (surface: HTMLElement, id: string) =>
     surface.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(id)}"]`);
-
-/** Whether the focus has left the page, as it does when the focused element is removed. */
-const focusLost = () => !document.activeElement || document.activeElement === document.body;
 
 // Fills the scroll panel even when the folder is short, so its empty space takes clicks,
 // right-clicks, marquee drags and drops. Positioned so the marquee is placed in content coordinates.

@@ -30,6 +30,14 @@ const archive: MockNode[] = Array.from({ length: 10_000 }, (_, index) =>
     ),
 );
 
+/** A folder of folders large enough that the sidebar tree only renders what's in view. */
+const datasets: MockNode[] = Array.from({ length: 5_000 }, (_, index) => {
+    const name = `set-${String(index + 1).padStart(4, "0")}`;
+    const modified = new Date(Date.UTC(2025, 0, 1) + index * 86_400_000).toISOString();
+
+    return folder(name, modified, [file(`${name}.parquet`, 40_000 + index * 13, modified)]);
+});
+
 /** One backend serving two unrelated project roots, as in "/server/project/a" and "/server/project/b". */
 export const serverAdapter = createMockAdapter({
     "/server/project/a": [
@@ -71,6 +79,7 @@ export const serverAdapter = createMockAdapter({
     ],
     "/server/project/b": [
         folder("archive", "2026-10-01T09:00", archive),
+        folder("datasets", "2026-10-05T12:00", datasets),
         folder("cmd", "2026-09-12T10:30", [
             folder("server", "2026-09-12T10:30", [file("main.go", 2_950, "2026-09-12T10:30")]),
         ]),

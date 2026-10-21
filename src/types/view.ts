@@ -26,6 +26,13 @@ export interface EntryLayout {
     rtl: boolean;
 }
 
+/** A list that renders only what's in or near view, and the panel it scrolls in. Internal. */
+export interface ScrollTarget {
+    list: HTMLElement;
+    /** Null when nothing around the list scrolls. */
+    scroller: HTMLElement | null;
+}
+
 /**
  * The entries a view renders, only those in or near the scroll panel, and how they're laid out in
  * lines. Internal, from `useVirtualLines`.

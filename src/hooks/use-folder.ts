@@ -5,7 +5,8 @@ import { folderKey } from "../store/folder-store";
 
 import type { Section } from "../types";
 
-const useData = () => {
+/** The folder store and the file manager's adapter, from `DataContext`. */
+export const useData = () => {
     const value = useContext(DataContext);
 
     if (!value) {

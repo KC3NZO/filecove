@@ -1,12 +1,7 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { gridColumns } from "../utils/dom";
+import { shownSpan, useScrollMeasure } from "./use-scroll-measure";
 
-import { gridColumns, scrollParent } from "../utils/dom";
-
-import type { VirtualLines } from "../types";
-
-/** How far past the scroll panel's top and bottom edges entries are rendered, ready to scroll in, in px. */
-const OVERSCAN = 400;
+import type { ScrollTarget, VirtualLines } from "../types";
 
 /** The lines as last measured, and which of them to render. */
 interface Measure {
@@ -19,12 +14,6 @@ interface Measure {
     /** The first and last line to render. */
     first: number;
     last: number;
-}
-
-interface Target {
-    list: HTMLElement;
-    /** The panel the list scrolls in, or null when nothing around it scrolls. */
-    scroller: HTMLElement | null;
 }
 
 /** A box in viewport coordinates. */
@@ -43,7 +32,8 @@ const sameMeasure = (a: Measure, b: Measure) =>
  * tracks, how tall it is from the first entry rendered, the row gap between lines, and which
  * lines are in or near the panel.
  */
-const measure = ({ list, scroller }: Target, count: number): Measure => {
+const measure = (target: ScrollTarget, count: number): Measure => {
+    const { list } = target;
     const entry = list.firstElementChild;
     const columns = gridColumns(list);
     const height = entry ? entry.getBoundingClientRect().height : 0;
@@ -55,20 +45,18 @@ const measure = ({ list, scroller }: Target, count: number): Measure => {
         return { columns, height, pitch: 0, first: 0, last: 0 };
     }
 
-    if (!scroller) {
+    const span = shownSpan(target);
+
+    if (!span) {
         return { columns, height, pitch, first: 0, last: lastLine };
     }
-
-    // The part of the list the panel shows, widened by the overscan, in the list's own coordinates.
-    const top = scroller.getBoundingClientRect().top + scroller.clientTop - list.getBoundingClientRect().top - OVERSCAN;
-    const bottom = top + scroller.clientHeight + 2 * OVERSCAN;
 
     return {
         columns,
         height,
         pitch,
-        first: clamp(Math.floor(top / pitch), 0, lastLine),
-        last: clamp(Math.floor(bottom / pitch), 0, lastLine),
+        first: clamp(Math.floor(span.top / pitch), 0, lastLine),
+        last: clamp(Math.floor(span.bottom / pitch), 0, lastLine),
     };
 };
 
@@ -82,68 +70,15 @@ const measure = ({ list, scroller }: Target, count: number): Measure => {
  *
  * `keep` lists entries to render wherever they are, such as the focused one. `indexesIn` finds
  * entries by where the lines put them, rendered or not, and `settled` says whether the rendered
- * ones are in their places yet, to be scrolled to.
+ * ones are in their places yet, to be scrolled to, which they aren't until the latest measure is
+ * rendered.
  */
 export const useVirtualLines = (count: number, keep: number[]) => {
-    const [measured, setMeasured] = useState(UNMEASURED);
-    const target = useRef<Target | null>(null);
-    const detach = useRef<(() => void) | null>(null);
-    const latestCount = useRef(count);
-    const isSettled = useRef(true);
-
-    // Measures again as the panel scrolls or resizes. A change is rendered at once, so entries
-    // scrolling in are there in the frame that shows them.
-    const update = useCallback(() => {
-        if (target.current) {
-            const next = measure(target.current, latestCount.current);
-
-            flushSync(() => setMeasured((previous) => (sameMeasure(previous, next) ? previous : next)));
-        }
-    }, []);
-
-    // A callback ref, so it follows the listbox from the list to the grid and back. It tears down
-    // when called with null rather than returning a cleanup, which React 18 would ignore.
-    const ref = useCallback(
-        (list: HTMLElement | null) => {
-            detach.current?.();
-            detach.current = null;
-            target.current = null;
-
-            if (!list) {
-                return;
-            }
-
-            const scroller = scrollParent(list);
-            const observer = new ResizeObserver(update);
-
-            observer.observe(list);
-
-            if (scroller) {
-                observer.observe(scroller);
-                scroller.addEventListener("scroll", update, { passive: true });
-            }
-
-            target.current = { list, scroller };
-            detach.current = () => {
-                observer.disconnect();
-                scroller?.removeEventListener("scroll", update);
-            };
-        },
-        [update],
+    const { ref, target, measured, settled } = useScrollMeasure(
+        (scrollTarget) => measure(scrollTarget, count),
+        UNMEASURED,
+        sameMeasure,
     );
-
-    // Measured after every render too, since anything may have moved. Until what's rendered
-    // matches the measure, as when the listbox has just mounted, entries may be out of place.
-    useLayoutEffect(() => {
-        const next = target.current ? measure(target.current, count) : measured;
-
-        latestCount.current = count;
-        isSettled.current = sameMeasure(measured, next);
-
-        if (!isSettled.current) {
-            setMeasured(next);
-        }
-    });
 
     const { columns, height, pitch, first, last } = measured;
     const lineCount = Math.ceil(count / columns);
@@ -212,9 +147,6 @@ export const useVirtualLines = (count: number, keep: number[]) => {
 
         return hits;
     };
-
-    /** Whether the rendered entries are where the latest measure puts them, so one can be scrolled to. */
-    const settled = useCallback(() => isSettled.current, []);
 
     return { lines, indexesIn, settled };
 };

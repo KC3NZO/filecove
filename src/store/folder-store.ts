@@ -12,8 +12,13 @@ export const createFolderStore = () => {
     const states = new Map<string, FolderState>();
     const requests = new Map<string, AbortController>();
     const listeners = new Set<() => void>();
+    // Counts the changes, for a view that reads many listings at once.
+    let version = 0;
 
-    const notify = () => listeners.forEach((listener) => listener());
+    const notify = () => {
+        version += 1;
+        listeners.forEach((listener) => listener());
+    };
 
     /**
      * Ids of a folder and of the folders below it whose listings a section has cached, found
@@ -83,6 +88,9 @@ export const createFolderStore = () => {
 
     return {
         get: (key: string) => states.get(key),
+
+        /** Changes whenever any listing does, for a view that reads many of them, such as the sidebar tree. */
+        version: () => version,
 
         subscribe: (listener: () => void) => {
             listeners.add(listener);

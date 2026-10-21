@@ -1,5 +1,5 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import type { FocusEvent, KeyboardEvent, Ref } from "react";
+import { Fragment, useCallback, useContext, useEffect, useRef, useState } from "react";
+import type { CSSProperties, DragEvent, FocusEvent, KeyboardEvent, Ref } from "react";
 
 import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
@@ -7,15 +7,28 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DragContext } from "../../../contexts/drag-context";
+import { useTreeRows } from "../../../hooks/use-tree-rows";
 import { useTreeSelection } from "../../../hooks/use-tree-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
+import { useVirtualRows } from "../../../hooks/use-virtual-rows";
 import { HEADER_HEIGHT, SIDEBAR_WIDTH, rootWide } from "../../../styles/layout";
 import { focusOutline } from "../../../styles/mixins";
-import { focusTreeItem, isRtl, isTypingKey, matchName, shownTreeItems } from "../../../utils/keyboard";
+import { focusLost } from "../../../utils/dom";
+import { focusTreeItem, isRtl, isTypingKey, matchName } from "../../../utils/keyboard";
 import Icon from "../../icons/icon";
-import SectionItem, { SectionTree } from "./location-item";
+import TreeRowItem, { GuideLine } from "./location-item";
 
-import type { OpenMenu, Place, RunShortcut, Section, SectionGroup } from "../../../types";
+import type {
+    OpenMenu,
+    Place,
+    RunShortcut,
+    Section,
+    SectionGroup,
+    StatusRow,
+    TreeItemRow,
+    TreeRow,
+} from "../../../types";
 
 interface SidebarProps {
     ref?: Ref<HTMLDivElement>;
@@ -101,33 +114,22 @@ const navSx: SxProps<Theme> = {
     pb: 1,
 };
 
+// Placed by the tree, like the rows.
 const groupTitleSx: SxProps<Theme> = {
-    display: "block",
+    position: "absolute",
+    left: 0,
+    right: 0,
+    display: "flex",
+    alignItems: "center",
     px: 1.5,
-    pt: 0.5,
-    pb: 0.5,
     color: "text.secondary",
     fontWeight: 600,
 };
 
-// Only shows a ring while it has nothing to hand the focus to, such as a single section still loading.
-const treeSx: SxProps<Theme> = {
-    borderRadius: 2,
-    outline: "none",
-    "&:focus-visible": focusOutline,
-};
-
-const listSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "2px",
-    m: 0,
-    p: 0,
-};
-
-const rootListSx: SxProps<Theme> = {
-    m: 0,
-    p: 0,
+const ruleSx: SxProps<Theme> = {
+    position: "absolute",
+    left: 0,
+    right: 0,
 };
 
 const dividerSx: SxProps<Theme> = {
@@ -135,15 +137,46 @@ const dividerSx: SxProps<Theme> = {
     my: 1,
 };
 
+// Only renders the rows in or near view, each placed where it goes, and is as tall as all of them.
+// Only shows a ring while it has nothing to hand the focus to, such as a single section still loading.
+const treeSx: SxProps<Theme> = {
+    position: "relative",
+    borderRadius: 2,
+    outline: "none",
+    "&:focus-visible": focusOutline,
+};
+
+// Holds rows placed in the tree, so it takes no room itself. The section groups are still lists,
+// so each is a `group` of the tree.
+const listSx: SxProps<Theme> = {
+    m: 0,
+    p: 0,
+};
+
+const placeStyle = (row: TreeRow): CSSProperties => ({ top: row.top, height: row.height });
+
+const isItem = (row: TreeRow): row is TreeItemRow =>
+    row.kind === "section" || row.kind === "folder" || row.kind === "error";
+
+// The rows that go in a list: the items, and a single section's loading and empty rows.
+const isListed = (row: TreeRow): row is TreeItemRow | StatusRow =>
+    row.kind !== "caption" && row.kind !== "divider";
+
+const rowElement = (tree: HTMLElement | null, id: string) =>
+    tree?.querySelector<HTMLElement>(`[data-tree-key="${CSS.escape(id)}"]`) ?? null;
+
 /**
  * The sidebar: the file manager's title and a tree of its sections and their folders, or of a
- * single section's folders.
+ * single section's folders. The tree is flattened into the rows it shows (`useTreeRows`), and
+ * only those in or near view are rendered (`useVirtualRows`), so a folder of thousands of folders
+ * expands as fast as a small one.
  *
  * The tree is one stop in the tab order. Tabbed to, it hands the focus to the row that had it
  * last, or else the open folder's, or the first; while a row has it, the tree steps out of the
  * tab order so Shift+Tab leaves it. Up, Down, Home and End move between the rows shown, Right
  * goes into an expanded row and Left out to the row above, and typing finds a row by its name.
- * The rows take the keys that act on them (`TreeItem` in `location-item.tsx`).
+ * These go by the rows rather than the page, which only holds some of them. The rows take the
+ * keys that act on them (`TreeItem` in `location-item.tsx`).
  *
  * As an overlay, it takes the focus as it opens, closes on Escape, and closes when the focus
  * moves on to the file manager behind it.
@@ -166,10 +199,36 @@ const Sidebar = ({
     // The sidebar's own selection; the content's lives in its folder view, and neither sees the other.
     const { selection, select, selectSection, reset } = useTreeSelection(openKey);
     const typeAhead = useTypeAhead();
-    const treeRef = useRef<HTMLDivElement>(null);
-    // `folderKey` of the row that had the focus last, which gets it back when the tree is tabbed to.
-    const lastFocused = useRef<string | null>(null);
+    const drag = useContext(DragContext);
+    const treeRef = useRef<HTMLDivElement | null>(null);
     const [focusInside, setFocusInside] = useState(false);
+    // The row that has the focus, or had it last, which gets it back when the tree is tabbed to.
+    const [focusKey, setFocusKey] = useState<string | null>(null);
+    // A row to focus once it's rendered.
+    const [focusRequest, setFocusRequest] = useState<string | null>(null);
+    // The row a drag started from.
+    const [grabbedKey, setGrabbedKey] = useState<string | null>(null);
+
+    // A single section that hides its folders still gets its row, so the sidebar isn't left empty.
+    const tree = single && single.showFolders !== false ? single : null;
+    const { rows, guides, height } = useTreeRows(groups, tree, expanded);
+
+    // The focused row stays rendered wherever the tree is scrolled, so it keeps the focus, and so
+    // does a row the focus is going to, and the row a drag started from while it's dragged, since
+    // the drag ends on it.
+    const {
+        ref: virtualRef,
+        shown,
+        span,
+    } = useVirtualRows(rows, [focusKey, focusRequest, drag?.dragged ? grabbedKey : null]);
+
+    const treeElement = useCallback(
+        (element: HTMLDivElement | null) => {
+            treeRef.current = element;
+            virtualRef(element);
+        },
+        [virtualRef],
+    );
 
     // The overlay takes the focus as it slides in.
     useEffect(() => {
@@ -177,6 +236,55 @@ const Sidebar = ({
             treeRef.current?.focus();
         }
     }, [open]);
+
+    useEffect(() => {
+        if (focusRequest === null) {
+            return;
+        }
+
+        const element = rowElement(treeRef.current, focusRequest);
+
+        setFocusRequest(null);
+
+        if (element) {
+            focusTreeItem(element);
+        }
+    }, [focusRequest]);
+
+    /** Focuses a row and scrolls to it, rendering it first if it isn't. */
+    const focusRow = (id: string) => {
+        const element = rowElement(treeRef.current, id);
+
+        if (element) {
+            focusTreeItem(element);
+        } else {
+            setFocusRequest(id);
+        }
+    };
+
+    // A row that goes while it has the focus, as a folder deleted or moved away does, hands it on
+    // to the row shown before it, so the focus isn't dropped to the page. The rows it was among
+    // are kept from the render before.
+    const previousRows = useRef(rows);
+
+    useEffect(() => {
+        const before = previousRows.current;
+
+        previousRows.current = rows;
+
+        if (!focusInside || focusKey === null || !focusLost() || rows.some((row) => row.id === focusKey)) {
+            return;
+        }
+
+        const ids = new Set(rows.map((row) => row.id));
+        const index = before.findIndex((row) => row.id === focusKey);
+        const stays = (row: TreeRow) => isItem(row) && ids.has(row.id);
+        const neighbour = before.slice(0, Math.max(index, 0)).findLast(stays) ?? before.slice(index + 1).find(stays);
+
+        if (neighbour) {
+            focusRow(neighbour.id);
+        }
+    });
 
     // Picking a location closes the overlay; expanding or selecting a folder doesn't, so the tree can be browsed in it.
     const handleNavigate = useCallback(
@@ -210,13 +318,11 @@ const Sidebar = ({
     };
 
     const handleTreeFocus = (event: FocusEvent<HTMLDivElement>) => {
-        const tree = event.currentTarget;
-
-        if (event.target !== tree) {
+        if (event.target !== event.currentTarget) {
             const key = event.target instanceof HTMLElement ? event.target.dataset.treeKey : undefined;
 
             if (key !== undefined) {
-                lastFocused.current = key;
+                setFocusKey(key);
             }
 
             setFocusInside(true);
@@ -224,14 +330,11 @@ const Sidebar = ({
             return;
         }
 
-        const rows = shownTreeItems(tree);
-        const row =
-            rows.find((item) => item.dataset.treeKey === lastFocused.current) ??
-            rows.find((item) => item.getAttribute("aria-current") === "page") ??
-            rows[0];
+        const items = rows.filter(isItem);
+        const row = items.find((item) => item.id === focusKey) ?? items.find((item) => item.id === openKey) ?? items[0];
 
         if (row) {
-            focusTreeItem(row);
+            focusRow(row.id);
         }
     };
 
@@ -247,55 +350,81 @@ const Sidebar = ({
             return;
         }
 
-        const tree = event.currentTarget;
-        const item =
-            event.target instanceof HTMLElement && event.target.getAttribute("role") === "treeitem" ? event.target : null;
-        const rows = shownTreeItems(tree);
-        const index = item ? rows.indexOf(item) : -1;
-        const rtl = isRtl(tree);
-        let next: HTMLElement | null | undefined;
+        const key =
+            event.target instanceof HTMLElement && event.target.getAttribute("role") === "treeitem"
+                ? event.target.dataset.treeKey
+                : undefined;
+        const items = rows.filter(isItem);
+        const index = key === undefined ? -1 : items.findIndex((item) => item.id === key);
+        const item = index >= 0 ? items[index] : undefined;
+        const rtl = isRtl(event.currentTarget);
+        let next: TreeItemRow | undefined;
 
         switch (event.key) {
             case "ArrowDown":
-                next = rows[index + 1];
+                next = items[index + 1];
                 break;
             case "ArrowUp":
-                next = index < 0 ? rows[0] : rows[index - 1];
+                next = index < 0 ? items[0] : items[index - 1];
                 break;
             case "Home":
-                next = rows[0];
+                next = items[0];
                 break;
             case "End":
-                next = rows.at(-1);
+                next = items.at(-1);
                 break;
             // Into an expanded row, to its first folder, and out of a collapsed one, to the row above.
-            case rtl ? "ArrowLeft" : "ArrowRight":
+            case rtl ? "ArrowLeft" : "ArrowRight": {
+                const below = items[index + 1];
+
                 next =
-                    item?.getAttribute("aria-expanded") === "true"
-                        ? item.querySelector<HTMLElement>('[role="treeitem"]')
-                        : null;
+                    item?.kind !== "error" && item?.expanded && below && below.depth > item.depth ? below : undefined;
                 break;
+            }
             case rtl ? "ArrowRight" : "ArrowLeft":
-                next = item?.parentElement?.closest<HTMLElement>('[role="treeitem"]');
+                next = item && items.slice(0, index).findLast((row) => row.depth < item.depth);
                 break;
             default:
                 if (isTypingKey(event)) {
-                    const names = rows.map((row) => row.getAttribute("aria-label") ?? "");
-                    const match = matchName(names, Math.max(index, 0), typeAhead.type(event.key));
+                    const match = matchName(
+                        items.map((row) => row.label),
+                        Math.max(index, 0),
+                        typeAhead.type(event.key),
+                    );
 
-                    next = rows[match];
+                    next = items[match];
                     event.preventDefault();
                 }
         }
 
-        if (next && tree.contains(next)) {
+        if (next) {
             event.preventDefault();
-            focusTreeItem(next);
+            focusRow(next.id);
         }
     };
 
-    // A single section that hides its folders still gets its row, so the sidebar isn't left empty.
-    const tree = single && single.showFolders !== false ? single : null;
+    // The row a drag starts from, found once the drag has bubbled up from it.
+    const handleDragStart = (event: DragEvent) => {
+        const item = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-tree-key]") : null;
+
+        setGrabbedKey(item?.dataset.treeKey ?? null);
+    };
+
+    const renderItem = (row: TreeItemRow | StatusRow) => (
+        <TreeRowItem
+            key={row.id}
+            row={row}
+            openKey={openKey}
+            selection={selection}
+            onToggle={onToggle}
+            onExpand={onExpand}
+            onNavigate={handleNavigate}
+            onSelectFolder={select}
+            onSelectSection={selectSection}
+            onOpenMenu={onOpenMenu}
+            onShortcut={onShortcut}
+        />
+    );
 
     return (
         <Box ref={ref} sx={sidebarSx} data-open={open} onKeyDown={handleKeyDown} onBlur={handleBlur}>
@@ -312,63 +441,71 @@ const Sidebar = ({
             </Box>
             <Box component="nav" aria-label="Sidebar" sx={navSx}>
                 <Box
-                    ref={treeRef}
+                    ref={treeElement}
                     role="tree"
                     aria-label={tree ? tree.label : "Sections"}
                     aria-multiselectable
                     tabIndex={focusInside ? -1 : 0}
                     sx={treeSx}
+                    style={{ height }}
                     onFocus={handleTreeFocus}
                     onBlur={handleTreeBlur}
                     onKeyDown={handleTreeKeyDown}
+                    onDragStart={handleDragStart}
                 >
+                    {/* Behind the rows, as they're first in the page. */}
+                    {guides
+                        .filter((guide) => guide.top < span.bottom && guide.bottom > span.top)
+                        .map((guide) => (
+                            <GuideLine key={`${guide.depth}:${guide.top}`} guide={guide} />
+                        ))}
                     {tree && (
-                        <Box component="ul" role="none" sx={rootListSx}>
-                            <SectionTree
-                                section={tree}
-                                expanded={expanded}
-                                openKey={openKey}
-                                selection={selection}
-                                onToggle={onToggle}
-                                onExpand={onExpand}
-                                onNavigate={handleNavigate}
-                                onSelectFolder={select}
-                                onSelectSection={selectSection}
-                                onOpenMenu={onOpenMenu}
-                                onShortcut={onShortcut}
-                            />
+                        <Box component="ul" role="none" sx={listSx}>
+                            {shown.filter(isListed).map(renderItem)}
                         </Box>
                     )}
                     {/* Each group is a `group` of the tree, named by its title, which is hidden from screen
                         readers so it isn't read twice. */}
-                    {!tree && groups.map((group, index) => (
-                        <Fragment key={group.id}>
-                            {index > 0 && <Divider sx={dividerSx} aria-hidden />}
-                            {group.title && (
-                                <Typography variant="caption" sx={groupTitleSx} aria-hidden>
-                                    {group.title}
-                                </Typography>
-                            )}
-                            <Box component="ul" role="group" aria-label={group.title} sx={listSx}>
-                                {group.sections.map((section) => (
-                                    <SectionItem
-                                        key={section.id}
-                                        section={section}
-                                        expanded={expanded}
-                                        openKey={openKey}
-                                        selection={selection}
-                                        onToggle={onToggle}
-                                        onExpand={onExpand}
-                                        onNavigate={handleNavigate}
-                                        onSelectFolder={select}
-                                        onSelectSection={selectSection}
-                                        onOpenMenu={onOpenMenu}
-                                        onShortcut={onShortcut}
-                                    />
-                                ))}
-                            </Box>
-                        </Fragment>
-                    ))}
+                    {!tree &&
+                        groups.map((group, index) => {
+                            const inGroup = shown.filter((row) => row.group === index);
+                            const items = inGroup.filter(isListed);
+
+                            return (
+                                <Fragment key={group.id}>
+                                    {inGroup.map((row) => {
+                                        if (row.kind === "divider") {
+                                            return (
+                                                <Box key={row.id} sx={ruleSx} style={placeStyle(row)} aria-hidden>
+                                                    <Divider sx={dividerSx} />
+                                                </Box>
+                                            );
+                                        }
+
+                                        if (row.kind === "caption") {
+                                            return (
+                                                <Typography
+                                                    key={row.id}
+                                                    variant="caption"
+                                                    sx={groupTitleSx}
+                                                    style={placeStyle(row)}
+                                                    aria-hidden
+                                                >
+                                                    {row.title}
+                                                </Typography>
+                                            );
+                                        }
+
+                                        return null;
+                                    })}
+                                    {items.length > 0 && (
+                                        <Box component="ul" role="group" aria-label={group.title} sx={listSx}>
+                                            {items.map(renderItem)}
+                                        </Box>
+                                    )}
+                                </Fragment>
+                            );
+                        })}
                 </Box>
             </Box>
         </Box>

@@ -18,4 +18,25 @@ export type { Place } from "./navigation";
 export type { FolderRef, Section, SectionGroup, SectionImports } from "./section";
 export type { EntrySelection, SelectModifiers, TreeSelection, TreeTarget } from "./selection";
 export type { DroppedFiles, UploadItem, UploadStatus } from "./upload";
-export type { EntryLayout, FileViewProps, SortDirection, SortKey, SortOrder, ViewMode, VirtualLines } from "./view";
+export type {
+    CaptionRow,
+    DividerRow,
+    ErrorRow,
+    FlatTree,
+    FolderRow,
+    SectionRow,
+    StatusRow,
+    TreeGuide,
+    TreeItemRow,
+    TreeRow,
+} from "./tree";
+export type {
+    EntryLayout,
+    FileViewProps,
+    ScrollTarget,
+    SortDirection,
+    SortKey,
+    SortOrder,
+    ViewMode,
+    VirtualLines,
+} from "./view";

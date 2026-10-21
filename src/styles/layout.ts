@@ -21,3 +21,12 @@ export const SIDEBAR_WIDTH = 248;
 
 /** Shared by the sidebar header and the main header bar so the two line up. */
 export const HEADER_HEIGHT = 52;
+
+/*
+ * Heights of the sidebar tree's rows, in px. The tree only renders the rows in or near view, and
+ * places each one itself from these.
+ */
+export const TREE_SECTION_HEIGHT = 36;
+export const TREE_FOLDER_HEIGHT = 30;
+export const TREE_CAPTION_HEIGHT = 28;
+export const TREE_DIVIDER_HEIGHT = 17;
