@@ -19,7 +19,7 @@ A file is opened by double-clicking it, Enter or Alt+Down on it, a touch tap out
 
 ## The adapter's `content`
 
-`content(entry, { signal })` resolves with a `FileContent`: `{ url }` or `{ blob }`. It's called only for files the preview can show, so describing a zip downloads nothing, and the signal aborts as the preview steps on or closes. Downloading, when it comes, is meant to use it too.
+`content(entry, { signal })` resolves with a `FileContent`: `{ url }` or `{ blob }`. It's called only for files the preview can show, so describing a zip downloads nothing, and the signal aborts as the preview steps on or closes. Downloading, when it comes, is meant to use it too. The list's and the grid's thumbnails come from the adapter's separate `thumbnail`, never from `content` (see `thumbnails.md`).
 
 - A URL is used as it is, as the `src` of an `<img>`, `<video>`, `<audio>` or `<iframe>`, so it streams and caches as any URL does. Text is fetched from it, which needs CORS on another origin, and only the first `TEXT_LIMIT` bytes are read before the download is cancelled.
 - A blob is shown through an object URL, revoked once the preview moves on or closes, or read in part for text. What was loaded goes with it, so coming back to a file loads it afresh.
@@ -59,4 +59,4 @@ A single file steps through the files of the view it's listed in, in the content
 
 ## Not yet
 
-Thumbnails in the grid, downloading, the consumer's actions in the preview's header, loading the next file ahead, swiping on touch, zooming images, full screen, highlighted code or rendered Markdown, and fonts, office documents or archives' contents.
+Downloading, the consumer's actions in the preview's header, loading the next file ahead, swiping on touch, zooming images, full screen, highlighted code or rendered Markdown, and fonts, office documents or archives' contents.

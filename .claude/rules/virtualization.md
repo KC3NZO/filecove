@@ -33,6 +33,7 @@ Entries go in lines of equal height: one row per line in the list, as many tiles
 - The listbox's `height` covers every line, so the panel scrolls as far as it would with every entry rendered.
 - The hook renders the lines `shownSpan` covers.
 - Rows (`FileRow`) and tiles (`FileTile`) are memoized, so scrolling only renders the ones coming into view.
+- Only rendered entries ask for their thumbnails, and one scrolled away before its thumbnail came drops the request (see `thumbnails.md`).
 - The zebra stripe follows the entry's index (`data-striped`), not `:nth-of-type`, since the rendered rows aren't consecutive.
 
 ### What stays rendered
