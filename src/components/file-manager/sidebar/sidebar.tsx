@@ -165,8 +165,11 @@ const isItem = (row: TreeRow): row is TreeItemRow =>
 const isListed = (row: TreeRow): row is TreeItemRow | StatusRow =>
     row.kind !== "caption" && row.kind !== "divider";
 
+// Compares the keys rather than selecting by one: a row's key is a `folderKey`, which holds a NUL,
+// and a selector turns that into U+FFFD, so it never matches. Only the rows in or near view are rendered.
 const rowElement = (tree: HTMLElement | null, id: string) =>
-    tree?.querySelector<HTMLElement>(`[data-tree-key="${CSS.escape(id)}"]`) ?? null;
+    Array.from(tree?.querySelectorAll<HTMLElement>("[data-tree-key]") ?? []).find((row) => row.dataset.treeKey === id) ??
+    null;
 
 /**
  * The sidebar: the file manager's title and a tree of its sections and their folders, or of a
