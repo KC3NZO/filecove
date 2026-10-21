@@ -21,7 +21,7 @@ A key press goes to the consumer's shortcuts before the component's own keys, so
 
 | Where | Keys |
 |---|---|
-| Anywhere in the file manager (`file-manager.tsx`) | F6 between the sidebar tree and the content, F9 to show and hide the collapsed sidebar, Alt+Left and Alt+Right for back and forward |
+| Anywhere in the file manager (`file-manager.tsx`) | F6 between the sidebar tree and the content, F9 to show and hide the sidebar, Alt+Left and Alt+Right for back and forward |
 | Content (`content/folder-view.tsx`) | arrows, Home, End, PageUp, PageDown, Space, Shift+Space, Enter, Alt+Down, Backspace, Alt+Up, Ctrl+A, Escape, typing, Menu or Shift+F10 |
 | Sidebar tree (`sidebar/sidebar.tsx`, `TreeItem` in `sidebar/location-item.tsx`) | Up, Down, Home, End, Right, Left, Enter, Space, Shift+Space, typing, Menu or Shift+F10, Escape (closes the overlay) |
 | "Move to…" and "Copy to…" (`dialogs/transfer-dialog.tsx`) | Up, Down, Home, End, PageUp, PageDown, typing, Enter or Space to open, Backspace or Alt+Up to go up |
@@ -64,20 +64,21 @@ The sidebar's `nav` holds one `tree` (`aria-multiselectable`). The tree is flat,
 - A row that goes while focused, as a folder deleted or moved away does, hands the focus to the row shown before it, found among the rows of the render before (`previousRows`), since the focus has dropped to the page by then.
 - A folder that couldn't be listed shows a `treeitem` "Couldn't load. Retry", which Enter, Space or its link retries.
 
-### The overlay
+### The overlay and the hidden sidebar
 
 Below `rootWide` the sidebar is collapsed, and two keys open it besides the "Show sidebar" button: F9 shows and hides it, as in GNOME Files, and F6 opens it from anywhere outside it. It takes the focus as it opens.
 
 - `openSidebar` keeps what had the focus (`sidebarOpener`), and `closeSidebar` gives the focus back to it, or to the "Show sidebar" button when it's gone, if the focus was in the overlay. Escape and F9 close it so.
 - Focus moving on to the rest of the file manager, by Tab or F6 for instance, closes it as a click behind it does, and leaves the focus where it went. Focus going to a menu or dialog, outside the file manager, keeps it open.
-- Docked, F9 does nothing and is left to the browser, since a docked sidebar can't be hidden yet, and closing never moves the focus.
-- `overlays()` in `file-manager.tsx` tells the two modes apart from the sidebar's computed `position`, as container queries decide it.
+- Docked, F9 hides and shows the sidebar (`showDocked`; see "Hiding the docked sidebar" in `file-manager.md`). Hidden with the focus in it, it hands the focus to the content. Shown from the "Show sidebar" button, which only shows while the sidebar is hidden and so goes, the tree takes the focus; shown with F9 from anywhere else, the focus stays where it is. F6 passes a hidden sidebar by, to the content.
+- `overlays()` in `file-manager.tsx` tells the two modes apart from the sidebar's computed `position`, as container queries decide it, even while the docked sidebar is hidden.
 
 ## Move and copy dialog
 
 The transfer picker's folder list (`dialogs/transfer-dialog.tsx`) is one tab stop, focused once the dialog has faded in (the transition's `onEntered`, since the closing context menu takes back focus given any sooner), so the path bar, the list and the buttons are three stops rather than one per folder.
 
 - Rows are `ListItemButton`s in `ListItem`s with a roving `tabIndex`. The arrows, Home, End, PageUp and PageDown move between the rows that can be opened, skipping the entries themselves, and typing finds one by name (`stepIndex`, `matchName`), without spaces, since Space opens a row.
+- Only the rows in or near view are rendered (see `virtualization.md`), and the row with the Tab stop. A key moving to a row that isn't rendered gives it the Tab stop, which renders it, and `pendingFocus` focuses it a render later. `settleFocus` waits for the rows to be in their places (`settled()`), then focuses the row and scrolls to it, so going up to a folder far down the list lands on it. Each `ListItem` carries `aria-setsize` and `aria-posinset`.
 - Enter or Space opens the focused folder or section, as a click does, and Backspace or Alt+Up goes up as the Back button does (`canGoUp`).
 - Opening a folder or going up from the list keeps the focus in it (`pendingFocus`, settled after each render from the row with `tabindex="0"`): on the first row, or going up, on the folder left through (`folderLeft`), or the section left when going back to the list of sections. While a folder loads, or when it has no folders, the box in the list's place holds the focus, still taking Backspace, and is a `group` named by the folder. The conflict step's Back gives the focus back to the list.
 - Going up with the path bar or the Back button leaves the focus there, but the folder left through still gets the list's Tab stop.
@@ -86,6 +87,6 @@ The transfer picker's folder list (`dialogs/transfer-dialog.tsx`) is one tab sto
 
 MUI's `Menu` gives the arrows, Enter, Escape and type-ahead, and gives the focus back on closing. Items carry `aria-keyshortcuts` (`ariaShortcut`, with ⌘ as Meta alongside Control). A `contextmenu` event inside the open menu, which some browsers send on releasing the Menu key that just opened it, leaves it open.
 
-## Not yet
+## Moving and copying
 
-A one-step keyboard drop onto a folder; moving and copying go through cut and paste or the transfer dialog. Hiding the docked sidebar, with F9 or otherwise.
+There's no keyboard drag and drop, by choice. Cut or copy, then paste, does what a drop does: Ctrl+V on a tree row pastes into that folder, and in the content "Paste into folder" from a folder's menu (Menu key), across panes with F6. "Move to…" and "Copy to…" pick a folder from a list.

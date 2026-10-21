@@ -7,6 +7,7 @@ paths:
   - "src/hooks/use-marquee.ts"
   - "src/components/file-manager/content/**"
   - "src/components/file-manager/sidebar/**"
+  - "src/components/file-manager/dialogs/transfer-dialog.tsx"
   - "src/utils/dom.ts"
   - "src/types/view.ts"
   - "src/types/tree.ts"
@@ -14,9 +15,9 @@ paths:
 
 # Virtualization
 
-The content and the sidebar tree render only what's in or near their scroll panel, so a folder of thousands of entries, or of thousands of folders in the tree, lists, scrolls and selects as fast as a small one. The transfer picker's folder list still renders every folder.
+The content, the sidebar tree and the transfer picker's folder list render only what's in or near their scroll panel, so a folder of thousands of entries, or of thousands of folders in the tree or the picker, lists, scrolls and selects as fast as a small one.
 
-Both build on `hooks/use-scroll-measure.ts`, which measures a list against the panel it scrolls in: after every render, on the panel's `scroll`, and on resizing (a `ResizeObserver` on the list and the panel). A scroll or resize that changes the measure is rendered under `flushSync`, so what scrolls in appears in the same frame. `shownSpan` gives the part of the list the panel shows, widened by `OVERSCAN` (400px); without a scrolling ancestor it's null, and everything is rendered. The list's ref is a callback ref that tears down when called with null, rather than returning a cleanup, which React 18 would ignore.
+All three build on `hooks/use-scroll-measure.ts`, which measures a list against the panel it scrolls in: after every render, on the panel's `scroll`, and on resizing (a `ResizeObserver` on the list and the panel). A scroll or resize that changes the measure is rendered under `flushSync`, so what scrolls in appears in the same frame. `shownSpan` gives the part of the list the panel shows, widened by `OVERSCAN` (400px); without a scrolling ancestor it's null, and everything is rendered. The list's ref is a callback ref that tears down when called with null, rather than returning a cleanup, which React 18 would ignore.
 
 ## The content
 
@@ -81,6 +82,14 @@ The tree is flattened into the rows it shows (`hooks/use-tree-rows.ts`, `FlatTre
 Keyboard navigation, the hand-off of the focus when the focused row goes, and finding the row to focus as the tree is tabbed to all go by the rows, not the page (see `keyboard.md`).
 
 The playground's `datasets` folder, in the API service section, holds 5,000 folders for trying this out.
+
+## The transfer picker
+
+The "Move to…" and "Copy to…" folder list (`dialogs/transfer-dialog.tsx`) uses `useVirtualLines` as the content's list view does: the `List` is a grid of one track, as tall as all its rows, inside a box that scrolls, and each rendered `ListItem` is placed at `index * pitch`.
+
+- Its items are the sections, on the list of sections, or the folders, the entries being moved among them (disabled), as `PickerItem`s. Names are kept to one line (`noWrap`), since every row must be as tall.
+- The row with the Tab stop stays rendered (`keep`). The keyboard side is in `keyboard.md`.
+- The scrolling box is keyed by the folder, so each opens scrolled to the top and measured afresh.
 
 ## Limits
 

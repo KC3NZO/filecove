@@ -11,7 +11,7 @@ These apply to the component in `src/`, not to the playground.
 
 The component adapts to the box it is placed in, not the viewport. `src/styles/layout.ts` defines two named containers and their breakpoints:
 
-- The root (`rootMedium`, `rootWide`). At `rootWide` (900px or wider) the sidebar docks; below it, the sidebar is an in-component overlay.
+- The root (`rootMedium`, `rootWide`). At `rootWide` (900px or wider) the sidebar docks, unless it's hidden (`data-hidden`, with the frame's `data-sidebar-hidden` giving the panels back their left margin); below it, the sidebar is an in-component overlay.
 - The content view (`viewMedium`, `viewWide`), which decides which list columns show.
 
 Use these constants as `sx` keys. Don't use `theme.breakpoints` or `useMediaQuery` inside the component. The one exception is `@media (hover: none)`, which detects a touch device rather than a size (it shows the header's Select button).

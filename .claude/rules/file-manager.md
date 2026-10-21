@@ -21,6 +21,16 @@ paths:
 - `forget(sectionId, folderIds)` drops the listings of those folders and of everything cached below them (`cachedTree`). Only use it on folders no enabled `useFolder` is showing, since nothing reloads them on its own.
 - In the sidebar, a folder's listing, once there is one, overrides the adapter's `hasSubfolders` hint for its chevron.
 
+### Paging
+
+An adapter may list a large folder in pages: `list` resolves with a `nextCursor`, and the store calls it again with that as `cursor`, page after page, until one comes without it. Every page is fetched, so a listing in the cache is always the whole folder, and sorting, clash checks, Select all and type-ahead stay right. Paging lets a backend cap its responses and shows the first entries sooner; it doesn't load less.
+
+- Listed for the first time, a folder shows what has come so far as `{ status: "loading", partial: true }` (`FolderState`), never with no entries, at most every `PAGE_INTERVAL` (500 ms) after the first page, since every showing sorts it again in the content and the tree. Listed again, it keeps its listing until the new one is complete, as it always has.
+- Whatever needs the whole folder waits until `partial` is gone: the paste and upload dialogs before looking for clashes, and the transfer picker's "Copy here" / "Move here" button. "Folder is empty" and the tree's "No folders" only show once the folder is `ready`, and a tree row keeps its spinner while pages come.
+- An entry a later page repeats, as offset paging can while the folder changes, is listed once. A page handing back the cursor it was given is an error, rather than a request loop.
+- `abortAll` keeps a complete listing being refreshed, but drops a partial one, so it's listed again. React's development double mount runs it.
+- The playground's mock adapter lists 2,500 entries a page, with the next offset as the cursor, so `archive` comes in four.
+
 ### Changes show in every section sharing the adapter
 
 Sections served by the same adapter object can show the same folders, under the same ids (ids are unique within an adapter), so whatever a dialog changes is handled in all of them, through two helpers in `file-manager.tsx`:
@@ -38,6 +48,15 @@ Sections served by the same adapter object can show the same folders, under the 
 - Breadcrumbs come from the trail, not from parsing ids. The path bar starts with the section label, followed by the folders below its root.
 - Navigating never expands or collapses the sidebar tree; only its chevrons, Right and Left on a row, and a drag resting on a row do (see "Drag and drop"), and the path bar shows where you are. Only the first section shown starts expanded.
 - Going up to a folder the open one is in, by any route, selects the folder left through, and opening a folder from the content takes the focus into it (`arrive`; see `keyboard.md`). The header's back and forward go through `goBack` and `goForward` for this, which read where they lead from `usePlaceHistory`'s `previous` and `next`.
+
+## Hiding the docked sidebar
+
+Below `rootWide` the sidebar is an overlay, opened and closed with `sidebarOpen`. Docked, it can be hidden instead, with `sidebarHidden` in `file-manager.tsx`, as in GNOME Files:
+
+- F9 hides and shows it (see `keyboard.md`), as does "Show sidebar" in the header's view menu, with F9 beside it. The menu portals out of the file manager, where its container queries don't reach, so it reads whether the sidebar docks as it opens (`sidebarDocked`, from the sidebar's computed `position`), and only offers the item then.
+- While it's hidden, the header shows the "Show sidebar" button and search, as it does while the sidebar is collapsed.
+- The sidebar takes `display: none` through `data-hidden`, only from `rootWide`, so a narrower root still has its overlay. The frame's `data-sidebar-hidden` gives the content and upload panels back their left margin (`besideSidebar`).
+- The state outlives the root's width changing: hidden, then narrowed and widened again, it's still hidden.
 
 ## Context menu and actions
 
@@ -65,7 +84,8 @@ Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names i
 
 - The picker browses folders only, starting in the entries' own folder, with the path bar and a back arrow to the folder above. Its folder list is one tab stop, moved through with the arrows (see `keyboard.md`). Only sections served by the same adapter object are offered (ids mean nothing to another adapter), and of those only the ones whose `importFrom` takes the entries' section (see "Sections taking entries from each other"); with more than one, going back from a root reaches a list of them.
 - The entries being copied or moved can't be opened, so a folder can never go into itself or below itself, without the component parsing ids. Moving into the entries' own folder is disabled.
-- Before running, the destination's cached listing is checked for names the entries share. Clashes get a second step with Replace, Keep both and Skip, passed as `conflict`; otherwise `conflict` is "keepBoth", so a clash the cache missed never overwrites anything. Copying into the entries' own folder keeps both without asking, as a duplicate.
+- Before running, the destination's cached listing is checked for names the entries share, so "Copy here" / "Move here" is disabled until all of it has come (see "Paging"). Clashes get a second step with Replace, Keep both and Skip, passed as `conflict`; otherwise `conflict` is "keepBoth", so a clash the cache missed never overwrites anything. Copying into the entries' own folder keeps both without asking, as a duplicate.
+- Its folder list renders only the rows in or near view (see `virtualization.md`).
 - Progress, cancelling and errors work as in the name dialog. Afterwards the destination is listed again, and for a move the source too, with the listings holding them (`relist`).
 - After a move, moved folders go through `dropFolders`, and the open place, if it's inside one in any section showing it, goes to the destination instead.
 - Not yet: a New folder button in the picker, an operations panel for long transfers, and copying between adapters.
@@ -127,7 +147,7 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 
   The menu is the only control in the grid view, and in a list too narrow for its header row.
 - The sidebar tree ignores it and stays by name (`compareEntries`). Section order is the consumer's.
-- The same menu has a "Show hidden files" checkbox whose state isn't applied to listings yet.
+- The same menu has a "Show hidden files" checkbox whose state isn't applied to listings yet, and, while the sidebar docks, "Show sidebar" (see "Hiding the docked sidebar").
 
 ## The parts
 

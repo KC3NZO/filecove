@@ -40,7 +40,7 @@ Imports are relative, with no path alias. The only barrels are `src/index.ts` an
 
 `FileManager` (`src/components/file-manager/file-manager.tsx`) is a file manager for the web, so it has no built-in locations (no Home, Trash or Network). The consumer supplies everything:
 
-- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal })` returns `{ entries }` for one folder, called only when a folder is first opened or expanded. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working. Optional members switch features on: `createFolder`, `rename`, `copy`, `move`, `delete` and `upload` so far.
+- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal, cursor })` returns `{ entries, nextCursor }` for one folder, called only when a folder is first opened or expanded, and again for each further page while it hands back a `nextCursor`. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working. Optional members switch features on: `createFolder`, `rename`, `copy`, `move`, `delete` and `upload` so far.
 - **`sections`** is `SectionGroup[]`. Each `Section` (id, label, icon, `rootId`, optional own `adapter`, optional `showFolders`, optional `importFrom`) is an independent root, with no connection to other sections even when they share an adapter. A single `section` can be passed instead, and its folders then fill the sidebar (see `file-manager.md`).
 - **`actions`** is `ActionGroup[]` for the context menu.
 
@@ -62,11 +62,11 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `material-ui.md` | `sx` objects, per-component and per-icon imports | `src/`, `playground/` |
 | `types.md` | where types live | `src/` |
 | `component-styling.md` | container queries, palette tokens, CSS custom properties | `src/` |
-| `file-manager.md` | data store, navigation, context menu, sorting, the parts | `src/components/file-manager/`, `hooks/`, `store/`, `utils/` |
+| `file-manager.md` | data store and paging, navigation, hiding the sidebar, context menu, sorting, the parts | `src/components/file-manager/`, `hooks/`, `store/`, `utils/` |
 | `uploads.md` | the upload queue and panel, dropping files from the desktop, what's shared with the media manager | upload store, hook, panel, dialog and types, `use-drop-target.ts`, `types/adapter.ts` |
 | `selection.md` | content and sidebar selection, marquee, touch selection mode | selection components, hooks and utils |
 | `keyboard.md` | keyboard navigation, focus, ARIA roles of the content and the tree | the frame, content, sidebar, context menu, transfer dialog, keyboard utils |
-| `virtualization.md` | rendering only the entries and tree rows in or near view, the flattened sidebar tree, and what stays rendered | the content, the sidebar, the virtualization and tree-rows hooks, `use-marquee.ts`, `utils/dom.ts`, view and tree types |
+| `virtualization.md` | rendering only the entries, tree rows and picker folders in or near view, the flattened sidebar tree, and what stays rendered | the content, the sidebar, the transfer dialog, the virtualization and tree-rows hooks, `use-marquee.ts`, `utils/dom.ts`, view and tree types |
 | `icons.md` | icon packs, variants, `IconProvider`, adding an icon | `components/icons/`, `icon-sets/`, icon types |
 
 When a feature is added or changed, document it in the matching rule (or a new one), not here. This file stays for things every session needs.
