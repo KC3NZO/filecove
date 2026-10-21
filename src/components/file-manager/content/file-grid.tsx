@@ -6,6 +6,7 @@ import { viewMedium } from "../../../styles/layout";
 import {
     cutMarker,
     dragMarkers,
+    focusVisibleRing,
     hoverBackground,
     selectedBackground,
     selectedHoverBackground,
@@ -46,6 +47,7 @@ const tileSx: SxProps<Theme> = (theme) => ({
     '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
     "& > svg": { flexShrink: 0 },
     ...cutMarker,
+    ...focusVisibleRing,
     ...dragMarkers(theme),
 });
 
@@ -59,8 +61,14 @@ const nameSx: SxProps<Theme> = {
     lineHeight: 1.35,
 };
 
+/**
+ * The entries as tiles, a listbox with one option per entry, which the arrow keys move through in
+ * two directions. Only the focused tile is in the tab order.
+ */
 const FileGrid = ({
     entries,
+    label,
+    focusId,
     selectedIds,
     cutIds,
     draggable,
@@ -70,11 +78,14 @@ const FileGrid = ({
     onOpen,
     onMenu,
 }: FileViewProps) => (
-    <Box sx={gridSx}>
+    <Box sx={gridSx} role="listbox" aria-label={label} aria-multiselectable>
         {entries.map((entry) => (
             <Box
                 key={entry.id}
                 sx={tileSx}
+                role="option"
+                aria-selected={selectedIds.has(entry.id)}
+                tabIndex={entry.id === focusId ? 0 : -1}
                 draggable={draggable}
                 data-entry-id={entry.id}
                 data-no-marquee

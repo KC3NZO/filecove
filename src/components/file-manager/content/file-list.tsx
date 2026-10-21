@@ -9,10 +9,12 @@ import {
     cutMarker,
     dragMarkers,
     focusRing,
+    focusVisibleRing,
     hoverBackground,
     selectedBackground,
     selectedHoverBackground,
     stripeBackground,
+    visuallyHiddenSx,
 } from "../../../styles/mixins";
 import { describeDate, describeSize, describeType } from "../../../utils/format";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
@@ -88,14 +90,17 @@ const rowSx: SxProps<Theme> = (theme) => ({
     "&:hover": { bgcolor: hoverBackground(theme) },
     '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
     '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
-    // The menu button shows on hover, on focus and for the selected row; always on touch screens.
+    // The menu button shows on hover, for the selected row and the row with keyboard focus; always
+    // on touch screens.
     "& [data-menu-button]": { opacity: 0 },
-    '&:hover [data-menu-button], &[data-selected="true"] [data-menu-button], & [data-menu-button].Mui-focusVisible':
-        { opacity: 1 },
+    '&:hover [data-menu-button], &[data-selected="true"] [data-menu-button], &:focus-visible [data-menu-button]': {
+        opacity: 1,
+    },
     "@media (hover: none)": { "& [data-menu-button]": { opacity: 1 } },
     // A row scrolled into view stops below the sticky column header rather than under it.
     [viewMedium]: { minHeight: 44, scrollMarginTop: "3rem" },
     ...cutMarker,
+    ...focusVisibleRing,
     ...dragMarkers(theme),
 });
 
@@ -174,8 +179,12 @@ const menuButtonSx: SxProps<Theme> = {
     color: "text.secondary",
 };
 
-/** A sortable column label: picks its key, or reverses the order when it already sorts by it. */
+/**
+ * A sortable column label: picks its key, or reverses the order when it already sorts by it. The
+ * column sorting the list tells screen readers its direction, which the arrow only shows.
+ */
 const ColumnHeader = ({ sortKey, sort, sx, onSortChange }: ColumnHeaderProps) => {
+    const info = SORT_KEY_INFO[sortKey];
     const active = sortKey === sort.key;
 
     return (
@@ -189,15 +198,27 @@ const ColumnHeader = ({ sortKey, sort, sx, onSortChange }: ColumnHeaderProps) =>
                     onSortChange(toggleSortKey(sort, sortKey));
                 }}
             >
-                {SORT_KEY_INFO[sortKey].label}
+                {info.label}
+                {active && (
+                    <Box component="span" sx={visuallyHiddenSx}>
+                        , sorted {info[sort.direction]}
+                    </Box>
+                )}
                 {active && <Icon name={sort.direction === "asc" ? "arrowUp" : "arrowDown"} sx={sortIconSx} />}
             </ButtonBase>
         </Box>
     );
 };
 
+/**
+ * The entries as rows, a listbox with one option per entry. Only the focused row is in the tab
+ * order; the folder view moves the focus between rows with the arrow keys. The menu buttons are
+ * for pointers alone, since the Menu key or Shift+F10 opens the same menu from the focused row.
+ */
 const FileList = ({
     entries,
+    label,
+    focusId,
     selectedIds,
     cutIds,
     draggable,
@@ -211,18 +232,21 @@ const FileList = ({
     onSortChange,
 }: FileViewProps) => (
     <Box sx={listSx}>
-        <Box sx={headerRowSx}>
+        <Box sx={headerRowSx} role="group" aria-label="Sort by">
             <ColumnHeader sortKey="name" sort={sort} sx={nameHeaderSx} onSortChange={onSortChange} />
             <ColumnHeader sortKey="size" sort={sort} onSortChange={onSortChange} />
             <ColumnHeader sortKey="type" sort={sort} sx={typeCellSx} onSortChange={onSortChange} />
             <ColumnHeader sortKey="modified" sort={sort} sx={modifiedHeaderSx} onSortChange={onSortChange} />
             <Box />
         </Box>
-        <Box sx={rowsSx}>
+        <Box sx={rowsSx} role="listbox" aria-label={label} aria-multiselectable>
             {entries.map((entry) => (
                 <Box
                     key={entry.id}
                     sx={rowSx}
+                    role="option"
+                    aria-selected={selectedIds.has(entry.id)}
+                    tabIndex={entry.id === focusId ? 0 : -1}
                     // The whole row is the entry's: it's dragged by any part, and a marquee only
                     // starts from the empty space around the rows.
                     draggable={draggable}
@@ -269,7 +293,8 @@ const FileList = ({
                         {hasActions && (
                             <IconButton
                                 size="small"
-                                aria-label={`Actions for ${entry.name}`}
+                                tabIndex={-1}
+                                aria-hidden
                                 data-menu-button
                                 sx={menuButtonSx}
                                 // Like a right-click: the menu decides whether it acts on the whole selection.

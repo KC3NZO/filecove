@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
@@ -27,6 +27,8 @@ interface HeaderBarProps {
     onToggleHidden: () => void;
     onToggleSelecting: () => void;
     onOpenSidebar: () => void;
+    /** The button that shows the collapsed sidebar, which takes the focus back when it closes. */
+    sidebarButtonRef?: Ref<HTMLButtonElement>;
 }
 
 // Narrow: the buttons on top and the path bar on a row of its own below them, just above the
@@ -105,10 +107,11 @@ const HeaderBar = ({
     onToggleHidden,
     onToggleSelecting,
     onOpenSidebar,
+    sidebarButtonRef,
 }: HeaderBarProps) => (
     <Box sx={headerSx}>
         <Box sx={startGroupSx}>
-            <IconButton aria-label="Show sidebar" sx={collapsedOnlySx} onClick={onOpenSidebar}>
+            <IconButton ref={sidebarButtonRef} aria-label="Show sidebar" sx={collapsedOnlySx} onClick={onOpenSidebar}>
                 <Icon name="menu" fontSize="small" />
             </IconButton>
             <IconButton aria-label="Back" disabled={!canGoBack} onClick={onBack}>

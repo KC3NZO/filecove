@@ -1,8 +1,7 @@
-import { useContext, useMemo } from "react";
-import type { CSSProperties, DOMAttributes, DragEvent, MouseEvent, ReactNode } from "react";
+import { useContext, useLayoutEffect, useMemo, useRef } from "react";
+import type { CSSProperties, DOMAttributes, DragEvent, KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 
 import Box from "@mui/material/Box";
-import ButtonBase from "@mui/material/ButtonBase";
 import CircularProgress from "@mui/material/CircularProgress";
 import Collapse from "@mui/material/Collapse";
 import Typography from "@mui/material/Typography";
@@ -18,12 +17,13 @@ import { folderKey } from "../../../store/folder-store";
 import {
     cutMarker,
     dragMarkers,
-    focusRing,
+    focusOutline,
     hoverBackground,
     selectedBackground,
     selectedHoverBackground,
 } from "../../../styles/mixins";
-import { pointerPosition } from "../../../utils/menu-position";
+import { focusTreeItem, isMenuKey, isRtl, neighbourTreeItem } from "../../../utils/keyboard";
+import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { selectModifiers } from "../../../utils/selection";
 import { compareEntries } from "../../../utils/sort";
@@ -38,6 +38,7 @@ import type {
     MenuPosition,
     OpenMenu,
     Place,
+    RunShortcut,
     Section,
     SelectModifiers,
     TreeSelection,
@@ -63,6 +64,7 @@ interface TreeProps {
     onSelectFolder: (target: TreeTarget, modifiers?: SelectModifiers) => void;
     onSelectSection: (key: string) => void;
     onOpenMenu: OpenMenu;
+    onShortcut: RunShortcut;
 }
 
 interface FolderItemProps extends TreeProps {
@@ -84,13 +86,22 @@ interface FolderChildrenProps extends TreeProps {
     onRetry: () => void;
 }
 
+interface ErrorItemProps {
+    depth: number;
+    onRetry: () => void;
+}
+
 type DragHandlers = Pick<
     DOMAttributes<HTMLElement>,
     "onDragStart" | "onDragEnter" | "onDragOver" | "onDragLeave" | "onDrop"
 >;
 
-interface TreeRowProps {
+interface TreeItemProps {
     variant: "section" | "folder";
+    /** `folderKey` of the folder, or of the section's root. */
+    treeKey: string;
+    /** 0 for a section, and for the top folders of a single section's tree. */
+    depth: number;
     icon: ReactNode;
     label: string;
     /** Part of the tree's selection. */
@@ -109,9 +120,18 @@ interface TreeRowProps {
     expandable: boolean;
     expanded: boolean;
     loading: boolean;
+    /** The folders below it, shown while it's expanded. */
+    children?: ReactNode;
+    /** A click on the row, which opens it or, with Ctrl or Shift, selects it. */
     onSelect: (event: MouseEvent) => void;
+    /** Opens it, for Enter. */
+    onOpen: () => void;
+    /** Selects it, for Space; Space opens it when this is missing, as Enter does. */
+    onSpace?: (modifiers: SelectModifiers) => void;
     onToggle: () => void;
     onMenu: (position: MenuPosition) => boolean;
+    /** Runs the action whose shortcut the key press matches; returns whether one did. */
+    onShortcut: (event: KeyboardEvent) => boolean;
 }
 
 /*
@@ -131,8 +151,30 @@ const depthStyle = (depth: number) => ({ "--depth": depth }) as CSSProperties;
 
 const isFolder = (entry: FileEntry) => entry.kind === "folder";
 
+/**
+ * Hands the focus on to the row shown before a tree row that goes while it has it, as a folder
+ * deleted or moved away does, so the focus isn't dropped to the page. It runs as the row unmounts,
+ * while its element is still in the page.
+ */
+const useFocusHandOff = (ref: RefObject<HTMLElement | null>) => {
+    useLayoutEffect(() => {
+        const item = ref.current;
+
+        return () => {
+            const neighbour = item?.contains(document.activeElement) && neighbourTreeItem(item);
+
+            if (neighbour) {
+                focusTreeItem(neighbour);
+            }
+        };
+    }, [ref]);
+};
+
+// The item takes the focus, but the row inside it shows the ring, since the item holds the rows
+// below it too.
 const itemSx: SxProps<Theme> = {
     listStyle: "none",
+    outline: "none",
 };
 
 const rowSx: SxProps<Theme> = (theme) => ({
@@ -145,31 +187,38 @@ const rowSx: SxProps<Theme> = (theme) => ({
     // The open folder keeps its accent text when the selection moves to other folders.
     '&[data-open="true"]': { color: "primary.main" },
     ...cutMarker,
+    '[role="treeitem"]:focus-visible > &': focusOutline,
     ...dragMarkers(theme),
 });
 
-const sectionButtonSx: SxProps<Theme> = {
+// The row's main part, which a click opens or selects. It's no button: the item around it takes
+// the focus and the keys.
+const mainPartSx = {
+    display: "flex",
+    alignItems: "center",
     width: "100%",
+    borderRadius: "inherit",
+    cursor: "pointer",
+    userSelect: "none",
+    WebkitTapHighlightColor: "transparent",
+} as const;
+
+const sectionButtonSx: SxProps<Theme> = {
+    ...mainPartSx,
     minHeight: 36,
-    justifyContent: "flex-start",
     gap: 1.5,
     pl: `${INSET}px`,
     // Room for the expand toggle on the right.
     pr: 4.5,
-    borderRadius: "inherit",
-    ...focusRing,
 };
 
 const folderButtonSx: SxProps<Theme> = {
-    width: "100%",
+    ...mainPartSx,
     minHeight: 30,
-    justifyContent: "flex-start",
     gap: 1,
     pl: indent(CHEVRON + 4),
     pr: 1,
-    borderRadius: "inherit",
     "& > svg": { flexShrink: 0 },
-    ...focusRing,
 };
 
 const sectionLabelSx: SxProps<Theme> = {
@@ -182,40 +231,42 @@ const folderLabelSx: SxProps<Theme> = {
     fontSize: "0.8125rem",
 };
 
+// The chevrons are for pointers; the keyboard expands and collapses with Right and Left.
+const toggleSx = {
+    position: "absolute",
+    top: "50%",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transform: "translateY(-50%)",
+    borderRadius: 1,
+    color: "text.secondary",
+    cursor: "pointer",
+    "&:hover": { bgcolor: "action.hover", color: "text.primary" },
+} as const;
+
 // Sections keep the plain GNOME look, so their toggle only shows on hover, on keyboard focus,
 // while expanded, or always on touch screens where there is no hover.
 const sectionToggleSx: SxProps<Theme> = {
-    position: "absolute",
-    top: "50%",
+    ...toggleSx,
     right: 6,
     width: 24,
     height: 24,
-    transform: "translateY(-50%)",
-    borderRadius: 1,
-    color: "text.secondary",
     opacity: 0,
     transition: "opacity 120ms",
-    "&:hover": { bgcolor: "action.hover", color: "text.primary" },
-    '*:hover > &, &.Mui-focusVisible, &[aria-expanded="true"]': { opacity: 1 },
+    '*:hover > &, [role="treeitem"]:focus-visible > * > &, &[data-expanded="true"]': { opacity: 1 },
     "@media (hover: none)": { opacity: 1 },
     "& > svg": { fontSize: "1.125rem", transition: "transform 150ms" },
-    '&[aria-expanded="true"] > svg': { transform: "rotate(90deg)" },
-    ...focusRing,
+    '&[data-expanded="true"] > svg': { transform: "rotate(90deg)" },
 };
 
 const folderToggleSx: SxProps<Theme> = {
-    position: "absolute",
-    top: "50%",
+    ...toggleSx,
     left: indent(0),
     width: CHEVRON,
     height: CHEVRON,
-    transform: "translateY(-50%)",
-    borderRadius: 1,
-    color: "text.secondary",
-    "&:hover": { bgcolor: "action.hover", color: "text.primary" },
     "& > svg": { fontSize: "1rem", transition: "transform 150ms" },
-    '&[aria-expanded="true"] > svg': { transform: "rotate(90deg)" },
-    ...focusRing,
+    '&[data-expanded="true"] > svg': { transform: "rotate(90deg)" },
 };
 
 const childListSx: SxProps<Theme> = {
@@ -242,23 +293,37 @@ const statusRowSx: SxProps<Theme> = {
     gap: 1,
     minHeight: 30,
     pl: indent(CHEVRON + 4),
+    borderRadius: 2,
     color: "text.secondary",
     fontSize: "0.8125rem",
+    outline: "none",
     '&[data-error="true"]': { color: "error.main" },
+    "&:focus-visible": focusOutline,
 };
 
 const retrySx: SxProps<Theme> = {
     px: 0.75,
     borderRadius: 1,
     color: "text.secondary",
-    fontSize: "inherit",
+    cursor: "pointer",
     textDecoration: "underline",
     "&:hover": { color: "text.primary" },
-    ...focusRing,
 };
 
-const TreeRow = ({
+/**
+ * A folder or section in the tree: a `treeitem` holding its row and the folders below it. Only
+ * the tree is in the tab order; it hands the focus to an item, and the arrow keys move it between
+ * them (`sidebar.tsx`). The item takes the keys that act on it:
+ *
+ * - Enter opens it, and Space selects it, Shift+Space from the anchor, or opens a section.
+ * - Right expands it and Left collapses it, the other way round right to left. Right on an
+ *   expanded item and Left on a collapsed one move the focus, which the tree does.
+ * - The Menu key or Shift+F10 opens its menu, and an action's shortcut runs on it.
+ */
+const TreeItem = ({
     variant,
+    treeKey,
+    depth,
     icon,
     label,
     selected,
@@ -271,11 +336,18 @@ const TreeRow = ({
     expandable,
     expanded,
     loading,
+    children,
     onSelect,
+    onOpen,
+    onSpace,
     onToggle,
     onMenu,
-}: TreeRowProps) => {
+    onShortcut,
+}: TreeItemProps) => {
     const isSection = variant === "section";
+    const itemRef = useRef<HTMLLIElement>(null);
+
+    useFocusHandOff(itemRef);
 
     const handleContextMenu = (event: MouseEvent) => {
         if (onMenu(pointerPosition(event))) {
@@ -283,40 +355,132 @@ const TreeRow = ({
         }
     };
 
+    const handleKeyDown = (event: KeyboardEvent<HTMLLIElement>) => {
+        // Items nest, so a key pressed on one bubbles up through the items above it, which leave it be.
+        if (event.target !== event.currentTarget) {
+            return;
+        }
+
+        if (isMenuKey(event)) {
+            event.preventDefault();
+            onMenu(belowElement(event.currentTarget.firstElementChild ?? event.currentTarget));
+
+            return;
+        }
+
+        if (onShortcut(event)) {
+            event.preventDefault();
+
+            return;
+        }
+
+        if (event.altKey) {
+            return;
+        }
+
+        const toggle = event.ctrlKey || event.metaKey;
+        const rtl = isRtl(event.currentTarget);
+
+        if (event.key === "Enter" && !toggle && !event.shiftKey) {
+            onOpen();
+        } else if (event.key === " ") {
+            if (onSpace) {
+                onSpace({ toggle: event.shiftKey ? toggle : true, range: event.shiftKey });
+            } else {
+                onOpen();
+            }
+        } else if (expandable && !expanded && event.key === (rtl ? "ArrowLeft" : "ArrowRight")) {
+            onToggle();
+        } else if (expandable && expanded && event.key === (rtl ? "ArrowRight" : "ArrowLeft")) {
+            onToggle();
+        } else {
+            return;
+        }
+
+        event.preventDefault();
+    };
+
     return (
         <Box
-            sx={rowSx}
-            draggable={draggable}
-            data-selected={selected}
-            data-open={open}
-            data-cut={cut}
-            data-dragged={dragged}
-            data-drop-target={dropTarget}
-            onContextMenu={handleContextMenu}
-            {...dragHandlers}
+            ref={itemRef}
+            component="li"
+            sx={itemSx}
+            style={depthStyle(depth)}
+            role="treeitem"
+            tabIndex={-1}
+            aria-label={label}
+            aria-level={depth + 1}
+            aria-selected={selected}
+            aria-expanded={expandable ? expanded : undefined}
+            aria-current={open ? "page" : undefined}
+            aria-busy={loading || undefined}
+            data-tree-key={treeKey}
+            onKeyDown={handleKeyDown}
         >
-            {/* A div rather than a button, since Firefox starts no drag from a button. */}
-            <ButtonBase
-                component="div"
-                sx={isSection ? sectionButtonSx : folderButtonSx}
-                aria-current={open ? "page" : undefined}
-                onClick={onSelect}
+            <Box
+                sx={rowSx}
+                draggable={draggable}
+                data-selected={selected}
+                data-open={open}
+                data-cut={cut}
+                data-dragged={dragged}
+                data-drop-target={dropTarget}
+                onContextMenu={handleContextMenu}
+                {...dragHandlers}
             >
-                {icon}
-                <Typography component="span" noWrap sx={isSection ? sectionLabelSx : folderLabelSx}>
-                    {label}
-                </Typography>
-            </ButtonBase>
-            {expandable && (
-                <ButtonBase
-                    sx={isSection ? sectionToggleSx : folderToggleSx}
-                    aria-label={`${label} folders`}
-                    aria-expanded={expanded}
-                    onClick={onToggle}
-                >
-                    {loading ? <CircularProgress size={12} color="inherit" /> : <Icon name="chevronRight" />}
-                </ButtonBase>
-            )}
+                <Box sx={isSection ? sectionButtonSx : folderButtonSx} onClick={onSelect}>
+                    {icon}
+                    <Typography component="span" noWrap sx={isSection ? sectionLabelSx : folderLabelSx}>
+                        {label}
+                    </Typography>
+                </Box>
+                {expandable && (
+                    <Box
+                        component="span"
+                        sx={isSection ? sectionToggleSx : folderToggleSx}
+                        aria-hidden
+                        data-expanded={expanded}
+                        onClick={onToggle}
+                    >
+                        {loading ? <CircularProgress size={12} color="inherit" /> : <Icon name="chevronRight" />}
+                    </Box>
+                )}
+            </Box>
+            {children}
+        </Box>
+    );
+};
+
+/** A row saying a folder's sub-folders couldn't be listed, which Enter, Space or its link lists again. */
+const ErrorItem = ({ depth, onRetry }: ErrorItemProps) => {
+    const itemRef = useRef<HTMLLIElement>(null);
+
+    useFocusHandOff(itemRef);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            onRetry();
+        }
+    };
+
+    return (
+        <Box
+            ref={itemRef}
+            component="li"
+            sx={statusRowSx}
+            style={depthStyle(depth)}
+            role="treeitem"
+            tabIndex={-1}
+            aria-level={depth + 1}
+            aria-label="Couldn't load. Retry"
+            data-error
+            onKeyDown={handleKeyDown}
+        >
+            Couldn't load
+            <Box component="span" sx={retrySx} onClick={onRetry}>
+                Retry
+            </Box>
         </Box>
     );
 };
@@ -328,14 +492,7 @@ const FolderChildren = ({ state, depth, trail, onRetry, ...tree }: FolderChildre
     const keys = useMemo(() => folders.map((entry) => folderKey(sectionId, entry.id)), [folders, sectionId]);
 
     if (state?.status === "error") {
-        return (
-            <Box component="li" sx={statusRowSx} style={depthStyle(depth)} data-error>
-                Couldn't load
-                <ButtonBase sx={retrySx} onClick={onRetry}>
-                    Retry
-                </ButtonBase>
-            </Box>
-        );
+        return <ErrorItem depth={depth} onRetry={onRetry} />;
     }
 
     return folders.map((entry) => (
@@ -352,8 +509,18 @@ const FolderChildren = ({ state, depth, trail, onRetry, ...tree }: FolderChildre
 };
 
 const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree }: FolderItemProps) => {
-    const { section, expanded, openKey, selection, onToggle, onExpand, onNavigate, onSelectFolder, onOpenMenu } =
-        tree;
+    const {
+        section,
+        expanded,
+        openKey,
+        selection,
+        onToggle,
+        onExpand,
+        onNavigate,
+        onSelectFolder,
+        onOpenMenu,
+        onShortcut,
+    } = tree;
     const key = folderKey(section.id, entry.id);
     const isExpanded = expanded.has(key);
     const { state, reload } = useFolder(section, entry.id, isExpanded && entry.hasSubfolders !== false);
@@ -384,6 +551,8 @@ const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree 
         order: siblingKeys,
     };
 
+    const open = () => onNavigate({ sectionId: section.id, trail });
+
     // Ctrl and Shift select without opening anything; a plain click opens the folder.
     const handleSelect = (event: MouseEvent) => {
         const modifiers = selectModifiers(event);
@@ -391,7 +560,7 @@ const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree 
         if (modifiers.toggle || modifiers.range) {
             onSelectFolder(target, modifiers);
         } else {
-            onNavigate({ sectionId: section.id, trail });
+            open();
         }
     };
 
@@ -401,53 +570,69 @@ const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree 
         onHold: hasNoFolders || isExpanded ? undefined : onExpand,
     });
 
-    // As in the content, a selected folder's menu acts on every selected folder, and so does a
-    // drag from it, while any other folder is selected on its own first and acted on alone.
+    // As in the content, a selected folder's menu acts on every selected folder, and so do a drag
+    // from it and a shortcut on it, while any other folder is acted on alone.
+    const actedOn = () =>
+        selected && selection
+            ? siblings.filter((sibling) => selection.ids.has(folderKey(section.id, sibling.id)))
+            : [entry];
+
+    // The menu and a drag select the folder they act on alone first.
     const takeSelection = () => {
         if (!selected) {
             onSelectFolder(target);
         }
 
-        return selected && selection
-            ? siblings.filter((sibling) => selection.ids.has(folderKey(section.id, sibling.id)))
-            : [entry];
+        return actedOn();
     };
 
     const handleMenu = (position: MenuPosition) =>
         onOpenMenu(position, { target: "selection", section, trail: parentTrail, entries: takeSelection() });
+
+    // An action for entries runs on the folder, and one for a folder runs in it, so Ctrl+V pastes
+    // into it and F5 lists it again.
+    const handleShortcut = (event: KeyboardEvent) =>
+        onShortcut(event, [
+            { target: "selection", section, trail: parentTrail, entries: actedOn() },
+            { target: "folder", section, trail, entries: [] },
+        ]);
 
     const handleDragStart = (event: DragEvent) => {
         drag?.start(event, () => ({ section, trail: parentTrail, entries: takeSelection(), grabbed: entry }));
     };
 
     return (
-        <Box component="li" sx={itemSx} style={depthStyle(depth)}>
-            <TreeRow
-                variant="folder"
-                icon={<FolderTypeIcon folderName={entry.name} size="1.125rem" />}
-                label={entry.name}
-                selected={selected}
-                open={key === openKey}
-                cut={cutIds.has(entry.id)}
-                draggable={draggable}
-                dragged={draggedIds.has(entry.id)}
-                dropTarget={drop.dropKey !== null}
-                dragHandlers={{ ...drop.handlers, onDragStart: draggable ? handleDragStart : undefined }}
-                expandable={!hasNoFolders}
-                expanded={isExpanded}
-                loading={state?.status === "loading" && !state.entries}
-                onSelect={handleSelect}
-                onToggle={() => onToggle(key)}
-                onMenu={handleMenu}
-            />
+        <TreeItem
+            variant="folder"
+            treeKey={key}
+            depth={depth}
+            icon={<FolderTypeIcon folderName={entry.name} size="1.125rem" />}
+            label={entry.name}
+            selected={selected}
+            open={key === openKey}
+            cut={cutIds.has(entry.id)}
+            draggable={draggable}
+            dragged={draggedIds.has(entry.id)}
+            dropTarget={drop.dropKey !== null}
+            dragHandlers={{ ...drop.handlers, onDragStart: draggable ? handleDragStart : undefined }}
+            expandable={!hasNoFolders}
+            expanded={isExpanded}
+            loading={state?.status === "loading" && !state.entries}
+            onSelect={handleSelect}
+            onOpen={open}
+            onSpace={(modifiers) => onSelectFolder(target, modifiers)}
+            onToggle={() => onToggle(key)}
+            onMenu={handleMenu}
+            onShortcut={handleShortcut}
+        >
             {!hasNoFolders && (
                 <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                    <Box component="ul" sx={childListSx}>
+                    <Box component="ul" role="group" sx={childListSx}>
                         <FolderChildren {...tree} state={state} depth={depth + 1} trail={trail} onRetry={reload} />
                     </Box>
                 </Collapse>
             )}
-        </Box>
+        </TreeItem>
     );
 };
 
@@ -456,8 +641,18 @@ const FolderItem = ({ entry, depth, parentTrail, siblings, siblingKeys, ...tree 
  * a root, not a folder that can be selected with others, so Ctrl and Shift just open it.
  */
 const SectionItem = (tree: TreeProps) => {
-    const { section, expanded, openKey, selection, onToggle, onExpand, onNavigate, onSelectSection, onOpenMenu } =
-        tree;
+    const {
+        section,
+        expanded,
+        openKey,
+        selection,
+        onToggle,
+        onExpand,
+        onNavigate,
+        onSelectSection,
+        onOpenMenu,
+        onShortcut,
+    } = tree;
     const key = folderKey(section.id, section.rootId);
     const showFolders = section.showFolders !== false;
     const isExpanded = showFolders && expanded.has(key);
@@ -471,6 +666,8 @@ const SectionItem = (tree: TreeProps) => {
         onHold: hasNoFolders || isExpanded ? undefined : onExpand,
     });
 
+    const open = () => onNavigate({ sectionId: section.id, trail: ROOT_TRAIL });
+
     // Its menu is about the section's root folder, so it alone becomes the selection meanwhile.
     const handleMenu = (position: MenuPosition) => {
         onSelectSection(key);
@@ -478,31 +675,38 @@ const SectionItem = (tree: TreeProps) => {
         return onOpenMenu(position, { target: "folder", section, trail: ROOT_TRAIL, entries: [] });
     };
 
+    // As with its menu, a shortcut runs in the section's root folder.
+    const handleShortcut = (event: KeyboardEvent) =>
+        onShortcut(event, [{ target: "folder", section, trail: ROOT_TRAIL, entries: [] }]);
+
     return (
-        <Box component="li" sx={itemSx} style={depthStyle(0)}>
-            <TreeRow
-                variant="section"
-                icon={<IconSlot icon={section.icon ?? "folder"} />}
-                label={section.label}
-                selected={selection ? selection.ids.has(key) : key === openKey}
-                open={key === openKey}
-                dropTarget={drop.dropKey !== null}
-                dragHandlers={drop.handlers}
-                expandable={!hasNoFolders}
-                expanded={isExpanded}
-                loading={state?.status === "loading" && !state.entries}
-                onSelect={() => onNavigate({ sectionId: section.id, trail: ROOT_TRAIL })}
-                onToggle={() => onToggle(key)}
-                onMenu={handleMenu}
-            />
+        <TreeItem
+            variant="section"
+            treeKey={key}
+            depth={0}
+            icon={<IconSlot icon={section.icon ?? "folder"} />}
+            label={section.label}
+            selected={selection ? selection.ids.has(key) : key === openKey}
+            open={key === openKey}
+            dropTarget={drop.dropKey !== null}
+            dragHandlers={drop.handlers}
+            expandable={!hasNoFolders}
+            expanded={isExpanded}
+            loading={state?.status === "loading" && !state.entries}
+            onSelect={open}
+            onOpen={open}
+            onToggle={() => onToggle(key)}
+            onMenu={handleMenu}
+            onShortcut={handleShortcut}
+        >
             {!hasNoFolders && (
                 <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                    <Box component="ul" sx={childListSx}>
+                    <Box component="ul" role="group" sx={childListSx}>
                         <FolderChildren {...tree} state={state} depth={1} trail={ROOT_TRAIL} onRetry={reload} />
                     </Box>
                 </Collapse>
             )}
-        </Box>
+        </TreeItem>
     );
 };
 
@@ -516,7 +720,7 @@ export const SectionTree = (tree: TreeProps) => {
 
     if (!state || (state.status === "loading" && !state.entries)) {
         return (
-            <Box component="li" sx={statusRowSx} style={depthStyle(0)}>
+            <Box component="li" role="none" sx={statusRowSx} style={depthStyle(0)}>
                 <CircularProgress size={12} color="inherit" />
                 Loading
             </Box>
@@ -525,7 +729,7 @@ export const SectionTree = (tree: TreeProps) => {
 
     if (state.status === "ready" && !state.entries?.some(isFolder)) {
         return (
-            <Box component="li" sx={statusRowSx} style={depthStyle(0)}>
+            <Box component="li" role="none" sx={statusRowSx} style={depthStyle(0)}>
                 No folders
             </Box>
         );

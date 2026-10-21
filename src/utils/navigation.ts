@@ -5,6 +5,17 @@ export const folderOf = (section: Section, trail: FolderRef[]): FolderRef =>
     trail.at(-1) ?? { id: section.rootId, name: section.label };
 
 /**
+ * The folder left by going from `from` up to `to`, a folder above it in the same section: the one
+ * on `from`'s trail right below `to`. Undefined when `to` isn't above `from`.
+ */
+export const folderLeft = (from: Place, to: Place): FolderRef | undefined =>
+    from.sectionId === to.sectionId &&
+    to.trail.length < from.trail.length &&
+    to.trail.every((folder, index) => folder.id === from.trail[index].id)
+        ? from.trail[to.trail.length]
+        : undefined;
+
+/**
  * A place in a section showing a folder after it was renamed. The folder's step takes the new name
  * and id. When the id changed, as path ids do, the ids of the folders below it changed too and
  * can't be worked out, so the trail ends at the renamed folder.

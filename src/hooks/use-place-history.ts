@@ -43,6 +43,10 @@ export const usePlaceHistory = (initial: () => Place) => {
 
     return {
         place: history.places[history.index],
+        /** Where `back` goes, if anywhere. */
+        previous: history.places[history.index - 1] as Place | undefined,
+        /** Where `forward` goes, if anywhere. */
+        next: history.places[history.index + 1] as Place | undefined,
         canGoBack: history.index > 0,
         canGoForward: history.index < history.places.length - 1,
         navigate,

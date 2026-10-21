@@ -14,9 +14,25 @@ export interface SortOrder {
     direction: SortDirection;
 }
 
+/** How a view lays out its entries, for moving through them with the arrow keys. Internal. */
+export interface EntryLayout {
+    /** Entries per row: 1 in the list, as many as fit in the grid. */
+    columns: number;
+    /** Whether Left and Right move between entries, as they do in the grid. */
+    horizontal: boolean;
+    /** Rows that PageUp and PageDown move by. */
+    page: number;
+    /** Whether the view runs right to left, which swaps Left and Right. */
+    rtl: boolean;
+}
+
 /** Props shared by the list and grid views. Internal, not exported from the package entry. */
 export interface FileViewProps {
     entries: FileEntry[];
+    /** Names the list of entries for screen readers: the folder's name. */
+    label: string;
+    /** The entry that takes focus when the view is tabbed to, and that the arrow keys move from. */
+    focusId: string | null;
     selectedIds: ReadonlySet<string>;
     /** Entries cut to the clipboard, shown faded until they're pasted. */
     cutIds: ReadonlySet<string>;

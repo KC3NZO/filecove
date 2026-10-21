@@ -67,13 +67,37 @@ export const dragMarkers = (theme: Theme) => ({
     },
 });
 
+/** The outline every keyboard focus ring draws, inside the element's edge. */
+export const focusOutline = {
+    outline: "2px solid",
+    outlineColor: "primary.main",
+    outlineOffset: "-2px",
+};
+
 /** Keyboard focus ring for ButtonBase elements; works whether or not ripples are enabled. */
 export const focusRing = {
-    "&.Mui-focusVisible": {
-        outline: "2px solid",
-        outlineColor: "primary.main",
-        outlineOffset: "-2px",
-    },
+    "&.Mui-focusVisible": focusOutline,
+};
+
+/**
+ * Keyboard focus ring for other focusable elements, such as list rows and grid tiles. Spread it
+ * after `cutMarker` and before `dragMarkers`, so it wins over the cut outline and a drop target wins over it.
+ */
+export const focusVisibleRing = {
+    "&:focus-visible": focusOutline,
+};
+
+/** Hides text from view while screen readers still read it, e.g. a column's sort order or a live status. */
+export const visuallyHiddenSx: SxProps<Theme> = {
+    position: "absolute",
+    width: "1px",
+    height: "1px",
+    m: "-1px",
+    p: 0,
+    border: 0,
+    overflow: "hidden",
+    clip: "rect(0 0 0 0)",
+    whiteSpace: "nowrap",
 };
 
 /**

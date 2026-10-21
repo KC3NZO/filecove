@@ -9,6 +9,7 @@ import MenuItem from "@mui/material/MenuItem";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { ariaShortcut } from "../../../utils/shortcut";
 import IconSlot from "../icon-slot";
 
 import type { ActionContext, ActionGroup, MenuPosition } from "../../../types";
@@ -60,6 +61,7 @@ const renderItems = ({ groups, context }: MenuState, onClose: () => void) => {
                     key={`${group.id}:${action.id}`}
                     sx={itemSx}
                     data-destructive={!!action.destructive}
+                    aria-keyshortcuts={action.shortcut && ariaShortcut(action.shortcut)}
                     disabled={action.disabled?.(context)}
                     onClick={() => {
                         onClose();
@@ -91,10 +93,15 @@ const ContextMenu = ({ menu, onClose }: ContextMenuProps) => {
             paper: { sx: paperSx },
             list: { dense: true },
             root: {
-                // A right-click outside the open menu closes it, rather than opening the browser's menu over it.
+                // A right-click outside the open menu closes it, rather than opening the browser's menu
+                // over it. One on the menu, or the Menu key pressed in it, which some browsers send on
+                // its release after the key press opened the menu, leaves it open.
                 onContextMenu: (event: MouseEvent) => {
                     event.preventDefault();
-                    onClose();
+
+                    if (!(event.target instanceof Element && event.target.closest('[role="menu"]'))) {
+                        onClose();
+                    }
                 },
             },
         }),

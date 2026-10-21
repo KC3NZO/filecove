@@ -15,3 +15,20 @@ export const matchesShortcut = (event: KeyboardEvent, shortcut: string) => {
         event.altKey === parts.includes("alt")
     );
 };
+
+/**
+ * A shortcut as `aria-keyshortcuts` names it, e.g. "Shift+Control+N Shift+Meta+N" for
+ * "Shift+Ctrl+N", since Ctrl also matches ⌘.
+ */
+export const ariaShortcut = (shortcut: string) => {
+    const parts = shortcut.split("+");
+    const ctrl = parts.findIndex((part) => part.toLowerCase() === "ctrl");
+
+    if (ctrl < 0) {
+        return shortcut;
+    }
+
+    const withKey = (key: string) => parts.map((part, index) => (index === ctrl ? key : part)).join("+");
+
+    return `${withKey("Control")} ${withKey("Meta")}`;
+};

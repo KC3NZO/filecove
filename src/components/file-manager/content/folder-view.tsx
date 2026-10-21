@@ -1,5 +1,5 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import type { DragEvent, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -17,10 +17,12 @@ import { useFolder } from "../../../hooks/use-folder";
 import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
 import { useSelection } from "../../../hooks/use-selection";
-import { selectedBackground } from "../../../styles/mixins";
-import { belowElement, pointerPosition } from "../../../utils/menu-position";
+import { useTypeAhead } from "../../../hooks/use-type-ahead";
+import { focusOutline, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
+import { gridColumns, isMenuKey, isRtl, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
+import { belowElement, insideElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
-import { EMPTY_SELECTION, marqueeSelection, selectModifiers } from "../../../utils/selection";
+import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import { entryComparator } from "../../../utils/sort";
 import Icon from "../../icons/icon";
 import FileGrid from "./file-grid";
@@ -53,6 +55,12 @@ interface FolderViewProps {
     selecting: boolean;
     /** Something is being pasted into the folder, so the progress bar shows. */
     busy: boolean;
+    /**
+     * Takes the focus, or as soon as there is something to focus once the folder is listed. Set
+     * for one render, e.g. as the folder opens from a key press in the one before, whose view went
+     * away with the focus in it.
+     */
+    takeFocus: boolean;
     /** An entry to select and scroll to once the listing has it, e.g. a folder just created. */
     revealId?: string;
     onSelectingChange: (selecting: boolean) => void;
@@ -64,9 +72,21 @@ interface FolderViewProps {
     onRevealed: () => void;
 }
 
+/** Where the view's focus is among the entries: the entry, and where it was listed. */
+interface EntryFocus {
+    id: string;
+    index: number;
+}
+
 /** The entry an event happened on, by its `data-entry-id`. */
 const entryIdAt = (target: EventTarget) =>
     target instanceof Element ? target.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId : undefined;
+
+const entryElement = (surface: HTMLElement, id: string) =>
+    surface.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(id)}"]`);
+
+/** Whether the focus has left the page, as it does when the focused element is removed. */
+const focusLost = () => !document.activeElement || document.activeElement === document.body;
 
 // Fills the scroll panel even when the folder is short, so its empty space takes clicks,
 // right-clicks, marquee drags and drops. Positioned so the marquee is placed in content coordinates.
@@ -80,8 +100,10 @@ const surfaceSx: SxProps<Theme> = {
     WebkitTouchCallout: "none",
     WebkitTapHighlightColor: "transparent",
     touchAction: "manipulation",
-    // Focused by presses, for the keyboard shortcuts, but never tabbed to, so no ring.
+    // Focused by presses, for the keyboard shortcuts, with no ring. It's only tabbed to while it
+    // lists nothing, and then rings the panel, rounded like it.
     outline: "none",
+    "&:focus-visible": { ...focusOutline, borderRadius: 3 },
 };
 
 // Geometry comes from custom properties that `useMarquee` sets while dragging.
@@ -146,6 +168,7 @@ const FolderView = ({
     hasActions,
     selecting,
     busy,
+    takeFocus,
     revealId,
     onSelectingChange,
     onSortChange,
@@ -172,6 +195,36 @@ const FolderView = ({
     );
 
     const { selection, selectedIds, selected, select, replace, selectAll, clear } = useSelection(entries);
+    const typeAhead = useTypeAhead();
+    const stateId = useId();
+
+    // The entry with the view's Tab stop, which the arrow keys move from. Where it was listed is
+    // kept up to date, so the entry after it takes its place if it goes.
+    const [focus, setFocus] = useState<EntryFocus | null>(null);
+    const focusIndex = focus && entries ? entries.findIndex((entry) => entry.id === focus.id) : -1;
+
+    if (focus && focusIndex >= 0 && focusIndex !== focus.index) {
+        setFocus({ id: focus.id, index: focusIndex });
+    }
+
+    let focusId: string | null = null;
+
+    if (entries?.length) {
+        if (focus && focusIndex >= 0) {
+            focusId = focus.id;
+        } else if (focus) {
+            focusId = entries[Math.min(focus.index, entries.length - 1)].id;
+        } else {
+            focusId = selected[0]?.id ?? entries[0].id;
+        }
+    }
+
+    // Whether the focus is in the view. Removing the focused entry, as deleting or moving it away
+    // does, drops the focus to the page without a blur, so this stays set and the entry taking its
+    // place gets the focus back.
+    const focusWithin = useRef(false);
+    // Set while the view is to take the focus once it has something to focus.
+    const pendingFocus = useRef(false);
 
     // Leaving selection mode, however it is left, drops the selection made in it.
     const [wasSelecting, setWasSelecting] = useState(selecting);
@@ -198,20 +251,58 @@ const FolderView = ({
         onChange: (ids, modifiers) => replace(marqueeSelection(marqueeBase.current, ids, modifiers)),
     });
 
-    // Waits for the refreshed listing, which arrives after the entry was created or renamed.
-    const revealListed = revealId !== undefined && !!entries?.some((entry) => entry.id === revealId);
+    useEffect(() => {
+        if (takeFocus) {
+            pendingFocus.current = true;
+        }
+    }, [takeFocus]);
+
+    // Waits for the refreshed listing, which arrives after the entry was created or renamed. The
+    // entry takes the focus too while the view has it, or is to take it.
+    const revealIndex = revealId === undefined || !entries ? -1 : entries.findIndex((entry) => entry.id === revealId);
 
     useEffect(() => {
-        if (revealId === undefined || !revealListed) {
+        const surface = marquee.surfaceRef.current;
+
+        if (revealId === undefined || revealIndex < 0 || !surface) {
             return;
         }
 
+        const element = entryElement(surface, revealId);
+
         replace({ ids: new Set([revealId]), anchor: revealId });
-        marquee.surfaceRef.current
-            ?.querySelector(`[data-entry-id="${CSS.escape(revealId)}"]`)
-            ?.scrollIntoView({ block: "nearest" });
+        setFocus({ id: revealId, index: revealIndex });
+
+        if (pendingFocus.current || focusWithin.current) {
+            pendingFocus.current = false;
+            element?.focus({ preventScroll: true });
+        }
+
+        element?.scrollIntoView({ block: "nearest" });
         onRevealed();
-    }, [revealId, revealListed, replace, marquee.surfaceRef, onRevealed]);
+    }, [revealId, revealIndex, replace, marquee.surfaceRef, onRevealed]);
+
+    // Gives the focus to the focused entry, or to the view while it lists nothing, when the view is
+    // to take it, or when the focused entry was removed. While the folder loads, the view holds it.
+    useEffect(() => {
+        const surface = marquee.surfaceRef.current;
+
+        if (!surface || (!pendingFocus.current && !(focusWithin.current && focusLost()))) {
+            return;
+        }
+
+        if (!entries && state?.status !== "error") {
+            surface.focus({ preventScroll: true });
+
+            return;
+        }
+
+        const element = focusId === null ? null : entryElement(surface, focusId);
+
+        pendingFocus.current = false;
+        (element ?? surface).focus({ preventScroll: true });
+        element?.scrollIntoView({ block: "nearest" });
+    });
 
     // The entry an event happened on.
     const entryAt = (event: DragEvent) => {
@@ -369,8 +460,24 @@ const FolderView = ({
     };
 
     // A shortcut acts on the selection when it applies there, or else on the open folder, so
-    // "New folder" works with entries selected.
-    const handleKeyDown = (event: KeyboardEvent) => {
+    // "New folder" works with entries selected. The consumer's shortcuts come before the view's own
+    // keys, so an action can take a key such as Enter. A control in the view, such as a column
+    // header, keeps Enter and Space, and the view's own keys only work on the entries and the view.
+    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        const entryId = entryIdAt(event.target);
+        const own = event.target === event.currentTarget || entryId !== undefined;
+
+        if (!own && (event.key === "Enter" || event.key === " ")) {
+            return;
+        }
+
+        if (own && isMenuKey(event)) {
+            event.preventDefault();
+            openKeyboardMenu(event.currentTarget, entryId);
+
+            return;
+        }
+
         const folderRequest: MenuRequest = { target: "folder", section, trail, entries: [] };
         const requests: MenuRequest[] = selected.length
             ? [{ target: "selection", section, trail, entries: selected }, folderRequest]
@@ -378,7 +485,208 @@ const FolderView = ({
 
         if (onShortcut(event, requests)) {
             event.preventDefault();
+
+            return;
         }
+
+        // Escape leaves selection mode, or else clears the selection; Ctrl+A selects everything.
+        // Both work wherever the focus is in the view.
+        const toggle = event.ctrlKey || event.metaKey;
+        let handled = false;
+
+        if (event.key === "Escape" && (selecting || selected.length > 0)) {
+            if (selecting) {
+                onSelectingChange(false);
+            } else {
+                clear();
+            }
+
+            handled = true;
+        } else if (toggle && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "a") {
+            selectAll();
+            handled = true;
+        } else if (own) {
+            handled = handleViewKey(event, entryId !== undefined);
+        }
+
+        if (handled) {
+            event.preventDefault();
+        }
+    };
+
+    const handleFocus = (event: FocusEvent) => {
+        const id = entryIdAt(event.target);
+        const index = id === undefined || !entries ? -1 : entries.findIndex((entry) => entry.id === id);
+
+        focusWithin.current = true;
+
+        if (id !== undefined && index >= 0 && (focus?.id !== id || focus.index !== index)) {
+            setFocus({ id, index });
+        }
+    };
+
+    const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
+        if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))) {
+            focusWithin.current = false;
+            pendingFocus.current = false;
+        }
+    };
+
+    /** Focuses an entry and scrolls it into view, below the sticky column header. */
+    const focusEntry = (id: string, index: number) => {
+        const element = marquee.surfaceRef.current && entryElement(marquee.surfaceRef.current, id);
+
+        setFocus({ id, index });
+        element?.focus({ preventScroll: true });
+        element?.scrollIntoView({ block: "nearest" });
+    };
+
+    /**
+     * Moves the focus to the entry at `index`. On its own it selects that entry alone, as a click
+     * does; with `range` (Shift) it selects from the anchor, or from the entry focused until now,
+     * adding to the selection with `toggle` too; `toggle` alone (Ctrl or ⌘) leaves the selection be,
+     * as does selection mode, where Space picks entries.
+     */
+    const moveFocus = (index: number, { toggle, range }: SelectModifiers) => {
+        const entry = entries?.[index];
+
+        if (!entry) {
+            return;
+        }
+
+        if (range) {
+            select(entry.id, { toggle, range: true }, focusId ?? entry.id);
+        } else if (!toggle && !selecting) {
+            select(entry.id);
+        }
+
+        focusEntry(entry.id, index);
+    };
+
+    const goUp = () => {
+        if (trail.length > 0) {
+            onNavigate({ sectionId: section.id, trail: trail.slice(0, -1) });
+        }
+    };
+
+    const openKeyboardMenu = (surface: HTMLElement, entryId: string | undefined) => {
+        const entry = entryId === undefined ? undefined : entries?.find((item) => item.id === entryId);
+        const element = entry && entryElement(surface, entry.id);
+
+        // At the row's menu button, as a click on it would open it, or else below the tile. The
+        // folder's menu opens in the top corner of the panel, which stays put as the folder scrolls.
+        if (entry && element) {
+            handleEntryMenu(belowElement(element.querySelector("[data-menu-button]") ?? element), entry);
+        } else {
+            onOpenMenu(insideElement(surface.parentElement ?? surface), {
+                target: "folder",
+                section,
+                trail,
+                entries: [],
+            });
+        }
+    };
+
+    /**
+     * The view's own keys, for when the focus is on an entry or on the view itself. Returns
+     * whether the key was taken.
+     *
+     * - Arrows, Home, End, PageUp and PageDown move the focus, selecting as `moveFocus` says. In the
+     *   grid, Left and Right move along a row and Up and Down between rows.
+     * - Space selects or deselects the focused entry; Shift+Space selects from the anchor to it.
+     * - Enter and Alt+Down open the focused folder; Backspace and Alt+Up go up to the folder above.
+     * - Typing finds the next entry whose name starts with what was typed.
+     */
+    const handleViewKey = (event: KeyboardEvent<HTMLDivElement>, onEntry: boolean) => {
+        const toggle = event.ctrlKey || event.metaKey;
+        const index = focusId === null || !entries ? -1 : entries.findIndex((entry) => entry.id === focusId);
+        const current = index >= 0 ? entries?.[index] : undefined;
+
+        if (event.altKey) {
+            if (toggle || event.shiftKey) {
+                return false;
+            }
+
+            if (event.key === "ArrowUp") {
+                goUp();
+
+                return true;
+            }
+
+            if (event.key === "ArrowDown" && current?.kind === "folder") {
+                handleOpen(current);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        if (event.key === "Backspace" && !toggle && !event.shiftKey) {
+            goUp();
+
+            return true;
+        }
+
+        if (!entries || !current || index < 0) {
+            return false;
+        }
+
+        if (event.key === "Enter" && !toggle && !event.shiftKey) {
+            if (current.kind !== "folder") {
+                return false;
+            }
+
+            handleOpen(current);
+
+            return true;
+        }
+
+        // A space typed in the middle of a name is part of it.
+        if (event.key === " " && !(isTypingKey(event) && typeAhead.typing())) {
+            if (event.shiftKey) {
+                select(current.id, { toggle, range: true }, current.id);
+            } else {
+                select(current.id, { toggle: true, range: false });
+            }
+
+            return true;
+        }
+
+        const surface = event.currentTarget;
+        const listbox = surface.querySelector<HTMLElement>('[role="listbox"]');
+        const element = entryElement(surface, current.id);
+        const grid = view === "grid";
+        const step = stepIndex(event.key, index, entries.length, {
+            columns: grid && listbox ? gridColumns(listbox) : 1,
+            horizontal: grid,
+            page: element && surface.parentElement ? pageRows(surface.parentElement, element) : 1,
+            rtl: isRtl(surface),
+        });
+
+        if (step !== null) {
+            // With the focus on the view rather than an entry, as after a click on its empty space,
+            // the first key only brings the focus to the entry that has the Tab stop.
+            moveFocus(onEntry ? step : index, { toggle, range: event.shiftKey });
+
+            return true;
+        }
+
+        if (isTypingKey(event)) {
+            const match = matchName(
+                entries.map((entry) => entry.name),
+                index,
+                typeAhead.type(event.key),
+            );
+
+            if (match >= 0) {
+                moveFocus(match, NO_MODIFIERS);
+            }
+
+            return true;
+        }
+
+        return false;
     };
 
     const handleSelectionMenu = (button: HTMLElement) => {
@@ -400,6 +708,8 @@ const FolderView = ({
         content = (
             <ContentView
                 entries={entries}
+                label={folder.name}
+                focusId={focusId}
                 selectedIds={selectedIds}
                 cutIds={cutIds}
                 draggable={draggable}
@@ -415,14 +725,14 @@ const FolderView = ({
         );
     } else if (entries) {
         content = (
-            <Box sx={stateSx}>
+            <Box id={stateId} sx={stateSx}>
                 <Icon name="folderOpen" sx={stateIconSx} />
                 <Typography sx={stateTitleSx}>Folder is empty</Typography>
             </Box>
         );
     } else if (state?.status === "error") {
         content = (
-            <Box sx={stateSx}>
+            <Box id={stateId} sx={stateSx} role="alert">
                 <Icon name="info" sx={stateIconSx} />
                 <Typography sx={stateTitleSx}>Couldn't open this folder</Typography>
                 {state.error instanceof Error && <Typography variant="body2">{state.error.message}</Typography>}
@@ -440,17 +750,32 @@ const FolderView = ({
         );
     } else {
         content = (
-            <Box sx={stateSx}>
-                <CircularProgress size={28} />
+            <Box id={stateId} sx={stateSx}>
+                <CircularProgress size={28} aria-label="Loading" />
             </Box>
         );
     }
+
+    // Screen readers hear how many entries are selected as it changes, e.g. with Shift+arrows or Ctrl+A.
+    let status = "";
+
+    if (selected.length > 0) {
+        status = selected.length === 1 ? "1 item selected" : `${selected.length} items selected`;
+    }
+
+    // While it lists nothing, the view is tabbed to itself, so the shortcuts and the menu key work
+    // there, and it's named for the folder and described by why it's empty.
+    const listed = !!entries?.length;
 
     return (
         <Box
             ref={marquee.surfaceRef}
             sx={surfaceSx}
-            tabIndex={-1}
+            tabIndex={listed ? -1 : 0}
+            role={listed ? undefined : "group"}
+            aria-label={listed ? undefined : folder.name}
+            aria-describedby={listed ? undefined : stateId}
+            data-folder-view
             data-selecting={selecting}
             // Read by the panel around the view, which outlines itself while the open folder would take the drop.
             data-drop-target={drop.dropKey === folder.id}
@@ -462,11 +787,13 @@ const FolderView = ({
             onClick={handleBackgroundClick}
             onContextMenuCapture={handleContextMenuCapture}
             onContextMenu={handleBackgroundMenu}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             onDragStart={handleDragStart}
             {...drop.handlers}
         >
-            {(busy || state?.status === "loading") && entries && <LinearProgress sx={progressSx} />}
+            {(busy || state?.status === "loading") && entries && <LinearProgress sx={progressSx} aria-label="Loading" />}
             {content}
             {selecting && (
                 <SelectionBar
@@ -480,6 +807,9 @@ const FolderView = ({
                 />
             )}
             <Box ref={marquee.marqueeRef} sx={marqueeSx} />
+            <Box sx={visuallyHiddenSx} role="status">
+                {status}
+            </Box>
         </Box>
     );
 };

@@ -18,4 +18,4 @@ export type { Place } from "./navigation";
 export type { FolderRef, Section, SectionGroup, SectionImports } from "./section";
 export type { EntrySelection, SelectModifiers, TreeSelection, TreeTarget } from "./selection";
 export type { DroppedFiles, UploadItem, UploadStatus } from "./upload";
-export type { FileViewProps, SortDirection, SortKey, SortOrder, ViewMode } from "./view";
+export type { EntryLayout, FileViewProps, SortDirection, SortKey, SortOrder, ViewMode } from "./view";

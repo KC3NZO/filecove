@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, CSSProperties, DragEvent } from "react";
+import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 
 import Backdrop from "@mui/material/Backdrop";
@@ -17,7 +17,7 @@ import { createFolderStore, folderKey } from "../../store/folder-store";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { visibleActionGroups } from "../../utils/action-groups";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
-import { folderOf, outsideDeleted, renameInPlace } from "../../utils/navigation";
+import { folderLeft, folderOf, outsideDeleted, renameInPlace } from "../../utils/navigation";
 import { importsFrom } from "../../utils/sections";
 import { matchesShortcut } from "../../utils/shortcut";
 import { DEFAULT_SORT } from "../../utils/sort";
@@ -194,6 +194,10 @@ const uploadsSx: SxProps<Theme> = {
 
 const pickerStyle: CSSProperties = { display: "none" };
 
+// Below `rootWide` the sidebar overlays the content. Container queries decide that, so it's read
+// from the sidebar's style.
+const overlays = (sidebar: HTMLElement) => getComputedStyle(sidebar).position === "absolute";
+
 const FileManager = ({
     adapter,
     sections: groups,
@@ -220,10 +224,12 @@ const FileManager = ({
         [sections],
     );
 
-    const { place, canGoBack, canGoForward, navigate, back, forward, rewrite } = usePlaceHistory(() => ({
-        sectionId: defaultSectionId ?? sections[0]?.sections[0]?.id ?? "",
-        trail: [],
-    }));
+    const { place, previous, next, canGoBack, canGoForward, navigate, back, forward, rewrite } = usePlaceHistory(
+        () => ({
+            sectionId: defaultSectionId ?? sections[0]?.sections[0]?.id ?? "",
+            trail: [],
+        }),
+    );
 
     const section = sectionsById.get(place.sectionId);
     const folder = section && folderOf(section, place.trail);
@@ -254,6 +260,20 @@ const FileManager = ({
     // The folder in which touch selection mode is on, so opening another folder turns it off.
     const [selectingKey, setSelectingKey] = useState<string | null>(null);
     const selecting = openKey !== null && selectingKey === openKey;
+    const panelRef = useRef<HTMLDivElement>(null);
+    const sidebarRef = useRef<HTMLDivElement>(null);
+    const sidebarButtonRef = useRef<HTMLButtonElement>(null);
+    // What had the focus when the context menu opened, where an action picked in it counts as run from.
+    const menuOpener = useRef<Element | null>(null);
+    // Asks the folder view to take the focus, for one render, e.g. as another folder opens and the
+    // view the focus was in goes away.
+    const [focusContent, setFocusContent] = useState(false);
+
+    useEffect(() => {
+        if (focusContent) {
+            setFocusContent(false);
+        }
+    }, [focusContent]);
 
     // An entry still waiting to be selected is forgotten once another folder opens.
     if (reveal && reveal.key !== openKey) {
@@ -310,18 +330,122 @@ const FileManager = ({
         });
     }, []);
 
+    // Opening a folder from the content takes the focus along into it, as the view it was in goes
+    // away; an action picked in the context menu counts as run where the menu was opened. Going up
+    // to a folder the open one is in selects the folder it was left through, as desktop file
+    // managers do.
+    const arrive = useCallback(
+        (target: Place) => {
+            const active = document.activeElement;
+            const from = active?.closest('[role="menu"]') ? menuOpener.current : active;
+            const targetSection = sectionsById.get(target.sectionId);
+            const left = folderLeft(place, target);
+
+            if (from && panelRef.current?.contains(from)) {
+                setFocusContent(true);
+            }
+
+            if (left && targetSection) {
+                const key = folderKey(targetSection.id, folderOf(targetSection, target.trail).id);
+
+                setReveal({ key, id: left.id });
+            }
+        },
+        [place, sectionsById],
+    );
+
     // Going somewhere leaves the sidebar tree as the user left it; the path bar shows where it is.
     const goTo = useCallback(
         (target: Place) => {
             if (sectionsById.has(target.sectionId)) {
+                arrive(target);
                 navigate(target);
             }
         },
-        [navigate, sectionsById],
+        [arrive, navigate, sectionsById],
+    );
+
+    const goBack = useCallback(() => {
+        if (previous) {
+            arrive(previous);
+            back();
+        }
+    }, [previous, arrive, back]);
+
+    const goForward = useCallback(() => {
+        if (next) {
+            arrive(next);
+            forward();
+        }
+    }, [next, arrive, forward]);
+
+    // The overlay closes on the place picked in it, so the focus goes on to the content.
+    const navigateFromSidebar = useCallback(
+        (target: Place) => {
+            if (sidebarRef.current?.contains(document.activeElement) && overlays(sidebarRef.current)) {
+                setFocusContent(true);
+            }
+
+            goTo(target);
+        },
+        [goTo],
     );
 
     const openSidebar = useCallback(() => setSidebarOpen(true), []);
-    const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
+    // Closing the overlay with the focus in it gives the focus back to the button that showed it.
+    // Docked, that button is hidden, so the focus stays.
+    const closeSidebar = useCallback(() => {
+        setSidebarOpen(false);
+
+        if (sidebarRef.current?.contains(document.activeElement)) {
+            sidebarButtonRef.current?.focus();
+        }
+    }, []);
+
+    // F6 moves the focus between the sidebar tree and the content, as in GNOME Files, or to the
+    // content while the sidebar is hidden.
+    const switchPane = () => {
+        const sidebar = sidebarRef.current;
+
+        if (sidebar && !sidebar.contains(document.activeElement)) {
+            sidebar.querySelector<HTMLElement>('[role="tree"]')?.focus();
+
+            if (sidebar.contains(document.activeElement)) {
+                return;
+            }
+        }
+
+        setFocusContent(true);
+    };
+
+    // Keys that work anywhere in the file manager: F6, and Alt+Left and Alt+Right for back and forward.
+    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        // Menus and dialogs portal out of the file manager, but their key presses still bubble here
+        // through React's tree; they aren't the file manager's.
+        if (
+            event.defaultPrevented ||
+            !(event.target instanceof Node) ||
+            !event.currentTarget.contains(event.target)
+        ) {
+            return;
+        }
+
+        const others = event.ctrlKey || event.metaKey || event.shiftKey;
+
+        if (event.key === "F6" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            switchPane();
+        } else if (event.altKey && !others && event.key === "ArrowLeft") {
+            goBack();
+        } else if (event.altKey && !others && event.key === "ArrowRight") {
+            goForward();
+        } else {
+            return;
+        }
+
+        event.preventDefault();
+    };
+
     const toggleView = useCallback(() => setView((prev) => (prev === "list" ? "grid" : "list")), []);
     const toggleHidden = useCallback(() => setShowHidden((prev) => !prev), []);
     const closeMenu = useCallback(() => setMenu((prev) => prev && { ...prev, open: false }), []);
@@ -690,6 +814,7 @@ const FileManager = ({
                 return false;
             }
 
+            menuOpener.current = document.activeElement;
             setMenu({ open: true, position, context, groups });
 
             return true;
@@ -729,6 +854,7 @@ const FileManager = ({
                             drag.end();
                         }}
                         onDragEnd={drag.end}
+                        onKeyDown={handleKeyDown}
                     >
                         <Box sx={frameSx}>
                             <Backdrop
@@ -738,6 +864,7 @@ const FileManager = ({
                                 onClick={closeSidebar}
                             />
                             <Sidebar
+                                ref={sidebarRef}
                                 title={title}
                                 groups={sections}
                                 single={singleSection}
@@ -746,8 +873,9 @@ const FileManager = ({
                                 open={sidebarOpen}
                                 onToggle={toggleExpanded}
                                 onExpand={expand}
-                                onNavigate={goTo}
+                                onNavigate={navigateFromSidebar}
                                 onOpenMenu={openMenu}
+                                onShortcut={runShortcut}
                                 onClose={closeSidebar}
                             />
                             <Box sx={mainSx}>
@@ -771,15 +899,16 @@ const FileManager = ({
                                     sort={sort}
                                     showHidden={showHidden}
                                     selecting={selecting}
-                                    onBack={back}
-                                    onForward={forward}
+                                    onBack={goBack}
+                                    onForward={goForward}
                                     onToggleView={toggleView}
                                     onSortChange={setSort}
                                     onToggleHidden={toggleHidden}
                                     onToggleSelecting={toggleSelecting}
                                     onOpenSidebar={openSidebar}
+                                    sidebarButtonRef={sidebarButtonRef}
                                 />
-                                <Box sx={panelSx}>
+                                <Box ref={panelRef} sx={panelSx}>
                                     {/* Keyed by folder, so each opens scrolled to the top with nothing selected. */}
                                     <Box key={openKey ?? undefined} sx={viewSx}>
                                         {section && (
@@ -791,6 +920,7 @@ const FileManager = ({
                                                 hasActions={hasActions}
                                                 selecting={selecting}
                                                 busy={busy}
+                                                takeFocus={focusContent}
                                                 revealId={reveal?.id}
                                                 onSelectingChange={setSelecting}
                                                 onSortChange={setSort}

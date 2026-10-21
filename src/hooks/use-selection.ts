@@ -16,9 +16,20 @@ export const useSelection = (entries: FileEntry[] | undefined) => {
         [entries, selection.ids],
     );
 
+    /**
+     * Selects as a click with `modifiers` would. A range starts from `fallbackAnchor` when the
+     * folder has no anchor yet, as Shift+arrow does from the focused entry.
+     */
     const select = useCallback(
-        (id: string, modifiers: SelectModifiers = NO_MODIFIERS) => {
-            setSelection((prev) => nextSelection(prev, id, modifiers, order));
+        (id: string, modifiers: SelectModifiers = NO_MODIFIERS, fallbackAnchor?: string) => {
+            setSelection((prev) => {
+                const anchored =
+                    fallbackAnchor !== undefined && (prev.anchor === null || !order.includes(prev.anchor))
+                        ? { ...prev, anchor: fallbackAnchor }
+                        : prev;
+
+                return nextSelection(anchored, id, modifiers, order);
+            });
         },
         [order],
     );
