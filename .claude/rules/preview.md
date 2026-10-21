@@ -2,6 +2,8 @@
 paths:
   - "src/components/file-manager/dialogs/preview-dialog.tsx"
   - "src/components/file-manager/dialogs/image-viewer.tsx"
+  - "src/hooks/use-preview-contents.ts"
+  - "src/hooks/use-swipe.ts"
   - "src/utils/preview.ts"
   - "src/types/preview.ts"
   - "src/types/adapter.ts"
@@ -27,7 +29,17 @@ There's no editor in the component, by choice: editing needs a way to save throu
 `content(entry, { signal })` resolves with a `FileContent`: `{ url }` or `{ blob }`. It's called only for files the preview can show, so describing a zip downloads nothing, and the signal aborts as the preview steps on or closes. Downloading, when it comes, is meant to use it too. The list's and the grid's thumbnails come from the adapter's separate `thumbnail`, never from `content` (see `thumbnails.md`).
 
 - A URL is used as it is, as the `src` of an `<img>`, `<video>`, `<audio>` or `<iframe>`, so it streams and caches as any URL does. Text is fetched from it, which needs CORS on another origin, and only the first `TEXT_LIMIT` bytes are read before the download is cancelled.
-- A blob is shown through an object URL, revoked once the preview moves on or closes, or read in part for text. What was loaded goes with it, so coming back to a file loads it afresh.
+- A blob is shown through an object URL, or read in part for text. The URL is revoked once the file is more than a step away from the one shown, or the preview has gone.
+
+## Loading ahead
+
+`hooks/use-preview-contents.ts` loads what the preview shows, and the file one step further on before it's stepped to, so it shows at once.
+
+- The file ahead is the next one the way the last step went, on to start with. It loads once the one shown has come, so the two don't share the bandwidth: a picture or a video once the browser has it (`pending` until it's measured), anything else once `content` has answered, and at once beside a file there's nothing to load for.
+- Its `content` is called, and text is read, as for the file shown. A picture is also fetched and decoded through an `Image`, held until it's dropped. A video, audio or a PDF isn't downloaded ahead, since its player or frame loads it.
+- What was loaded is kept for the files one step either side of the one shown, so stepping back is as quick. The rest is dropped: its load aborted, its picture's download stopped and its object URL revoked, so coming back to one loads it afresh.
+- A file ahead that fails shows its error when it's stepped to, with Try again. A picture that fails to decode ahead is left to fail again when shown.
+- Nothing more is loaded while the preview fades out, and everything goes with it.
 
 ## What the preview shows
 
@@ -54,6 +66,7 @@ Files are never run. A web page shows as its source, and a blob going into the P
 - Zoomed in, it pans by dragging, with the wheel (Shift+wheel sideways), and with the arrow keys, which then pan rather than step to another file; 0 or Best fit gets them back. It's centred along an axis it fits and otherwise always covers the view. A step to another file starts it fitted again (the viewer is keyed by the entry).
 - Fitted, it's laid out by CSS alone, so it follows the dialog's size without a measure; zoomed, it's placed from its own size (`naturalWidth`) and the view's, kept by a `ResizeObserver`, through `style`. Its width and height scale rather than a `transform: scale`, so an SVG redraws sharp at any size.
 - The dialog hands key presses to the viewer first, through its `ref` (`ImageViewerHandle.keyDown`), since the focus is on the dialog rather than the image.
+- Fitted, a sideways swipe steps to another file, and the image moves with it; zoomed in (`ImageViewerHandle.zoomed`), the finger pans it. The swipe puts the image back at rest before a second finger's pinch is measured, and taps are told apart on the screen rather than in the view, which moves with the swipe.
 
 Loading shows a spinner. An adapter's rejection, or the browser failing to load or show the file, shows "Couldn't preview this file" with the message and Try again, which calls `content` afresh, in case a signed URL had run out.
 
@@ -63,6 +76,8 @@ A single file steps through the files of the view it's listed in, in the content
 
 - Stepping through the folder, the content's selection follows the file shown (`follow`, `handlePreviewStep`, through `reveal`), as in GNOME's and macOS's previewers. Stepping through a selection leaves it as it was.
 - The arrow buttons, or Left and Right (swapped in RTL) except in a player, which seeks with them, and on a zoomed image, which pans with them. There's no wrapping round.
+- Swiping sideways on touch (`hooks/use-swipe.ts`), left for the next file (swapped in RTL). The file follows the finger, and once it has crossed a quarter of the width, or was flicked, the next file slides in; otherwise it springs back. Towards an end it follows only part of the way, and springs back. With reduced motion it neither slides in nor springs back. The body's `touch-action` is `pan-y pinch-zoom`, and the text's too, so sideways moves come as pointer events while text still scrolls and the page still zooms.
+- A swipe isn't taken on a zoomed image, which pans instead, on a player, a button or a link, or over a PDF, whose frame keeps the touches. Going up or down first makes it a scroll, and a second finger cancels it, leaving the pinch to the image.
 - A visually hidden `status` says "name, 2 of 12" on each step.
 
 ## Keys and focus
@@ -77,4 +92,4 @@ A single file steps through the files of the view it's listed in, in the content
 
 ## Not yet
 
-Downloading, the consumer's actions in the preview's header, loading the next file ahead, swiping on touch, Safari's touchpad pinch (it sends `gesturechange`, not Ctrl+wheel), momentum when panning by touch, animating zoom steps, rotating images, full screen, highlighted code or rendered Markdown, and fonts, office documents or archives' contents.
+Downloading, the consumer's actions in the preview's header, sliding between files on the buttons and the keys, swiping on past a zoomed image's edge, Safari's touchpad pinch (it sends `gesturechange`, not Ctrl+wheel), momentum when panning by touch, animating zoom steps, rotating images, full screen, highlighted code or rendered Markdown, and fonts, office documents or archives' contents.
