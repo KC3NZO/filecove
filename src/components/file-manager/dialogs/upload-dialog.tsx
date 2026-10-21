@@ -67,9 +67,10 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
     const { files, folders } = dropped;
     const target = folderOf(section, trail);
 
-    // The folder is listed first when it isn't cached, as a folder dropped onto may never have been opened.
+    // The folder is listed first when it isn't cached, as a folder dropped onto may never have been
+    // opened, and its clashes are only looked for once all its pages have come.
     const { state } = useFolder(section, target.id, true);
-    const listed = !!state?.entries || state?.status === "error";
+    const listed = (!!state?.entries && !state.partial) || state?.status === "error";
 
     // A ref rather than state: React's development double mount runs the effect below twice before
     // any re-render, and state set by the first run wouldn't be seen by the second, which would

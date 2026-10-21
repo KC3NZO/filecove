@@ -20,6 +20,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { useFolder } from "../../../hooks/use-folder";
 import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
+import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { dialogPaperSx, focusOutline, focusRing, hoverBackground } from "../../../styles/mixins";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { folderLeft, folderOf } from "../../../utils/navigation";
@@ -68,7 +69,20 @@ interface TransferDialogProps {
     onDone: (request: TransferRequest, destination: Place) => void;
 }
 
+/** A row of the folder list: a section, on the list of sections, or a folder. */
+interface PickerItem {
+    id: string;
+    name: string;
+    /** The section the row opens, on the list of sections. */
+    section?: Section;
+    /** One of the entries being copied or moved, which can't be opened. */
+    disabled?: boolean;
+}
+
 const NO_MENU: OpenMenu = () => false;
+
+// Long names are cut short, since every row must be as tall for the list to place them.
+const TEXT_SLOTS = { primary: { noWrap: true } };
 
 // One column of rows, which never runs right to left, for `stepIndex`.
 const ROWS = { columns: 1, horizontal: false, rtl: false };
@@ -103,14 +117,28 @@ const frame = {
     bgcolor: "background.paper",
 };
 
-// Not a flex container: `ListItemButton` grows along a flex axis, which would stretch every row.
-// It only takes the focus itself while no row can.
-const listSx: SxProps<Theme> = {
+const scrollerSx: SxProps<Theme> = {
     ...frame,
     overflowY: "auto",
     py: 0.5,
+};
+
+// Only the rows in or near view are rendered, each placed at its line, and the list is as tall as
+// all of them (`useVirtualLines`). It's a grid of one track for the hook to read. It only takes the
+// focus itself while no row can.
+const listSx: SxProps<Theme> = {
+    position: "relative",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr)",
     outline: "none",
     "&:focus-visible": focusOutline,
+};
+
+// Placed at its line by `top`, set in `style`.
+const itemSx: SxProps<Theme> = {
+    position: "absolute",
+    left: 0,
+    right: 0,
 };
 
 // Holds the focus in place of the list while the folder loads, or when it has no folders.
@@ -160,7 +188,8 @@ const isFolder = (entry: FileEntry) => entry.kind === "folder";
  * arrows, Home, End, PageUp and PageDown move between the rows that can be opened, and typing
  * finds one by name; Enter or Space opens the focused folder, and Backspace or Alt+Up goes up, as
  * the Back button does. Opening a folder or going up from the list keeps the focus in it, on the
- * first row, or going up on the folder left through.
+ * first row, or going up on the folder left through. Only the rows in or near view are rendered,
+ * and the focused one, so a folder of thousands of folders opens as fast as a small one.
  */
 const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferDialogProps) => {
     const { kind, section, adapter, trail, entries, destinations } = request;
@@ -176,6 +205,9 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
 
     const folders = useMemo(() => state?.entries?.filter(isFolder).sort(compareEntries), [state?.entries]);
     const movingIds = useMemo(() => new Set(entries.map((entry) => entry.id)), [entries]);
+    // All of the folder has come, not just some of its pages, so its names can be checked for clashes.
+    const listed = !!state?.entries && !state.partial;
+    const failed = state?.status === "error";
 
     // Ids are unique within an adapter, so the same folder is the same id whichever section shows it.
     const sameFolder = place !== null && targetFolder.id === sourceId;
@@ -188,7 +220,8 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
     const { pending, failure, run: start, cancel, clearFailure } = useTransfer(request, refresh);
 
     const typeAhead = useTypeAhead();
-    const listRef = useRef<HTMLUListElement>(null);
+    const listRef = useRef<HTMLUListElement | null>(null);
+    const scrollerRef = useRef<HTMLDivElement>(null);
     const frameRef = useRef<HTMLDivElement>(null);
     const stateId = useId();
     // The row with the list's Tab stop, which the arrow keys move from.
@@ -196,35 +229,58 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
     // Set while the list is to take the focus once it has rows to focus.
     const pendingFocus = useRef(false);
 
-    // The rows that can be opened, in display order: the sections, or the folders other than the
-    // entries themselves. The row last focused has the Tab stop, or else the first.
-    const rows =
-        place === null
-            ? destinations.map((candidate) => ({ id: candidate.id, name: candidate.label }))
-            : (folders ?? [])
-                  .filter((folder) => !movingIds.has(folder.id))
-                  .map((folder) => ({ id: folder.id, name: folder.name }));
+    // What the list shows, in display order: the sections, or the folders, the entries themselves
+    // among them.
+    const choosingSection = place === null;
+    const items = useMemo<PickerItem[]>(
+        () =>
+            choosingSection
+                ? destinations.map((candidate) => ({ id: candidate.id, name: candidate.label, section: candidate }))
+                : (folders ?? []).map((folder) => ({
+                      id: folder.id,
+                      name: folder.name,
+                      disabled: movingIds.has(folder.id),
+                  })),
+        [choosingSection, destinations, folders, movingIds],
+    );
+
+    // The rows that can be opened. The row last focused has the Tab stop, or else the first.
+    const rows = useMemo(() => items.filter((item) => !item.disabled), [items]);
     const tabStop = rows.find((row) => row.id === focusId)?.id ?? rows[0]?.id ?? null;
-    const loaded = place === null || !!folders || state?.status === "error";
+    const loaded = place === null || listed || failed;
     const listLabel = place ? `Folders in ${targetFolder.name}` : "Locations";
 
+    // The row with the Tab stop stays rendered wherever the list is scrolled, so it keeps the focus.
+    const { lines, settled } = useVirtualLines(items.length, [items.findIndex((item) => item.id === tabStop)]);
+    const linesRef = lines.ref;
+
+    const listElement = useCallback(
+        (element: HTMLUListElement | null) => {
+            listRef.current = element;
+            linesRef(element);
+        },
+        [linesRef],
+    );
+
     // Gives the focus to the row with the Tab stop, read from the page so it works from the
-    // transition's callback too. While the folder loads, the box in the list's place holds it.
+    // transition's callback too, once the rows are in their places. While the folder loads, the
+    // box in the list's place holds it.
     const settleFocus = useCallback(() => {
         const body = listRef.current ?? frameRef.current;
 
-        if (!pendingFocus.current || !body) {
+        if (!pendingFocus.current || !body || !settled()) {
             return;
         }
 
         const row = body.querySelector<HTMLElement>('[data-row-id][tabindex="0"]');
 
-        (row ?? body).focus();
+        (row ?? body).focus({ preventScroll: true });
+        row?.scrollIntoView({ block: "nearest" });
 
         if (row || body.getAttribute("aria-busy") !== "true") {
             pendingFocus.current = false;
         }
-    }, []);
+    }, [settled]);
 
     useEffect(() => settleFocus());
 
@@ -304,7 +360,7 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
 
         const row = event.target instanceof HTMLElement && event.target.dataset.rowId ? event.target : null;
         const index = row ? rows.findIndex((item) => item.id === row.dataset.rowId) : -1;
-        const page = row && listRef.current ? pageRows(listRef.current, row) : 1;
+        const page = row && scrollerRef.current ? pageRows(scrollerRef.current, row) : 1;
         let next = stepIndex(event.key, Math.max(index, 0), rows.length, { ...ROWS, page });
 
         // From the list itself, the arrows bring the focus to the first row.
@@ -323,12 +379,30 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
         }
 
         const nextRow = next === null ? undefined : rows[next];
-        const selector = nextRow && `[data-row-id="${CSS.escape(nextRow.id)}"]`;
-        const element = selector ? listRef.current?.querySelector<HTMLElement>(selector) : undefined;
 
+        if (!nextRow) {
+            return;
+        }
+
+        const element = listRef.current?.querySelector<HTMLElement>(`[data-row-id="${CSS.escape(nextRow.id)}"]`);
+
+        event.preventDefault();
+
+        // A row that isn't rendered yet is, once it has the Tab stop, and is focused then.
         if (element) {
-            event.preventDefault();
-            element.focus();
+            element.focus({ preventScroll: true });
+            element.scrollIntoView({ block: "nearest" });
+        } else {
+            pendingFocus.current = true;
+            setFocusId(nextRow.id);
+        }
+    };
+
+    const openItem = (item: PickerItem) => {
+        if (item.section) {
+            go({ sectionId: item.section.id, trail: [] });
+        } else if (place) {
+            go({ ...place, trail: [...place.trail, { id: item.id, name: item.name }] });
         }
     };
 
@@ -373,53 +447,55 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
                 <ConflictMessage names={conflicts} folderName={targetFolder.name} />
             </Box>
         );
-    } else if (!place || folders?.length) {
+    } else if (items.length > 0) {
+        // Keyed by place, so each folder opens scrolled to the top.
         body = (
-            <List
-                ref={listRef}
-                dense
-                sx={listSx}
-                aria-label={listLabel}
-                tabIndex={tabStop === null ? 0 : -1}
-                onFocus={handleListFocus}
-                onKeyDown={handleListKeyDown}
-            >
-                {!place &&
-                    destinations.map((candidate) => (
-                        <ListItem key={candidate.id} disablePadding>
-                            <ListItemButton
-                                sx={rowSx}
-                                tabIndex={candidate.id === tabStop ? 0 : -1}
-                                data-row-id={candidate.id}
-                                onClick={() => go({ sectionId: candidate.id, trail: [] })}
+            <Box key={place ? targetFolder.id : ""} ref={scrollerRef} sx={scrollerSx}>
+                <List
+                    ref={listElement}
+                    dense
+                    disablePadding
+                    sx={listSx}
+                    style={{ height: lines.height }}
+                    aria-label={listLabel}
+                    tabIndex={tabStop === null ? 0 : -1}
+                    onFocus={handleListFocus}
+                    onKeyDown={handleListKeyDown}
+                >
+                    {lines.indexes.map((index) => {
+                        const item = items[index];
+
+                        return (
+                            <ListItem
+                                key={item.id}
+                                disablePadding
+                                sx={itemSx}
+                                style={{ top: index * lines.pitch }}
+                                // Only some rows are rendered, so each says where it is among all of them.
+                                aria-setsize={items.length}
+                                aria-posinset={index + 1}
                             >
-                                <ListItemIcon sx={rowIconSx}>
-                                    <IconSlot icon={candidate.icon ?? "folder"} />
-                                </ListItemIcon>
-                                <ListItemText primary={candidate.label} />
-                            </ListItemButton>
-                        </ListItem>
-                    ))}
-                {place &&
-                    folders?.map((folder) => (
-                        <ListItem key={folder.id} disablePadding>
-                            <ListItemButton
-                                sx={rowSx}
-                                disabled={movingIds.has(folder.id)}
-                                tabIndex={folder.id === tabStop ? 0 : -1}
-                                data-row-id={folder.id}
-                                onClick={() =>
-                                    go({ ...place, trail: [...place.trail, { id: folder.id, name: folder.name }] })
-                                }
-                            >
-                                <ListItemIcon sx={rowIconSx}>
-                                    <FolderTypeIcon folderName={folder.name} size="1.25rem" />
-                                </ListItemIcon>
-                                <ListItemText primary={folder.name} />
-                            </ListItemButton>
-                        </ListItem>
-                    ))}
-            </List>
+                                <ListItemButton
+                                    sx={rowSx}
+                                    disabled={item.disabled}
+                                    tabIndex={item.id === tabStop ? 0 : -1}
+                                    data-row-id={item.id}
+                                    onClick={() => openItem(item)}
+                                >
+                                    <ListItemIcon sx={rowIconSx}>
+                                        {item.section ? (
+                                            <IconSlot icon={item.section.icon ?? "folder"} />
+                                        ) : (
+                                            <FolderTypeIcon folderName={item.name} size="1.25rem" />
+                                        )}
+                                    </ListItemIcon>
+                                    <ListItemText primary={item.name} slotProps={TEXT_SLOTS} />
+                                </ListItemButton>
+                            </ListItem>
+                        );
+                    })}
+                </List>
+            </Box>
         );
     } else {
         body = (
@@ -434,13 +510,13 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
                 onKeyDown={handleListKeyDown}
             >
                 <Box id={stateId} sx={stateSx}>
-                    {folders && <Typography variant="body2">No folders</Typography>}
-                    {!folders && state?.status === "error" && (
+                    {listed && <Typography variant="body2">No folders</Typography>}
+                    {failed && (
                         <Typography variant="body2">
                             Couldn't open this folder{state.error instanceof Error && `: ${state.error.message}`}
                         </Typography>
                     )}
-                    {!folders && state?.status !== "error" && <CircularProgress size={24} aria-label="Loading" />}
+                    {!loaded && <CircularProgress size={24} aria-label="Loading" />}
                 </Box>
             </Box>
         );
@@ -502,9 +578,10 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
                     <Button color="inherit" onClick={close}>
                         Cancel
                     </Button>
+                    {/* The folder's names are checked for clashes, so it can't be chosen before they've all come. */}
                     <Button
                         variant="contained"
-                        disabled={!place || (kind === "move" && sameFolder)}
+                        disabled={!place || !loaded || (kind === "move" && sameFolder)}
                         loading={!!pending}
                         onClick={confirm}
                     >

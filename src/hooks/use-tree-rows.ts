@@ -23,6 +23,10 @@ const ROOT_TRAIL: FolderRef[] = [];
 
 const isFolder = (entry: FileEntry) => entry.kind === "folder";
 
+// Listed for the first time: nothing has come yet, or only some of its pages.
+const firstListing = (state: FolderState | undefined) =>
+    state?.status === "loading" && (!state.entries || !!state.partial);
+
 // A listing's folders in the tree's order, with their keys, sorted once per listing, since a
 // listing is replaced rather than changed.
 const sortedFolders = new WeakMap<FileEntry[], { folders: FileEntry[]; keys: string[] }>();
@@ -115,7 +119,7 @@ const flatten = (
                 siblingKeys: keys,
                 expandable: !hasNoFolders,
                 expanded: isExpanded,
-                loading: own?.status === "loading" && !own.entries,
+                loading: firstListing(own),
             });
 
             if (isExpanded && entry.hasSubfolders !== false) {
@@ -206,7 +210,7 @@ const flatten = (
                 section,
                 expandable: !hasNoFolders,
                 expanded: isExpanded,
-                loading: state?.status === "loading" && !state.entries,
+                loading: firstListing(state),
             });
 
             if (isExpanded) {

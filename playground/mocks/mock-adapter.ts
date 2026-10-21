@@ -16,6 +16,8 @@ export interface MockNode {
 interface MockAdapterOptions {
     /** Simulated round-trip time range, in ms. */
     latency?: [min: number, max: number];
+    /** Entries per page; a larger folder is listed in pages, each a round trip of its own. */
+    pageSize?: number;
 }
 
 /** Simulated upload speed, in bytes per second. */
@@ -57,12 +59,13 @@ const toEntry = (parentPath: string, node: MockNode): FileEntry => ({
 /**
  * An in-memory adapter over one or more unrelated root paths, with simulated latency so the
  * lazy loading can be seen. Entry ids are full paths, as a path-based backend would use, so a
- * renamed folder's id changes along with every id below it. Folders marked `fails` refuse to be
- * listed, renamed, deleted or written to.
+ * renamed folder's id changes along with every id below it. Large folders are listed in pages,
+ * with the offset of the next one as the cursor. Folders marked `fails` refuse to be listed,
+ * renamed, deleted or written to.
  */
 export const createMockAdapter = (
     roots: Record<string, MockNode[]>,
-    { latency = [250, 700] }: MockAdapterOptions = {},
+    { latency = [250, 700], pageSize = 2500 }: MockAdapterOptions = {},
 ): FileAdapter => {
     const folders = new Map<string, MockNode>();
 
@@ -215,10 +218,17 @@ export const createMockAdapter = (
     const clashes = (target: MockNode, node: MockNode) => !!target.children?.some((child) => child.name === node.name);
 
     return {
-        list: (folderId, { signal }) =>
-            respond<ListResult>(signal, () => ({
-                entries: (folderAt(folderId).children ?? []).map((child) => toEntry(folderId, child)),
-            })),
+        list: (folderId, { signal, cursor }) =>
+            respond<ListResult>(signal, () => {
+                const children = folderAt(folderId).children ?? [];
+                const start = cursor ? Number(cursor) : 0;
+                const end = start + pageSize;
+
+                return {
+                    entries: children.slice(start, end).map((child) => toEntry(folderId, child)),
+                    nextCursor: end < children.length ? String(end) : undefined,
+                };
+            }),
 
         createFolder: (parentId, name, { signal }) =>
             respond(signal, () => {

@@ -73,9 +73,10 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
     const target = folderOf(section, trail);
     const sourceId = folderOf(clipboard.section, clipboard.trail).id;
 
-    // The target is listed first when it isn't cached, as a folder dropped onto may never have been opened.
+    // The target is listed first when it isn't cached, as a folder dropped onto may never have been
+    // opened, and its clashes are only looked for once all its pages have come.
     const { state } = useFolder(section, target.id, true);
-    const listed = !!state?.entries || state?.status === "error";
+    const listed = (!!state?.entries && !state.partial) || state?.status === "error";
 
     const [checked, setChecked] = useState(false);
     const [conflicts, setConflicts] = useState<string[] | null>(null);

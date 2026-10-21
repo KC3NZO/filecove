@@ -1,4 +1,10 @@
-import type { FileAdapter, FolderState } from "../types";
+import type { FileAdapter, FileEntry, FolderState } from "../types";
+
+/**
+ * How often, at most, a folder listed for the first time in pages shows the pages that have come so
+ * far, in ms; the first one shows at once. Every showing sorts the listing again, wherever it's shown.
+ */
+const PAGE_INTERVAL = 500;
 
 /** Cache key of a folder. Sections are independent roots, so one id in two sections is two folders. */
 export const folderKey = (sectionId: string, folderId: string) => `${sectionId}\u0000${folderId}`;
@@ -51,6 +57,10 @@ export const createFolderStore = () => {
     /**
      * Lists a folder unless it is loaded or already loading. `force` lists it again either way,
      * replacing a request in flight, whose result could predate a change just made.
+     *
+     * A folder the adapter lists in pages is asked for page after page, as long as each hands back
+     * a cursor. Listed for the first time, it shows what has come so far as it goes (`partial`);
+     * listed again, the listing it had stays until the new one is complete.
      */
     const load = (key: string, adapter: FileAdapter, folderId: string, force = false) => {
         const current = states.get(key);
@@ -62,9 +72,12 @@ export const createFolderStore = () => {
         requests.get(key)?.abort();
 
         const controller = new AbortController();
+        const { signal } = controller;
+        // A request that was aborted or replaced no longer owns the folder.
+        const owns = () => requests.get(key) === controller;
+
         const settle = (state: FolderState) => {
-            // A request that was aborted or replaced no longer owns the folder.
-            if (requests.get(key) !== controller) {
+            if (!owns()) {
                 return;
             }
 
@@ -73,17 +86,53 @@ export const createFolderStore = () => {
             notify();
         };
 
-        requests.set(key, controller);
-        states.set(key, { status: "loading", entries: current?.entries });
-        notify();
+        const progressive = !current?.entries || !!current.partial;
+        const entries: FileEntry[] = [];
+        // An entry a later page repeats, as offset paging can while the folder changes, is listed once.
+        const listed = new Set<string>();
+        let shownAt = -Infinity;
 
         // Wrapped so an adapter that throws synchronously still ends up as an error state.
-        Promise.resolve()
-            .then(() => adapter.list(folderId, { signal: controller.signal }))
-            .then(
-                ({ entries }) => settle({ status: "ready", entries }),
-                (error: unknown) => settle({ status: "error", error }),
-            );
+        const listPage = (cursor?: string): Promise<void> =>
+            Promise.resolve()
+                .then(() => adapter.list(folderId, { signal, cursor }))
+                .then(({ entries: page, nextCursor }) => {
+                    if (!owns()) {
+                        return;
+                    }
+
+                    page.forEach((entry) => {
+                        if (!listed.has(entry.id)) {
+                            listed.add(entry.id);
+                            entries.push(entry);
+                        }
+                    });
+
+                    if (!nextCursor) {
+                        settle({ status: "ready", entries });
+
+                        return;
+                    }
+
+                    // Asked for the same page again and again, it would never end.
+                    if (nextCursor === cursor) {
+                        throw new Error("The adapter's list returned the cursor it was given.");
+                    }
+
+                    if (progressive && entries.length > 0 && performance.now() - shownAt >= PAGE_INTERVAL) {
+                        shownAt = performance.now();
+                        states.set(key, { status: "loading", entries: entries.slice(), partial: true });
+                        notify();
+                    }
+
+                    return listPage(nextCursor);
+                });
+
+        requests.set(key, controller);
+        states.set(key, { status: "loading", entries: current?.entries, partial: current?.partial });
+        notify();
+
+        listPage().catch((error: unknown) => settle({ status: "error", error }));
     };
 
     return {
@@ -148,15 +197,18 @@ export const createFolderStore = () => {
             }
         },
 
-        /** Cancels every request in flight, e.g. on unmount, and forgets their loading state. */
+        /**
+         * Cancels every request in flight, e.g. on unmount, and forgets their loading state. A
+         * listing being replaced is kept; one only partly listed is dropped, to be listed again.
+         */
         abortAll() {
             requests.forEach((controller, key) => {
                 controller.abort();
 
-                const entries = states.get(key)?.entries;
+                const state = states.get(key);
 
-                if (entries) {
-                    states.set(key, { status: "ready", entries });
+                if (state?.entries && !state.partial) {
+                    states.set(key, { status: "ready", entries: state.entries });
                 } else {
                     states.delete(key);
                 }

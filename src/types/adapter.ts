@@ -33,11 +33,20 @@ export interface FileEntry {
 export interface ListOptions {
     /** Aborted when the result is no longer wanted, e.g. the file manager unmounted. */
     signal: AbortSignal;
+    /** The `nextCursor` of the page before, when the folder is listed in pages; missing for the first page. */
+    cursor?: string;
 }
 
-/** An object rather than a bare array, so fields such as a paging cursor can be added later without a breaking change. */
+/** An object rather than a bare array, so fields can be added later without a breaking change. */
 export interface ListResult {
     entries: FileEntry[];
+    /**
+     * Where the next page starts, for a backend that lists a large folder in pages. The file manager
+     * calls `list` again with it as `cursor`, until a page comes without one, and shows the entries
+     * as they arrive. It's opaque to the file manager, e.g. a continuation token or an offset. Leave
+     * it out on the last page, or for a folder listed in one go.
+     */
+    nextCursor?: string;
 }
 
 /** Passed to calls that change the backend. */
@@ -81,7 +90,10 @@ export interface UploadOptions extends OperationOptions {
 }
 
 export interface FileAdapter {
-    /** Lists the direct children of a folder. Reject to show the folder as failed to load. */
+    /**
+     * Lists the direct children of a folder, all at once or a page at a time (`nextCursor`). Reject
+     * to show the folder as failed to load.
+     */
     list(folderId: string, options: ListOptions): Promise<ListResult>;
     /**
      * Creates a folder named `name` in `parentId` and resolves with its entry. Without it, the file
