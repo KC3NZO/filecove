@@ -21,8 +21,9 @@ export interface ActionContext {
     openFolder: (entry: FileEntry) => void;
     /**
      * Opens the one entry in `entries` as double-clicking it does: a folder in the file manager, and
-     * a file with the file manager's `onOpenFile`, or else in the preview. Missing unless there's
-     * exactly one entry, and for a file neither can open.
+     * a file with the file manager's `onOpenFile`, or in the preview when that declines it. Missing
+     * unless there's exactly one entry, and for files when the file manager has no `onOpenFile`,
+     * since opening one would only preview it, as `preview` does.
      */
     open?: () => void;
     /**

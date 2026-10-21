@@ -76,10 +76,12 @@ interface BaseProps {
     defaultSort?: SortOrder;
     /**
      * What opening a file does, by double-clicking, tapping or pressing Enter on it, or with
-     * `ActionContext.open`, e.g. opening it in an editor of the consumer's. Without it, a file opens
-     * in the preview, when the adapter has `content`.
+     * `ActionContext.open`, e.g. opening it in an editor of the consumer's. Return false to leave a
+     * file to the preview, e.g. one of a type there's no editor for. Without it, a file opens in the
+     * preview, when the adapter has `content`, and `ActionContext.open` is missing for files, since
+     * it would only do what `preview` does.
      */
-    onOpenFile?: (entry: FileEntry, context: ActionContext) => void;
+    onOpenFile?: (entry: FileEntry, context: ActionContext) => boolean | void;
 }
 
 interface MultiSectionProps extends BaseProps {
@@ -941,14 +943,17 @@ const FileManager = ({
                 preview,
             };
 
-            // Opened as double-clicking it does: a folder here, a file as the consumer says, or else
-            // in the preview.
-            if (entries.length === 1) {
-                if (only.kind === "folder") {
-                    context.open = () => context.openFolder(only);
-                } else {
-                    context.open = onOpenFile ? () => onOpenFile(only, context) : preview;
-                }
+            // Opened as double-clicking it does: a folder here, and a file as the consumer says, or
+            // in the preview when they decline it. Without `onOpenFile`, opening a file is only
+            // previewing it, which `preview` already offers.
+            if (entries.length === 1 && only.kind === "folder") {
+                context.open = () => context.openFolder(only);
+            } else if (entries.length === 1 && onOpenFile) {
+                context.open = () => {
+                    if (onOpenFile(only, context) === false) {
+                        preview?.();
+                    }
+                };
             }
 
             return context;
@@ -970,17 +975,22 @@ const FileManager = ({
         ],
     );
 
-    // Opens a file as double-clicking it does, with `onOpenFile` or else in the preview. Returns
-    // false when neither can open it.
+    // Opens a file as double-clicking it does, with `onOpenFile`, or in the preview when there's
+    // none or it declines the file. Returns false when nothing opened it.
     const openFile = useCallback(
         (request: MenuRequest) => {
-            const { open } = contextFor(request);
+            const context = contextFor(request);
+            const [entry] = request.entries;
 
-            open?.();
+            if (entry && onOpenFile && onOpenFile(entry, context) !== false) {
+                return true;
+            }
 
-            return !!open;
+            context.preview?.();
+
+            return !!context.preview;
         },
-        [contextFor],
+        [contextFor, onOpenFile],
     );
 
     const openMenu = useCallback<OpenMenu>(
