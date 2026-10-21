@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 
 import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
@@ -150,6 +150,14 @@ const mainSx: SxProps<Theme> = {
     minWidth: 0,
 };
 
+// Docked, the sidebar takes the panels' left margin; hidden, they take it back.
+const besideSidebar = {
+    [rootWide]: {
+        ml: 0,
+        '[data-sidebar-hidden="true"] &': { ml: 0.75 },
+    },
+};
+
 // The content sits as an inset, rounded panel on the window background, as in GNOME Files. The
 // panel itself doesn't scroll, so the outline it shows while the open folder would take a drop
 // stays put over the content scrolling under it, sticky column header included.
@@ -164,7 +172,7 @@ const panelSx: SxProps<Theme> = {
     borderRadius: 3,
     overflow: "hidden",
     bgcolor: "background.paper",
-    [rootWide]: { ml: 0 },
+    ...besideSidebar,
     // The folder view marks itself, inside the scrolling view, with `data-drop-target`.
     '&:has(> * > [data-drop-target="true"])::after': {
         content: '""',
@@ -189,7 +197,7 @@ const viewSx: SxProps<Theme> = {
 const uploadsSx: SxProps<Theme> = {
     mx: 0.75,
     mb: 0.75,
-    [rootWide]: { ml: 0 },
+    ...besideSidebar,
 };
 
 const pickerStyle: CSSProperties = { display: "none" };
@@ -241,6 +249,9 @@ const FileManager = ({
         () => new Set(section && section.showFolders !== false ? [folderKey(section.id, section.rootId)] : []),
     );
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    // Whether the docked sidebar is hidden, with F9 or the view menu. Collapsed, it shows as an
+    // overlay instead, while `sidebarOpen`.
+    const [sidebarHidden, setSidebarHidden] = useState(false);
     const [view, setView] = useState<ViewMode>(defaultView);
     // Kept across folders, as the view is.
     const [sort, setSort] = useState<SortOrder>(defaultSort);
@@ -437,22 +448,50 @@ const FileManager = ({
         setFocusContent(true);
     };
 
-    // F9 shows and hides the collapsed sidebar, as in GNOME Files. A docked sidebar can't be
-    // hidden yet, so it's left to the browser then.
-    const toggleSidebar = () => {
+    // Shows or hides the docked sidebar. Hidden with the focus in it, it hands the focus to the
+    // content. Shown from the "Show sidebar" button, which only shows while it's hidden and so
+    // goes, it takes the focus itself.
+    const showDocked = useCallback((shown: boolean) => {
         const sidebar = sidebarRef.current;
 
-        if (!sidebar || !overlays(sidebar)) {
-            return false;
+        if (!shown && sidebar?.contains(document.activeElement)) {
+            setFocusContent(true);
         }
 
-        if (sidebarOpen) {
+        if (shown && document.activeElement === sidebarButtonRef.current) {
+            flushSync(() => setSidebarHidden(false));
+            sidebar?.querySelector<HTMLElement>('[role="tree"]')?.focus();
+
+            return;
+        }
+
+        setSidebarHidden(!shown);
+    }, []);
+
+    // Docked or not, as container queries decide; hidden, the docked sidebar still says it docks.
+    const sidebarDocked = useCallback(() => !!sidebarRef.current && !overlays(sidebarRef.current), []);
+
+    // The header's "Show sidebar" button, shown while the sidebar is collapsed or hidden.
+    const showSidebar = useCallback(() => {
+        if (sidebarDocked()) {
+            showDocked(true);
+        } else {
+            openSidebar();
+        }
+    }, [sidebarDocked, showDocked, openSidebar]);
+
+    const toggleDocked = useCallback(() => showDocked(sidebarHidden), [showDocked, sidebarHidden]);
+
+    // F9 shows and hides the sidebar, as in GNOME Files: the overlay while it's collapsed, and
+    // the docked sidebar otherwise.
+    const toggleSidebar = () => {
+        if (sidebarDocked()) {
+            toggleDocked();
+        } else if (sidebarOpen) {
             closeSidebar();
         } else {
             openSidebar();
         }
-
-        return true;
     };
 
     // Keys that work anywhere in the file manager: F6, F9, and Alt+Left and Alt+Right for back and forward.
@@ -474,7 +513,7 @@ const FileManager = ({
         if (event.key === "F6" && !event.ctrlKey && !event.metaKey && !event.altKey) {
             switchPane();
         } else if (event.key === "F9" && plain) {
-            handled = toggleSidebar();
+            toggleSidebar();
         } else if (event.altKey && !others && event.key === "ArrowLeft") {
             goBack();
         } else if (event.altKey && !others && event.key === "ArrowRight") {
@@ -898,7 +937,7 @@ const FileManager = ({
                         onDragEnd={drag.end}
                         onKeyDown={handleKeyDown}
                     >
-                        <Box sx={frameSx}>
+                        <Box sx={frameSx} data-sidebar-hidden={sidebarHidden}>
                             <Backdrop
                                 open={sidebarOpen}
                                 sx={backdropSx}
@@ -913,6 +952,7 @@ const FileManager = ({
                                 expanded={expanded}
                                 openKey={openKey}
                                 open={sidebarOpen}
+                                hidden={sidebarHidden}
                                 onToggle={toggleExpanded}
                                 onExpand={expand}
                                 onNavigate={navigateFromSidebar}
@@ -941,13 +981,16 @@ const FileManager = ({
                                     sort={sort}
                                     showHidden={showHidden}
                                     selecting={selecting}
+                                    sidebarHidden={sidebarHidden}
+                                    sidebarDocked={sidebarDocked}
                                     onBack={goBack}
                                     onForward={goForward}
                                     onToggleView={toggleView}
                                     onSortChange={setSort}
                                     onToggleHidden={toggleHidden}
                                     onToggleSelecting={toggleSelecting}
-                                    onOpenSidebar={openSidebar}
+                                    onShowSidebar={showSidebar}
+                                    onToggleSidebar={toggleDocked}
                                     sidebarButtonRef={sidebarButtonRef}
                                 />
                                 <Box ref={panelRef} sx={panelSx}>

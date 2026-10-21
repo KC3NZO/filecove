@@ -41,6 +41,8 @@ interface SidebarProps {
     openKey: string | null;
     /** Whether the overlay is showing while the sidebar is collapsed; has no effect once it docks. */
     open: boolean;
+    /** Whether the docked sidebar is hidden; has no effect while it's collapsed. */
+    hidden: boolean;
     onToggle: (key: string) => void;
     /** Expands a collapsed folder or section that a drag rests on. */
     onExpand: (key: string) => void;
@@ -77,7 +79,7 @@ const sidebarSx: SxProps<Theme> = (theme) => ({
         visibility: "visible",
     },
 
-    // Docked beside the content.
+    // Docked beside the content, unless it's hidden.
     [rootWide]: {
         position: "relative",
         zIndex: "auto",
@@ -86,6 +88,7 @@ const sidebarSx: SxProps<Theme> = (theme) => ({
         transform: "none",
         visibility: "visible",
         transition: "none",
+        '&[data-hidden="true"]': { display: "none" },
     },
 });
 
@@ -189,6 +192,7 @@ const Sidebar = ({
     expanded,
     openKey,
     open,
+    hidden,
     onToggle,
     onExpand,
     onNavigate,
@@ -427,7 +431,14 @@ const Sidebar = ({
     );
 
     return (
-        <Box ref={ref} sx={sidebarSx} data-open={open} onKeyDown={handleKeyDown} onBlur={handleBlur}>
+        <Box
+            ref={ref}
+            sx={sidebarSx}
+            data-open={open}
+            data-hidden={hidden}
+            onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
+        >
             <Box sx={headerSx}>
                 <IconButton aria-label="Search">
                     <Icon name="search" fontSize="small" />

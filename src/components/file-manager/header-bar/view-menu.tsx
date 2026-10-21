@@ -10,6 +10,7 @@ import Menu from "@mui/material/Menu";
 import type { MenuProps } from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Radio from "@mui/material/Radio";
+import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { SORT_KEYS, SORT_KEY_INFO, withSortKey } from "../../../utils/sort";
@@ -20,8 +21,13 @@ import type { SortDirection, SortOrder } from "../../../types";
 interface ViewMenuProps {
     sort: SortOrder;
     showHidden: boolean;
+    /** Whether the docked sidebar is hidden. */
+    sidebarHidden: boolean;
+    /** Whether the sidebar docks at the moment, read as the menu opens. */
+    sidebarDocked: () => boolean;
     onSortChange: (sort: SortOrder) => void;
     onToggleHidden: () => void;
+    onToggleSidebar: () => void;
 }
 
 const DIRECTIONS: readonly SortDirection[] = ["asc", "desc"];
@@ -56,12 +62,29 @@ const controlSx: SxProps<Theme> = {
     pointerEvents: "none",
 };
 
+const shortcutSx: SxProps<Theme> = {
+    ml: 3,
+    color: "text.secondary",
+};
+
 /**
- * The header's view options: how the content is sorted, and whether hidden files show. It stays
- * open while options change, so the key and the direction can both be picked in one go.
+ * The header's view options: how the content is sorted, whether hidden files show and, while the
+ * sidebar docks, whether it shows. It stays open while options change, so the key and the
+ * direction can both be picked in one go.
  */
-const ViewMenu = ({ sort, showHidden, onSortChange, onToggleHidden }: ViewMenuProps) => {
+const ViewMenu = ({
+    sort,
+    showHidden,
+    sidebarHidden,
+    sidebarDocked,
+    onSortChange,
+    onToggleHidden,
+    onToggleSidebar,
+}: ViewMenuProps) => {
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+    // The menu portals out of the file manager, where its container queries don't reach, so
+    // whether the sidebar docks is read as it opens. Collapsed, the header's button shows it.
+    const [docked, setDocked] = useState(false);
     const keyInfo = SORT_KEY_INFO[sort.key];
 
     return (
@@ -70,7 +93,10 @@ const ViewMenu = ({ sort, showHidden, onSortChange, onToggleHidden }: ViewMenuPr
                 aria-label="View options"
                 aria-haspopup="menu"
                 aria-expanded={!!anchor}
-                onClick={(event) => setAnchor(event.currentTarget)}
+                onClick={(event) => {
+                    setDocked(sidebarDocked());
+                    setAnchor(event.currentTarget);
+                }}
             >
                 <Icon name="expand" fontSize="small" />
             </IconButton>
@@ -123,6 +149,28 @@ const ViewMenu = ({ sort, showHidden, onSortChange, onToggleHidden }: ViewMenuPr
                     </ListItemIcon>
                     <ListItemText>Show hidden files</ListItemText>
                 </MenuItem>
+                {docked && (
+                    <MenuItem
+                        role="menuitemcheckbox"
+                        aria-checked={!sidebarHidden}
+                        aria-keyshortcuts="F9"
+                        onClick={onToggleSidebar}
+                    >
+                        <ListItemIcon>
+                            <Checkbox
+                                size="small"
+                                checked={!sidebarHidden}
+                                tabIndex={-1}
+                                disableRipple
+                                sx={controlSx}
+                            />
+                        </ListItemIcon>
+                        <ListItemText>Show sidebar</ListItemText>
+                        <Typography variant="body2" sx={shortcutSx}>
+                            F9
+                        </Typography>
+                    </MenuItem>
+                )}
             </Menu>
         </>
     );

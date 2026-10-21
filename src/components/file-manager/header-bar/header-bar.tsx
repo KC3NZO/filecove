@@ -20,14 +20,21 @@ interface HeaderBarProps {
     showHidden: boolean;
     /** Whether touch selection mode is on. */
     selecting: boolean;
+    /** Whether the docked sidebar is hidden. */
+    sidebarHidden: boolean;
+    /** Whether the sidebar docks at the moment, rather than collapsing, as container queries decide. */
+    sidebarDocked: () => boolean;
     onBack: () => void;
     onForward: () => void;
     onToggleView: () => void;
     onSortChange: (sort: SortOrder) => void;
     onToggleHidden: () => void;
     onToggleSelecting: () => void;
-    onOpenSidebar: () => void;
-    /** The button that shows the collapsed sidebar, which takes the focus back when it closes. */
+    /** Opens the collapsed sidebar, or shows the hidden docked one. */
+    onShowSidebar: () => void;
+    /** Hides or shows the docked sidebar. */
+    onToggleSidebar: () => void;
+    /** The button that shows the sidebar, which takes the focus back when the overlay closes. */
     sidebarButtonRef?: Ref<HTMLButtonElement>;
 }
 
@@ -74,7 +81,10 @@ const endGroupSx: SxProps<Theme> = {
     gap: 0.25,
 };
 
-/** Only while the sidebar is collapsed: its toggle, and search, which otherwise lives in the sidebar. */
+/**
+ * Only while the sidebar is collapsed, or hidden: the button that shows it, and search, which
+ * otherwise lives in the sidebar.
+ */
 const collapsedOnlySx: SxProps<Theme> = {
     [rootWide]: { display: "none" },
 };
@@ -100,18 +110,27 @@ const HeaderBar = ({
     sort,
     showHidden,
     selecting,
+    sidebarHidden,
+    sidebarDocked,
     onBack,
     onForward,
     onToggleView,
     onSortChange,
     onToggleHidden,
     onToggleSelecting,
-    onOpenSidebar,
+    onShowSidebar,
+    onToggleSidebar,
     sidebarButtonRef,
 }: HeaderBarProps) => (
     <Box sx={headerSx}>
         <Box sx={startGroupSx}>
-            <IconButton ref={sidebarButtonRef} aria-label="Show sidebar" sx={collapsedOnlySx} onClick={onOpenSidebar}>
+            <IconButton
+                ref={sidebarButtonRef}
+                aria-label="Show sidebar"
+                aria-keyshortcuts="F9"
+                sx={sidebarHidden ? undefined : collapsedOnlySx}
+                onClick={onShowSidebar}
+            >
                 <Icon name="menu" fontSize="small" />
             </IconButton>
             <IconButton aria-label="Back" disabled={!canGoBack} onClick={onBack}>
@@ -131,7 +150,7 @@ const HeaderBar = ({
             >
                 <Icon name="selectMode" fontSize="small" />
             </IconButton>
-            <IconButton aria-label="Search" sx={collapsedOnlySx}>
+            <IconButton aria-label="Search" sx={sidebarHidden ? undefined : collapsedOnlySx}>
                 <Icon name="search" fontSize="small" />
             </IconButton>
             <IconButton aria-label={view === "list" ? "Grid view" : "List view"} onClick={onToggleView}>
@@ -140,8 +159,11 @@ const HeaderBar = ({
             <ViewMenu
                 sort={sort}
                 showHidden={showHidden}
+                sidebarHidden={sidebarHidden}
+                sidebarDocked={sidebarDocked}
                 onSortChange={onSortChange}
                 onToggleHidden={onToggleHidden}
+                onToggleSidebar={onToggleSidebar}
             />
         </Box>
     </Box>
