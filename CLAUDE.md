@@ -29,9 +29,10 @@ There is no test runner configured.
 
 - `index.ts` is the public entry. It exports `FileManager`, `IconProvider` and the public types, and nothing else is public.
 - `components/file-manager/` is the frame and its parts (`sidebar/`, `header-bar/`, `content/`, `context-menu/`, `dialogs/`).
+- `components/uploads/` has the upload panel, kept free of file manager imports so the planned media manager can reuse it (see `uploads.md`).
 - `components/icons/` has `Icon`, `IconProvider`, and `FileTypeIcon` / `FolderTypeIcon`, the only way to render `@react-symbols/icons`.
 - `types/` holds shared and exported types, one file per domain, re-exported from `types/index.ts`. Files marked internal stay out of `src/index.ts`.
-- `hooks/`, `contexts/`, `store/` (the folder listing cache), `utils/` (plain functions), `styles/` (container-query constants, style helpers) and `icon-sets/`.
+- `hooks/`, `contexts/`, `store/` (the folder listing cache and the upload queue), `utils/` (plain functions), `styles/` (container-query constants, style helpers) and `icon-sets/`.
 
 Imports are relative, with no path alias. The only barrels are `src/index.ts` and `src/types/index.ts`; everything else is imported by file, e.g. `components/icons/icon`.
 
@@ -39,7 +40,7 @@ Imports are relative, with no path alias. The only barrels are `src/index.ts` an
 
 `FileManager` (`src/components/file-manager/file-manager.tsx`) is a file manager for the web, so it has no built-in locations (no Home, Trash or Network). The consumer supplies everything:
 
-- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal })` returns `{ entries }` for one folder, called only when a folder is first opened or expanded. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working. Optional members switch features on: `createFolder`, `rename`, `copy`, `move` and `delete` so far.
+- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal })` returns `{ entries }` for one folder, called only when a folder is first opened or expanded. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working. Optional members switch features on: `createFolder`, `rename`, `copy`, `move`, `delete` and `upload` so far.
 - **`sections`** is `SectionGroup[]`. Each `Section` (id, label, icon, `rootId`, optional own `adapter`, optional `showFolders`, optional `importFrom`) is an independent root, with no connection to other sections even when they share an adapter. A single `section` can be passed instead, and its folders then fill the sidebar (see `file-manager.md`).
 - **`actions`** is `ActionGroup[]` for the context menu.
 
@@ -62,6 +63,7 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `types.md` | where types live | `src/` |
 | `component-styling.md` | container queries, palette tokens, CSS custom properties | `src/` |
 | `file-manager.md` | data store, navigation, context menu, sorting, the parts | `src/components/file-manager/`, `hooks/`, `store/`, `utils/` |
+| `uploads.md` | the upload queue and panel, dropping files from the desktop, what's shared with the media manager | upload store, hook, panel, dialog and types, `use-drop-target.ts`, `types/adapter.ts` |
 | `selection.md` | content and sidebar selection, marquee, touch selection mode | selection components, hooks and utils |
 | `icons.md` | icon packs, variants, `IconProvider`, adding an icon | `components/icons/`, `icon-sets/`, icon types |
 
