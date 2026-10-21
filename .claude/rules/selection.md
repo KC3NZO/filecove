@@ -21,7 +21,9 @@ paths:
 - Shift selects a range from the anchor;
 - Ctrl+Shift adds the range to the selection.
 
-In both panes, right-clicking a selected item (or using its ⋮) acts on that pane's whole selection, and any other item is selected alone first.
+In both panes, right-clicking a selected item (or using its ⋮, or the Menu key) acts on that pane's whole selection, and any other item is selected alone first.
+
+The keyboard selects too (see `keyboard.md`): in the content, plain arrows select as a click, Shift+arrows extend from the anchor, Ctrl+arrows only move the focus and Space toggles; in the tree, the arrows only move the focus, Space toggles and Shift+Space selects a range.
 
 ## Content
 

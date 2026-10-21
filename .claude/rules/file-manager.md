@@ -36,17 +36,18 @@ Sections served by the same adapter object can show the same folders, under the 
 `hooks/use-place-history.ts` holds the current `Place` (a section plus a trail of `FolderRef`s) and the back/forward history. `utils/navigation.ts` has `folderOf`, which returns the folder a place points at.
 
 - Breadcrumbs come from the trail, not from parsing ids. The path bar starts with the section label, followed by the folders below its root.
-- Navigating never expands or collapses the sidebar tree; only its chevrons and a drag resting on a row do (see "Drag and drop"), and the path bar shows where you are. Only the first section shown starts expanded.
+- Navigating never expands or collapses the sidebar tree; only its chevrons, Right and Left on a row, and a drag resting on a row do (see "Drag and drop"), and the path bar shows where you are. Only the first section shown starts expanded.
+- Going up to a folder the open one is in, by any route, selects the folder left through, and opening a folder from the content takes the focus into it (`arrive`; see `keyboard.md`). The header's back and forward go through `goBack` and `goForward` for this, which read where they lead from `usePlaceHistory`'s `previous` and `next`.
 
 ## Context menu and actions
 
 An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`. It also offers `createFolder()`, `rename()`, `copyTo()`, `moveTo()`, `cut()`, `copy()`, `delete()`, `upload()`, `paste()` and `pasteInto()`, which are left out when the section's adapter lacks the matching method (`rename` also when there isn't exactly one entry, `copyTo`, `moveTo`, `cut`, `copy` and `delete` when there are none, `upload` while another upload is being checked, `paste` and `pasteInto` when there's nothing to paste there, `pasteInto` also unless the entries are a single folder), so actions hide with `visible: (context) => !!context.rename`, or grey out with `disabled`. The consumer still places, labels and gates these actions; the file manager adds nothing to the menu itself.
 
 - Actions apply to any number of selected entries (copy, move, delete, compress...). Only actions marked `single: true`, such as rename, hide while several entries are selected.
-- The menu opens on right-click (items, content background, sidebar rows) and from the ⋮ buttons (list rows, path bar).
+- The menu opens on right-click (items, content background, sidebar rows), from the ⋮ buttons (list rows, path bar), and with the Menu key or Shift+F10 on a focused entry, tree row or the view (see `keyboard.md`).
 - When no action applies, the browser's own menu is left alone.
 - `context-menu/` renders the grouped menu from the groups that `utils/action-groups.ts` leaves visible.
-- An action's `shortcut` is also a key binding (`utils/shortcut.ts`; Ctrl matches ⌘ too). `folder-view.tsx` takes focus on any press (`tabIndex={-1}`) and hands key presses to `runShortcut` in `file-manager.tsx`, which tries the selection first and then the open folder, through the same `contextFor` and visibility rules as the menu. Shortcuts only work in the content for now, not the sidebar. Browsers keep some keys for themselves: Chrome never passes Shift+Ctrl+N (or Ctrl+N, Ctrl+T, Ctrl+W) to a page.
+- An action's `shortcut` is also a key binding (`utils/shortcut.ts`; Ctrl matches ⌘ too). `folder-view.tsx` takes focus on any press and hands key presses to `runShortcut` in `file-manager.tsx`, which tries the selection first and then the open folder, through the same `contextFor` and visibility rules as the menu. Sidebar tree rows do the same with the row (or the tree's selection) and then the row's own folder, and a section row with its root. Shortcuts come before the component's own keys. Browsers keep some keys for themselves: Chrome never passes Shift+Ctrl+N (or Ctrl+N, Ctrl+T, Ctrl+W) to a page.
 
 ## Creating and renaming
 
@@ -96,8 +97,7 @@ Entries only ever move or copy between sections served by the same adapter objec
 - While a paste runs, the open folder shows its progress bar (`busy`) if the paste changes it, in whichever section: it's the target, the folder listing the target, or the folder a cut leaves.
 - A cut is pasted once and leaves the clipboard; a copy can be pasted again. Entries moved by either route leave the clipboard (their ids may have changed), as do deleted ones, and a renamed entry is replaced by its new self. Entries below a renamed folder keep their stale ids, and pasting them reports the adapter's error.
 - Cut entries are marked wherever they're listed: `CutContext` (`contexts/cut-context.ts`) carries their ids and adapter, `hooks/use-cut-ids.ts` gives a section the ids it could be showing, and list rows, grid tiles and sidebar tree rows set `data-cut` for `cutMarker` (see `component-styling.md`).
-- Ctrl+V pastes into the open folder even with a folder selected, as in GNOME; the playground's "Paste into folder" has no shortcut.
-- Not yet: the shortcuts in the sidebar.
+- Ctrl+V pastes into the open folder even with a folder selected, as in GNOME; the playground's "Paste into folder" has no shortcut. On a sidebar tree row, Ctrl+V pastes into that folder.
 
 ## Drag and drop
 
@@ -131,7 +131,7 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 
 ## The parts
 
-- `sidebar/location-item.tsx` renders a section row and its lazily loaded folder tree (`TreeRow` is the shared row). A section with `showFolders: false` is a plain GNOME-style place: no chevron, no tree, and it never starts expanded. The default is `true`.
+- `sidebar/location-item.tsx` renders a section row and its lazily loaded folder tree (`TreeItem` is the shared `treeitem`, holding the row and the folders below it). A section with `showFolders: false` is a plain GNOME-style place: no chevron, no tree, and it never starts expanded. The default is `true`.
 
 ## Single section
 
