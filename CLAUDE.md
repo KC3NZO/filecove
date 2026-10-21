@@ -40,9 +40,11 @@ Imports are relative, with no path alias. The only barrels are `src/index.ts` an
 
 `FileManager` (`src/components/file-manager/file-manager.tsx`) is a file manager for the web, so it has no built-in locations (no Home, Trash or Network). The consumer supplies everything:
 
-- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal, cursor })` returns `{ entries, nextCursor }` for one folder, called only when a folder is first opened or expanded, and again for each further page while it hands back a `nextCursor`. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working. Optional members switch features on: `createFolder`, `rename`, `copy`, `move`, `delete` and `upload` so far.
+- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal, cursor })` returns `{ entries, nextCursor }` for one folder, called only when a folder is first opened or expanded, and again for each further page while it hands back a `nextCursor`. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working. Optional members switch features on: `createFolder`, `rename`, `copy`, `move`, `delete`, `upload` and `content` (a file's URL or bytes, for the preview) so far.
 - **`sections`** is `SectionGroup[]`. Each `Section` (id, label, icon, `rootId`, optional own `adapter`, optional `showFolders`, optional `importFrom`) is an independent root, with no connection to other sections even when they share an adapter. A single `section` can be passed instead, and its folders then fill the sidebar (see `file-manager.md`).
 - **`actions`** is `ActionGroup[]` for the context menu.
+
+Opening a file goes to the optional `onOpenFile(entry, context)`, or else to the built-in preview (see `preview.md`).
 
 ## Conventions
 
@@ -68,6 +70,7 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `keyboard.md` | keyboard navigation, focus, ARIA roles of the content and the tree | the frame, content, sidebar, context menu, transfer dialog, keyboard utils |
 | `virtualization.md` | rendering only the entries, tree rows and picker folders in or near view, the flattened sidebar tree, and what stays rendered | the content, the sidebar, the transfer dialog, the virtualization and tree-rows hooks, `use-marquee.ts`, `utils/dom.ts`, view and tree types |
 | `icons.md` | icon packs, variants, `IconProvider`, adding an icon | `components/icons/`, `icon-sets/`, icon types |
+| `preview.md` | opening files, `onOpenFile`, the adapter's `content`, the preview dialog and what it shows | the preview dialog, `utils/preview.ts`, preview, adapter and action types, the mock contents |
 
 When a feature is added or changed, document it in the matching rule (or a new one), not here. This file stays for things every session needs.
 

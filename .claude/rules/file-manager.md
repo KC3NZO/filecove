@@ -60,13 +60,17 @@ Below `rootWide` the sidebar is an overlay, opened and closed with `sidebarOpen`
 
 ## Context menu and actions
 
-An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`. It also offers `createFolder()`, `rename()`, `copyTo()`, `moveTo()`, `cut()`, `copy()`, `delete()`, `upload()`, `paste()` and `pasteInto()`, which are left out when the section's adapter lacks the matching method (`rename` also when there isn't exactly one entry, `copyTo`, `moveTo`, `cut`, `copy` and `delete` when there are none, `upload` while another upload is being checked, `paste` and `pasteInto` when there's nothing to paste there, `pasteInto` also unless the entries are a single folder), so actions hide with `visible: (context) => !!context.rename`, or grey out with `disabled`. The consumer still places, labels and gates these actions; the file manager adds nothing to the menu itself.
+An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`. It also offers `open()`, `preview()`, `createFolder()`, `rename()`, `copyTo()`, `moveTo()`, `cut()`, `copy()`, `delete()`, `upload()`, `paste()` and `pasteInto()`, which are left out when the section's adapter lacks the matching method (`preview` lacking `content`, also when the entries hold no file; `open` unless there's exactly one entry, and for a file nothing can open; `rename` also when there isn't exactly one entry, `copyTo`, `moveTo`, `cut`, `copy` and `delete` when there are none, `upload` while another upload is being checked, `paste` and `pasteInto` when there's nothing to paste there, `pasteInto` also unless the entries are a single folder), so actions hide with `visible: (context) => !!context.rename`, or grey out with `disabled`. The consumer still places, labels and gates these actions; the file manager adds nothing to the menu itself.
 
 - Actions apply to any number of selected entries (copy, move, delete, compress...). Only actions marked `single: true`, such as rename, hide while several entries are selected.
 - The menu opens on right-click (items, content background, sidebar rows), from the ⋮ buttons (list rows, path bar), and with the Menu key or Shift+F10 on a focused entry, tree row or the view (see `keyboard.md`).
 - When no action applies, the browser's own menu is left alone.
 - `context-menu/` renders the grouped menu from the groups that `utils/action-groups.ts` leaves visible.
 - An action's `shortcut` is also a key binding (`utils/shortcut.ts`; Ctrl matches ⌘ too). `folder-view.tsx` takes focus on any press and hands key presses to `runShortcut` in `file-manager.tsx`, which tries the selection first and then the open folder, through the same `contextFor` and visibility rules as the menu. Sidebar tree rows do the same with the row (or the tree's selection) and then the row's own folder, and a section row with its root. Shortcuts come before the component's own keys. Browsers keep some keys for themselves: Chrome never passes Shift+Ctrl+N (or Ctrl+N, Ctrl+T, Ctrl+W) to a page.
+
+## Opening files and previewing
+
+Opening a file (double-click, Enter, a tap, `open()`) goes to `FileManager`'s optional `onOpenFile`, or else to the preview, `dialogs/preview-dialog.tsx`, which shows what the adapter's optional `content` hands it. See `preview.md`.
 
 ## Creating and renaming
 
@@ -164,7 +168,7 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 The playground shows this mode with `?single` in the URL.
 - `header-bar/` holds back/forward, the path bar and the view buttons. Below `rootMedium` the path bar gets a full-width row under the buttons; from `rootMedium` up, it sits centred between them.
 - `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`file-list.tsx`, a `--columns` grid template) or the grid view (`file-grid.tsx`), which render only the entries in or near view (see `virtualization.md`).
-- `dialogs/` holds the modals, which portal to `<body>` like the context menu: `name-dialog.tsx`, `transfer-dialog.tsx`, `paste-dialog.tsx`, `delete-dialog.tsx` and `upload-dialog.tsx`, with `conflict-step.tsx` shared by the transfer, paste and upload dialogs.
+- `dialogs/` holds the modals, which portal to `<body>` like the context menu: `name-dialog.tsx`, `transfer-dialog.tsx`, `paste-dialog.tsx`, `delete-dialog.tsx`, `upload-dialog.tsx` and `preview-dialog.tsx`, with `conflict-step.tsx` shared by the transfer, paste and upload dialogs.
 - The upload panel under the content is `components/uploads/upload-panel.tsx`, outside `file-manager/` since it's meant to be shared (see `uploads.md`).
 - `icon-slot.tsx` fits consumer-supplied icons to the same 1.25rem box as the built-in ones.
 - `utils/format.ts` formats sizes, dates and type labels. These are English-only for now.

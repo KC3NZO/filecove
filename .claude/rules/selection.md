@@ -47,7 +47,7 @@ There are no modifier keys on touch, so the content has a selection mode instead
   - The header's Select button, shown only under `@media (hover: none)`.
 - In the mode every tap toggles, and a tap on empty space does nothing. `content/selection-bar.tsx` (sticky at the panel's bottom) offers ✕, the count, Select all or none, and ⋮ for the selection's menu. Leaving the mode clears the selection.
 - Rows and tiles show check badges (`content/item-icon.tsx`, keyed off `data-selecting` and `data-selected`).
-- Outside the mode, a touch tap opens a folder rather than selecting it.
+- Outside the mode, a touch tap opens a folder or a file rather than selecting it, and selects only a file nothing can open (see `preview.md`).
 - `folder-view.tsx` reads each press's `pointerType` rather than the device, so hybrid devices get both behaviours. A touch press's `contextmenu` is swallowed, since a long-press means select.
 - The sidebar tree has no touch selection.
 
