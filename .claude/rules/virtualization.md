@@ -1,17 +1,28 @@
 ---
 paths:
+  - "src/hooks/use-scroll-measure.ts"
   - "src/hooks/use-virtual-lines.ts"
+  - "src/hooks/use-virtual-rows.ts"
+  - "src/hooks/use-tree-rows.ts"
   - "src/hooks/use-marquee.ts"
   - "src/components/file-manager/content/**"
+  - "src/components/file-manager/sidebar/**"
   - "src/utils/dom.ts"
   - "src/types/view.ts"
+  - "src/types/tree.ts"
 ---
 
 # Virtualization
 
-The content renders only the entries in or near the scroll panel, so a folder of thousands of entries lists, scrolls and selects as fast as a small one. `hooks/use-virtual-lines.ts` does it for the list and the grid alike. `content/folder-view.tsx` calls it and hands the view its `VirtualLines` (`types/view.ts`) as `lines`. The sidebar tree and the transfer picker's folder list still render every folder.
+The content and the sidebar tree render only what's in or near their scroll panel, so a folder of thousands of entries, or of thousands of folders in the tree, lists, scrolls and selects as fast as a small one. The transfer picker's folder list still renders every folder.
 
-## Lines
+Both build on `hooks/use-scroll-measure.ts`, which measures a list against the panel it scrolls in: after every render, on the panel's `scroll`, and on resizing (a `ResizeObserver` on the list and the panel). A scroll or resize that changes the measure is rendered under `flushSync`, so what scrolls in appears in the same frame. `shownSpan` gives the part of the list the panel shows, widened by `OVERSCAN` (400px); without a scrolling ancestor it's null, and everything is rendered. The list's ref is a callback ref that tears down when called with null, rather than returning a cleanup, which React 18 would ignore.
+
+## The content
+
+`hooks/use-virtual-lines.ts` does it for the list and the grid alike. `content/folder-view.tsx` calls it and hands the view its `VirtualLines` (`types/view.ts`) as `lines`.
+
+### Lines
 
 Entries go in lines of equal height: one row per line in the list, as many tiles as fit in the grid. The listbox is a CSS grid, so CSS still lays out what the container queries decide, and the hook reads it:
 
@@ -19,18 +30,18 @@ Entries go in lines of equal height: one row per line in the list, as many tiles
 - The first entry rendered gives every line's height, so all rows, and all tiles, must be the same height. A list row's height never depends on its entry, and a tile's name always takes two lines (`minHeight: "2.7em"`).
 - Each rendered entry is absolutely positioned, with `top` from its line and, in the grid, `gridColumn: "<n> / span 1"`. An absolutely positioned child of a grid takes the grid area it's placed in as its containing block, so the tile fills its column. The span matters: with only a start line, the box runs to the listbox's far edge.
 - The listbox's `height` covers every line, so the panel scrolls as far as it would with every entry rendered.
-- The hook renders the lines within `OVERSCAN` (400px) of the panel's edges. It measures again after every render, on the panel's `scroll`, and on resizing (a `ResizeObserver` on the listbox and the panel). A scroll or resize that changes the measure is rendered under `flushSync`, so entries scrolling in appear in the same frame. Without a scrolling ancestor, every line is rendered.
+- The hook renders the lines `shownSpan` covers.
 - Rows (`FileRow`) and tiles (`FileTile`) are memoized, so scrolling only renders the ones coming into view.
 - The zebra stripe follows the entry's index (`data-striped`), not `:nth-of-type`, since the rendered rows aren't consecutive.
 
-## What stays rendered
+### What stays rendered
 
 `keep` lists entries that are rendered wherever they are:
 
 - The focused entry (`focusId`), so it keeps the focus and the view's Tab stop however far the panel scrolls.
 - The entry a drag started from, while it's dragged. `dragend` is dispatched to its element, and from a removed element it would never reach the root.
 
-## Finding entries by layout, not in the page
+### Finding entries by layout, not in the page
 
 Anything that used to look entries up in the page now works from where the layout puts them:
 
@@ -42,7 +53,36 @@ Anything that used to look entries up in the page now works from where the layou
 
 The playground's `archive` folder, in the API service section, holds 10,000 files for trying this out.
 
+## The sidebar tree
+
+The tree is flattened into the rows it shows (`hooks/use-tree-rows.ts`, `FlatTree` in `types/tree.ts`): the dividers and captions of the section groups, the sections, the folders below expanded rows, a folder's "Couldn't load" row, and a single section's loading and empty rows, top to bottom. Each row knows its `top` and `height`, and `hooks/use-virtual-rows.ts` renders those within `shownSpan`, found by binary search, as the rows differ in height.
+
+- Heights are constants in `styles/layout.ts` (`TREE_SECTION_HEIGHT`, `TREE_FOLDER_HEIGHT`, `TREE_CAPTION_HEIGHT`, `TREE_DIVIDER_HEIGHT`), not measured, since nothing in the sidebar changes with container queries. The 2px between a group's sections and around an expanded row's folders are kept in the offsets.
+- Every row is absolutely positioned in the `tree`, which is as tall as all of them. The section groups' `ul`s (`role="group"`) and a single section's `ul` hold their rows without taking room, so a group is still a `group` of the tree, but the folders below a row are no longer nested in it. Each `treeitem` says where it is with `aria-level`, `aria-setsize` and `aria-posinset`.
+- The guide lines along an expanded row's folders are elements of their own (`GuideLine`), one per expanded row, rendered where they cross the rows rendered, ahead of the rows so they're drawn behind them.
+- Folder and section rows are memoized, so scrolling only renders the rows coming into view.
+- Expanding and collapsing is instant, since there's no nested list left to animate.
+
+### Listings
+
+`useTreeRows` reads every listing it shows from the store, and is flattened again whenever any listing changes, by the store's `version`. Each listing's folders are sorted once, kept in a `WeakMap` by the listing, which is replaced rather than changed.
+
+- A folder is listed once the tree comes to show its folders: when it's expanded along with every row above it, and its `hasSubfolders` hint isn't false. A section's root is listed when the section is expanded, and a single section's root at once.
+- Only folders the tree has just come to show are listed, so a listing that failed isn't tried again on every change, only from its Retry or once it's shown again.
+
+### What stays rendered
+
+`keep` names the rows rendered wherever they are:
+
+- The focused row (`focusKey`), so it keeps the focus.
+- A row the focus is going to that isn't rendered yet (`focusRequest`).
+- The row a drag started from, while it's dragged (`grabbedKey`), for `dragend`, as in the content.
+
+Keyboard navigation, the hand-off of the focus when the focused row goes, and finding the row to focus as the tree is tabbed to all go by the rows, not the page (see `keyboard.md`).
+
+The playground's `datasets` folder, in the API service section, holds 5,000 folders for trying this out.
+
 ## Limits
 
-- Find in page (Ctrl+F) and a screen reader's browse mode only see the rendered entries.
+- Find in page (Ctrl+F) and a screen reader's browse mode only see the rendered entries and rows.
 - Browsers cap an element's height (about 17.9 million px in Firefox), so a folder of a few hundred thousand entries is cut short.

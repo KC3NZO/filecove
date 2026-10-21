@@ -13,7 +13,7 @@ paths:
 
 # Keyboard and screen readers
 
-Everything a pointer does in the content and the sidebar tree can be done from the keyboard, and both panes tell screen readers what they hold and what is selected. Plain key logic lives in `utils/keyboard.ts` (`stepIndex`, `matchName`, `isMenuKey`, the tree's `shownTreeItems`), and `hooks/use-type-ahead.ts` collects the letters typed in quick succession.
+Everything a pointer does in the content and the sidebar tree can be done from the keyboard, and both panes tell screen readers what they hold and what is selected. Plain key logic lives in `utils/keyboard.ts` (`stepIndex`, `matchName`, `isMenuKey`, `focusTreeItem`), and `hooks/use-type-ahead.ts` collects the letters typed in quick succession.
 
 ## Order of keys
 
@@ -54,13 +54,14 @@ The folder view is remounted per folder, so the focused element goes with it. `f
 
 ## Sidebar tree
 
-The sidebar's `nav` holds one `tree` (`aria-multiselectable`). Each section group is a `group` named by its title (the visible caption and the divider are `aria-hidden`), a single section's tree sits in a `ul` with `role="none"`, and each folder's children are a `group`. Every section and folder is a `treeitem` `li` with `aria-level`, `aria-expanded` when it can expand, `aria-selected`, `aria-current="page"` for the open folder, `aria-busy` while loading and `aria-label`, since its content includes the rows below it.
+The sidebar's `nav` holds one `tree` (`aria-multiselectable`). The tree is flat, since only the rows in or near view are rendered (see `virtualization.md`): each section group is a `group` named by its title (the visible caption and the divider are `aria-hidden`), holding its sections and the folders below them alike, and a single section's folders sit in a `ul` with `role="none"`. Every section and folder is a `treeitem` `li` that says where it is with `aria-level`, `aria-setsize` and `aria-posinset`, with `aria-expanded` when it can expand, `aria-selected`, `aria-current="page"` for the open folder, `aria-busy` while loading and `aria-label`.
 
-- The tree is one tab stop. Its container is tabbable while no row has the focus and hands it to the last focused row, else the open folder's, else the first (`handleTreeFocus`); while a row has it, the container leaves the tab order so Shift+Tab gets out. Rows have `tabIndex={-1}`, and a press on a row focuses its `li`.
-- The rows' main part and chevron are no longer buttons, the chevron is `aria-hidden`, and the ring is drawn on the row (`[role="treeitem"]:focus-visible > &`) since the `li` wraps its children.
-- Rows handle what acts on them, guarded so a key doesn't act on every row it bubbles through: Enter opens, Space toggles a folder in the tree's selection and Shift+Space selects a range (on a section, Space opens), Right expands, Left collapses, Menu or Shift+F10 opens its menu, and consumer shortcuts run with the folder (or the tree's selection, if it's in it) as entries and the folder itself as the "folder" target, so Ctrl+V pastes into it and F5 lists it again. A section row's shortcuts run in its root. The tree then moves the focus: Up, Down, Home, End over the rows shown (`shownTreeItems`), Right into an expanded row, Left to the row above, and typing by `aria-label`.
+- The tree is one tab stop. Its container is tabbable while no row has the focus and hands it to the last focused row (`focusKey`), else the open folder's, else the first (`handleTreeFocus`); while a row has it, the container leaves the tab order so Shift+Tab gets out. Rows have `tabIndex={-1}`, and a press on a row focuses its `li`.
+- The focused row stays rendered however far the tree scrolls. A row the focus moves to that isn't rendered yet is rendered first (`focusRequest`), then focused and scrolled to (`focusRow`).
+- The rows' main part and chevron are no longer buttons, the chevron is `aria-hidden`, and the ring is drawn on the row inside the `li` (`[role="treeitem"]:focus-visible > &`).
+- Rows handle what acts on them, guarded so a key doesn't act on every row it bubbles through: Enter opens, Space toggles a folder in the tree's selection and Shift+Space selects a range (on a section, Space opens), Right expands, Left collapses, Menu or Shift+F10 opens its menu, and consumer shortcuts run with the folder (or the tree's selection, if it's in it) as entries and the folder itself as the "folder" target, so Ctrl+V pastes into it and F5 lists it again. A section row's shortcuts run in its root. The tree then moves the focus, going by the flat rows (`useTreeRows`) rather than the page: Up, Down, Home, End over the rows shown, Right into an expanded row (to the row after it, when that's deeper), Left to the row above (the nearest row before it that's shallower), and typing by the rows' labels.
 - Moving the focus never opens or selects, as in the content with Ctrl held.
-- A row that unmounts while focused hands the focus to the row shown before it (`useFocusHandOff`, a layout effect cleanup, which runs while the row is still in the page).
+- A row that goes while focused, as a folder deleted or moved away does, hands the focus to the row shown before it, found among the rows of the render before (`previousRows`), since the focus has dropped to the page by then.
 - A folder that couldn't be listed shows a `treeitem` "Couldn't load. Retry", which Enter, Space or its link retries.
 
 ### The overlay

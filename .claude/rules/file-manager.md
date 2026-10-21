@@ -131,13 +131,13 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 
 ## The parts
 
-- `sidebar/location-item.tsx` renders a section row and its lazily loaded folder tree (`TreeItem` is the shared `treeitem`, holding the row and the folders below it). A section with `showFolders: false` is a plain GNOME-style place: no chevron, no tree, and it never starts expanded. The default is `true`.
+- The sidebar tree is flat: `hooks/use-tree-rows.ts` turns the sections and the listings of the expanded folders into the rows the tree shows, each placed where it goes, and lists a folder once the tree comes to show its folders. `sidebar/location-item.tsx` renders one row each: a section, a folder, a folder that couldn't be listed or a single section's status (`TreeItem` is the shared `treeitem`), and the guide lines along expanded folders. Only the rows in or near view are rendered (see `virtualization.md`). A section with `showFolders: false` is a plain GNOME-style place: no chevron, no tree, and it never starts expanded. The default is `true`.
 
 ## Single section
 
 `FileManager` takes either `sections` (groups) or a single `section`, never both; `FileManagerProps` is a union that enforces it, and `defaultSectionId` only exists with `sections`. Inside, a single section becomes one group of one, so navigation, the store and the path bar don't tell the modes apart. Only the sidebar does:
 
-- `SectionTree` (in `location-item.tsx`) lists the root's folders as the sidebar's top level, with no section row and nothing to collapse. The root loads straight away and shows loading, empty ("No folders") and error rows in place of the tree.
+- `useTreeRows`, given the `single` section, lists the root's folders as the sidebar's top level, with no section row and nothing to collapse. The root loads straight away and shows loading, empty ("No folders") and error rows in place of the tree.
 - The root itself is reached through the path bar's first crumb, since there is no row for it. There is no sidebar menu for the root either; the content background's menu covers it.
 - With `showFolders: false`, the single section falls back to its plain row, so the sidebar isn't empty.
 

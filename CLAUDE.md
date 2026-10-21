@@ -66,7 +66,7 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `uploads.md` | the upload queue and panel, dropping files from the desktop, what's shared with the media manager | upload store, hook, panel, dialog and types, `use-drop-target.ts`, `types/adapter.ts` |
 | `selection.md` | content and sidebar selection, marquee, touch selection mode | selection components, hooks and utils |
 | `keyboard.md` | keyboard navigation, focus, ARIA roles of the content and the tree | the frame, content, sidebar, context menu, transfer dialog, keyboard utils |
-| `virtualization.md` | rendering only the entries in or near view, and what stays rendered | the content, `use-virtual-lines.ts`, `use-marquee.ts`, `utils/dom.ts`, view types |
+| `virtualization.md` | rendering only the entries and tree rows in or near view, the flattened sidebar tree, and what stays rendered | the content, the sidebar, the virtualization and tree-rows hooks, `use-marquee.ts`, `utils/dom.ts`, view and tree types |
 | `icons.md` | icon packs, variants, `IconProvider`, adding an icon | `components/icons/`, `icon-sets/`, icon types |
 
 When a feature is added or changed, document it in the matching rule (or a new one), not here. This file stays for things every session needs.
