@@ -151,7 +151,21 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 
   The menu is the only control in the grid view, and in a list too narrow for its header row.
 - The sidebar tree ignores it and stays by name (`compareEntries`). Section order is the consumer's.
-- The same menu has a "Show hidden files" checkbox whose state isn't applied to listings yet, and, while the sidebar docks, "Show sidebar" (see "Hiding the docked sidebar").
+- The same menu has a "Show hidden files" checkbox (see "Hidden files"), and, while the sidebar docks, "Show sidebar" (see "Hiding the docked sidebar").
+
+## Hidden files
+
+"Show hidden files" in the header's view menu, off to start with, is `showHidden` in `file-manager.tsx`. It persists across folders, as the sort does. Whether an entry is hidden is `isHidden` (`utils/hidden.ts`): the entry's optional `hidden` when the adapter sets it, or else a name starting with a dot. So a backend with its own idea of hidden says so, and `hidden: false` keeps a dotfile always shown.
+
+- Listings are filtered where they're shown, never in the store, so clash checks (the paste, upload and name dialogs) and `relist` still see every entry: a hidden name can clash too.
+- The content view (`folder-view.tsx`) leaves hidden entries out before sorting, so selection, Select all, type-ahead, the marquee, the arrow keys, the selection bar's total, the screen reader's count and the preview's stepping (the `listing` of a `MenuRequest`) all go by what's shown. A folder holding only hidden entries reads "Folder is empty", as in GNOME Files.
+- The sidebar tree (`use-tree-rows.ts`) leaves out hidden folders, and a folder whose listing holds none that show loses its chevron. `sortedFolders` keeps both the whole sorted list and the unhidden one per listing. Expanded state is kept by folder key, so a hidden folder comes back as it was.
+- The "Move to…" and "Copy to…" picker leaves them out too, so a hidden destination is reached by turning the option on first.
+- The open folder stays open when it is hidden and the option is turned off, or when it's reached with it off, and the path bar shows it; only what's listed in it is filtered.
+- Selected entries that get hidden stay in the selection's id set, as removed ones do, but don't count: `selected` only holds listed entries. Turning the option back on brings them back selected.
+- A created or renamed entry to be revealed (`revealId`), or a folder left through that is hidden, is given up on while hidden entries are off, rather than waiting for a listing that will never show it.
+- `childCount` and `hasSubfolders` are the adapter's own and count hidden entries as the backend does.
+- Not yet: a shortcut for the checkbox (GNOME has Ctrl+H), the option's initial value as a prop, and keeping it across reloads.
 
 ## The parts
 

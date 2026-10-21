@@ -72,7 +72,7 @@ Loading shows a spinner. An adapter's rejection, or the browser failing to load 
 
 ## Stepping through files
 
-A single file steps through the files of the view it's listed in, in the content's order, starting at it: the content passes its sorted entries as `MenuRequest.listing`, and only the content has one. Several entries step through the files among them. Folders are skipped.
+A single file steps through the files of the view it's listed in, in the content's order, starting at it: the content passes its sorted entries as `MenuRequest.listing`, and only the content has one. Hidden files are not among them while they're not shown. Several entries step through the files among them. Folders are skipped.
 
 - Stepping through the folder, the content's selection follows the file shown (`follow`, `handlePreviewStep`, through `reveal`), as in GNOME's and macOS's previewers. Stepping through a selection leaves it as it was.
 - The arrow buttons, or Left and Right (swapped in RTL) except in a player, which seeks with them, and on a zoomed image, which pans with them. There's no wrapping round.
