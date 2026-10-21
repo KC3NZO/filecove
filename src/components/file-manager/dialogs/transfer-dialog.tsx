@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import type { FocusEvent, KeyboardEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -10,6 +10,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
@@ -18,8 +19,10 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
 import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
-import { dialogPaperSx, hoverBackground } from "../../../styles/mixins";
-import { folderOf } from "../../../utils/navigation";
+import { useTypeAhead } from "../../../hooks/use-type-ahead";
+import { dialogPaperSx, focusOutline, focusRing, hoverBackground } from "../../../styles/mixins";
+import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
+import { folderLeft, folderOf } from "../../../utils/navigation";
 import { compareEntries } from "../../../utils/sort";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
@@ -67,9 +70,8 @@ interface TransferDialogProps {
 
 const NO_MENU: OpenMenu = () => false;
 
-const slotProps = {
-    paper: { sx: dialogPaperSx },
-};
+// One column of rows, which never runs right to left, for `stepIndex`.
+const ROWS = { columns: 1, horizontal: false, rtl: false };
 
 const contentSx: SxProps<Theme> = {
     display: "flex",
@@ -102,21 +104,28 @@ const frame = {
 };
 
 // Not a flex container: `ListItemButton` grows along a flex axis, which would stretch every row.
+// It only takes the focus itself while no row can.
 const listSx: SxProps<Theme> = {
     ...frame,
     overflowY: "auto",
     py: 0.5,
+    outline: "none",
+    "&:focus-visible": focusOutline,
 };
 
+// Holds the focus in place of the list while the folder loads, or when it has no folders.
 const emptySx: SxProps<Theme> = {
     ...frame,
     display: "flex",
+    outline: "none",
+    "&:focus-visible": focusOutline,
 };
 
 const rowSx: SxProps<Theme> = (theme) => ({
     mx: 0.5,
     borderRadius: 1.5,
     "&:hover": { bgcolor: hoverBackground(theme) },
+    ...focusRing,
 });
 
 const rowIconSx: SxProps<Theme> = {
@@ -146,6 +155,12 @@ const isFolder = (entry: FileEntry) => entry.kind === "folder";
  * the sections the adapter serves that take entries from theirs, starting in the entries' own
  * folder. The entries themselves can't be opened, so a folder can never go into itself. Names the
  * destination already has are settled in a second step: replace, keep both, or skip.
+ *
+ * The list of folders is one stop in the tab order, focused once the dialog has faded in. The
+ * arrows, Home, End, PageUp and PageDown move between the rows that can be opened, and typing
+ * finds one by name; Enter or Space opens the focused folder, and Backspace or Alt+Up goes up, as
+ * the Back button does. Opening a folder or going up from the list keeps the focus in it, on the
+ * first row, or going up on the folder left through.
  */
 const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferDialogProps) => {
     const { kind, section, adapter, trail, entries, destinations } = request;
@@ -172,18 +187,148 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
 
     const { pending, failure, run: start, cancel, clearFailure } = useTransfer(request, refresh);
 
+    const typeAhead = useTypeAhead();
+    const listRef = useRef<HTMLUListElement>(null);
+    const frameRef = useRef<HTMLDivElement>(null);
+    const stateId = useId();
+    // The row with the list's Tab stop, which the arrow keys move from.
+    const [focusId, setFocusId] = useState<string | null>(null);
+    // Set while the list is to take the focus once it has rows to focus.
+    const pendingFocus = useRef(false);
+
+    // The rows that can be opened, in display order: the sections, or the folders other than the
+    // entries themselves. The row last focused has the Tab stop, or else the first.
+    const rows =
+        place === null
+            ? destinations.map((candidate) => ({ id: candidate.id, name: candidate.label }))
+            : (folders ?? [])
+                  .filter((folder) => !movingIds.has(folder.id))
+                  .map((folder) => ({ id: folder.id, name: folder.name }));
+    const tabStop = rows.find((row) => row.id === focusId)?.id ?? rows[0]?.id ?? null;
+    const loaded = place === null || !!folders || state?.status === "error";
+    const listLabel = place ? `Folders in ${targetFolder.name}` : "Locations";
+
+    // Gives the focus to the row with the Tab stop, read from the page so it works from the
+    // transition's callback too. While the folder loads, the box in the list's place holds it.
+    const settleFocus = useCallback(() => {
+        const body = listRef.current ?? frameRef.current;
+
+        if (!pendingFocus.current || !body) {
+            return;
+        }
+
+        const row = body.querySelector<HTMLElement>('[data-row-id][tabindex="0"]');
+
+        (row ?? body).focus();
+
+        if (row || body.getAttribute("aria-busy") !== "true") {
+            pendingFocus.current = false;
+        }
+    }, []);
+
+    useEffect(() => settleFocus());
+
+    // The list takes the focus once the dialog has faded in, so the arrows work straight away. The
+    // context menu hands the focus back to where it was opened from as it closes, which would win
+    // over anything sooner.
+    const slotProps = useMemo(
+        () => ({
+            paper: { sx: dialogPaperSx },
+            transition: {
+                onEntered: () => {
+                    pendingFocus.current = true;
+                    settleFocus();
+                },
+            },
+        }),
+        [settleFocus],
+    );
+
+    // Opening a folder from the list, or going up from it, takes the focused row away, so the list
+    // takes the focus again. Going up, the folder left through gets the Tab stop, as in the content.
     const go = (next: Place | null) => {
-        if (!pending) {
-            setPlace(next);
-            clearFailure();
+        if (pending) {
+            return;
+        }
+
+        const active = document.activeElement;
+        const left = place && next ? folderLeft(place, next) : undefined;
+
+        if (listRef.current?.contains(active) || frameRef.current?.contains(active)) {
+            pendingFocus.current = true;
+        }
+
+        setFocusId(left?.id ?? (next === null ? (place?.sectionId ?? null) : null));
+        setPlace(next);
+        clearFailure();
+    };
+
+    // Up to the folder above, or from a section's root to the list of sections when there are several.
+    const canGoUp = !!place && (place.trail.length > 0 || destinations.length > 1);
+
+    const goUp = () => {
+        if (!place || !canGoUp) {
+            return;
+        }
+
+        go(place.trail.length > 0 ? { ...place, trail: place.trail.slice(0, -1) } : null);
+    };
+
+    const handleListFocus = (event: FocusEvent) => {
+        const id = event.target instanceof HTMLElement ? event.target.dataset.rowId : undefined;
+
+        if (id !== undefined && id !== focusId) {
+            setFocusId(id);
         }
     };
 
-    const goUp = () => {
-        if (place?.trail.length) {
-            go({ ...place, trail: place.trail.slice(0, -1) });
-        } else {
-            go(null);
+    // Enter and Space are left to the rows, which open as a click does.
+    const handleListKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+        if (event.ctrlKey || event.metaKey) {
+            return;
+        }
+
+        if (
+            (event.key === "Backspace" && !event.altKey && !event.shiftKey) ||
+            (event.key === "ArrowUp" && event.altKey && !event.shiftKey)
+        ) {
+            event.preventDefault();
+            goUp();
+
+            return;
+        }
+
+        if (event.altKey) {
+            return;
+        }
+
+        const row = event.target instanceof HTMLElement && event.target.dataset.rowId ? event.target : null;
+        const index = row ? rows.findIndex((item) => item.id === row.dataset.rowId) : -1;
+        const page = row && listRef.current ? pageRows(listRef.current, row) : 1;
+        let next = stepIndex(event.key, Math.max(index, 0), rows.length, { ...ROWS, page });
+
+        // From the list itself, the arrows bring the focus to the first row.
+        if (next !== null && index < 0) {
+            next = event.key === "End" ? rows.length - 1 : 0;
+        }
+
+        // A space opens the focused row rather than going into a name.
+        if (next === null && isTypingKey(event) && event.key !== " ") {
+            event.preventDefault();
+            next = matchName(
+                rows.map((item) => item.name),
+                Math.max(index, 0),
+                typeAhead.type(event.key),
+            );
+        }
+
+        const nextRow = next === null ? undefined : rows[next];
+        const selector = nextRow && `[data-row-id="${CSS.escape(nextRow.id)}"]`;
+        const element = selector ? listRef.current?.querySelector<HTMLElement>(selector) : undefined;
+
+        if (element) {
+            event.preventDefault();
+            element.focus();
         }
     };
 
@@ -228,48 +373,74 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
                 <ConflictMessage names={conflicts} folderName={targetFolder.name} />
             </Box>
         );
-    } else if (!place) {
+    } else if (!place || folders?.length) {
         body = (
-            <List dense sx={listSx}>
-                {destinations.map((candidate) => (
-                    <ListItemButton key={candidate.id} sx={rowSx} onClick={() => go({ sectionId: candidate.id, trail: [] })}>
-                        <ListItemIcon sx={rowIconSx}>
-                            <IconSlot icon={candidate.icon ?? "folder"} />
-                        </ListItemIcon>
-                        <ListItemText primary={candidate.label} />
-                    </ListItemButton>
-                ))}
-            </List>
-        );
-    } else if (folders?.length) {
-        body = (
-            <List dense sx={listSx}>
-                {folders.map((folder) => (
-                    <ListItemButton
-                        key={folder.id}
-                        sx={rowSx}
-                        disabled={movingIds.has(folder.id)}
-                        onClick={() => go({ ...place, trail: [...place.trail, { id: folder.id, name: folder.name }] })}
-                    >
-                        <ListItemIcon sx={rowIconSx}>
-                            <FolderTypeIcon folderName={folder.name} size="1.25rem" />
-                        </ListItemIcon>
-                        <ListItemText primary={folder.name} />
-                    </ListItemButton>
-                ))}
+            <List
+                ref={listRef}
+                dense
+                sx={listSx}
+                aria-label={listLabel}
+                tabIndex={tabStop === null ? 0 : -1}
+                onFocus={handleListFocus}
+                onKeyDown={handleListKeyDown}
+            >
+                {!place &&
+                    destinations.map((candidate) => (
+                        <ListItem key={candidate.id} disablePadding>
+                            <ListItemButton
+                                sx={rowSx}
+                                tabIndex={candidate.id === tabStop ? 0 : -1}
+                                data-row-id={candidate.id}
+                                onClick={() => go({ sectionId: candidate.id, trail: [] })}
+                            >
+                                <ListItemIcon sx={rowIconSx}>
+                                    <IconSlot icon={candidate.icon ?? "folder"} />
+                                </ListItemIcon>
+                                <ListItemText primary={candidate.label} />
+                            </ListItemButton>
+                        </ListItem>
+                    ))}
+                {place &&
+                    folders?.map((folder) => (
+                        <ListItem key={folder.id} disablePadding>
+                            <ListItemButton
+                                sx={rowSx}
+                                disabled={movingIds.has(folder.id)}
+                                tabIndex={folder.id === tabStop ? 0 : -1}
+                                data-row-id={folder.id}
+                                onClick={() =>
+                                    go({ ...place, trail: [...place.trail, { id: folder.id, name: folder.name }] })
+                                }
+                            >
+                                <ListItemIcon sx={rowIconSx}>
+                                    <FolderTypeIcon folderName={folder.name} size="1.25rem" />
+                                </ListItemIcon>
+                                <ListItemText primary={folder.name} />
+                            </ListItemButton>
+                        </ListItem>
+                    ))}
             </List>
         );
     } else {
         body = (
-            <Box sx={emptySx}>
-                <Box sx={stateSx}>
+            <Box
+                ref={frameRef}
+                sx={emptySx}
+                tabIndex={0}
+                role="group"
+                aria-label={listLabel}
+                aria-describedby={stateId}
+                aria-busy={!loaded}
+                onKeyDown={handleListKeyDown}
+            >
+                <Box id={stateId} sx={stateSx}>
                     {folders && <Typography variant="body2">No folders</Typography>}
                     {!folders && state?.status === "error" && (
                         <Typography variant="body2">
                             Couldn't open this folder{state.error instanceof Error && `: ${state.error.message}`}
                         </Typography>
                     )}
-                    {!folders && state?.status !== "error" && <CircularProgress size={24} />}
+                    {!folders && state?.status !== "error" && <CircularProgress size={24} aria-label="Loading" />}
                 </Box>
             </Box>
         );
@@ -283,12 +454,7 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
             <DialogContent sx={contentSx}>
                 {!conflicts && (
                     <Box sx={toolbarSx}>
-                        <IconButton
-                            size="small"
-                            aria-label="Back"
-                            disabled={!place || (place.trail.length === 0 && destinations.length < 2)}
-                            onClick={goUp}
-                        >
+                        <IconButton size="small" aria-label="Back" disabled={!canGoUp} onClick={goUp}>
                             <Icon name="arrowBack" fontSize="small" />
                         </IconButton>
                         <Box sx={locationSx}>
@@ -317,7 +483,15 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
             </DialogContent>
             {conflicts ? (
                 <DialogActions>
-                    <Button color="inherit" disabled={!!pending} onClick={() => setConflicts(null)}>
+                    <Button
+                        color="inherit"
+                        disabled={!!pending}
+                        onClick={() => {
+                            // The list comes back in place of this button, so it takes the focus.
+                            pendingFocus.current = true;
+                            setConflicts(null);
+                        }}
+                    >
                         Back
                     </Button>
                     <Box sx={spacerSx} />
