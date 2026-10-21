@@ -22,6 +22,7 @@ import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { dialogPaperSx, focusOutline, focusRing, hoverBackground } from "../../../styles/mixins";
+import { isHidden } from "../../../utils/hidden";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { folderLeft, folderOf } from "../../../utils/navigation";
 import { compareEntries } from "../../../utils/sort";
@@ -59,6 +60,8 @@ export interface TransferDialogState {
 interface TransferDialogProps {
     open: boolean;
     request: TransferRequest;
+    /** Whether hidden folders are listed with the rest. */
+    showHidden: boolean;
     onClose: () => void;
     /**
      * Called whenever the adapter may have changed folders, done, failed or cancelled, with their
@@ -191,7 +194,7 @@ const isFolder = (entry: FileEntry) => entry.kind === "folder";
  * first row, or going up on the folder left through. Only the rows in or near view are rendered,
  * and the focused one, so a folder of thousands of folders opens as fast as a small one.
  */
-const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferDialogProps) => {
+const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone }: TransferDialogProps) => {
     const { kind, section, adapter, trail, entries, destinations } = request;
     const sourceId = folderOf(section, trail).id;
 
@@ -203,7 +206,13 @@ const TransferDialog = ({ open, request, onClose, onChanged, onDone }: TransferD
     const targetFolder = folderOf(target, place?.trail ?? []);
     const { state } = useFolder(target, targetFolder.id, place !== null);
 
-    const folders = useMemo(() => state?.entries?.filter(isFolder).sort(compareEntries), [state?.entries]);
+    const folders = useMemo(
+        () =>
+            state?.entries
+                ?.filter((entry) => isFolder(entry) && (showHidden || !isHidden(entry)))
+                .sort(compareEntries),
+        [state?.entries, showHidden],
+    );
     const movingIds = useMemo(() => new Set(entries.map((entry) => entry.id)), [entries]);
     // All of the folder has come, not just some of its pages, so its names can be checked for clashes.
     const listed = !!state?.entries && !state.partial;

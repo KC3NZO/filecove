@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
 import { folderKey } from "../store/folder-store";
 import { TREE_CAPTION_HEIGHT, TREE_DIVIDER_HEIGHT, TREE_FOLDER_HEIGHT, TREE_SECTION_HEIGHT } from "../styles/layout";
+import { isHidden } from "../utils/hidden";
 import { compareEntries } from "../utils/sort";
 import { useData } from "./use-folder";
 
@@ -27,21 +28,33 @@ const isFolder = (entry: FileEntry) => entry.kind === "folder";
 const firstListing = (state: FolderState | undefined) =>
     state?.status === "loading" && (!state.entries || !!state.partial);
 
-// A listing's folders in the tree's order, with their keys, sorted once per listing, since a
-// listing is replaced rather than changed.
-const sortedFolders = new WeakMap<FileEntry[], { folders: FileEntry[]; keys: string[] }>();
+// Whether the tree lists the folder: hidden ones only while hidden entries show.
+const isShownFolder = (entry: FileEntry, showHidden: boolean) => isFolder(entry) && (showHidden || !isHidden(entry));
 
-const foldersOf = (sectionId: string, entries: FileEntry[]) => {
+interface SortedFolders {
+    folders: FileEntry[];
+    keys: string[];
+}
+
+// A listing's folders in the tree's order, with their keys, all of them and the ones not hidden,
+// sorted once per listing, since a listing is replaced rather than changed.
+const sortedFolders = new WeakMap<FileEntry[], { all: SortedFolders; unhidden: SortedFolders }>();
+
+const foldersOf = (sectionId: string, entries: FileEntry[], showHidden: boolean) => {
     let sorted = sortedFolders.get(entries);
 
     if (!sorted) {
-        const folders = entries.filter(isFolder).sort(compareEntries);
+        const withKeys = (folders: FileEntry[]) => ({
+            folders,
+            keys: folders.map((entry) => folderKey(sectionId, entry.id)),
+        });
+        const all = entries.filter(isFolder).sort(compareEntries);
 
-        sorted = { folders, keys: folders.map((entry) => folderKey(sectionId, entry.id)) };
+        sorted = { all: withKeys(all), unhidden: withKeys(all.filter((entry) => !isHidden(entry))) };
         sortedFolders.set(entries, sorted);
     }
 
-    return sorted;
+    return showHidden ? sorted.all : sorted.unhidden;
 };
 
 /**
@@ -52,8 +65,10 @@ const flatten = (
     groups: SectionGroup[],
     single: Section | null,
     expanded: ReadonlySet<string>,
+    showHidden: boolean,
     stateOf: (section: Section, folderId: string) => FolderState | undefined,
 ) => {
+    const hasFolders = (entries: FileEntry[]) => entries.some((entry) => isShownFolder(entry, showHidden));
     const rows: TreeRow[] = [];
     const guides: TreeGuide[] = [];
     const shown: Shown[] = [];
@@ -90,7 +105,7 @@ const flatten = (
             return;
         }
 
-        const { folders, keys } = foldersOf(section.id, state.entries);
+        const { folders, keys } = foldersOf(section.id, state.entries, showHidden);
 
         folders.forEach((entry, index) => {
             const key = keys[index];
@@ -99,7 +114,7 @@ const flatten = (
             const folderTrail = [...trail, { id: entry.id, name: entry.name }];
             // Once the folder has been listed, the listing wins over the adapter's hint, e.g. after
             // a folder was created in it.
-            const hasNoFolders = own?.entries ? !own.entries.some(isFolder) : entry.hasSubfolders === false;
+            const hasNoFolders = own?.entries ? !hasFolders(own.entries) : entry.hasSubfolders === false;
 
             add({
                 kind: "folder",
@@ -155,7 +170,7 @@ const flatten = (
 
         if (!state || (state.status === "loading" && !state.entries)) {
             add({ kind: "status", id: "loading", top: offset, height: TREE_FOLDER_HEIGHT, group: 0, loading: true });
-        } else if (state.status === "ready" && !state.entries?.some(isFolder)) {
+        } else if (state.status === "ready" && !(state.entries && hasFolders(state.entries))) {
             add({ kind: "status", id: "empty", top: offset, height: TREE_FOLDER_HEIGHT, group: 0, loading: false });
         } else {
             addFolders(single, 0, single.rootId, ROOT_TRAIL, 0);
@@ -191,7 +206,8 @@ const flatten = (
             const showFolders = section.showFolders !== false;
             const isExpanded = showFolders && expanded.has(key);
             const state = stateOf(section, section.rootId);
-            const hasNoFolders = !showFolders || (state?.status === "ready" && !state.entries?.some(isFolder));
+            const hasNoFolders =
+                !showFolders || (state?.status === "ready" && !(state.entries && hasFolders(state.entries)));
 
             if (index > 0) {
                 offset += SECTION_GAP;
@@ -230,20 +246,25 @@ const flatten = (
  * The sidebar tree as a flat list of the rows it shows: the sections of `groups` with the folders
  * below the expanded ones, or `single`'s folders. Reading every listing it shows from the store,
  * it's flattened again whenever any listing changes. A folder is listed once the tree comes to
- * show its folders, as it's expanded or one above it is.
+ * show its folders, as it's expanded or one above it is. Hidden folders are left out unless
+ * `showHidden`.
  */
 export const useTreeRows = (
     groups: SectionGroup[],
     single: Section | null,
     expanded: ReadonlySet<string>,
+    showHidden: boolean,
 ): FlatTree => {
     const { store, adapter } = useData();
     const version = useSyncExternalStore(store.subscribe, store.version);
 
     const tree = useMemo(
-        () => flatten(groups, single, expanded, (section, folderId) => store.get(folderKey(section.id, folderId))),
+        () =>
+            flatten(groups, single, expanded, showHidden, (section, folderId) =>
+                store.get(folderKey(section.id, folderId)),
+            ),
         // `version` stands for the listings `flatten` reads.
-        [groups, single, expanded, store, version],
+        [groups, single, expanded, showHidden, store, version],
     );
 
     // Only folders the tree has just come to show are listed, so a folder whose listing failed is

@@ -21,6 +21,7 @@ import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { focusOutline, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
 import { focusLost } from "../../../utils/dom";
+import { isHidden } from "../../../utils/hidden";
 import { isMenuKey, isRtl, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { belowElement, insideElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
@@ -52,6 +53,8 @@ interface FolderViewProps {
     trail: FolderRef[];
     view: ViewMode;
     sort: SortOrder;
+    /** Whether hidden entries are listed with the rest. */
+    showHidden: boolean;
     hasActions: boolean;
     /** Touch selection mode: taps toggle entries, and the selection bar shows. */
     selecting: boolean;
@@ -172,6 +175,7 @@ const FolderView = ({
     trail,
     view,
     sort,
+    showHidden,
     hasActions,
     selecting,
     busy,
@@ -196,11 +200,17 @@ const FolderView = ({
     const adapter = section.adapter ?? data?.adapter;
     const draggable = !!(adapter?.move || adapter?.copy);
 
-    // Sorted here rather than in the store, since the sidebar tree shares the listing and keeps its own order.
-    const entries = useMemo(
-        () => (state?.entries ? [...state.entries].sort(entryComparator(sort)) : undefined),
-        [state?.entries, sort],
-    );
+    // Hidden entries are left out here rather than in the store, since clashing names are looked for
+    // among all of them. Sorted here too, since the sidebar tree shares the listing and keeps its own order.
+    const entries = useMemo(() => {
+        if (!state?.entries) {
+            return undefined;
+        }
+
+        const listed = showHidden ? [...state.entries] : state.entries.filter((entry) => !isHidden(entry));
+
+        return listed.sort(entryComparator(sort));
+    }, [state?.entries, showHidden, sort]);
 
     // Where each entry is listed, to find entries by id without searching a large folder.
     const indexById = useMemo(() => new Map(entries?.map((entry, index) => [entry.id, index] as const)), [entries]);
@@ -297,6 +307,21 @@ const FolderView = ({
         pendingFocus.current = false;
         onRevealed();
     }, [revealId, revealIndex, replace, onRevealed]);
+
+    // An entry to reveal that is hidden is never listed, so it's given up on.
+    const revealHidden = useMemo(
+        () =>
+            revealId !== undefined &&
+            !showHidden &&
+            !!state?.entries?.some((entry) => entry.id === revealId && isHidden(entry)),
+        [revealId, showHidden, state?.entries],
+    );
+
+    useEffect(() => {
+        if (revealHidden) {
+            onRevealed();
+        }
+    }, [revealHidden, onRevealed]);
 
     // Scrolls to the entry asked for, focusing it if asked to, once it's rendered, which it is once
     // it has the view's focus, and once the entries are in their places. An entry that's gone from

@@ -269,7 +269,7 @@ const FileManager = ({
     const [view, setView] = useState<ViewMode>(defaultView);
     // Kept across folders, as the view is.
     const [sort, setSort] = useState<SortOrder>(defaultSort);
-    // Only the view menu's checkbox for now; listings aren't filtered by it yet.
+    // Kept across folders, as the sort is. Listings are filtered by it where they're shown, never in the store.
     const [showHidden, setShowHidden] = useState(false);
     const [menu, setMenu] = useState<MenuState | null>(null);
     const [naming, setNaming] = useState<NameDialogState | null>(null);
@@ -1057,6 +1057,7 @@ const FileManager = ({
                                 groups={sections}
                                 single={singleSection}
                                 expanded={expanded}
+                                showHidden={showHidden}
                                 openKey={openKey}
                                 open={sidebarOpen}
                                 hidden={sidebarHidden}
@@ -1109,6 +1110,7 @@ const FileManager = ({
                                                 trail={place.trail}
                                                 view={view}
                                                 sort={sort}
+                                                showHidden={showHidden}
                                                 hasActions={hasActions}
                                                 selecting={selecting}
                                                 busy={busy}
@@ -1154,6 +1156,7 @@ const FileManager = ({
                                 key={`transfer:${transfer.id}`}
                                 open={transfer.open}
                                 request={transfer.request}
+                                showHidden={showHidden}
                                 onClose={closeTransfer}
                                 onChanged={relist}
                                 onDone={handleTransferred}

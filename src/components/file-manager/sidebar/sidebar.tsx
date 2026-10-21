@@ -37,6 +37,8 @@ interface SidebarProps {
     /** The file manager's only section, whose folders then fill the sidebar in place of `groups`. */
     single?: Section;
     expanded: ReadonlySet<string>;
+    /** Whether hidden folders are listed with the rest. */
+    showHidden: boolean;
     /** `folderKey` of the open folder. */
     openKey: string | null;
     /** Whether the overlay is showing while the sidebar is collapsed; has no effect once it docks. */
@@ -193,6 +195,7 @@ const Sidebar = ({
     groups,
     single,
     expanded,
+    showHidden,
     openKey,
     open,
     hidden,
@@ -218,7 +221,7 @@ const Sidebar = ({
 
     // A single section that hides its folders still gets its row, so the sidebar isn't left empty.
     const tree = single && single.showFolders !== false ? single : null;
-    const { rows, guides, height } = useTreeRows(groups, tree, expanded);
+    const { rows, guides, height } = useTreeRows(groups, tree, expanded, showHidden);
 
     // The focused row stays rendered wherever the tree is scrolled, so it keeps the focus, and so
     // does a row the focus is going to, and the row a drag started from while it's dragged, since

@@ -28,6 +28,13 @@ export interface FileEntry {
      * listing them first. Leave it out when the backend can't tell cheaply.
      */
     hasSubfolders?: boolean;
+    /**
+     * Whether the entry is hidden, so it only shows while "Show hidden files" is on. Leave it out to
+     * go by the name, which hides what starts with a dot. Set it for a backend with its own idea of
+     * hidden, such as a file attribute, or to `false` to always show a dotfile. Hidden entries are
+     * still listed, so name clashes are found among them.
+     */
+    hidden?: boolean;
     /** Anything else the adapter wants to carry for custom actions; the file manager ignores it. */
     meta?: Record<string, unknown>;
 }
