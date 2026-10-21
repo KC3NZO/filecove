@@ -106,7 +106,7 @@ const DragPreview = ({ ref, entry, count }: DragPreviewProps) => {
             <Box sx={stackSx}>
                 {layers}
                 <Box sx={pillSx}>
-                    <ItemIcon entry={entry} size="1.25rem" />
+                    <ItemIcon entry={entry} size={1.25} />
                     <Typography variant="body2" noWrap sx={nameSx}>
                         {entry.name}
                     </Typography>

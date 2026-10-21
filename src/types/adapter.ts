@@ -5,6 +5,8 @@
  * shared by both.
  */
 
+import type { ViewMode } from "./view";
+
 /** A file or folder as the adapter reports it. */
 export interface FileEntry {
     /**
@@ -102,6 +104,23 @@ export interface ContentOptions {
  */
 export type FileContent = { url: string; blob?: never } | { blob: Blob; url?: never };
 
+/** Passed to `thumbnail`. */
+export interface ThumbnailOptions {
+    /** Aborted when the thumbnail is no longer wanted, e.g. the file was scrolled out of view. */
+    signal: AbortSignal;
+    /**
+     * The view the file is shown in, whose thumbnails differ in size: small beside the name in the
+     * list, larger in the grid. A backend that keeps a few sizes picks one by it.
+     */
+    view: ViewMode;
+    /**
+     * The side of the square the thumbnail is fitted into, in device pixels (CSS pixels times
+     * `devicePixelRatio`), for a backend that makes thumbnails to order. A larger picture is shrunk
+     * to fit and a smaller one is shown as it is, never stretched.
+     */
+    size: number;
+}
+
 export interface FileAdapter {
     /**
      * Lists the direct children of a folder, all at once or a page at a time (`nextCursor`). Reject
@@ -153,4 +172,13 @@ export interface FileAdapter {
      * `Error` to show its message to the user.
      */
     content?(entry: FileEntry, options: ContentOptions): Promise<FileContent>;
+    /**
+     * Gives a small picture of a file, which the list and the grid show in place of its icon: a URL
+     * or the bytes, as `content` does, or null for a file with none. It's asked for as the file
+     * comes into view, once per view, a few at a time, so resolve with null at once for a file that
+     * can't have one, rather than asking the server. Thumbnails are kept while the file manager is
+     * mounted, and asked for again when a file's size or date modified changes. Without it, or when
+     * it rejects, the file's icon shows.
+     */
+    thumbnail?(entry: FileEntry, options: ThumbnailOptions): Promise<FileContent | null>;
 }

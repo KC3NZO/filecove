@@ -17,3 +17,7 @@ export const gridColumns = (element: Element) =>
 
 /** Whether the focus has left the page, as it does when the focused element is removed. */
 export const focusLost = () => !document.activeElement || document.activeElement === document.body;
+
+/** A length in rem as device pixels, at the root's font size and the screen's pixel ratio, rounded up. */
+export const devicePixels = (rem: number) =>
+    Math.ceil(rem * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) * window.devicePixelRatio);

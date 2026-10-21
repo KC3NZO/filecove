@@ -26,6 +26,7 @@ export type {
     SortDirection,
     SortKey,
     SortOrder,
+    ThumbnailOptions,
     TransferOptions,
     UploadOptions,
     ViewMode,

@@ -34,7 +34,8 @@ interface ColumnHeaderProps {
     onSortChange: (sort: SortOrder) => void;
 }
 
-interface FileRowProps extends Pick<FileViewProps, "draggable" | "hasActions" | "onSelect" | "onOpen" | "onMenu"> {
+interface FileRowProps
+    extends Pick<FileViewProps, "adapter" | "draggable" | "hasActions" | "onSelect" | "onOpen" | "onMenu"> {
     entry: FileEntry;
     /** Where the entry is listed, from 0. */
     index: number;
@@ -251,6 +252,7 @@ const FileRow = memo(
         focused,
         selected,
         cut,
+        adapter,
         draggable,
         dragged,
         dropTarget,
@@ -292,7 +294,7 @@ const FileRow = memo(
             }}
         >
             <Box sx={nameCellSx}>
-                <ItemIcon entry={entry} size="1.75rem" />
+                <ItemIcon entry={entry} size={1.75} adapter={adapter} view="list" />
                 <Box sx={nameTextSx}>
                     <Typography variant="body2" noWrap>
                         {entry.name}
@@ -347,6 +349,7 @@ const FileList = ({
     focusId,
     selectedIds,
     cutIds,
+    adapter,
     draggable,
     draggedIds,
     dropTargetId,
@@ -386,6 +389,7 @@ const FileList = ({
                         focused={entry.id === focusId}
                         selected={selectedIds.has(entry.id)}
                         cut={cutIds.has(entry.id)}
+                        adapter={adapter}
                         draggable={draggable}
                         dragged={draggedIds.has(entry.id)}
                         dropTarget={dropTargetId === entry.id}

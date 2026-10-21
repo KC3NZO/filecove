@@ -754,6 +754,7 @@ const FolderView = ({
                 focusId={focusId}
                 selectedIds={selectedIds}
                 cutIds={cutIds}
+                adapter={adapter}
                 draggable={draggable}
                 draggedIds={draggedIds}
                 dropTargetId={drop.dropKey}

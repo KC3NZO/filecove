@@ -8,6 +8,7 @@ export type {
     ListOptions,
     ListResult,
     OperationOptions,
+    ThumbnailOptions,
     TransferOptions,
     UploadOptions,
 } from "./adapter";

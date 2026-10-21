@@ -1,4 +1,4 @@
-import type { FileEntry } from "./adapter";
+import type { FileAdapter, FileEntry } from "./adapter";
 import type { MenuPosition } from "./menu";
 import type { SelectModifiers } from "./selection";
 
@@ -63,6 +63,8 @@ export interface FileViewProps {
     selectedIds: ReadonlySet<string>;
     /** Entries cut to the clipboard, shown faded until they're pasted. */
     cutIds: ReadonlySet<string>;
+    /** The folder's adapter, which may give its files thumbnails. */
+    adapter: FileAdapter | undefined;
     /** Entries can be dragged onto a folder, to be moved or copied into it. */
     draggable: boolean;
     /** Entries being dragged, shown faded until the drag ends. */

@@ -14,6 +14,7 @@ import { useEntryDrag } from "../../hooks/use-entry-drag";
 import { usePlaceHistory } from "../../hooks/use-place-history";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { createFolderStore, folderKey } from "../../store/folder-store";
+import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { visibleActionGroups } from "../../utils/action-groups";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
@@ -226,9 +227,11 @@ const FileManager = ({
     onOpenFile,
 }: FileManagerProps) => {
     const [store] = useState(createFolderStore);
-    const data = useMemo(() => ({ store, adapter }), [store, adapter]);
+    const [thumbnails] = useState(createThumbnailCache);
+    const data = useMemo(() => ({ store, adapter, thumbnails }), [store, adapter, thumbnails]);
 
     useEffect(() => () => store.abortAll(), [store]);
+    useEffect(() => () => thumbnails.clear(), [thumbnails]);
 
     // A single section is handled as one group of one, so only the sidebar needs to tell them apart.
     const sections = useMemo<SectionGroup[]>(

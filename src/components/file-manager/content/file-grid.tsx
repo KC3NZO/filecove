@@ -19,7 +19,7 @@ import ItemIcon from "./item-icon";
 
 import type { FileEntry, FileViewProps } from "../../../types";
 
-interface FileTileProps extends Pick<FileViewProps, "draggable" | "onSelect" | "onOpen" | "onMenu"> {
+interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "onSelect" | "onOpen" | "onMenu"> {
     entry: FileEntry;
     /** Where the entry is listed, from 0. */
     index: number;
@@ -110,6 +110,7 @@ const FileTile = memo(
         focused,
         selected,
         cut,
+        adapter,
         draggable,
         dragged,
         dropTarget,
@@ -147,7 +148,7 @@ const FileTile = memo(
                 }
             }}
         >
-            <ItemIcon entry={entry} size="3.5rem" />
+            <ItemIcon entry={entry} size={3.5} adapter={adapter} view="grid" />
             <Typography variant="body2" sx={nameSx}>
                 {entry.name}
             </Typography>
@@ -167,6 +168,7 @@ const FileGrid = ({
     focusId,
     selectedIds,
     cutIds,
+    adapter,
     draggable,
     draggedIds,
     dropTargetId,
@@ -197,6 +199,7 @@ const FileGrid = ({
                         focused={entry.id === focusId}
                         selected={selectedIds.has(entry.id)}
                         cut={cutIds.has(entry.id)}
+                        adapter={adapter}
                         draggable={draggable}
                         dragged={draggedIds.has(entry.id)}
                         dropTarget={dropTargetId === entry.id}

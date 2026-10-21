@@ -1,20 +1,43 @@
+import type { ReactNode } from "react";
+
 import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useThumbnail } from "../../../hooks/use-thumbnail";
 import { FileTypeIcon, FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 
-import type { FileEntry } from "../../../types";
+import type { FileAdapter, FileEntry, ViewMode } from "../../../types";
 
 interface ItemIconProps {
     entry: FileEntry;
-    size: string;
+    /** The icon's width and height, in rem. */
+    size: number;
+    /** The entry's adapter, which may give the file a thumbnail. */
+    adapter?: FileAdapter;
+    /** The view the entry is shown in, which its thumbnail is asked for; without it, the icon always shows. */
+    view?: ViewMode;
 }
 
 const wrapperSx: SxProps<Theme> = {
     position: "relative",
     display: "inline-flex",
     flexShrink: 0,
+};
+
+// The picture fits the icon's square, shrunk but never stretched. The row or tile takes presses,
+// right-clicks and drags, not the picture.
+const thumbnailSx: SxProps<Theme> = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    "& > img": {
+        display: "block",
+        maxWidth: "100%",
+        maxHeight: "100%",
+        borderRadius: 0.5,
+        pointerEvents: "none",
+    },
 };
 
 // Only shown in touch selection mode, set as `data-selecting` on the folder view: an empty ring,
@@ -39,17 +62,32 @@ const badgeSx: SxProps<Theme> = {
     '[data-selected="true"] & > svg': { visibility: "visible" },
 };
 
-const ItemIcon = ({ entry, size }: ItemIconProps) => (
-    <Box sx={wrapperSx}>
-        {entry.kind === "folder" ? (
-            <FolderTypeIcon folderName={entry.name} size={size} />
-        ) : (
-            <FileTypeIcon fileName={entry.name} size={size} />
-        )}
-        <Box sx={badgeSx} aria-hidden>
-            <Icon name="check" />
+/** An entry's type icon, or its file's thumbnail once one has loaded, with the check badge of touch selection. */
+const ItemIcon = ({ entry, size, adapter, view }: ItemIconProps) => {
+    const thumbnail = useThumbnail(entry, adapter, view, size);
+    const length = `${size}rem`;
+    let icon: ReactNode;
+
+    if (thumbnail) {
+        icon = (
+            <Box sx={thumbnailSx} style={{ width: length, height: length }}>
+                <img src={thumbnail} alt="" draggable={false} />
+            </Box>
+        );
+    } else if (entry.kind === "folder") {
+        icon = <FolderTypeIcon folderName={entry.name} size={length} />;
+    } else {
+        icon = <FileTypeIcon fileName={entry.name} size={length} />;
+    }
+
+    return (
+        <Box sx={wrapperSx}>
+            {icon}
+            <Box sx={badgeSx} aria-hidden>
+                <Icon name="check" />
+            </Box>
         </Box>
-    </Box>
-);
+    );
+};
 
 export default ItemIcon;

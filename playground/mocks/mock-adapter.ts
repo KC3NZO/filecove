@@ -1,4 +1,4 @@
-import { sampleContent } from "./mock-content";
+import { sampleContent, shrink, thumbnailSource } from "./mock-content";
 
 import type { ConflictPolicy, FileAdapter, FileContent, FileEntry, ListResult } from "../../src";
 
@@ -11,7 +11,10 @@ export interface MockNode {
     /** ISO date-time. */
     modified?: string;
     mimeType?: string;
-    /** An uploaded file's bytes, which the preview shows; other files get contents made up from their names. */
+    /**
+     * An uploaded file's bytes, which the preview shows, and the thumbnail when it's a picture;
+     * other files get contents made up from their names.
+     */
     blob?: Blob;
     /** Listing this folder, or reading this file, fails, to show the error states. */
     fails?: boolean;
@@ -339,5 +342,22 @@ export const createMockAdapter = (
 
                 return node.blob ? { blob: node.blob } : sampleContent(node.name, node.size, node.mimeType);
             }),
+
+        // Made to order, shrunk to the size asked for in either view; a backend keeping a few sizes
+        // would pick one by `view`. A file with none is answered at once, without a round trip.
+        thumbnail: (entry, { signal, size }) =>
+            Promise.resolve()
+                .then(() => {
+                    const { node } = locate(entry);
+
+                    if (node.blob) {
+                        return node.blob.type.startsWith("image/") ? node.blob : null;
+                    }
+
+                    return node.children ? null : thumbnailSource(node.name, node.mimeType);
+                })
+                .then((source) => source && respond(signal, () => source))
+                .then((source) => source && shrink(source, size))
+                .then((thumbnail) => thumbnail && { blob: thumbnail }),
     };
 };

@@ -2,7 +2,7 @@ import type { FileContent } from "../../src";
 
 // Made-up contents for the mock adapter's files, so the preview has something to show. Pictures,
 // PDFs, sounds and text are made from the file's name; videos come from MDN's public samples, to
-// show a URL being handed over rather than bytes.
+// show a URL being handed over rather than bytes. Thumbnails are made from the same pictures.
 
 /** Longest text made up for a file, however large it says it is. */
 const MAX_TEXT = 1_000_000;
@@ -164,9 +164,13 @@ const hueOf = (name: string) => [...name].reduce((hash, char) => (hash * 31 + ch
 
 const escapeXml = (value: string) => value.replace(/[&<>"]/g, (char) => `&#${char.charCodeAt(0)};`);
 
-/** A landscape in the name's colours, with the name on it. */
-const picture = (name: string) => {
+/** A landscape in the name's colours, with the name on it unless it's for a thumbnail, too small to read. */
+const picture = (name: string, labelled = true) => {
     const hue = hueOf(name);
+    const label = labelled
+        ? `<text x="80" y="150" font-family="system-ui, sans-serif" font-size="72" font-weight="600" fill="white">
+${escapeXml(name)}</text>`
+        : "";
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
 <defs><linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
 <stop offset="0" stop-color="hsl(${hue} 70% 62%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360} 65% 34%)"/>
@@ -174,8 +178,7 @@ const picture = (name: string) => {
 <rect width="1600" height="1000" fill="url(#sky)"/>
 <circle cx="1240" cy="260" r="140" fill="hsl(${(hue + 30) % 360} 90% 88% / 0.6)"/>
 <path d="M0 820 L420 480 L760 760 L1060 560 L1600 900 L1600 1000 L0 1000 Z" fill="hsl(${hue} 40% 18% / 0.6)"/>
-<text x="80" y="150" font-family="system-ui, sans-serif" font-size="72" font-weight="600" fill="white">
-${escapeXml(name)}</text>
+${label}
 </svg>`;
 
     return new Blob([svg], { type: "image/svg+xml" });
@@ -188,6 +191,22 @@ const logo = (name: string) => {
 <circle cx="128" cy="128" r="120" fill="hsl(${hue} 70% 50%)"/>
 <text x="128" y="166" text-anchor="middle" font-family="system-ui, sans-serif" font-size="120" font-weight="700"
 fill="white">${escapeXml(name[0]?.toUpperCase() ?? "?")}</text>
+</svg>`;
+
+    return new Blob([svg], { type: "image/svg+xml" });
+};
+
+/** A page with a heading in the name's colour and lines of text, standing for a PDF's first page. */
+const page = (name: string) => {
+    const lines = Array.from({ length: 10 }, (_, line) => {
+        const width = line % 4 === 3 ? 280 : 468;
+
+        return `<rect x="72" y="${200 + line * 48}" width="${width}" height="16" rx="8" fill="#c4c8cf"/>`;
+    }).join("");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="612" height="792" viewBox="0 0 612 792">
+<rect x="6" y="6" width="600" height="780" fill="#fafafa" stroke="#b8bcc4" stroke-width="12"/>
+<rect x="72" y="96" width="320" height="44" rx="10" fill="hsl(${hueOf(name)} 55% 45%)"/>
+${lines}
 </svg>`;
 
     return new Blob([svg], { type: "image/svg+xml" });
@@ -262,10 +281,15 @@ const chime = () => {
     return new Blob([view.buffer], { type: "audio/wav" });
 };
 
+const extensionOf = (name: string) => {
+    const dot = name.lastIndexOf(".");
+
+    return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+};
+
 /** Contents for a mock file, made up from its name, claimed size and type. */
 export const sampleContent = (name: string, size?: number, mimeType?: string): FileContent => {
-    const dot = name.lastIndexOf(".");
-    const extension = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+    const extension = extensionOf(name);
 
     if (VIDEOS.has(extension) || mimeType?.startsWith("video/")) {
         return { url: SAMPLE_VIDEOS[extension] ?? SAMPLE_VIDEOS.mp4 };
@@ -292,4 +316,71 @@ export const sampleContent = (name: string, size?: number, mimeType?: string): F
     }
 
     return { blob: new Blob([text(name, size)], { type: mimeType ?? "text/plain" }) };
+};
+
+/**
+ * The picture a mock file's thumbnail is made from, or null for a file a backend would have none
+ * for: pictures and logos as they are, without the name, and a PDF's first page.
+ */
+export const thumbnailSource = (name: string, mimeType?: string) => {
+    const extension = extensionOf(name);
+
+    if (extension === "svg") {
+        return logo(name);
+    }
+
+    if (PICTURES.has(extension) || mimeType?.startsWith("image/")) {
+        return picture(name, false);
+    }
+
+    if (extension === "pdf") {
+        return page(name);
+    }
+
+    return null;
+};
+
+/**
+ * A copy of a picture at most `size` px on its longer side, as PNG, as a backend making thumbnails
+ * to order would make it; null for a picture the browser can't draw. One with no size of its own,
+ * such as an SVG with only a `viewBox`, scales to anything, so it comes back as it was, and so does
+ * one the canvas can't be read back from.
+ */
+export const shrink = async (blob: Blob, size: number) => {
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+
+    try {
+        await new Promise((resolve, reject) => {
+            image.onload = resolve;
+            image.onerror = reject;
+            image.src = url;
+        });
+    } catch {
+        return null;
+    } finally {
+        URL.revokeObjectURL(url);
+    }
+
+    const { naturalWidth: width, naturalHeight: height } = image;
+
+    if (!width || !height) {
+        return blob;
+    }
+
+    const scale = Math.min(size / width, size / height, 1);
+    const canvas = document.createElement("canvas");
+
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+
+    try {
+        canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        const shrunk = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+
+        return shrunk ?? blob;
+    } catch {
+        return blob;
+    }
 };
