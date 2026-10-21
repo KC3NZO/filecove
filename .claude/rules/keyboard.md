@@ -5,6 +5,7 @@ paths:
   - "src/components/file-manager/sidebar/**"
   - "src/components/file-manager/header-bar/header-bar.tsx"
   - "src/components/file-manager/context-menu/**"
+  - "src/components/file-manager/dialogs/transfer-dialog.tsx"
   - "src/utils/keyboard.ts"
   - "src/utils/shortcut.ts"
   - "src/hooks/use-type-ahead.ts"
@@ -20,12 +21,13 @@ A key press goes to the consumer's shortcuts before the component's own keys, so
 
 | Where | Keys |
 |---|---|
-| Anywhere in the file manager (`file-manager.tsx`) | F6 between the sidebar tree and the content, Alt+Left and Alt+Right for back and forward |
+| Anywhere in the file manager (`file-manager.tsx`) | F6 between the sidebar tree and the content, F9 to show and hide the collapsed sidebar, Alt+Left and Alt+Right for back and forward |
 | Content (`content/folder-view.tsx`) | arrows, Home, End, PageUp, PageDown, Space, Shift+Space, Enter, Alt+Down, Backspace, Alt+Up, Ctrl+A, Escape, typing, Menu or Shift+F10 |
 | Sidebar tree (`sidebar/sidebar.tsx`, `TreeItem` in `sidebar/location-item.tsx`) | Up, Down, Home, End, Right, Left, Enter, Space, Shift+Space, typing, Menu or Shift+F10, Escape (closes the overlay) |
+| "Move to…" and "Copy to…" (`dialogs/transfer-dialog.tsx`) | Up, Down, Home, End, PageUp, PageDown, typing, Enter or Space to open, Backspace or Alt+Up to go up |
 
 - The root's handler ignores presses from the menus and dialogs, which portal out of it but still bubble through React's tree, by checking that the DOM holds the target.
-- Browsers keep some keys. Chrome never passes Ctrl+N, Ctrl+T or Ctrl+W to a page, and F6 or Alt+Left may be taken by the browser before the page sees them.
+- Browsers keep some keys. Chrome never passes Ctrl+N, Ctrl+T or Ctrl+W to a page, and F6, F9 or Alt+Left may be taken by the browser before the page sees them.
 - Left and Right swap when the view or tree computes as `direction: rtl` (`isRtl`), ahead of RTL support.
 
 ## Content
@@ -63,7 +65,21 @@ The sidebar's `nav` holds one `tree` (`aria-multiselectable`). Each section grou
 
 ### The overlay
 
-Below `rootWide` the sidebar takes the focus as it opens. Escape closes it, giving the focus back to the "Show sidebar" button (`closeSidebar`, which does nothing to the focus while docked since that button is hidden), and focus moving on to the rest of the file manager, by Tab for instance, closes it as a click behind it does. Focus going to a menu or dialog, outside the file manager, keeps it open. `overlays()` in `file-manager.tsx` tells the two modes apart from the sidebar's computed `position`, as container queries decide it.
+Below `rootWide` the sidebar is collapsed, and two keys open it besides the "Show sidebar" button: F9 shows and hides it, as in GNOME Files, and F6 opens it from anywhere outside it. It takes the focus as it opens.
+
+- `openSidebar` keeps what had the focus (`sidebarOpener`), and `closeSidebar` gives the focus back to it, or to the "Show sidebar" button when it's gone, if the focus was in the overlay. Escape and F9 close it so.
+- Focus moving on to the rest of the file manager, by Tab or F6 for instance, closes it as a click behind it does, and leaves the focus where it went. Focus going to a menu or dialog, outside the file manager, keeps it open.
+- Docked, F9 does nothing and is left to the browser, since a docked sidebar can't be hidden yet, and closing never moves the focus.
+- `overlays()` in `file-manager.tsx` tells the two modes apart from the sidebar's computed `position`, as container queries decide it.
+
+## Move and copy dialog
+
+The transfer picker's folder list (`dialogs/transfer-dialog.tsx`) is one tab stop, focused once the dialog has faded in (the transition's `onEntered`, since the closing context menu takes back focus given any sooner), so the path bar, the list and the buttons are three stops rather than one per folder.
+
+- Rows are `ListItemButton`s in `ListItem`s with a roving `tabIndex`. The arrows, Home, End, PageUp and PageDown move between the rows that can be opened, skipping the entries themselves, and typing finds one by name (`stepIndex`, `matchName`), without spaces, since Space opens a row.
+- Enter or Space opens the focused folder or section, as a click does, and Backspace or Alt+Up goes up as the Back button does (`canGoUp`).
+- Opening a folder or going up from the list keeps the focus in it (`pendingFocus`, settled after each render from the row with `tabindex="0"`): on the first row, or going up, on the folder left through (`folderLeft`), or the section left when going back to the list of sections. While a folder loads, or when it has no folders, the box in the list's place holds the focus, still taking Backspace, and is a `group` named by the folder. The conflict step's Back gives the focus back to the list.
+- Going up with the path bar or the Back button leaves the focus there, but the folder left through still gets the list's Tab stop.
 
 ## Context menu
 
@@ -71,4 +87,4 @@ MUI's `Menu` gives the arrows, Enter, Escape and type-ahead, and gives the focus
 
 ## Not yet
 
-Moving entries by keyboard other than cut and paste, and a way into a collapsed overlay sidebar other than its button.
+A one-step keyboard drop onto a folder; moving and copying go through cut and paste or the transfer dialog. Hiding the docked sidebar, with F9 or otherwise.

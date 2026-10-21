@@ -65,7 +65,7 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `file-manager.md` | data store, navigation, context menu, sorting, the parts | `src/components/file-manager/`, `hooks/`, `store/`, `utils/` |
 | `uploads.md` | the upload queue and panel, dropping files from the desktop, what's shared with the media manager | upload store, hook, panel, dialog and types, `use-drop-target.ts`, `types/adapter.ts` |
 | `selection.md` | content and sidebar selection, marquee, touch selection mode | selection components, hooks and utils |
-| `keyboard.md` | keyboard navigation, focus, ARIA roles of the content and the tree | the frame, content, sidebar, context menu, keyboard utils |
+| `keyboard.md` | keyboard navigation, focus, ARIA roles of the content and the tree | the frame, content, sidebar, context menu, transfer dialog, keyboard utils |
 | `icons.md` | icon packs, variants, `IconProvider`, adding an icon | `components/icons/`, `icon-sets/`, icon types |
 
 When a feature is added or changed, document it in the matching rule (or a new one), not here. This file stays for things every session needs.
