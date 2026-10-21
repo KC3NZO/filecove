@@ -17,9 +17,14 @@ interface Preview {
  * until the drop, so every view can tell where the entries may go and fade them wherever it lists
  * them. `context` goes to `DragContext`; `onPointerDownCapture` and `end` go on an element around
  * every view, `end` for both `drop` and `dragend`. The drag image is taken from `previewRef`'s
- * element, which the caller renders while `preview` is set, for a single frame.
+ * element, which the caller renders while `preview` is set, for a single frame. `uploadInto` is
+ * handed on to the views as it is, for files dragged in from outside.
  */
-export const useEntryDrag = (adapter: FileAdapter, dropInto: DropInto) => {
+export const useEntryDrag = (
+    adapter: FileAdapter,
+    dropInto: DropInto,
+    uploadInto: DragContextValue["uploadInto"],
+) => {
     const previewRef = useRef<HTMLDivElement>(null);
     // The pointer of the latest press, which a drag starts from.
     const pointerType = useRef("mouse");
@@ -70,8 +75,9 @@ export const useEntryDrag = (adapter: FileAdapter, dropInto: DropInto) => {
             start,
             dropInto: (target, copy) =>
                 dragged ? dropInto(dragged, copy, target.section, target.trail) : undefined,
+            uploadInto,
         }),
-        [marked, dragged, start, dropInto],
+        [marked, dragged, start, dropInto, uploadInto],
     );
 
     const onPointerDownCapture = (event: PointerEvent) => {

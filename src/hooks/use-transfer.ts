@@ -25,8 +25,11 @@ const start = ({ kind, adapter, entries }: TransferJob, targetId: string, option
     throw new Error("Not supported here.");
 };
 
-/** Names of `entries` that a folder's listing already has, which a transfer into it would clash with. */
-export const clashingNames = (entries: FileEntry[], listing: FileEntry[] | undefined) => {
+/**
+ * Names of `entries`, or of files being uploaded, that a folder's listing already has, which a
+ * transfer or upload into it would clash with.
+ */
+export const clashingNames = (entries: readonly { name: string }[], listing: FileEntry[] | undefined) => {
     const taken = new Set(listing?.map((entry) => entry.name));
 
     return entries.filter((entry) => taken.has(entry.name)).map((entry) => entry.name);

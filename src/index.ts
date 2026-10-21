@@ -25,5 +25,6 @@ export type {
     SortKey,
     SortOrder,
     TransferOptions,
+    UploadOptions,
     ViewMode,
 } from "./types";

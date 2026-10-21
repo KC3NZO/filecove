@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, CSSProperties, DragEvent } from "react";
 import { createPortal } from "react-dom";
 
 import Backdrop from "@mui/material/Backdrop";
@@ -9,8 +9,10 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { CutContext } from "../../contexts/cut-context";
 import { DataContext } from "../../contexts/data-context";
 import { DragContext } from "../../contexts/drag-context";
+import { carriesFiles } from "../../hooks/use-drop-target";
 import { useEntryDrag } from "../../hooks/use-entry-drag";
 import { usePlaceHistory } from "../../hooks/use-place-history";
+import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { createFolderStore, folderKey } from "../../store/folder-store";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { visibleActionGroups } from "../../utils/action-groups";
@@ -19,12 +21,14 @@ import { folderOf, outsideDeleted, renameInPlace } from "../../utils/navigation"
 import { importsFrom } from "../../utils/sections";
 import { matchesShortcut } from "../../utils/shortcut";
 import { DEFAULT_SORT } from "../../utils/sort";
+import UploadPanel from "../uploads/upload-panel";
 import FolderView from "./content/folder-view";
 import ContextMenu from "./context-menu/context-menu";
 import DeleteDialog from "./dialogs/delete-dialog";
 import NameDialog from "./dialogs/name-dialog";
 import PasteDialog from "./dialogs/paste-dialog";
 import TransferDialog from "./dialogs/transfer-dialog";
+import UploadDialog from "./dialogs/upload-dialog";
 import DragPreview from "./drag-preview";
 import HeaderBar from "./header-bar/header-bar";
 import PathBar from "./header-bar/path-bar";
@@ -34,7 +38,10 @@ import type {
     ActionContext,
     ActionGroup,
     Clipboard,
+    ConflictPolicy,
+    DroppedFiles,
     DropInto,
+    DropTarget,
     FileAdapter,
     FileEntry,
     FolderRef,
@@ -52,6 +59,7 @@ import type { DeleteDialogState, DeleteRequest } from "./dialogs/delete-dialog";
 import type { NameDialogState, NameRequest } from "./dialogs/name-dialog";
 import type { PasteDialogState, PasteRequest } from "./dialogs/paste-dialog";
 import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-dialog";
+import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
 
 interface BaseProps {
     /** Backend for every section that doesn't bring its own. */
@@ -101,6 +109,15 @@ const folderIdsOf = (entries: FileEntry[]) =>
 // While entries are dragged, the backdrop of the overlay sidebar lets drops through to the content,
 // so a folder dragged out of the sidebar can land there.
 const PASS_THROUGH: CSSProperties = { pointerEvents: "none" };
+
+// Files dropped where nothing takes them would have the browser open them in place of the page, so
+// the file manager refuses them anywhere its views don't take them.
+const refuseFiles = (event: DragEvent) => {
+    if (carriesFiles(event) && !event.defaultPrevented) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "none";
+    }
+};
 
 // The root only establishes the container; a container can't match its own queries, so the
 // visible frame is the child below it.
@@ -168,6 +185,15 @@ const viewSx: SxProps<Theme> = {
     overflowY: "auto",
 };
 
+// The upload panel is a second inset panel under the content, so it never covers the files.
+const uploadsSx: SxProps<Theme> = {
+    mx: 0.75,
+    mb: 0.75,
+    [rootWide]: { ml: 0 },
+};
+
+const pickerStyle: CSSProperties = { display: "none" };
+
 const FileManager = ({
     adapter,
     sections: groups,
@@ -220,7 +246,11 @@ const FileManager = ({
     const [deleting, setDeleting] = useState<DeleteDialogState | null>(null);
     const [clipboard, setClipboard] = useState<Clipboard | null>(null);
     const [pasting, setPasting] = useState<PasteDialogState | null>(null);
+    const [uploadCheck, setUploadCheck] = useState<UploadDialogState | null>(null);
     const [reveal, setReveal] = useState<Reveal | null>(null);
+    // The browser's file picker, and where the files picked with it go.
+    const pickerRef = useRef<HTMLInputElement>(null);
+    const pickedInto = useRef<((dropped: DroppedFiles) => void) | null>(null);
     // The folder in which touch selection mode is on, so opening another folder turns it off.
     const [selectingKey, setSelectingKey] = useState<string | null>(null);
     const selecting = openKey !== null && selectingKey === openKey;
@@ -323,6 +353,12 @@ const FileManager = ({
 
     const closePaste = useCallback(() => setPasting((prev) => prev && { ...prev, open: false }), []);
 
+    const askUpload = useCallback((request: UploadRequest) => {
+        setUploadCheck((prev) => ({ open: true, id: (prev?.id ?? 0) + 1, request }));
+    }, []);
+
+    const closeUploadCheck = useCallback(() => setUploadCheck((prev) => prev && { ...prev, open: false }), []);
+
     // Pastes `pasted` into the folder at `trail`, when it can go there and no other paste is running.
     const offerPaste = useCallback(
         (pasted: Clipboard, target: Section, trail: FolderRef[]) =>
@@ -339,7 +375,44 @@ const FileManager = ({
         [offerPaste],
     );
 
-    const drag = useEntryDrag(adapter, dropInto);
+    // Uploads into the folder at `trail`, when its adapter takes uploads and no other upload is
+    // being checked. Files dropped from outside go the same way.
+    const offerUpload = useCallback(
+        (target: Section, trail: FolderRef[]) => {
+            const served = target.adapter ?? adapter;
+
+            return served.upload && !uploadCheck?.open
+                ? (dropped: DroppedFiles) => askUpload({ section: target, adapter: served, trail, dropped })
+                : undefined;
+        },
+        [adapter, uploadCheck?.open, askUpload],
+    );
+
+    const uploadInto = useCallback(
+        (target: DropTarget) => offerUpload(target.section, target.trail),
+        [offerUpload],
+    );
+
+    // Only opens from a click or key press, which an action's `onSelect` runs in.
+    const pickFiles = useCallback((into: (dropped: DroppedFiles) => void) => {
+        pickedInto.current = into;
+        pickerRef.current?.click();
+    }, []);
+
+    const handlePicked = (event: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.currentTarget.files ?? []);
+        const into = pickedInto.current;
+
+        // Emptied, so picking the same files again still counts as a change.
+        event.currentTarget.value = "";
+        pickedInto.current = null;
+
+        if (into && files.length > 0) {
+            into({ files, folders: [] });
+        }
+    };
+
+    const drag = useEntryDrag(adapter, dropInto, uploadInto);
 
     // Sections served by one adapter can show the same folders, under the same ids, since ids are
     // unique within an adapter, so a change made in one of them shows in all of them.
@@ -356,6 +429,18 @@ const FileManager = ({
             sectionsOf(served).forEach((shown) => store.relist(shown.id, served, folderIds));
         },
         [sectionsOf, store],
+    );
+
+    // Uploads run in the background, a few at a time, while the user browses; the folders they end
+    // in are listed again like any other change.
+    const uploads = useUploadQueue(relist);
+
+    const startUpload = useCallback(
+        ({ section: target, adapter: served, trail }: UploadRequest, files: File[], conflict: ConflictPolicy) => {
+            closeUploadCheck();
+            uploads.queue.add(served, folderOf(target, trail), files, conflict);
+        },
+        [closeUploadCheck, uploads.queue],
     );
 
     // With path ids, a change can leave an id naming another folder: a deleted or moved folder's id
@@ -540,6 +625,8 @@ const FileManager = ({
             const pasteTo = (pasteTrail: FolderRef[]) =>
                 clipboard ? offerPaste(clipboard, menuSection, pasteTrail) : undefined;
 
+            const uploadHere = offerUpload(menuSection, trail);
+
             const [only] = entries;
 
             return {
@@ -569,6 +656,9 @@ const FileManager = ({
                         ? () => setClipboard({ ...base, kind: "copy", entries })
                         : undefined,
                 delete: folderAdapter.delete && entries.length > 0 ? () => askDelete({ ...base, entries }) : undefined,
+                upload:
+                    uploadHere &&
+                    ((files?: File[]) => (files ? uploadHere({ files, folders: [] }) : pickFiles(uploadHere))),
                 paste: pasteTo(trail),
                 pasteInto:
                     entries.length === 1 && only.kind === "folder"
@@ -576,7 +666,19 @@ const FileManager = ({
                         : undefined,
             };
         },
-        [adapter, store, goTo, askName, askDestination, askDelete, offerPaste, sectionsById, clipboard],
+        [
+            adapter,
+            store,
+            goTo,
+            askName,
+            askDestination,
+            askDelete,
+            offerPaste,
+            offerUpload,
+            pickFiles,
+            sectionsById,
+            clipboard,
+        ],
     );
 
     const openMenu = useCallback<OpenMenu>(
@@ -620,7 +722,12 @@ const FileManager = ({
                     <Box
                         sx={rootSx}
                         onPointerDownCapture={drag.onPointerDownCapture}
-                        onDrop={drag.end}
+                        onDragEnter={refuseFiles}
+                        onDragOver={refuseFiles}
+                        onDrop={(event) => {
+                            refuseFiles(event);
+                            drag.end();
+                        }}
                         onDragEnd={drag.end}
                     >
                         <Box sx={frameSx}>
@@ -695,6 +802,17 @@ const FileManager = ({
                                         )}
                                     </Box>
                                 </Box>
+                                {uploads.items.length > 0 && (
+                                    <Box sx={uploadsSx}>
+                                        <UploadPanel
+                                            items={uploads.items}
+                                            onCancel={uploads.queue.cancel}
+                                            onRetry={uploads.queue.retry}
+                                            onCancelAll={uploads.queue.cancelAll}
+                                            onClear={uploads.queue.clear}
+                                        />
+                                    </Box>
+                                )}
                             </Box>
                         </Box>
                         <ContextMenu menu={menu} onClose={closeMenu} />
@@ -738,6 +856,16 @@ const FileManager = ({
                                 onDone={handlePasted}
                             />
                         )}
+                        {uploadCheck && (
+                            <UploadDialog
+                                key={`upload:${uploadCheck.id}`}
+                                open={uploadCheck.open}
+                                request={uploadCheck.request}
+                                onClose={closeUploadCheck}
+                                onUpload={startUpload}
+                            />
+                        )}
+                        <input ref={pickerRef} type="file" multiple style={pickerStyle} onChange={handlePicked} />
                         {drag.preview &&
                             createPortal(
                                 <DragPreview

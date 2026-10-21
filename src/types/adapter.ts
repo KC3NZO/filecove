@@ -64,6 +64,22 @@ export interface TransferOptions extends OperationOptions {
     conflict: ConflictPolicy;
 }
 
+/** Passed to `upload`. */
+export interface UploadOptions extends OperationOptions {
+    /**
+     * Chosen by the user when the folder's cached listing showed a clash, and "keepBoth" otherwise,
+     * so a clash the cache missed never overwrites anything. Files the user chose to skip are never
+     * sent, so "skip" only reaches clashes the cache missed.
+     */
+    conflict: ConflictPolicy;
+    /**
+     * Reports how much of the file has been sent, e.g. from `XMLHttpRequest`'s `upload.onprogress`
+     * with `event.loaded` and `event.total`. Calling it is optional; without it the file shows as
+     * uploading with no figure.
+     */
+    onProgress: (loaded: number, total: number) => void;
+}
+
 export interface FileAdapter {
     /** Lists the direct children of a folder. Reject to show the folder as failed to load. */
     list(folderId: string, options: ListOptions): Promise<ListResult>;
@@ -97,4 +113,11 @@ export interface FileAdapter {
      * with an `Error` to show its message to the user.
      */
     delete?(entries: FileEntry[], options: OperationOptions): Promise<void>;
+    /**
+     * Uploads one file into `folderId`. Files from the browser's file picker or dropped from the
+     * desktop are uploaded one call each, a few at a time, so each has its own progress, error and
+     * cancel. Without it, the file manager has no way to upload. Reject with an `Error` to show its
+     * message beside the file, e.g. when it's too large or not allowed.
+     */
+    upload?(file: File, folderId: string, options: UploadOptions): Promise<void>;
 }

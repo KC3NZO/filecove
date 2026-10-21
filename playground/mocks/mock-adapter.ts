@@ -18,6 +18,12 @@ interface MockAdapterOptions {
     latency?: [min: number, max: number];
 }
 
+/** Simulated upload speed, in bytes per second. */
+const UPLOAD_SPEED = 5_000_000;
+
+/** Shortest and longest simulated upload, in ms, so small files still show progress and large ones end. */
+const UPLOAD_TIME: [min: number, max: number] = [500, 8000];
+
 export const folder = (name: string, modified: string, children: MockNode[]): MockNode => ({ name, modified, children });
 
 export const file = (name: string, size: number, modified: string, mimeType?: string): MockNode => ({
@@ -92,6 +98,39 @@ export const createMockAdapter = (
                 "abort",
                 () => {
                     clearTimeout(timer);
+                    reject(signal.reason);
+                },
+                { once: true },
+            );
+        });
+
+    /** Simulates sending `size` bytes, reporting progress as it goes. */
+    const send = (signal: AbortSignal, size: number, onProgress: (loaded: number, total: number) => void) =>
+        new Promise<void>((resolve, reject) => {
+            if (signal.aborted) {
+                reject(signal.reason);
+
+                return;
+            }
+
+            const [min, max] = UPLOAD_TIME;
+            const duration = Math.min(Math.max((size / UPLOAD_SPEED) * 1000, min), max);
+            const started = performance.now();
+            const timer = setInterval(() => {
+                const done = Math.min((performance.now() - started) / duration, 1);
+
+                onProgress(Math.round(size * done), size);
+
+                if (done === 1) {
+                    clearInterval(timer);
+                    resolve();
+                }
+            }, 100);
+
+            signal.addEventListener(
+                "abort",
+                () => {
+                    clearInterval(timer);
                     reject(signal.reason);
                 },
                 { once: true },
@@ -251,5 +290,27 @@ export const createMockAdapter = (
                     detach(parent, parentId, node);
                 });
             }),
+
+        // Only the file's name, size and type are kept. A folder that refuses files does so before
+        // anything is sent.
+        upload: (file, folderId, { signal, conflict, onProgress }) =>
+            Promise.resolve()
+                .then(() => folderAt(folderId))
+                .then(() => send(signal, file.size, onProgress))
+                .then(() =>
+                    respond(signal, () => {
+                        const target = folderAt(folderId);
+                        const node: MockNode = {
+                            name: file.name,
+                            size: file.size,
+                            modified: new Date().toISOString(),
+                            mimeType: file.type || undefined,
+                        };
+
+                        if (!(conflict === "skip" && clashes(target, node))) {
+                            insert(target, folderId, node, conflict);
+                        }
+                    }),
+                ),
     };
 };

@@ -199,10 +199,11 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
             },
             {
                 id: "upload",
-                label: "Upload files",
+                label: "Upload files…",
                 icon: "upload",
                 target: "folder",
-                onSelect: (context) => notify(`Upload to ${context.folder.name}`),
+                visible: (context) => !!context.upload,
+                onSelect: (context) => context.upload?.(),
             },
         ],
     },

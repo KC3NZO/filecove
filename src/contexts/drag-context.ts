@@ -1,7 +1,7 @@
 import { createContext } from "react";
 import type { DragEvent } from "react";
 
-import type { DragSource, DropTarget, FileAdapter } from "../types";
+import type { DragSource, DroppedFiles, DropTarget, FileAdapter } from "../types";
 
 export interface DragContextValue {
     /**
@@ -20,6 +20,11 @@ export interface DragContextValue {
      * moving them otherwise, to be called on drop, or undefined when they can't go there.
      */
     dropInto: (target: DropTarget, copy: boolean) => (() => void) | undefined;
+    /**
+     * What dropping files from outside, such as from the desktop, into `target` does, to be called
+     * on drop with what was dropped, or undefined when it doesn't take uploads.
+     */
+    uploadInto: (target: DropTarget) => ((dropped: DroppedFiles) => void) | undefined;
 }
 
 /** The drag of entries under way, shared by the content and the sidebar tree. */

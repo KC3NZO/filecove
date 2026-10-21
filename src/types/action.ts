@@ -55,6 +55,12 @@ export interface ActionContext {
      */
     delete?: () => void;
     /**
+     * Uploads `files` into `folder`, or, without them, asks for some with the browser's file picker,
+     * which only opens from a click or key press. Names `folder` already has are asked about first.
+     * Missing when the section's adapter has no `upload`, or while another upload is being checked.
+     */
+    upload?: (files?: File[]) => void;
+    /**
      * Moves or copies what was cut or copied into `folder`. Missing when there is nothing to paste
      * here: the clipboard is empty, its entries came from another adapter, `folder` is one of them
      * or inside one, cut entries are already in `folder`, or a paste is still running. An action
