@@ -9,3 +9,11 @@ export interface TextExcerpt {
     /** Whether the file goes on past `text`. */
     truncated: boolean;
 }
+
+/** What the preview has loaded to show a file. */
+export type PreviewContent =
+    | { status: "url"; url: string }
+    | { status: "text"; excerpt: TextExcerpt }
+    /** A text file that turned out not to be text. */
+    | { status: "binary" }
+    | { status: "error"; message: string };

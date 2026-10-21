@@ -12,6 +12,8 @@ import Icon from "../../icons/icon";
 export interface ImageViewerHandle {
     /** Takes a key pressed anywhere in the preview, and says whether it did anything with it. */
     keyDown: (event: KeyboardEvent) => boolean;
+    /** Whether the image is zoomed in, when a swipe pans it rather than stepping to another file. */
+    zoomed: () => boolean;
 }
 
 interface ImageViewerProps {
@@ -51,7 +53,10 @@ interface Gesture {
 
 /** A press that may turn out to be a tap, or the tap that came before one. */
 interface Tap {
+    /** Where it was in the view, to zoom at. */
     point: Point;
+    /** And on the screen, which the view moves across while it's swiped. */
+    screen: Point;
     time: number;
 }
 
@@ -98,6 +103,8 @@ const pointIn = (element: Element, { clientX, clientY }: { clientX: number; clie
 
     return { x: clientX - rect.left, y: clientY - rect.top };
 };
+
+const screenPoint = ({ clientX, clientY }: { clientX: number; clientY: number }) => ({ x: clientX, y: clientY });
 
 /** The scale that fits the image into the view, as large as it goes without stretching it past its own size. */
 const fitScale = (image: Size, view: Size) =>
@@ -215,7 +222,8 @@ const percentSx: SxProps<Theme> = {
  * pointer, a pinch on a touch screen between the fingers, and a double click or double tap toggles
  * between fitting the view and a closer look. Zoomed in, it pans by dragging, the wheel and the
  * arrow keys. The buttons in the corner zoom around the view's centre, as do +, -, 0 (fit) and 1
- * (the image's own size), which the preview hands over through `ref`.
+ * (the image's own size), which the preview hands over through `ref`. Fitted, a swipe is left to
+ * the preview, to step to another file.
  *
  * Unzoomed, the image is laid out to fit by CSS alone, so it follows the view's size without
  * waiting on a measure; zoomed, it's placed from its own size and the view's.
@@ -317,6 +325,7 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
 
             return true;
         },
+        zoomed: () => zoomRef.current !== null,
     }));
 
     // Browsers send a pinch on a touchpad as Ctrl+wheel. A mouse's notch zooms by a step at most,
@@ -424,7 +433,9 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
         // Double taps are caught here, as not every browser sends `dblclick` for them; a mouse's
         // double click comes through `dblclick`, at the system's speed.
         press.current =
-            event.pointerType !== "mouse" && pointers.current.size === 1 ? { point, time: event.timeStamp } : null;
+            event.pointerType !== "mouse" && pointers.current.size === 1
+                ? { point, screen: screenPoint(event), time: event.timeStamp }
+                : null;
         regroup();
     };
 
@@ -438,7 +449,7 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
 
         pointers.current.set(event.pointerId, point);
 
-        if (press.current && distance(press.current.point, point) > TAP_TOLERANCE) {
+        if (press.current && distance(press.current.screen, screenPoint(event)) > TAP_TOLERANCE) {
             press.current = null;
         }
 
@@ -470,11 +481,11 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
         if (event.type === "pointerup" && tap && pointers.current.size === 0) {
             const last = lastTap.current;
 
-            if (last && tap.time - last.time < DOUBLE_TAP_TIME && distance(tap.point, last.point) < DOUBLE_TAP_DISTANCE) {
+            if (last && tap.time - last.time < DOUBLE_TAP_TIME && distance(tap.screen, last.screen) < DOUBLE_TAP_DISTANCE) {
                 lastTap.current = null;
                 toggle(tap.point);
             } else {
-                lastTap.current = { point: tap.point, time: event.timeStamp };
+                lastTap.current = { ...tap, time: event.timeStamp };
             }
         }
 

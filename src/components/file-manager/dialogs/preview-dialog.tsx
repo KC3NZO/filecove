@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
@@ -9,16 +9,18 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { usePreviewContents } from "../../../hooks/use-preview-contents";
+import { useSwipe } from "../../../hooks/use-swipe";
 import { dialogPaperSx, focusOutline, visuallyHiddenSx } from "../../../styles/mixins";
 import { describeDate, describeSize, describeType, formatSize } from "../../../utils/format";
 import { isRtl } from "../../../utils/keyboard";
-import { TEXT_LIMIT, previewKind, readText } from "../../../utils/preview";
+import { TEXT_LIMIT, previewKind } from "../../../utils/preview";
 import { FileTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import ImageViewer from "./image-viewer";
 import type { ImageViewerHandle } from "./image-viewer";
 
-import type { FileAdapter, FileEntry, FolderRef, Section, TextExcerpt } from "../../../types";
+import type { FileAdapter, FileEntry, FolderRef, Section } from "../../../types";
 
 export interface PreviewRequest {
     section: Section;
@@ -59,15 +61,7 @@ interface PreviewDialogProps {
     onStep: (request: PreviewRequest, entry: FileEntry) => void;
 }
 
-/** What has been loaded to show the file with `id`. */
-type Loaded =
-    | { id: string; status: "url"; url: string }
-    | { id: string; status: "text"; excerpt: TextExcerpt }
-    /** A text file that turned out not to be text. */
-    | { id: string; status: "binary" }
-    | { id: string; status: "error"; message: string };
-
-/** An image's or a video's own size, once it has loaded. */
+/** An image's or a video's own size, once it has loaded: 0 for a picture with none, such as some SVGs. */
 interface Dimensions {
     id: string;
     width: number;
@@ -121,13 +115,12 @@ const counterSx: SxProps<Theme> = {
 };
 
 // The file sits on the content panel's surface, as the window lays out the folder view: chrome on
-// the window's background, the view on paper.
+// the window's background, the view on paper. Sideways moves of a finger are left to the page, to
+// swipe to another file.
 const bodySx: SxProps<Theme> = {
     flex: 1,
     minHeight: 0,
     display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
     mx: 1,
     mb: 1,
     overflow: "hidden",
@@ -135,6 +128,17 @@ const bodySx: SxProps<Theme> = {
     borderColor: "divider",
     borderRadius: 2,
     bgcolor: "background.paper",
+    touchAction: "pan-y pinch-zoom",
+};
+
+// What follows the finger as it swipes.
+const slideSx: SxProps<Theme> = {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
 };
 
 // Shrunk to fit, never stretched past its own size.
@@ -160,7 +164,7 @@ const textFrameSx: SxProps<Theme> = {
     flexDirection: "column",
 };
 
-// Long lines wrap, so Left and Right stay free for stepping between files.
+// Long lines wrap, so Left and Right, and a sideways swipe, stay free for stepping between files.
 const textSx: SxProps<Theme> = {
     flex: 1,
     minHeight: 0,
@@ -173,6 +177,7 @@ const textSx: SxProps<Theme> = {
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
     tabSize: 4,
+    touchAction: "pan-y pinch-zoom",
     outline: "none",
     "&:focus-visible": focusOutline,
 };
@@ -211,33 +216,40 @@ const audioSx: SxProps<Theme> = {
     mt: 2,
 };
 
-const errorMessage = (error: unknown) =>
-    error instanceof Error && error.message ? error.message : "Couldn't get the file.";
-
 /**
  * Shows files one at a time, as GNOME's and macOS's previewers do: images, videos, audio and PDFs
  * as the browser shows them, the start of text files, and an icon with the file's details for the
- * rest. The arrows, or the buttons, step through the files it was given, and Space or Escape closes it.
+ * rest. The arrows, the buttons, or a swipe on touch step through the files it was given, and
+ * Space or Escape closes it.
  *
  * The adapter's `content` says where each file's contents are. A URL is used as it is; a `Blob` is
- * shown through an object URL, which goes as the preview moves on.
+ * shown through an object URL. The next file loads once the one shown has, so stepping on shows
+ * it at once (see `usePreviewContents`).
  */
 const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, onStep }: PreviewDialogProps) => {
     const { adapter, entries } = request;
     const count = entries.length;
 
     const [index, setIndex] = useState(() => Math.min(Math.max(request.index, 0), count - 1));
-    const [loaded, setLoaded] = useState<Loaded | null>(null);
+    // The way the last step went, where the file loaded ahead lies.
+    const [direction, setDirection] = useState<1 | -1>(1);
     const [dimensions, setDimensions] = useState<Dimensions | null>(null);
-    // Bumped by "Try again", which gets the file afresh.
-    const [attempt, setAttempt] = useState(0);
     const viewerRef = useRef<ImageViewerHandle>(null);
+    const slideRef = useRef<HTMLDivElement>(null);
     const titleId = useId();
 
     const entry = entries[index];
     const kind = previewKind(entry);
-    const shown = loaded?.id === entry.id ? loaded : null;
     const size = dimensions?.id === entry.id ? dimensions : null;
+    const { content: shown, fail, retry } = usePreviewContents({
+        adapter,
+        entries,
+        index,
+        // Nothing more is loaded while the preview fades out.
+        ahead: open ? direction : null,
+        // A picture or a video is still coming until the browser has measured it.
+        pending: (kind === "image" || kind === "video") && !size,
+    });
 
     const slotProps = useMemo(
         () => ({
@@ -247,95 +259,28 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
         [onClosed],
     );
 
-    // Files the preview can only describe aren't fetched at all.
-    useEffect(() => {
-        if (kind === "none") {
-            return;
-        }
+    const canStep = (delta: 1 | -1) => index + delta >= 0 && index + delta < count;
 
-        const controller = new AbortController();
-        const { signal } = controller;
-        const { id } = entry;
-        let objectUrl: string | null = null;
-
-        // Wrapped so an adapter that throws synchronously still ends up as a failure.
-        Promise.resolve()
-            .then(() => {
-                if (!adapter.content) {
-                    throw new Error("Not supported here.");
-                }
-
-                return adapter.content(entry, { signal });
-            })
-            .then(async (content): Promise<Loaded | null> => {
-                if (signal.aborted) {
-                    return null;
-                }
-
-                if (kind === "text") {
-                    const excerpt = await readText(content, signal);
-
-                    return excerpt ? { id, status: "text", excerpt } : { id, status: "binary" };
-                }
-
-                if (content.url !== undefined) {
-                    return { id, status: "url", url: content.url };
-                }
-
-                // A PDF is only ever shown as one, whatever type the blob says it is: a web page in
-                // the frame would run in the page's own origin.
-                objectUrl = URL.createObjectURL(
-                    kind === "pdf" ? new Blob([content.blob], { type: "application/pdf" }) : content.blob,
-                );
-
-                return { id, status: "url", url: objectUrl };
-            })
-            .then(
-                (result) => {
-                    if (result && !signal.aborted) {
-                        setLoaded(result);
-                    }
-                },
-                (error: unknown) => {
-                    if (!signal.aborted) {
-                        setLoaded({ id, status: "error", message: errorMessage(error) });
-                    }
-                },
-            );
-
-        return () => {
-            controller.abort();
-
-            if (objectUrl) {
-                URL.revokeObjectURL(objectUrl);
-            }
-
-            // What was loaded goes with its object URL, so coming back to the file loads it afresh.
-            setLoaded(null);
-        };
-    }, [adapter, entry, kind, attempt]);
-
-    const step = (delta: number) => {
-        const next = index + delta;
-
-        if (next >= 0 && next < count) {
-            setIndex(next);
-            onStep(request, entries[next]);
+    const step = (delta: 1 | -1) => {
+        if (canStep(delta)) {
+            setIndex(index + delta);
+            setDirection(delta);
+            onStep(request, entries[index + delta]);
         }
     };
 
-    const retry = () => setAttempt((prev) => prev + 1);
+    const swipe = useSwipe({
+        ref: slideRef,
+        canStep,
+        onStep: step,
+        // Zoomed in, a picture pans with the finger instead.
+        ignore: () => viewerRef.current?.zoomed() ?? false,
+    });
 
     // The browser couldn't load the URL, or can't show what it holds.
-    const handleMediaError = () => {
-        setLoaded((prev) => (prev?.id === entry.id ? { id: entry.id, status: "error", message: MEDIA_ERROR } : prev));
-    };
+    const handleMediaError = () => fail(entry.id, MEDIA_ERROR);
 
-    const measure = (width: number, height: number) => {
-        if (width > 0 && height > 0) {
-            setDimensions({ id: entry.id, width, height });
-        }
-    };
+    const measure = (width: number, height: number) => setDimensions({ id: entry.id, width, height });
 
     // An image takes its zoom keys first, and the arrows while it's zoomed in, to pan it. Left and
     // Right step through the files, swapped when the page runs right to left, except in a player,
@@ -374,7 +319,7 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
     const details = [
         describeType(entry),
         entry.size === undefined ? null : describeSize(entry),
-        size && `${size.width} × ${size.height}`,
+        size && size.width > 0 && size.height > 0 ? `${size.width} × ${size.height}` : null,
     ]
         .filter(Boolean)
         .join(" · ");
@@ -397,7 +342,7 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
                 <Icon name="info" sx={stateIconSx} />
                 <Typography sx={stateTitleSx}>Couldn't preview this file</Typography>
                 <Typography variant="body2">{shown.message}</Typography>
-                <Button size="small" variant="outlined" onClick={retry}>
+                <Button size="small" variant="outlined" onClick={() => retry(entry.id)}>
                     Try again
                 </Button>
             </Box>
@@ -502,7 +447,11 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
                     <Icon name="close" />
                 </IconButton>
             </Box>
-            <Box sx={bodySx}>{body}</Box>
+            <Box sx={bodySx} {...swipe}>
+                <Box ref={slideRef} sx={slideSx}>
+                    {body}
+                </Box>
+            </Box>
             {/* Screen readers hear which file the arrows stepped to. */}
             <Box sx={visuallyHiddenSx} role="status">
                 {count > 1 ? `${entry.name}, ${index + 1} of ${count}` : ""}
