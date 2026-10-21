@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
@@ -15,6 +15,8 @@ import { isRtl } from "../../../utils/keyboard";
 import { TEXT_LIMIT, previewKind, readText } from "../../../utils/preview";
 import { FileTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
+import ImageViewer from "./image-viewer";
+import type { ImageViewerHandle } from "./image-viewer";
 
 import type { FileAdapter, FileEntry, FolderRef, Section, TextExcerpt } from "../../../types";
 
@@ -229,6 +231,7 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
     const [dimensions, setDimensions] = useState<Dimensions | null>(null);
     // Bumped by "Try again", which gets the file afresh.
     const [attempt, setAttempt] = useState(0);
+    const viewerRef = useRef<ImageViewerHandle>(null);
     const titleId = useId();
 
     const entry = entries[index];
@@ -334,11 +337,21 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
         }
     };
 
-    // Left and Right step through the files, swapped when the page runs right to left, except in a
-    // player, which seeks with them. Space closes, as in GNOME's and macOS's previewers, except on
-    // what Space presses or plays; a key held down from opening it doesn't close it again.
+    // An image takes its zoom keys first, and the arrows while it's zoomed in, to pan it. Left and
+    // Right step through the files, swapped when the page runs right to left, except in a player,
+    // which seeks with them. Space closes, as in GNOME's and macOS's previewers, except on what
+    // Space presses or plays; a key held down from opening it doesn't close it again.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
+        if (event.defaultPrevented) {
+            return;
+        }
+
+        if (viewerRef.current?.keyDown(event)) {
+            event.preventDefault();
+            return;
+        }
+
+        if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
             return;
         }
 
@@ -410,13 +423,12 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
         );
     } else if (kind === "image") {
         body = (
-            <Box
+            <ImageViewer
                 key={entry.id}
-                component="img"
+                ref={viewerRef}
                 src={shown.url}
                 alt={entry.name}
-                sx={mediaSx}
-                onLoad={(event) => measure(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)}
+                onLoad={measure}
                 onError={handleMediaError}
             />
         );

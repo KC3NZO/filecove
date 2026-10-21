@@ -46,6 +46,9 @@ import StarOutlined from "@mui/icons-material/StarOutlined";
 import StarBorderOutlined from "@mui/icons-material/StarBorderOutlined";
 import UploadOutlined from "@mui/icons-material/UploadOutlined";
 import MovieOutlined from "@mui/icons-material/MovieOutlined";
+import FitScreenOutlined from "@mui/icons-material/FitScreenOutlined";
+import ZoomInOutlined from "@mui/icons-material/ZoomInOutlined";
+import ZoomOutOutlined from "@mui/icons-material/ZoomOutOutlined";
 
 import type { IconSet } from "../types";
 
@@ -98,6 +101,9 @@ const outlined: IconSet = {
     starBorder: StarBorderOutlined,
     upload: UploadOutlined,
     videos: MovieOutlined,
+    zoomFit: FitScreenOutlined,
+    zoomIn: ZoomInOutlined,
+    zoomOut: ZoomOutOutlined,
 };
 
 export default outlined;

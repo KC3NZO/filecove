@@ -46,6 +46,9 @@ import StarRounded from "@mui/icons-material/StarRounded";
 import StarBorderRounded from "@mui/icons-material/StarBorderRounded";
 import UploadRounded from "@mui/icons-material/UploadRounded";
 import MovieRounded from "@mui/icons-material/MovieRounded";
+import FitScreenRounded from "@mui/icons-material/FitScreenRounded";
+import ZoomInRounded from "@mui/icons-material/ZoomInRounded";
+import ZoomOutRounded from "@mui/icons-material/ZoomOutRounded";
 
 import type { IconSet } from "../types";
 
@@ -98,6 +101,9 @@ const rounded: IconSet = {
     starBorder: StarBorderRounded,
     upload: UploadRounded,
     videos: MovieRounded,
+    zoomFit: FitScreenRounded,
+    zoomIn: ZoomInRounded,
+    zoomOut: ZoomOutRounded,
 };
 
 export default rounded;

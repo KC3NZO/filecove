@@ -46,6 +46,9 @@ import StarTwoTone from "@mui/icons-material/StarTwoTone";
 import StarBorderTwoTone from "@mui/icons-material/StarBorderTwoTone";
 import UploadTwoTone from "@mui/icons-material/UploadTwoTone";
 import MovieTwoTone from "@mui/icons-material/MovieTwoTone";
+import FitScreenTwoTone from "@mui/icons-material/FitScreenTwoTone";
+import ZoomInTwoTone from "@mui/icons-material/ZoomInTwoTone";
+import ZoomOutTwoTone from "@mui/icons-material/ZoomOutTwoTone";
 
 import type { IconSet } from "../types";
 
@@ -98,6 +101,9 @@ const twoTone: IconSet = {
     starBorder: StarBorderTwoTone,
     upload: UploadTwoTone,
     videos: MovieTwoTone,
+    zoomFit: FitScreenTwoTone,
+    zoomIn: ZoomInTwoTone,
+    zoomOut: ZoomOutTwoTone,
 };
 
 export default twoTone;

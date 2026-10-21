@@ -46,6 +46,9 @@ import StarSharp from "@mui/icons-material/StarSharp";
 import StarBorderSharp from "@mui/icons-material/StarBorderSharp";
 import UploadSharp from "@mui/icons-material/UploadSharp";
 import MovieSharp from "@mui/icons-material/MovieSharp";
+import FitScreenSharp from "@mui/icons-material/FitScreenSharp";
+import ZoomInSharp from "@mui/icons-material/ZoomInSharp";
+import ZoomOutSharp from "@mui/icons-material/ZoomOutSharp";
 
 import type { IconSet } from "../types";
 
@@ -98,6 +101,9 @@ const sharp: IconSet = {
     starBorder: StarBorderSharp,
     upload: UploadSharp,
     videos: MovieSharp,
+    zoomFit: FitScreenSharp,
+    zoomIn: ZoomInSharp,
+    zoomOut: ZoomOutSharp,
 };
 
 export default sharp;

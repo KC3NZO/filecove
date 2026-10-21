@@ -54,7 +54,10 @@ export type IconName =
     | "star"
     | "starBorder"
     | "upload"
-    | "videos";
+    | "videos"
+    | "zoomFit"
+    | "zoomIn"
+    | "zoomOut";
 
 /** One icon component per semantic name; every variant must provide all of them. */
 export type IconSet = Record<IconName, IconComponent>;

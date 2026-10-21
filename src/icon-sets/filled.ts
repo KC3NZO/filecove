@@ -46,6 +46,9 @@ import Star from "@mui/icons-material/Star";
 import StarBorder from "@mui/icons-material/StarBorder";
 import Upload from "@mui/icons-material/Upload";
 import Movie from "@mui/icons-material/Movie";
+import FitScreen from "@mui/icons-material/FitScreen";
+import ZoomIn from "@mui/icons-material/ZoomIn";
+import ZoomOut from "@mui/icons-material/ZoomOut";
 
 import type { IconSet } from "../types";
 
@@ -98,6 +101,9 @@ const filled: IconSet = {
     starBorder: StarBorder,
     upload: Upload,
     videos: Movie,
+    zoomFit: FitScreen,
+    zoomIn: ZoomIn,
+    zoomOut: ZoomOut,
 };
 
 export default filled;
