@@ -16,7 +16,7 @@ The component adapts to the box it is placed in, not the viewport. `src/styles/l
 
 Use these constants as `sx` keys. Don't use `theme.breakpoints` or `useMediaQuery` inside the component. The one exception is `@media (hover: none)`, which detects a touch device rather than a size (it shows the header's Select button).
 
-Dynamic geometry (tree depth, list column templates) goes through CSS custom properties set in `style`, so the `sx` objects stay static at module scope.
+Dynamic geometry (tree depth, list column templates) goes through CSS custom properties set in `style`, so the `sx` objects stay static at module scope. Geometry worked out in JS from measurements, such as where a virtualized entry sits (`top`, `gridColumn`) or how tall its listbox is, goes in `style` as plain properties.
 
 ## Colors
 

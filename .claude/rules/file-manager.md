@@ -143,7 +143,7 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 
 The playground shows this mode with `?single` in the URL.
 - `header-bar/` holds back/forward, the path bar and the view buttons. Below `rootMedium` the path bar gets a full-width row under the buttons; from `rootMedium` up, it sits centred between them.
-- `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`file-list.tsx`, a `--columns` grid template) or the grid view (`file-grid.tsx`).
+- `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`file-list.tsx`, a `--columns` grid template) or the grid view (`file-grid.tsx`), which render only the entries in or near view (see `virtualization.md`).
 - `dialogs/` holds the modals, which portal to `<body>` like the context menu: `name-dialog.tsx`, `transfer-dialog.tsx`, `paste-dialog.tsx`, `delete-dialog.tsx` and `upload-dialog.tsx`, with `conflict-step.tsx` shared by the transfer, paste and upload dialogs.
 - The upload panel under the content is `components/uploads/upload-panel.tsx`, outside `file-manager/` since it's meant to be shared (see `uploads.md`).
 - `icon-slot.tsx` fits consumer-supplied icons to the same 1.25rem box as the built-in ones.
