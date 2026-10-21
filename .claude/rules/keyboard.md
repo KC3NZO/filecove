@@ -25,7 +25,7 @@ A key press goes to the consumer's shortcuts before the component's own keys, so
 | Content (`content/folder-view.tsx`) | arrows, Home, End, PageUp, PageDown, Space, Shift+Space, Enter, Alt+Down, Backspace, Alt+Up, Ctrl+A, Escape, typing, Menu or Shift+F10 |
 | Sidebar tree (`sidebar/sidebar.tsx`, `TreeItem` in `sidebar/location-item.tsx`) | Up, Down, Home, End, Right, Left, Enter, Space, Shift+Space, typing, Menu or Shift+F10, Escape (closes the overlay) |
 | "Move to…" and "Copy to…" (`dialogs/transfer-dialog.tsx`) | Up, Down, Home, End, PageUp, PageDown, typing, Enter or Space to open, Backspace or Alt+Up to go up |
-| The preview (`dialogs/preview-dialog.tsx`) | Left and Right to step through the files, Space or Escape to close (see `preview.md`) |
+| The preview (`dialogs/preview-dialog.tsx`) | Left and Right to step through the files, Space or Escape to close, +, -, 0 and 1 to zoom an image (`dialogs/image-viewer.tsx`) and the arrows to pan it zoomed in (see `preview.md`) |
 
 - The root's handler ignores presses from the menus and dialogs, which portal out of it but still bubble through React's tree, by checking that the DOM holds the target.
 - Browsers keep some keys. Chrome never passes Ctrl+N, Ctrl+T or Ctrl+W to a page, and F6, F9 or Alt+Left may be taken by the browser before the page sees them.

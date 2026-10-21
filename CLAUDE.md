@@ -70,7 +70,7 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `keyboard.md` | keyboard navigation, focus, ARIA roles of the content and the tree | the frame, content, sidebar, context menu, transfer dialog, keyboard utils |
 | `virtualization.md` | rendering only the entries, tree rows and picker folders in or near view, the flattened sidebar tree, and what stays rendered | the content, the sidebar, the transfer dialog, the virtualization and tree-rows hooks, `use-marquee.ts`, `utils/dom.ts`, view and tree types |
 | `icons.md` | icon packs, variants, `IconProvider`, adding an icon | `components/icons/`, `icon-sets/`, icon types |
-| `preview.md` | opening files, `onOpenFile`, the adapter's `content`, the preview dialog and what it shows | the preview dialog, `utils/preview.ts`, preview, adapter and action types, the mock contents |
+| `preview.md` | opening files, `onOpenFile`, the adapter's `content`, the preview dialog and what it shows, zooming images | the preview dialog and its image viewer, `utils/preview.ts`, preview, adapter and action types, the mock contents |
 | `thumbnails.md` | the adapter's `thumbnail`, its `view` and `size`, the thumbnail cache, how the list and the grid show them | the entry icon, the list and the grid, `use-thumbnail.ts`, the thumbnail cache, the data context, adapter and view types, the mocks |
 
 When a feature is added or changed, document it in the matching rule (or a new one), not here. This file stays for things every session needs.
