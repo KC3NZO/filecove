@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { MouseEvent, PointerEvent as ReactPointerEvent } from "react";
 
+import { scrollParent } from "../utils/dom";
 import { selectModifiers } from "../utils/selection";
 
 import type { SelectModifiers } from "../types";
@@ -32,8 +33,6 @@ interface Drag {
     clientY: number;
     modifiers: SelectModifiers;
     scroller: HTMLElement | null;
-    /** Entry boxes relative to the surface, measured once the marquee starts. */
-    items: { id: string; box: Box }[];
     active: boolean;
     /** The covered ids as last reported, to report only changes. */
     hitsKey: string | null;
@@ -42,6 +41,8 @@ interface Drag {
 
 interface MarqueeOptions {
     enabled: boolean;
+    /** The ids of the entries a box in viewport coordinates touches, in display order. */
+    entriesIn: (box: Box) => string[];
     /** Called once a press has moved far enough to become a marquee. */
     onStart: () => void;
     /** Called whenever the entries under the marquee change, with their ids in display order. */
@@ -50,54 +51,22 @@ interface MarqueeOptions {
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-const scrollParent = (element: HTMLElement) => {
-    for (let node = element.parentElement; node; node = node.parentElement) {
-        const { overflowY } = getComputedStyle(node);
-
-        if (overflowY === "auto" || overflowY === "scroll") {
-            return node;
-        }
-    }
-
-    return null;
-};
-
-/** Every element marked with `data-entry-id` inside the surface, in document (display) order. */
-const measureEntries = (surface: HTMLElement) => {
-    const origin = surface.getBoundingClientRect();
-
-    return Array.from(surface.querySelectorAll<HTMLElement>("[data-entry-id]"), (element) => {
-        const rect = element.getBoundingClientRect();
-
-        return {
-            id: element.dataset.entryId ?? "",
-            box: {
-                left: rect.left - origin.left,
-                top: rect.top - origin.top,
-                right: rect.right - origin.left,
-                bottom: rect.bottom - origin.top,
-            },
-        };
-    });
-};
-
-const overlaps = (a: Box, b: Box) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-
 /**
- * Rubber-band selection over a surface whose entries carry `data-entry-id`. The rectangle is
- * drawn by moving `marqueeRef`'s element directly, so dragging doesn't re-render the view;
- * only a change in the covered entries reaches `onChange`. Mouse only: on touch, a drag scrolls.
+ * Rubber-band selection over a surface of entries, which `entriesIn` finds by where the view lays
+ * them out rather than in the page, since a virtualized view only renders some of them. The
+ * rectangle is drawn by moving `marqueeRef`'s element directly, so dragging doesn't re-render the
+ * view; only a change in the covered entries reaches `onChange`. Mouse only: on touch, a drag scrolls.
  */
-export const useMarquee = ({ enabled, onStart, onChange }: MarqueeOptions) => {
+export const useMarquee = ({ enabled, entriesIn, onStart, onChange }: MarqueeOptions) => {
     const surfaceRef = useRef<HTMLDivElement>(null);
     const marqueeRef = useRef<HTMLDivElement>(null);
     const dragRef = useRef<Drag | null>(null);
     const endRef = useRef<(() => void) | null>(null);
     const suppressClick = useRef(false);
-    const callbacks = useRef({ onStart, onChange });
+    const callbacks = useRef({ entriesIn, onStart, onChange });
 
     useEffect(() => {
-        callbacks.current = { onStart, onChange };
+        callbacks.current = { entriesIn, onStart, onChange };
     });
 
     // A drag still running when the view goes away (another folder opened) is dropped with it.
@@ -124,7 +93,6 @@ export const useMarquee = ({ enabled, onStart, onChange }: MarqueeOptions) => {
                 clientY: event.clientY,
                 modifiers: selectModifiers(event),
                 scroller: scrollParent(surface),
-                items: [],
                 active: false,
                 hitsKey: null,
                 frame: 0,
@@ -141,7 +109,6 @@ export const useMarquee = ({ enabled, onStart, onChange }: MarqueeOptions) => {
                     }
 
                     drag.active = true;
-                    drag.items = measureEntries(surface);
                     callbacks.current.onStart();
                 }
 
@@ -162,7 +129,12 @@ export const useMarquee = ({ enabled, onStart, onChange }: MarqueeOptions) => {
                     marquee.dataset.active = "true";
                 }
 
-                const hits = drag.items.filter((item) => overlaps(item.box, box)).map((item) => item.id);
+                const hits = callbacks.current.entriesIn({
+                    left: rect.left + box.left,
+                    top: rect.top + box.top,
+                    right: rect.left + box.right,
+                    bottom: rect.top + box.bottom,
+                });
                 const hitsKey = hits.join("\u0000");
 
                 if (hitsKey !== drag.hitsKey) {

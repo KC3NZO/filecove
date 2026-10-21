@@ -18,8 +18,9 @@ import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
 import { useSelection } from "../../../hooks/use-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
+import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { focusOutline, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
-import { gridColumns, isMenuKey, isRtl, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
+import { isMenuKey, isRtl, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { belowElement, insideElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
@@ -76,6 +77,12 @@ interface FolderViewProps {
 interface EntryFocus {
     id: string;
     index: number;
+}
+
+/** An entry to scroll to once it's rendered, and whether to focus it too. */
+interface ScrollRequest {
+    id: string;
+    focus: boolean;
 }
 
 /** The entry an event happened on, by its `data-entry-id`. */
@@ -194,6 +201,9 @@ const FolderView = ({
         [state?.entries, sort],
     );
 
+    // Where each entry is listed, to find entries by id without searching a large folder.
+    const indexById = useMemo(() => new Map(entries?.map((entry, index) => [entry.id, index] as const)), [entries]);
+
     const { selection, selectedIds, selected, select, replace, selectAll, clear } = useSelection(entries);
     const typeAhead = useTypeAhead();
     const stateId = useId();
@@ -201,7 +211,7 @@ const FolderView = ({
     // The entry with the view's Tab stop, which the arrow keys move from. Where it was listed is
     // kept up to date, so the entry after it takes its place if it goes.
     const [focus, setFocus] = useState<EntryFocus | null>(null);
-    const focusIndex = focus && entries ? entries.findIndex((entry) => entry.id === focus.id) : -1;
+    const focusIndex = focus ? (indexById.get(focus.id) ?? -1) : -1;
 
     if (focus && focusIndex >= 0 && focusIndex !== focus.index) {
         setFocus({ id: focus.id, index: focusIndex });
@@ -219,12 +229,25 @@ const FolderView = ({
         }
     }
 
+    // The entry a drag started from. Its element has to stay rendered while it's dragged, since the
+    // drag ends on it.
+    const [grabbedId, setGrabbedId] = useState<string | null>(null);
+
+    // Only the entries in or near view are rendered. The focused one stays rendered wherever the
+    // panel is scrolled, so it keeps the focus and the view's Tab stop.
+    const { lines, indexesIn, settled } = useVirtualLines(entries?.length ?? 0, [
+        focusId === null ? -1 : (indexById.get(focusId) ?? -1),
+        grabbedId !== null && draggedIds.has(grabbedId) ? (indexById.get(grabbedId) ?? -1) : -1,
+    ]);
+
     // Whether the focus is in the view. Removing the focused entry, as deleting or moving it away
     // does, drops the focus to the page without a blur, so this stays set and the entry taking its
     // place gets the focus back.
     const focusWithin = useRef(false);
     // Set while the view is to take the focus once it has something to focus.
     const pendingFocus = useRef(false);
+    // Set when the arrow keys move to an entry or one is revealed, which may not be rendered yet.
+    const pendingScroll = useRef<ScrollRequest | null>(null);
 
     // Leaving selection mode, however it is left, drops the selection made in it.
     const [wasSelecting, setWasSelecting] = useState(selecting);
@@ -245,6 +268,7 @@ const FolderView = ({
     const marqueeBase = useRef<EntrySelection>(EMPTY_SELECTION);
     const marquee = useMarquee({
         enabled: Boolean(entries?.length),
+        entriesIn: (box) => (entries ? indexesIn(box).map((index) => entries[index].id) : []),
         onStart: () => {
             marqueeBase.current = selection;
         },
@@ -259,35 +283,51 @@ const FolderView = ({
 
     // Waits for the refreshed listing, which arrives after the entry was created or renamed. The
     // entry takes the focus too while the view has it, or is to take it.
-    const revealIndex = revealId === undefined || !entries ? -1 : entries.findIndex((entry) => entry.id === revealId);
+    const revealIndex = revealId === undefined ? -1 : (indexById.get(revealId) ?? -1);
 
     useEffect(() => {
-        const surface = marquee.surfaceRef.current;
-
-        if (revealId === undefined || revealIndex < 0 || !surface) {
+        if (revealId === undefined || revealIndex < 0) {
             return;
         }
 
-        const element = entryElement(surface, revealId);
-
         replace({ ids: new Set([revealId]), anchor: revealId });
         setFocus({ id: revealId, index: revealIndex });
+        pendingScroll.current = { id: revealId, focus: pendingFocus.current || focusWithin.current };
+        pendingFocus.current = false;
+        onRevealed();
+    }, [revealId, revealIndex, replace, onRevealed]);
 
-        if (pendingFocus.current || focusWithin.current) {
-            pendingFocus.current = false;
-            element?.focus({ preventScroll: true });
+    // Scrolls to the entry asked for, focusing it if asked to, once it's rendered, which it is once
+    // it has the view's focus, and once the entries are in their places. An entry that's gone from
+    // the listing is given up on.
+    useEffect(() => {
+        const surface = marquee.surfaceRef.current;
+        const request = pendingScroll.current;
+
+        if (!surface || !request || !settled()) {
+            return;
         }
 
-        element?.scrollIntoView({ block: "nearest" });
-        onRevealed();
-    }, [revealId, revealIndex, replace, marquee.surfaceRef, onRevealed]);
+        const element = entryElement(surface, request.id);
+
+        if (element || !indexById.has(request.id)) {
+            pendingScroll.current = null;
+
+            if (request.focus) {
+                element?.focus({ preventScroll: true });
+            }
+
+            element?.scrollIntoView({ block: "nearest" });
+        }
+    });
 
     // Gives the focus to the focused entry, or to the view while it lists nothing, when the view is
-    // to take it, or when the focused entry was removed. While the folder loads, the view holds it.
+    // to take it, or when the focused entry was removed, once the entries are in their places.
+    // While the folder loads, the view holds it.
     useEffect(() => {
         const surface = marquee.surfaceRef.current;
 
-        if (!surface || (!pendingFocus.current && !(focusWithin.current && focusLost()))) {
+        if (!surface || !settled() || (!pendingFocus.current && !(focusWithin.current && focusLost()))) {
             return;
         }
 
@@ -307,8 +347,9 @@ const FolderView = ({
     // The entry an event happened on.
     const entryAt = (event: DragEvent) => {
         const id = entryIdAt(event.target);
+        const index = id === undefined ? undefined : indexById.get(id);
 
-        return id === undefined ? undefined : entries?.find((entry) => entry.id === id);
+        return index === undefined ? undefined : entries?.[index];
     };
 
     // A drag carries the selection when it starts on a selected entry, or else selects the entry and
@@ -320,6 +361,8 @@ const FolderView = ({
             if (!entry) {
                 return null;
             }
+
+            setGrabbedId(entry.id);
 
             if (selectedIds.has(entry.id)) {
                 return { section, trail, entries: selected, grabbed: entry };
@@ -516,7 +559,7 @@ const FolderView = ({
 
     const handleFocus = (event: FocusEvent) => {
         const id = entryIdAt(event.target);
-        const index = id === undefined || !entries ? -1 : entries.findIndex((entry) => entry.id === id);
+        const index = id === undefined ? -1 : (indexById.get(id) ?? -1);
 
         focusWithin.current = true;
 
@@ -532,13 +575,13 @@ const FolderView = ({
         }
     };
 
-    /** Focuses an entry and scrolls it into view, below the sticky column header. */
+    /**
+     * Focuses an entry and scrolls it into view, below the sticky column header. It may be far from
+     * what's rendered, so that's done once it is, as the focused entry always is.
+     */
     const focusEntry = (id: string, index: number) => {
-        const element = marquee.surfaceRef.current && entryElement(marquee.surfaceRef.current, id);
-
         setFocus({ id, index });
-        element?.focus({ preventScroll: true });
-        element?.scrollIntoView({ block: "nearest" });
+        pendingScroll.current = { id, focus: true };
     };
 
     /**
@@ -599,7 +642,7 @@ const FolderView = ({
      */
     const handleViewKey = (event: KeyboardEvent<HTMLDivElement>, onEntry: boolean) => {
         const toggle = event.ctrlKey || event.metaKey;
-        const index = focusId === null || !entries ? -1 : entries.findIndex((entry) => entry.id === focusId);
+        const index = focusId === null ? -1 : (indexById.get(focusId) ?? -1);
         const current = index >= 0 ? entries?.[index] : undefined;
 
         if (event.altKey) {
@@ -654,12 +697,10 @@ const FolderView = ({
         }
 
         const surface = event.currentTarget;
-        const listbox = surface.querySelector<HTMLElement>('[role="listbox"]');
         const element = entryElement(surface, current.id);
-        const grid = view === "grid";
         const step = stepIndex(event.key, index, entries.length, {
-            columns: grid && listbox ? gridColumns(listbox) : 1,
-            horizontal: grid,
+            columns: lines.columns,
+            horizontal: view === "grid",
             page: element && surface.parentElement ? pageRows(surface.parentElement, element) : 1,
             rtl: isRtl(surface),
         });
@@ -708,6 +749,7 @@ const FolderView = ({
         content = (
             <ContentView
                 entries={entries}
+                lines={lines}
                 label={folder.name}
                 focusId={focusId}
                 selectedIds={selectedIds}

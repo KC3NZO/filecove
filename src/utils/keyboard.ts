@@ -16,10 +16,6 @@ export const isTypingKey = (event: KeyboardEvent) =>
 /** Whether an element's text runs right to left, which swaps what Left and Right mean. */
 export const isRtl = (element: Element) => getComputedStyle(element).direction === "rtl";
 
-/** How many tracks a grid container lays out in each row. */
-export const gridColumns = (element: Element) =>
-    getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length || 1;
-
 /** How many rows of `item`'s height PageUp and PageDown move by in `scroller`, keeping one in view. */
 export const pageRows = (scroller: HTMLElement, item: HTMLElement) =>
     Math.max(1, Math.floor(scroller.clientHeight / Math.max(item.offsetHeight, 1)) - 1);

@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
 import IconButton from "@mui/material/IconButton";
@@ -23,13 +25,30 @@ import { SORT_KEY_INFO, toggleSortKey } from "../../../utils/sort";
 import Icon from "../../icons/icon";
 import ItemIcon from "./item-icon";
 
-import type { FileViewProps, SortKey, SortOrder } from "../../../types";
+import type { FileEntry, FileViewProps, SortKey, SortOrder } from "../../../types";
 
 interface ColumnHeaderProps {
     sortKey: SortKey;
     sort: SortOrder;
     sx?: SxProps<Theme>;
     onSortChange: (sort: SortOrder) => void;
+}
+
+interface FileRowProps extends Pick<FileViewProps, "draggable" | "hasActions" | "onSelect" | "onOpen" | "onMenu"> {
+    entry: FileEntry;
+    /** Where the entry is listed, from 0. */
+    index: number;
+    /** How many entries the folder lists. */
+    count: number;
+    /** How far down the listbox the row sits, in px. */
+    top: number;
+    /** Whether the row has the view's Tab stop. */
+    focused: boolean;
+    selected: boolean;
+    cut: boolean;
+    dragged: boolean;
+    /** Whether the dragged entries would be dropped into this folder now. */
+    dropTarget: boolean;
 }
 
 // `--columns` holds the tracks shared by the header and every row. It grows with the view:
@@ -70,14 +89,23 @@ const headerRowSx: SxProps<Theme> = {
     [viewMedium]: { display: "grid" },
 };
 
+// Only the rows in or near view are rendered, each placed at its line, and the listbox is as tall
+// as all of them (`useVirtualLines`). It's a grid of one track for the hook to read, with the row
+// gap that spaces the lines.
 const rowsSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0.5,
-    [viewMedium]: { gap: 1 },
+    position: "relative",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr)",
+    rowGap: 0.5,
+    [viewMedium]: { rowGap: 1 },
 };
 
+// Placed at its line by `top`, set in `style`. Every row is as tall, since the list measures one
+// for them all.
 const rowSx: SxProps<Theme> = (theme) => ({
+    position: "absolute",
+    left: 0,
+    right: 0,
     display: "grid",
     gridTemplateColumns: "var(--columns)",
     alignItems: "center",
@@ -86,7 +114,8 @@ const rowSx: SxProps<Theme> = (theme) => ({
     px: 1.5,
     borderRadius: 2,
     cursor: "default",
-    "&:nth-of-type(odd)": { bgcolor: stripeBackground(theme) },
+    // By the entry's place in the folder, since the rows rendered don't all follow each other.
+    '&[data-striped="true"]': { bgcolor: stripeBackground(theme) },
     "&:hover": { bgcolor: hoverBackground(theme) },
     '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
     '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
@@ -211,12 +240,109 @@ const ColumnHeader = ({ sortKey, sort, sx, onSortChange }: ColumnHeaderProps) =>
 };
 
 /**
- * The entries as rows, a listbox with one option per entry. Only the focused row is in the tab
- * order; the folder view moves the focus between rows with the arrow keys. The menu buttons are
- * for pointers alone, since the Menu key or Shift+F10 opens the same menu from the focused row.
+ * One entry's row. Memoized, so scrolling only renders the rows coming into view.
+ */
+const FileRow = memo(
+    ({
+        entry,
+        index,
+        count,
+        top,
+        focused,
+        selected,
+        cut,
+        draggable,
+        dragged,
+        dropTarget,
+        hasActions,
+        onSelect,
+        onOpen,
+        onMenu,
+    }: FileRowProps) => (
+        <Box
+            sx={rowSx}
+            style={{ top }}
+            role="option"
+            aria-selected={selected}
+            // Only some rows are rendered, so each says where it is among all of them.
+            aria-setsize={count}
+            aria-posinset={index + 1}
+            tabIndex={focused ? 0 : -1}
+            // The whole row is the entry's: it's dragged by any part, and a marquee only starts from
+            // the empty space around the rows.
+            draggable={draggable}
+            data-entry-id={entry.id}
+            data-no-marquee
+            data-striped={index % 2 === 0}
+            data-selected={selected}
+            data-cut={cut}
+            data-dragged={dragged}
+            data-drop-target={dropTarget}
+            onClick={(event) => {
+                event.stopPropagation();
+                onSelect(entry.id, selectModifiers(event));
+            }}
+            onDoubleClick={() => onOpen(entry)}
+            onContextMenu={(event) => {
+                event.stopPropagation();
+
+                if (onMenu(pointerPosition(event), entry)) {
+                    event.preventDefault();
+                }
+            }}
+        >
+            <Box sx={nameCellSx}>
+                <ItemIcon entry={entry} size="1.75rem" />
+                <Box sx={nameTextSx}>
+                    <Typography variant="body2" noWrap>
+                        {entry.name}
+                    </Typography>
+                    <Typography variant="caption" noWrap sx={secondaryLineSx}>
+                        {describeSize(entry)} · {describeDate(entry)}
+                    </Typography>
+                </Box>
+            </Box>
+            <Typography variant="body2" color="text.secondary" noWrap sx={sizeCellSx}>
+                {describeSize(entry)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" noWrap sx={typeCellSx}>
+                {describeType(entry)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" noWrap sx={modifiedCellSx}>
+                {describeDate(entry)}
+            </Typography>
+            <Box sx={menuCellSx}>
+                {hasActions && (
+                    <IconButton
+                        size="small"
+                        tabIndex={-1}
+                        aria-hidden
+                        data-menu-button
+                        sx={menuButtonSx}
+                        // Like a right-click: the menu decides whether it acts on the whole selection.
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onMenu(belowElement(event.currentTarget), entry);
+                        }}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                    >
+                        <Icon name="more" fontSize="small" />
+                    </IconButton>
+                )}
+            </Box>
+        </Box>
+    ),
+);
+
+/**
+ * The entries as rows, a listbox with one option per entry, of which only those in or near view
+ * are rendered (`lines`), one to a line. Only the focused row is in the tab order; the folder view
+ * moves the focus between rows with the arrow keys. The menu buttons are for pointers alone, since
+ * the Menu key or Shift+F10 opens the same menu from the focused row.
  */
 const FileList = ({
     entries,
+    lines,
     label,
     focusId,
     selectedIds,
@@ -239,77 +365,37 @@ const FileList = ({
             <ColumnHeader sortKey="modified" sort={sort} sx={modifiedHeaderSx} onSortChange={onSortChange} />
             <Box />
         </Box>
-        <Box sx={rowsSx} role="listbox" aria-label={label} aria-multiselectable>
-            {entries.map((entry) => (
-                <Box
-                    key={entry.id}
-                    sx={rowSx}
-                    role="option"
-                    aria-selected={selectedIds.has(entry.id)}
-                    tabIndex={entry.id === focusId ? 0 : -1}
-                    // The whole row is the entry's: it's dragged by any part, and a marquee only
-                    // starts from the empty space around the rows.
-                    draggable={draggable}
-                    data-entry-id={entry.id}
-                    data-no-marquee
-                    data-selected={selectedIds.has(entry.id)}
-                    data-cut={cutIds.has(entry.id)}
-                    data-dragged={draggedIds.has(entry.id)}
-                    data-drop-target={dropTargetId === entry.id}
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        onSelect(entry.id, selectModifiers(event));
-                    }}
-                    onDoubleClick={() => onOpen(entry)}
-                    onContextMenu={(event) => {
-                        event.stopPropagation();
+        <Box
+            ref={lines.ref}
+            sx={rowsSx}
+            style={{ height: lines.height }}
+            role="listbox"
+            aria-label={label}
+            aria-multiselectable
+        >
+            {lines.indexes.map((index) => {
+                const entry = entries[index];
 
-                        if (onMenu(pointerPosition(event), entry)) {
-                            event.preventDefault();
-                        }
-                    }}
-                >
-                    <Box sx={nameCellSx}>
-                        <ItemIcon entry={entry} size="1.75rem" />
-                        <Box sx={nameTextSx}>
-                            <Typography variant="body2" noWrap>
-                                {entry.name}
-                            </Typography>
-                            <Typography variant="caption" noWrap sx={secondaryLineSx}>
-                                {describeSize(entry)} · {describeDate(entry)}
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Typography variant="body2" color="text.secondary" noWrap sx={sizeCellSx}>
-                        {describeSize(entry)}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" noWrap sx={typeCellSx}>
-                        {describeType(entry)}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" noWrap sx={modifiedCellSx}>
-                        {describeDate(entry)}
-                    </Typography>
-                    <Box sx={menuCellSx}>
-                        {hasActions && (
-                            <IconButton
-                                size="small"
-                                tabIndex={-1}
-                                aria-hidden
-                                data-menu-button
-                                sx={menuButtonSx}
-                                // Like a right-click: the menu decides whether it acts on the whole selection.
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                    onMenu(belowElement(event.currentTarget), entry);
-                                }}
-                                onDoubleClick={(event) => event.stopPropagation()}
-                            >
-                                <Icon name="more" fontSize="small" />
-                            </IconButton>
-                        )}
-                    </Box>
-                </Box>
-            ))}
+                return (
+                    <FileRow
+                        key={entry.id}
+                        entry={entry}
+                        index={index}
+                        count={entries.length}
+                        top={index * lines.pitch}
+                        focused={entry.id === focusId}
+                        selected={selectedIds.has(entry.id)}
+                        cut={cutIds.has(entry.id)}
+                        draggable={draggable}
+                        dragged={draggedIds.has(entry.id)}
+                        dropTarget={dropTargetId === entry.id}
+                        hasActions={hasActions}
+                        onSelect={onSelect}
+                        onOpen={onOpen}
+                        onMenu={onMenu}
+                    />
+                );
+            })}
         </Box>
     </Box>
 );

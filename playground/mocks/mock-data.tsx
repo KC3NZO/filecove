@@ -19,6 +19,17 @@ const logs: MockNode[] = Array.from({ length: 120 }, (_, index) =>
     ),
 );
 
+const archiveTypes = ["csv", "json", "pdf", "png", "zip", "txt", "md", "svg"];
+
+/** A folder large enough that the content only renders what's in view, to try virtualization. */
+const archive: MockNode[] = Array.from({ length: 10_000 }, (_, index) =>
+    file(
+        `record-${String(index + 1).padStart(5, "0")}.${archiveTypes[index % archiveTypes.length]}`,
+        2_000 + ((index * 7_919) % 900_000),
+        new Date(Date.UTC(2024, 0, 1) + index * 3_600_000).toISOString(),
+    ),
+);
+
 /** One backend serving two unrelated project roots, as in "/server/project/a" and "/server/project/b". */
 export const serverAdapter = createMockAdapter({
     "/server/project/a": [
@@ -59,6 +70,7 @@ export const serverAdapter = createMockAdapter({
         file("a-very-long-file-name-that-should-truncate-gracefully-in-every-layout.md", 400, "2026-07-14T22:44"),
     ],
     "/server/project/b": [
+        folder("archive", "2026-10-01T09:00", archive),
         folder("cmd", "2026-09-12T10:30", [
             folder("server", "2026-09-12T10:30", [file("main.go", 2_950, "2026-09-12T10:30")]),
         ]),

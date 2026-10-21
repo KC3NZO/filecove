@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
@@ -15,23 +17,54 @@ import { pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
 import ItemIcon from "./item-icon";
 
-import type { FileViewProps } from "../../../types";
+import type { FileEntry, FileViewProps } from "../../../types";
+
+interface FileTileProps extends Pick<FileViewProps, "draggable" | "onSelect" | "onOpen" | "onMenu"> {
+    entry: FileEntry;
+    /** Where the entry is listed, from 0. */
+    index: number;
+    /** How many entries the folder lists. */
+    count: number;
+    /** How far down the listbox the tile's line sits, in px. */
+    top: number;
+    /** The grid column the tile goes in, from 0. */
+    column: number;
+    /** Whether the tile has the view's Tab stop. */
+    focused: boolean;
+    selected: boolean;
+    cut: boolean;
+    dragged: boolean;
+    /** Whether the dragged entries would be dropped into this folder now. */
+    dropTarget: boolean;
+}
 
 // Text can't be selected anywhere in the grid, or Shift-click would select it across tiles.
 const gridSx: SxProps<Theme> = {
-    display: "grid",
     userSelect: "none",
+    p: 1,
+    [viewMedium]: { p: 3 },
+};
+
+// Only the tiles in or near view are rendered, each placed at its line and in its column, and the
+// listbox is as tall as all the lines (`useVirtualLines`). The columns are still the grid's own,
+// as many as fit, which the hook reads.
+const tilesSx: SxProps<Theme> = {
+    position: "relative",
+    display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(6.5rem, 1fr))",
     gap: 0.5,
-    p: 1,
     [viewMedium]: {
         gridTemplateColumns: "repeat(auto-fill, minmax(7.5rem, 1fr))",
         gap: 1,
-        p: 3,
     },
 };
 
+// Placed by `top` and `gridColumn`, set in `style`: an absolutely positioned child of a grid takes
+// the grid area it's placed in as its box, so it fills its column's width.
 const tileSx: SxProps<Theme> = (theme) => ({
+    position: "absolute",
+    left: 0,
+    right: 0,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -51,6 +84,8 @@ const tileSx: SxProps<Theme> = (theme) => ({
     ...dragMarkers(theme),
 });
 
+// Two lines tall even for a short name, so every tile is as tall, since the grid measures one for
+// them all.
 const nameSx: SxProps<Theme> = {
     display: "-webkit-box",
     WebkitLineClamp: 2,
@@ -59,14 +94,75 @@ const nameSx: SxProps<Theme> = {
     overflowWrap: "anywhere",
     fontSize: "0.8125rem",
     lineHeight: 1.35,
+    minHeight: "2.7em",
 };
 
 /**
- * The entries as tiles, a listbox with one option per entry, which the arrow keys move through in
- * two directions. Only the focused tile is in the tab order.
+ * One entry's tile. Memoized, so scrolling only renders the tiles coming into view.
+ */
+const FileTile = memo(
+    ({
+        entry,
+        index,
+        count,
+        top,
+        column,
+        focused,
+        selected,
+        cut,
+        draggable,
+        dragged,
+        dropTarget,
+        onSelect,
+        onOpen,
+        onMenu,
+    }: FileTileProps) => (
+        <Box
+            sx={tileSx}
+            // The span ends the tile's box at its column's far side, not at the grid's.
+            style={{ top, gridColumn: `${column + 1} / span 1` }}
+            role="option"
+            aria-selected={selected}
+            // Only some tiles are rendered, so each says where it is among all of them.
+            aria-setsize={count}
+            aria-posinset={index + 1}
+            tabIndex={focused ? 0 : -1}
+            draggable={draggable}
+            data-entry-id={entry.id}
+            data-no-marquee
+            data-selected={selected}
+            data-cut={cut}
+            data-dragged={dragged}
+            data-drop-target={dropTarget}
+            onClick={(event) => {
+                event.stopPropagation();
+                onSelect(entry.id, selectModifiers(event));
+            }}
+            onDoubleClick={() => onOpen(entry)}
+            onContextMenu={(event) => {
+                event.stopPropagation();
+
+                if (onMenu(pointerPosition(event), entry)) {
+                    event.preventDefault();
+                }
+            }}
+        >
+            <ItemIcon entry={entry} size="3.5rem" />
+            <Typography variant="body2" sx={nameSx}>
+                {entry.name}
+            </Typography>
+        </Box>
+    ),
+);
+
+/**
+ * The entries as tiles, a listbox with one option per entry, of which only those in or near view
+ * are rendered (`lines`), as many to a line as fit. The arrow keys move through them in two
+ * directions. Only the focused tile is in the tab order.
  */
 const FileGrid = ({
     entries,
+    lines,
     label,
     focusId,
     selectedIds,
@@ -78,40 +174,39 @@ const FileGrid = ({
     onOpen,
     onMenu,
 }: FileViewProps) => (
-    <Box sx={gridSx} role="listbox" aria-label={label} aria-multiselectable>
-        {entries.map((entry) => (
-            <Box
-                key={entry.id}
-                sx={tileSx}
-                role="option"
-                aria-selected={selectedIds.has(entry.id)}
-                tabIndex={entry.id === focusId ? 0 : -1}
-                draggable={draggable}
-                data-entry-id={entry.id}
-                data-no-marquee
-                data-selected={selectedIds.has(entry.id)}
-                data-cut={cutIds.has(entry.id)}
-                data-dragged={draggedIds.has(entry.id)}
-                data-drop-target={dropTargetId === entry.id}
-                onClick={(event) => {
-                    event.stopPropagation();
-                    onSelect(entry.id, selectModifiers(event));
-                }}
-                onDoubleClick={() => onOpen(entry)}
-                onContextMenu={(event) => {
-                    event.stopPropagation();
+    <Box sx={gridSx}>
+        <Box
+            ref={lines.ref}
+            sx={tilesSx}
+            style={{ height: lines.height }}
+            role="listbox"
+            aria-label={label}
+            aria-multiselectable
+        >
+            {lines.indexes.map((index) => {
+                const entry = entries[index];
 
-                    if (onMenu(pointerPosition(event), entry)) {
-                        event.preventDefault();
-                    }
-                }}
-            >
-                <ItemIcon entry={entry} size="3.5rem" />
-                <Typography variant="body2" sx={nameSx}>
-                    {entry.name}
-                </Typography>
-            </Box>
-        ))}
+                return (
+                    <FileTile
+                        key={entry.id}
+                        entry={entry}
+                        index={index}
+                        count={entries.length}
+                        top={Math.floor(index / lines.columns) * lines.pitch}
+                        column={index % lines.columns}
+                        focused={entry.id === focusId}
+                        selected={selectedIds.has(entry.id)}
+                        cut={cutIds.has(entry.id)}
+                        draggable={draggable}
+                        dragged={draggedIds.has(entry.id)}
+                        dropTarget={dropTargetId === entry.id}
+                        onSelect={onSelect}
+                        onOpen={onOpen}
+                        onMenu={onMenu}
+                    />
+                );
+            })}
+        </Box>
     </Box>
 );
 

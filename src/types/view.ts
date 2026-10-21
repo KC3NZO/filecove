@@ -26,9 +26,29 @@ export interface EntryLayout {
     rtl: boolean;
 }
 
+/**
+ * The entries a view renders, only those in or near the scroll panel, and how they're laid out in
+ * lines. Internal, from `useVirtualLines`.
+ */
+export interface VirtualLines {
+    /** Takes the listbox, a grid container whose column tracks and row gap lay out the lines. */
+    ref: (list: HTMLElement | null) => void;
+    /** Indexes of the entries to render, in order. */
+    indexes: number[];
+    /** Entries per line: 1 in the list, as many tiles as fit in the grid. */
+    columns: number;
+    /** From one line's top to the next one's, in px. */
+    pitch: number;
+    /** How tall the lines are together, in px, which the listbox takes so the panel scrolls as far. */
+    height: number;
+}
+
 /** Props shared by the list and grid views. Internal, not exported from the package entry. */
 export interface FileViewProps {
+    /** Every entry of the folder, in display order. */
     entries: FileEntry[];
+    /** Which of them to render, and where. */
+    lines: VirtualLines;
     /** Names the list of entries for screen readers: the folder's name. */
     label: string;
     /** The entry that takes focus when the view is tabbed to, and that the arrow keys move from. */
