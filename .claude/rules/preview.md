@@ -12,10 +12,14 @@ paths:
 
 ## Opening a file
 
-A file is opened by double-clicking it, Enter or Alt+Down on it, a touch tap outside selection mode, or `ActionContext.open()`. A folder opens in the file manager, as it always has. A file goes to `FileManager`'s optional `onOpenFile(entry, context)`, so a consumer can open it in an editor of their own, and without it to the preview. When neither can open a file, a double-click does nothing, Enter and Alt+Down aren't taken (so an action can bind them), and a tap selects it.
+A file is opened by double-clicking it, Enter or Alt+Down on it, a touch tap outside selection mode, or `ActionContext.open()`. A folder opens in the file manager, as it always has. A file goes to `FileManager`'s optional `onOpenFile(entry, context)`, so a consumer can open it in an editor of their own, and without it to the preview. `onOpenFile` can return `false` to decline a file, e.g. one of a type the consumer has no editor for, and the file goes to the preview instead. When nothing can open a file, a double-click does nothing, Enter and Alt+Down aren't taken (so an action can bind them), and a tap selects it.
 
-- `contextFor` in `file-manager.tsx` builds `open` (exactly one entry) and `preview`. `FolderView` reaches `open` through its `onOpenFile` prop (`openFile`), which says whether anything opened the file.
-- The playground's "Open" action calls `context.open`, for folders and files alike, and "Preview" calls `context.preview`, with Space as its shortcut, as in GNOME Files. Ctrl+Space then toggles the focused entry in the selection. A space typed mid-name in type-ahead never runs a shortcut.
+There's no editor in the component, by choice: editing needs a way to save through the adapter, designed on paper first, and an editor is heavy and differs from app to app, so it's the consumer's, through `onOpenFile`.
+
+- `contextFor` in `file-manager.tsx` builds `open` (exactly one entry) and `preview`. For a file, `open` is there only when `onOpenFile` is, since without it opening a file is only previewing it, so a menu doesn't offer Open and Preview doing the same thing. `open` previews a file `onOpenFile` declines.
+- `FolderView` opens a file through its `onOpenFile` prop (`openFile`), which tries `onOpenFile`, then the preview, and says whether anything opened the file.
+- With `onOpenFile`, Open shows for every file, including those it would decline, since whether it declines one is only known by calling it.
+- The playground passes no `onOpenFile`, so its "Open" action (`context.open`) shows for folders only, and "Preview" calls `context.preview`, with Space as its shortcut, as in GNOME Files. Ctrl+Space then toggles the focused entry in the selection. A space typed mid-name in type-ahead never runs a shortcut.
 
 ## The adapter's `content`
 

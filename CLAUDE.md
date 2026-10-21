@@ -44,7 +44,7 @@ Imports are relative, with no path alias. The only barrels are `src/index.ts` an
 - **`sections`** is `SectionGroup[]`. Each `Section` (id, label, icon, `rootId`, optional own `adapter`, optional `showFolders`, optional `importFrom`) is an independent root, with no connection to other sections even when they share an adapter. A single `section` can be passed instead, and its folders then fill the sidebar (see `file-manager.md`).
 - **`actions`** is `ActionGroup[]` for the context menu.
 
-Opening a file goes to the optional `onOpenFile(entry, context)`, or else to the built-in preview (see `preview.md`).
+Opening a file goes to the optional `onOpenFile(entry, context)`, or to the built-in preview when there's none or it returns `false` (see `preview.md`). There's no built-in editor, by choice.
 
 ## Conventions
 
