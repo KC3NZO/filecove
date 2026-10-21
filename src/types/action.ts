@@ -20,6 +20,18 @@ export interface ActionContext {
     /** Opens a folder entry of `folder` in the file manager. */
     openFolder: (entry: FileEntry) => void;
     /**
+     * Opens the one entry in `entries` as double-clicking it does: a folder in the file manager, and
+     * a file with the file manager's `onOpenFile`, or else in the preview. Missing unless there's
+     * exactly one entry, and for a file neither can open.
+     */
+    open?: () => void;
+    /**
+     * Shows the files among `entries` in the file manager's preview, one at a time. A single file
+     * steps through the files of the folder it's listed in, in the content's order. Missing when the
+     * section's adapter has no `content`, or `entries` holds no files.
+     */
+    preview?: () => void;
+    /**
      * Asks for a name and creates a folder in `folder`. Missing when the section's adapter has no
      * `createFolder`, so an action can hide with `visible: (context) => !!context.createFolder`.
      */

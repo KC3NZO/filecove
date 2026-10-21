@@ -27,6 +27,7 @@ import ContextMenu from "./context-menu/context-menu";
 import DeleteDialog from "./dialogs/delete-dialog";
 import NameDialog from "./dialogs/name-dialog";
 import PasteDialog from "./dialogs/paste-dialog";
+import PreviewDialog from "./dialogs/preview-dialog";
 import TransferDialog from "./dialogs/transfer-dialog";
 import UploadDialog from "./dialogs/upload-dialog";
 import DragPreview from "./drag-preview";
@@ -58,6 +59,7 @@ import type { MenuState } from "./context-menu/context-menu";
 import type { DeleteDialogState, DeleteRequest } from "./dialogs/delete-dialog";
 import type { NameDialogState, NameRequest } from "./dialogs/name-dialog";
 import type { PasteDialogState, PasteRequest } from "./dialogs/paste-dialog";
+import type { PreviewDialogState, PreviewRequest } from "./dialogs/preview-dialog";
 import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-dialog";
 import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
 
@@ -71,6 +73,12 @@ interface BaseProps {
     defaultView?: ViewMode;
     /** Content order at first; name, A to Z, when omitted. The sidebar tree is always by name. */
     defaultSort?: SortOrder;
+    /**
+     * What opening a file does, by double-clicking, tapping or pressing Enter on it, or with
+     * `ActionContext.open`, e.g. opening it in an editor of the consumer's. Without it, a file opens
+     * in the preview, when the adapter has `content`.
+     */
+    onOpenFile?: (entry: FileEntry, context: ActionContext) => void;
 }
 
 interface MultiSectionProps extends BaseProps {
@@ -215,6 +223,7 @@ const FileManager = ({
     defaultSectionId,
     defaultView = "list",
     defaultSort = DEFAULT_SORT,
+    onOpenFile,
 }: FileManagerProps) => {
     const [store] = useState(createFolderStore);
     const data = useMemo(() => ({ store, adapter }), [store, adapter]);
@@ -264,6 +273,7 @@ const FileManager = ({
     const [clipboard, setClipboard] = useState<Clipboard | null>(null);
     const [pasting, setPasting] = useState<PasteDialogState | null>(null);
     const [uploadCheck, setUploadCheck] = useState<UploadDialogState | null>(null);
+    const [previewing, setPreviewing] = useState<PreviewDialogState | null>(null);
     const [reveal, setReveal] = useState<Reveal | null>(null);
     // The browser's file picker, and where the files picked with it go.
     const pickerRef = useRef<HTMLInputElement>(null);
@@ -343,18 +353,24 @@ const FileManager = ({
         });
     }, []);
 
+    // Whether the focus is in the content panel, or in the context menu opened from it, since an
+    // action picked in the menu counts as run where the menu was opened.
+    const focusInContent = useCallback(() => {
+        const active = document.activeElement;
+        const from = active?.closest('[role="menu"]') ? menuOpener.current : active;
+
+        return !!from && !!panelRef.current?.contains(from);
+    }, []);
+
     // Opening a folder from the content takes the focus along into it, as the view it was in goes
-    // away; an action picked in the context menu counts as run where the menu was opened. Going up
-    // to a folder the open one is in selects the folder it was left through, as desktop file
-    // managers do.
+    // away. Going up to a folder the open one is in selects the folder it was left through, as
+    // desktop file managers do.
     const arrive = useCallback(
         (target: Place) => {
-            const active = document.activeElement;
-            const from = active?.closest('[role="menu"]') ? menuOpener.current : active;
             const targetSection = sectionsById.get(target.sectionId);
             const left = folderLeft(place, target);
 
-            if (from && panelRef.current?.contains(from)) {
+            if (focusInContent()) {
                 setFocusContent(true);
             }
 
@@ -364,7 +380,7 @@ const FileManager = ({
                 setReveal({ key, id: left.id });
             }
         },
-        [place, sectionsById],
+        [place, sectionsById, focusInContent],
     );
 
     // Going somewhere leaves the sidebar tree as the user left it; the path bar shows where it is.
@@ -563,6 +579,38 @@ const FileManager = ({
     }, []);
 
     const closeUploadCheck = useCallback(() => setUploadCheck((prev) => prev && { ...prev, open: false }), []);
+
+    const askPreview = useCallback(
+        (request: PreviewRequest) => {
+            const fromContent = focusInContent();
+
+            setPreviewing((prev) => ({ open: true, id: (prev?.id ?? 0) + 1, request, fromContent }));
+        },
+        [focusInContent],
+    );
+
+    const closePreview = useCallback(() => setPreviewing((prev) => prev && { ...prev, open: false }), []);
+
+    // Once the preview has faded out, the content takes the focus back if the preview was opened
+    // from there, on the file shown last when the selection followed it.
+    const handlePreviewClosed = useCallback(() => {
+        if (previewing?.fromContent) {
+            setFocusContent(true);
+        }
+    }, [previewing?.fromContent]);
+
+    // A single file steps through its folder, and the content's selection follows the file shown,
+    // as it does in GNOME's and macOS's previewers.
+    const handlePreviewStep = useCallback(
+        ({ section: shown, trail, follow }: PreviewRequest, entry: FileEntry) => {
+            const key = folderKey(shown.id, folderOf(shown, trail).id);
+
+            if (follow && key === openKey) {
+                setReveal({ key, id: entry.id });
+            }
+        },
+        [openKey],
+    );
 
     // Pastes `pasted` into the folder at `trail`, when it can go there and no other paste is running.
     const offerPaste = useCallback(
@@ -811,7 +859,7 @@ const FileManager = ({
     );
 
     const contextFor = useCallback(
-        ({ target, section: menuSection, trail, entries }: MenuRequest): ActionContext => {
+        ({ target, section: menuSection, trail, entries, listing }: MenuRequest): ActionContext => {
             const menuFolder = folderOf(menuSection, trail);
             const folderAdapter = menuSection.adapter ?? adapter;
             const base = { section: menuSection, adapter: folderAdapter, trail };
@@ -833,8 +881,26 @@ const FileManager = ({
             const uploadHere = offerUpload(menuSection, trail);
 
             const [only] = entries;
+            const files = entries.filter((entry) => entry.kind === "file");
 
-            return {
+            // A single file steps through the files of the view it's listed in, in its order, and
+            // the selection follows; several files step through themselves.
+            const preview =
+                folderAdapter.content && files.length > 0
+                    ? () => {
+                          const siblings =
+                              entries.length === 1 && listing ? listing.filter((entry) => entry.kind === "file") : [];
+                          const index = siblings.findIndex((entry) => entry.id === only.id);
+
+                          askPreview(
+                              index >= 0
+                                  ? { ...base, entries: siblings, index, follow: true }
+                                  : { ...base, entries: files, index: 0, follow: false },
+                          );
+                      }
+                    : undefined;
+
+            const context: ActionContext = {
                 target,
                 entries,
                 folder: menuFolder,
@@ -869,7 +935,20 @@ const FileManager = ({
                     entries.length === 1 && only.kind === "folder"
                         ? pasteTo([...trail, { id: only.id, name: only.name }])
                         : undefined,
+                preview,
             };
+
+            // Opened as double-clicking it does: a folder here, a file as the consumer says, or else
+            // in the preview.
+            if (entries.length === 1) {
+                if (only.kind === "folder") {
+                    context.open = () => context.openFolder(only);
+                } else {
+                    context.open = onOpenFile ? () => onOpenFile(only, context) : preview;
+                }
+            }
+
+            return context;
         },
         [
             adapter,
@@ -878,12 +957,27 @@ const FileManager = ({
             askName,
             askDestination,
             askDelete,
+            askPreview,
             offerPaste,
             offerUpload,
             pickFiles,
             sectionsById,
             clipboard,
+            onOpenFile,
         ],
+    );
+
+    // Opens a file as double-clicking it does, with `onOpenFile` or else in the preview. Returns
+    // false when neither can open it.
+    const openFile = useCallback(
+        (request: MenuRequest) => {
+            const { open } = contextFor(request);
+
+            open?.();
+
+            return !!open;
+        },
+        [contextFor],
     );
 
     const openMenu = useCallback<OpenMenu>(
@@ -1010,6 +1104,7 @@ const FileManager = ({
                                                 onSelectingChange={setSelecting}
                                                 onSortChange={setSort}
                                                 onNavigate={goTo}
+                                                onOpenFile={openFile}
                                                 onOpenMenu={openMenu}
                                                 onShortcut={runShortcut}
                                                 onRevealed={clearReveal}
@@ -1078,6 +1173,17 @@ const FileManager = ({
                                 request={uploadCheck.request}
                                 onClose={closeUploadCheck}
                                 onUpload={startUpload}
+                            />
+                        )}
+                        {previewing && (
+                            <PreviewDialog
+                                key={`preview:${previewing.id}`}
+                                open={previewing.open}
+                                request={previewing.request}
+                                disableRestoreFocus={previewing.fromContent}
+                                onClose={closePreview}
+                                onClosed={handlePreviewClosed}
+                                onStep={handlePreviewStep}
                             />
                         )}
                         <input ref={pickerRef} type="file" multiple style={pickerStyle} onChange={handlePicked} />

@@ -68,6 +68,8 @@ interface FolderViewProps {
     onSelectingChange: (selecting: boolean) => void;
     onSortChange: (sort: SortOrder) => void;
     onNavigate: (place: Place) => void;
+    /** Opens a file as the file manager says. Returns false when nothing can open it. */
+    onOpenFile: (request: MenuRequest) => boolean;
     onOpenMenu: OpenMenu;
     onShortcut: RunShortcut;
     /** Called once `revealId` has been selected. */
@@ -163,7 +165,7 @@ const stateTitleSx: SxProps<Theme> = {
  * folder (the file manager remounts this per folder) and is never shared with the sidebar.
  *
  * On touch there are no modifier keys, so a long-press (or the header's Select button) starts a
- * selection mode in which taps toggle entries. Outside it, a tap opens a folder.
+ * selection mode in which taps toggle entries. Outside it, a tap opens a folder or a file.
  */
 const FolderView = ({
     section,
@@ -178,6 +180,7 @@ const FolderView = ({
     onSelectingChange,
     onSortChange,
     onNavigate,
+    onOpenFile,
     onOpenMenu,
     onShortcut,
     onRevealed,
@@ -407,17 +410,23 @@ const FolderView = ({
         },
     });
 
+    // Opens a folder here, and a file as the file manager says, with the view's order for the
+    // preview to step through. Returns false when nothing can open the file.
     const handleOpen = useCallback(
         (entry: FileEntry) => {
             if (entry.kind === "folder") {
                 onNavigate({ sectionId: section.id, trail: [...trail, { id: entry.id, name: entry.name }] });
+
+                return true;
             }
+
+            return onOpenFile({ target: "selection", section, trail, entries: [entry], listing: entries });
         },
-        [onNavigate, section.id, trail],
+        [onNavigate, onOpenFile, section, trail, entries],
     );
 
-    // In selection mode every tap toggles. Outside it, a touch tap opens a folder, as double-click
-    // does with a mouse, and otherwise selects as a click does.
+    // In selection mode every tap toggles. Outside it, a touch tap opens the entry, as double-click
+    // does with a mouse, and selects a file nothing can open, as a click does.
     const handleSelect = useCallback(
         (id: string, modifiers: SelectModifiers) => {
             if (selecting) {
@@ -428,9 +437,7 @@ const FolderView = ({
 
             const entry = pointerType.current === "mouse" ? undefined : entries?.find((item) => item.id === id);
 
-            if (entry?.kind === "folder") {
-                handleOpen(entry);
-            } else {
+            if (!entry || !handleOpen(entry)) {
                 select(id, modifiers);
             }
         },
@@ -462,9 +469,10 @@ const FolderView = ({
                 section,
                 trail,
                 entries: inSelection ? selected : [entry],
+                listing: entries,
             });
         },
-        [selectedIds, selected, select, onOpenMenu, section, trail],
+        [selectedIds, selected, select, onOpenMenu, section, trail, entries],
     );
 
     // Clicking empty space clears the selection, unless Ctrl or Shift is held: a modifier click
@@ -521,10 +529,12 @@ const FolderView = ({
 
         const folderRequest: MenuRequest = { target: "folder", section, trail, entries: [] };
         const requests: MenuRequest[] = selected.length
-            ? [{ target: "selection", section, trail, entries: selected }, folderRequest]
+            ? [{ target: "selection", section, trail, entries: selected, listing: entries }, folderRequest]
             : [folderRequest];
+        // A space typed in the middle of a name is part of it, not a shortcut.
+        const typingSpace = event.key === " " && isTypingKey(event) && typeAhead.typing();
 
-        if (onShortcut(event, requests)) {
+        if (!typingSpace && onShortcut(event, requests)) {
             event.preventDefault();
 
             return;
@@ -635,7 +645,7 @@ const FolderView = ({
      * - Arrows, Home, End, PageUp and PageDown move the focus, selecting as `moveFocus` says. In the
      *   grid, Left and Right move along a row and Up and Down between rows.
      * - Space selects or deselects the focused entry; Shift+Space selects from the anchor to it.
-     * - Enter and Alt+Down open the focused folder; Backspace and Alt+Up go up to the folder above.
+     * - Enter and Alt+Down open the focused entry; Backspace and Alt+Up go up to the folder above.
      * - Typing finds the next entry whose name starts with what was typed.
      */
     const handleViewKey = (event: KeyboardEvent<HTMLDivElement>, onEntry: boolean) => {
@@ -654,10 +664,8 @@ const FolderView = ({
                 return true;
             }
 
-            if (event.key === "ArrowDown" && current?.kind === "folder") {
-                handleOpen(current);
-
-                return true;
+            if (event.key === "ArrowDown" && current) {
+                return handleOpen(current);
             }
 
             return false;
@@ -674,13 +682,7 @@ const FolderView = ({
         }
 
         if (event.key === "Enter" && !toggle && !event.shiftKey) {
-            if (current.kind !== "folder") {
-                return false;
-            }
-
-            handleOpen(current);
-
-            return true;
+            return handleOpen(current);
         }
 
         // A space typed in the middle of a name is part of it.
@@ -729,7 +731,7 @@ const FolderView = ({
     };
 
     const handleSelectionMenu = (button: HTMLElement) => {
-        onOpenMenu(belowElement(button), { target: "selection", section, trail, entries: selected });
+        onOpenMenu(belowElement(button), { target: "selection", section, trail, entries: selected, listing: entries });
     };
 
     const handleBackgroundMenu = (event: MouseEvent) => {

@@ -4,6 +4,7 @@ import ArrowDownwardRounded from "@mui/icons-material/ArrowDownwardRounded";
 import ArrowForwardRounded from "@mui/icons-material/ArrowForwardRounded";
 import ArrowUpwardRounded from "@mui/icons-material/ArrowUpwardRounded";
 import CheckRounded from "@mui/icons-material/CheckRounded";
+import ChevronLeftRounded from "@mui/icons-material/ChevronLeftRounded";
 import ChevronRightRounded from "@mui/icons-material/ChevronRightRounded";
 import CloseRounded from "@mui/icons-material/CloseRounded";
 import ContentCopyRounded from "@mui/icons-material/ContentCopyRounded";
@@ -31,6 +32,7 @@ import DnsRounded from "@mui/icons-material/DnsRounded";
 import CreateNewFolderRounded from "@mui/icons-material/CreateNewFolderRounded";
 import ContentPasteRounded from "@mui/icons-material/ContentPasteRounded";
 import ImageRounded from "@mui/icons-material/ImageRounded";
+import VisibilityRounded from "@mui/icons-material/VisibilityRounded";
 import HistoryRounded from "@mui/icons-material/HistoryRounded";
 import RefreshRounded from "@mui/icons-material/RefreshRounded";
 import DriveFileRenameOutlineRounded from "@mui/icons-material/DriveFileRenameOutlineRounded";
@@ -54,6 +56,7 @@ const rounded: IconSet = {
     arrowForward: ArrowForwardRounded,
     arrowUp: ArrowUpwardRounded,
     check: CheckRounded,
+    chevronLeft: ChevronLeftRounded,
     chevronRight: ChevronRightRounded,
     close: CloseRounded,
     copy: ContentCopyRounded,
@@ -81,6 +84,7 @@ const rounded: IconSet = {
     newFolder: CreateNewFolderRounded,
     paste: ContentPasteRounded,
     pictures: ImageRounded,
+    preview: VisibilityRounded,
     recent: HistoryRounded,
     refresh: RefreshRounded,
     rename: DriveFileRenameOutlineRounded,

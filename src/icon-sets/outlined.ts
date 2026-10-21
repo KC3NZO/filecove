@@ -4,6 +4,7 @@ import ArrowDownwardOutlined from "@mui/icons-material/ArrowDownwardOutlined";
 import ArrowForwardOutlined from "@mui/icons-material/ArrowForwardOutlined";
 import ArrowUpwardOutlined from "@mui/icons-material/ArrowUpwardOutlined";
 import CheckOutlined from "@mui/icons-material/CheckOutlined";
+import ChevronLeftOutlined from "@mui/icons-material/ChevronLeftOutlined";
 import ChevronRightOutlined from "@mui/icons-material/ChevronRightOutlined";
 import CloseOutlined from "@mui/icons-material/CloseOutlined";
 import ContentCopyOutlined from "@mui/icons-material/ContentCopyOutlined";
@@ -31,6 +32,7 @@ import DnsOutlined from "@mui/icons-material/DnsOutlined";
 import CreateNewFolderOutlined from "@mui/icons-material/CreateNewFolderOutlined";
 import ContentPasteOutlined from "@mui/icons-material/ContentPasteOutlined";
 import ImageOutlined from "@mui/icons-material/ImageOutlined";
+import VisibilityOutlined from "@mui/icons-material/VisibilityOutlined";
 import HistoryOutlined from "@mui/icons-material/HistoryOutlined";
 import RefreshOutlined from "@mui/icons-material/RefreshOutlined";
 import DriveFileRenameOutlineOutlined from "@mui/icons-material/DriveFileRenameOutlineOutlined";
@@ -54,6 +56,7 @@ const outlined: IconSet = {
     arrowForward: ArrowForwardOutlined,
     arrowUp: ArrowUpwardOutlined,
     check: CheckOutlined,
+    chevronLeft: ChevronLeftOutlined,
     chevronRight: ChevronRightOutlined,
     close: CloseOutlined,
     copy: ContentCopyOutlined,
@@ -81,6 +84,7 @@ const outlined: IconSet = {
     newFolder: CreateNewFolderOutlined,
     paste: ContentPasteOutlined,
     pictures: ImageOutlined,
+    preview: VisibilityOutlined,
     recent: HistoryOutlined,
     refresh: RefreshOutlined,
     rename: DriveFileRenameOutlineOutlined,

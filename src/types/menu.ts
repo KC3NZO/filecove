@@ -18,6 +18,11 @@ export interface MenuRequest {
     /** Trail to the folder the action happens in. */
     trail: FolderRef[];
     entries: FileEntry[];
+    /**
+     * Every entry of the view the request came from, in its order, which the preview of a single
+     * file steps through. Only the content has one.
+     */
+    listing?: FileEntry[];
 }
 
 /** Opens the context menu. Returns false when no action applies, so the browser's own menu can show instead. */

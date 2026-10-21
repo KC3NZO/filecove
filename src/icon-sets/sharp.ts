@@ -4,6 +4,7 @@ import ArrowDownwardSharp from "@mui/icons-material/ArrowDownwardSharp";
 import ArrowForwardSharp from "@mui/icons-material/ArrowForwardSharp";
 import ArrowUpwardSharp from "@mui/icons-material/ArrowUpwardSharp";
 import CheckSharp from "@mui/icons-material/CheckSharp";
+import ChevronLeftSharp from "@mui/icons-material/ChevronLeftSharp";
 import ChevronRightSharp from "@mui/icons-material/ChevronRightSharp";
 import CloseSharp from "@mui/icons-material/CloseSharp";
 import ContentCopySharp from "@mui/icons-material/ContentCopySharp";
@@ -31,6 +32,7 @@ import DnsSharp from "@mui/icons-material/DnsSharp";
 import CreateNewFolderSharp from "@mui/icons-material/CreateNewFolderSharp";
 import ContentPasteSharp from "@mui/icons-material/ContentPasteSharp";
 import ImageSharp from "@mui/icons-material/ImageSharp";
+import VisibilitySharp from "@mui/icons-material/VisibilitySharp";
 import HistorySharp from "@mui/icons-material/HistorySharp";
 import RefreshSharp from "@mui/icons-material/RefreshSharp";
 import DriveFileRenameOutlineSharp from "@mui/icons-material/DriveFileRenameOutlineSharp";
@@ -54,6 +56,7 @@ const sharp: IconSet = {
     arrowForward: ArrowForwardSharp,
     arrowUp: ArrowUpwardSharp,
     check: CheckSharp,
+    chevronLeft: ChevronLeftSharp,
     chevronRight: ChevronRightSharp,
     close: CloseSharp,
     copy: ContentCopySharp,
@@ -81,6 +84,7 @@ const sharp: IconSet = {
     newFolder: CreateNewFolderSharp,
     paste: ContentPasteSharp,
     pictures: ImageSharp,
+    preview: VisibilitySharp,
     recent: HistorySharp,
     refresh: RefreshSharp,
     rename: DriveFileRenameOutlineSharp,

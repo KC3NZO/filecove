@@ -4,6 +4,7 @@ import ArrowDownwardTwoTone from "@mui/icons-material/ArrowDownwardTwoTone";
 import ArrowForwardTwoTone from "@mui/icons-material/ArrowForwardTwoTone";
 import ArrowUpwardTwoTone from "@mui/icons-material/ArrowUpwardTwoTone";
 import CheckTwoTone from "@mui/icons-material/CheckTwoTone";
+import ChevronLeftTwoTone from "@mui/icons-material/ChevronLeftTwoTone";
 import ChevronRightTwoTone from "@mui/icons-material/ChevronRightTwoTone";
 import CloseTwoTone from "@mui/icons-material/CloseTwoTone";
 import ContentCopyTwoTone from "@mui/icons-material/ContentCopyTwoTone";
@@ -31,6 +32,7 @@ import DnsTwoTone from "@mui/icons-material/DnsTwoTone";
 import CreateNewFolderTwoTone from "@mui/icons-material/CreateNewFolderTwoTone";
 import ContentPasteTwoTone from "@mui/icons-material/ContentPasteTwoTone";
 import ImageTwoTone from "@mui/icons-material/ImageTwoTone";
+import VisibilityTwoTone from "@mui/icons-material/VisibilityTwoTone";
 import HistoryTwoTone from "@mui/icons-material/HistoryTwoTone";
 import RefreshTwoTone from "@mui/icons-material/RefreshTwoTone";
 import DriveFileRenameOutlineTwoTone from "@mui/icons-material/DriveFileRenameOutlineTwoTone";
@@ -54,6 +56,7 @@ const twoTone: IconSet = {
     arrowForward: ArrowForwardTwoTone,
     arrowUp: ArrowUpwardTwoTone,
     check: CheckTwoTone,
+    chevronLeft: ChevronLeftTwoTone,
     chevronRight: ChevronRightTwoTone,
     close: CloseTwoTone,
     copy: ContentCopyTwoTone,
@@ -81,6 +84,7 @@ const twoTone: IconSet = {
     newFolder: CreateNewFolderTwoTone,
     paste: ContentPasteTwoTone,
     pictures: ImageTwoTone,
+    preview: VisibilityTwoTone,
     recent: HistoryTwoTone,
     refresh: RefreshTwoTone,
     rename: DriveFileRenameOutlineTwoTone,

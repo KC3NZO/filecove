@@ -47,6 +47,8 @@ export const serverAdapter = createMockAdapter({
         folder("docs", "2026-10-02T13:27", [
             file("architecture.pdf", 811_000, "2026-10-01T12:26", "application/pdf"),
             file("CHANGELOG.md", 6_120, "2026-10-17T17:40"),
+            // Can't be read, to show the preview's error state.
+            { ...file("contract.pdf", 412_000, "2026-10-08T15:12", "application/pdf"), fails: true },
         ]),
         folder("public", "2026-08-21T10:05", [
             folder("images", "2026-08-21T10:05", [
@@ -193,8 +195,17 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 icon: "folderOpen",
                 target: "selection",
                 single: true,
-                visible: (context) => context.entries[0].kind === "folder",
-                onSelect: (context) => context.openFolder(context.entries[0]),
+                visible: (context) => !!context.open,
+                onSelect: (context) => context.open?.(),
+            },
+            {
+                id: "preview",
+                label: "Preview",
+                icon: "preview",
+                shortcut: "Space",
+                target: "selection",
+                visible: (context) => !!context.preview,
+                onSelect: (context) => context.preview?.(),
             },
             {
                 id: "download",

@@ -89,6 +89,19 @@ export interface UploadOptions extends OperationOptions {
     onProgress: (loaded: number, total: number) => void;
 }
 
+/** Passed to `content`. */
+export interface ContentOptions {
+    /** Aborted when the file is no longer wanted, e.g. the preview moved on to another file or closed. */
+    signal: AbortSignal;
+}
+
+/**
+ * Where a file's contents are: a URL the browser loads them from, such as a signed link, which
+ * streams and caches as any URL does, or the bytes themselves as a `Blob`, e.g. fetched with
+ * headers a URL can't carry. An object rather than a bare value, so fields can be added later.
+ */
+export type FileContent = { url: string; blob?: never } | { blob: Blob; url?: never };
+
 export interface FileAdapter {
     /**
      * Lists the direct children of a folder, all at once or a page at a time (`nextCursor`). Reject
@@ -132,4 +145,12 @@ export interface FileAdapter {
      * message beside the file, e.g. when it's too large or not allowed.
      */
     upload?(file: File, folderId: string, options: UploadOptions): Promise<void>;
+    /**
+     * Says where a file's contents are, for the preview: a URL to load them from, or the bytes. A
+     * URL is used as it is, in an `<img>`, `<video>`, `<audio>` or `<iframe>`, and text is fetched
+     * from it, which needs CORS when it's on another origin. Only called for files the preview can
+     * show. Without it, the file manager has no way to show what's in a file. Reject with an
+     * `Error` to show its message to the user.
+     */
+    content?(entry: FileEntry, options: ContentOptions): Promise<FileContent>;
 }

@@ -1,4 +1,6 @@
-import type { ConflictPolicy, FileAdapter, FileEntry, ListResult } from "../../src";
+import { sampleContent } from "./mock-content";
+
+import type { ConflictPolicy, FileAdapter, FileContent, FileEntry, ListResult } from "../../src";
 
 /** A file or folder of the fake backend, written as nested literals. */
 export interface MockNode {
@@ -9,7 +11,9 @@ export interface MockNode {
     /** ISO date-time. */
     modified?: string;
     mimeType?: string;
-    /** Listing this folder fails, to preview the error state. */
+    /** An uploaded file's bytes, which the preview shows; other files get contents made up from their names. */
+    blob?: Blob;
+    /** Listing this folder, or reading this file, fails, to show the error states. */
     fails?: boolean;
 }
 
@@ -60,8 +64,8 @@ const toEntry = (parentPath: string, node: MockNode): FileEntry => ({
  * An in-memory adapter over one or more unrelated root paths, with simulated latency so the
  * lazy loading can be seen. Entry ids are full paths, as a path-based backend would use, so a
  * renamed folder's id changes along with every id below it. Large folders are listed in pages,
- * with the offset of the next one as the cursor. Folders marked `fails` refuse to be listed,
- * renamed, deleted or written to.
+ * with the offset of the next one as the cursor. Files and folders marked `fails` refuse to be
+ * listed, read, renamed, deleted or written to.
  */
 export const createMockAdapter = (
     roots: Record<string, MockNode[]>,
@@ -301,7 +305,7 @@ export const createMockAdapter = (
                 });
             }),
 
-        // Only the file's name, size and type are kept. A folder that refuses files does so before
+        // The file itself is kept, for the preview. A folder that refuses files does so before
         // anything is sent.
         upload: (file, folderId, { signal, conflict, onProgress }) =>
             Promise.resolve()
@@ -315,6 +319,7 @@ export const createMockAdapter = (
                             size: file.size,
                             modified: new Date().toISOString(),
                             mimeType: file.type || undefined,
+                            blob: file,
                         };
 
                         if (!(conflict === "skip" && clashes(target, node))) {
@@ -322,5 +327,17 @@ export const createMockAdapter = (
                         }
                     }),
                 ),
+
+        // An uploaded file is handed back as it was; the rest get contents made up from their names.
+        content: (entry, { signal }) =>
+            respond<FileContent>(signal, () => {
+                const { node } = locate(entry);
+
+                if (node.children) {
+                    throw new Error(`"${entry.name}" is a folder.`);
+                }
+
+                return node.blob ? { blob: node.blob } : sampleContent(node.name, node.size, node.mimeType);
+            }),
     };
 };

@@ -4,6 +4,7 @@ import ArrowDownward from "@mui/icons-material/ArrowDownward";
 import ArrowForward from "@mui/icons-material/ArrowForward";
 import ArrowUpward from "@mui/icons-material/ArrowUpward";
 import Check from "@mui/icons-material/Check";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
 import ChevronRight from "@mui/icons-material/ChevronRight";
 import Close from "@mui/icons-material/Close";
 import ContentCopy from "@mui/icons-material/ContentCopy";
@@ -31,6 +32,7 @@ import Dns from "@mui/icons-material/Dns";
 import CreateNewFolder from "@mui/icons-material/CreateNewFolder";
 import ContentPaste from "@mui/icons-material/ContentPaste";
 import Image from "@mui/icons-material/Image";
+import Visibility from "@mui/icons-material/Visibility";
 import History from "@mui/icons-material/History";
 import Refresh from "@mui/icons-material/Refresh";
 import DriveFileRenameOutline from "@mui/icons-material/DriveFileRenameOutline";
@@ -54,6 +56,7 @@ const filled: IconSet = {
     arrowForward: ArrowForward,
     arrowUp: ArrowUpward,
     check: Check,
+    chevronLeft: ChevronLeft,
     chevronRight: ChevronRight,
     close: Close,
     copy: ContentCopy,
@@ -81,6 +84,7 @@ const filled: IconSet = {
     newFolder: CreateNewFolder,
     paste: ContentPaste,
     pictures: Image,
+    preview: Visibility,
     recent: History,
     refresh: Refresh,
     rename: DriveFileRenameOutline,
