@@ -263,6 +263,8 @@ const FileManager = ({
     const panelRef = useRef<HTMLDivElement>(null);
     const sidebarRef = useRef<HTMLDivElement>(null);
     const sidebarButtonRef = useRef<HTMLButtonElement>(null);
+    // What had the focus when the overlay sidebar opened, which gets it back as the overlay closes.
+    const sidebarOpener = useRef<HTMLElement | null>(null);
     // What had the focus when the context menu opened, where an action picked in it counts as run from.
     const menuOpener = useRef<Element | null>(null);
     // Asks the folder view to take the focus, for one render, e.g. as another folder opens and the
@@ -391,24 +393,40 @@ const FileManager = ({
         [goTo],
     );
 
-    const openSidebar = useCallback(() => setSidebarOpen(true), []);
+    const openSidebar = useCallback(() => {
+        sidebarOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        setSidebarOpen(true);
+    }, []);
 
-    // Closing the overlay with the focus in it gives the focus back to the button that showed it.
-    // Docked, that button is hidden, so the focus stays.
+    // Closing the overlay with the focus in it gives the focus back to what had it before the
+    // overlay opened, or else to the button that shows it. Docked, the focus stays where it is.
     const closeSidebar = useCallback(() => {
-        setSidebarOpen(false);
+        const sidebar = sidebarRef.current;
+        const opener = sidebarOpener.current;
 
-        if (sidebarRef.current?.contains(document.activeElement)) {
-            sidebarButtonRef.current?.focus();
+        setSidebarOpen(false);
+        sidebarOpener.current = null;
+
+        if (sidebar && overlays(sidebar) && sidebar.contains(document.activeElement)) {
+            const returnTo =
+                opener && opener !== document.body && opener.isConnected ? opener : sidebarButtonRef.current;
+
+            returnTo?.focus();
         }
     }, []);
 
-    // F6 moves the focus between the sidebar tree and the content, as in GNOME Files, or to the
-    // content while the sidebar is hidden.
+    // F6 moves the focus between the sidebar tree and the content, as in GNOME Files. While the
+    // sidebar is collapsed, it opens the overlay, which takes the focus.
     const switchPane = () => {
         const sidebar = sidebarRef.current;
 
         if (sidebar && !sidebar.contains(document.activeElement)) {
+            if (overlays(sidebar) && !sidebarOpen) {
+                openSidebar();
+
+                return;
+            }
+
             sidebar.querySelector<HTMLElement>('[role="tree"]')?.focus();
 
             if (sidebar.contains(document.activeElement)) {
@@ -419,7 +437,25 @@ const FileManager = ({
         setFocusContent(true);
     };
 
-    // Keys that work anywhere in the file manager: F6, and Alt+Left and Alt+Right for back and forward.
+    // F9 shows and hides the collapsed sidebar, as in GNOME Files. A docked sidebar can't be
+    // hidden yet, so it's left to the browser then.
+    const toggleSidebar = () => {
+        const sidebar = sidebarRef.current;
+
+        if (!sidebar || !overlays(sidebar)) {
+            return false;
+        }
+
+        if (sidebarOpen) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
+
+        return true;
+    };
+
+    // Keys that work anywhere in the file manager: F6, F9, and Alt+Left and Alt+Right for back and forward.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         // Menus and dialogs portal out of the file manager, but their key presses still bubble here
         // through React's tree; they aren't the file manager's.
@@ -432,18 +468,24 @@ const FileManager = ({
         }
 
         const others = event.ctrlKey || event.metaKey || event.shiftKey;
+        const plain = !others && !event.altKey;
+        let handled = true;
 
         if (event.key === "F6" && !event.ctrlKey && !event.metaKey && !event.altKey) {
             switchPane();
+        } else if (event.key === "F9" && plain) {
+            handled = toggleSidebar();
         } else if (event.altKey && !others && event.key === "ArrowLeft") {
             goBack();
         } else if (event.altKey && !others && event.key === "ArrowRight") {
             goForward();
         } else {
-            return;
+            handled = false;
         }
 
-        event.preventDefault();
+        if (handled) {
+            event.preventDefault();
+        }
     };
 
     const toggleView = useCallback(() => setView((prev) => (prev === "list" ? "grid" : "list")), []);
