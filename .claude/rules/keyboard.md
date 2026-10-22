@@ -30,8 +30,19 @@ A key press goes to the consumer's shortcuts before the component's own keys, so
 - The root's handler ignores presses from the menus and dialogs, which portal out of it but still bubble through React's tree, by checking that the DOM holds the target.
 - Browsers keep some keys. Chrome never passes Ctrl+N, Ctrl+T or Ctrl+W to a page, and F6, F9 or Alt+Left may be taken by the browser before the page sees them. Ctrl+H, the browser's history elsewhere, reaches the page and is kept from the browser while the focus is in the file manager.
 - A consumer action bound to one of these keys runs instead in the content and the tree, where shortcuts run, since they come first and the root's handler skips a press already handled.
-- Keys are matched by the character they type (`event.key`), as the consumer's shortcuts are, so on a non-Latin layout such as Russian or Arabic, Ctrl+H means the key that types "h", which that layout may not have.
+- Letters and digits are matched on any keyboard layout (see "Keyboard layouts").
 - Left and Right swap when the view or tree computes as `direction: rtl` (`isRtl` in `utils/dom.ts`), and Alt+Left and Alt+Right swap when the file manager does (`useTextDirection`), as the back and forward arrows are mirrored (see `rtl.md`).
+
+## Keyboard layouts
+
+A shortcut's letter or digit is the key printed with it, whatever layout is on, as desktop toolkits and browsers do it. Neither of the event's two names for a key does that alone: `key` is what the layout types, which on Russian, Arabic, Hebrew or Greek is no Latin letter at all, and `code` is the key's place on a US keyboard, which on AZERTY puts Ctrl+A on the key marked Q, and on QWERTZ Ctrl+Z on the one marked Y. So `pressedKeys` (`utils/shortcut.ts`) gives a press as both, the likeliest first:
+
+- The key the layout types, lowercased, when it's a Latin letter or digit, or a named key (F2, Delete, the arrows, Space), which is the same on every layout. So Ctrl+Z is the key marked Z on QWERTY, AZERTY, QWERTZ and Dvorak alike.
+- Otherwise that, then the Latin letter or digit at the key's place, from `code` ("KeyH", "Digit1"), since non-Latin keyboards print the US letters beside their own. It also covers what Shift, AltGr or Option make of a key: AZERTY's digit row types "&", "é" and so on without Shift, and Option+H types "˙" on macOS.
+
+Everything that binds a letter, a digit or a symbol goes through it: the consumer's shortcuts (`matchesShortcut`, tried with each key the press stands for in turn, across the selection and the folder, so the key typed wins over the one at its place), Ctrl+A, Ctrl+H, and the preview's zoom keys. Symbols such as + and - are matched only as typed, wherever the layout has them. Type-ahead goes by the character typed, as it should.
+
+Limits: a non-Latin layout on a keyboard whose Latin letters aren't laid out as on a US one (a Russian layout on a French keyboard) gets the US place; so does Option+letter on a non-QWERTY macOS layout. Reading the layout itself (`navigator.keyboard.getLayoutMap()`) would fix both, but only Chromium has it.
 
 ## Content
 
