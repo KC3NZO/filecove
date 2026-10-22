@@ -82,7 +82,8 @@ The transfer picker's folder list (`dialogs/transfer-dialog.tsx`) is one tab sto
 - Only the rows in or near view are rendered (see `virtualization.md`), and the row with the Tab stop. A key moving to a row that isn't rendered gives it the Tab stop, which renders it, and `pendingFocus` focuses it a render later. `settleFocus` waits for the rows to be in their places (`settled()`), then focuses the row and scrolls to it, so going up to a folder far down the list lands on it. Each `ListItem` carries `aria-setsize` and `aria-posinset`.
 - Enter or Space opens the focused folder or section, as a click does, and Backspace or Alt+Up goes up as the Back button does (`canGoUp`).
 - Opening a folder or going up from the list keeps the focus in it (`pendingFocus`, settled after each render from the row with `tabindex="0"`): on the first row, or going up, on the folder left through (`folderLeft`), or the section left when going back to the list of sections. While a folder loads, or when it has no folders, the box in the list's place holds the focus, still taking Backspace, and is a `group` named by the folder. The conflict step's Back gives the focus back to the list.
-- Going up with the path bar or the Back button leaves the focus there, but the folder left through still gets the list's Tab stop.
+- Going up with the path bar or the Back button leaves the focus there, but the folder left through still gets the list's Tab stop and is scrolled to (`pendingScroll`, which `settleFocus` settles without focusing).
+- A folder made with the toolbar's New folder button is opened, and the list takes the focus (`pendingFocus`) from the button the name dialog gave it back to, so Backspace goes straight back up to it.
 
 ## Context menu
 

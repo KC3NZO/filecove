@@ -91,6 +91,7 @@ The "Move to…" and "Copy to…" folder list (`dialogs/transfer-dialog.tsx`) us
 - Its items are the sections, on the list of sections, or the folders, the entries being moved among them (disabled), as `PickerItem`s. Names are kept to one line (`noWrap`), since every row must be as tall.
 - The row with the Tab stop stays rendered (`keep`). The keyboard side is in `keyboard.md`.
 - The scrolling box is keyed by the folder, so each opens scrolled to the top and measured afresh.
+- A folder made with the New folder button is opened. Going back up from it, it takes the Tab stop as the folder left through, which renders it wherever it sorts, and `settleFocus` scrolls to it once the rows are in their places.
 
 ## Limits
 

@@ -90,9 +90,10 @@ Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names i
 - The entries being copied or moved can't be opened, so a folder can never go into itself or below itself, without the component parsing ids. Moving into the entries' own folder is disabled.
 - Before running, the destination's cached listing is checked for names the entries share, so "Copy here" / "Move here" is disabled until all of it has come (see "Paging"). Clashes get a second step with Replace, Keep both and Skip, passed as `conflict`; otherwise `conflict` is "keepBoth", so a clash the cache missed never overwrites anything. Copying into the entries' own folder keeps both without asking, as a duplicate.
 - Its folder list renders only the rows in or near view (see `virtualization.md`).
+- When the adapter has `createFolder`, a New folder button at the end of the picker's toolbar opens `name-dialog.tsx` over it, for the folder the picker shows, once that folder's listing is complete (so the name starts unused and clashes are caught). The name dialog is rendered beside the picker's `Dialog`, not inside it, so its key presses don't bubble through the picker. Once created, the folder it was made in is listed again as any create is, the new id goes through `dropFolders` (`onFolderCreated`, `handleFolderCreated` in `file-manager.tsx`) before the picker lists it, and the picker opens it, since its destination is the folder it shows and a folder made there is meant to take the entries, as in GTK's file chooser. Going back up lands on it as the folder left through, scrolled to wherever it sorts. It isn't selected in the content, even when its parent is open there.
 - Progress, cancelling and errors work as in the name dialog. Afterwards the destination is listed again, and for a move the source too, with the listings holding them (`relist`).
 - After a move, moved folders go through `dropFolders`, and the open place, if it's inside one in any section showing it, goes to the destination instead.
-- Not yet: a New folder button in the picker, an operations panel for long transfers, and copying between adapters.
+- Not yet: an operations panel for long transfers, and copying between adapters.
 
 ## Deleting
 
