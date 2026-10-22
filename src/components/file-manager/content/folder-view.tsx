@@ -28,6 +28,7 @@ import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../..
 import { belowElement, insideElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
+import { pressesKey } from "../../../utils/shortcut";
 import { entryComparator } from "../../../utils/sort";
 import Icon from "../../icons/icon";
 import FileGrid from "./file-grid";
@@ -574,7 +575,7 @@ const FolderView = ({
             }
 
             handled = true;
-        } else if (toggle && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "a") {
+        } else if (toggle && !event.altKey && !event.shiftKey && pressesKey(event, "a")) {
             selectAll();
             handled = true;
         } else if (own) {

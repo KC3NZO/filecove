@@ -7,6 +7,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../../hooks/use-locale";
+import { pressedKeys } from "../../../utils/shortcut";
 import Icon from "../../icons/icon";
 
 /** What the preview hands the image it shows. */
@@ -86,6 +87,9 @@ const PAN_KEYS: Partial<Record<string, Point>> = {
     ArrowUp: { x: 0, y: 1 },
     ArrowDown: { x: 0, y: -1 },
 };
+
+/** The keys that zoom: in ("+", or "=" beside it on a US layout), out, to fit and to the image's own size. */
+const ZOOM_KEYS = ["+", "=", "-", "0", "1"];
 
 const ORIGIN: Point = { x: 0, y: 0 };
 
@@ -297,7 +301,9 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
                 return false;
             }
 
-            switch (event.key) {
+            // The first key the press stands for that zooms, so AZERTY's 1 key counts without Shift,
+            // as it types "&", and Czech's still zooms in, as it types "+".
+            switch (pressedKeys(event).find((key) => ZOOM_KEYS.includes(key))) {
                 case "+":
                 case "=":
                     zoomAround((scale) => stepScale(scale, 1));

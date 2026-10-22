@@ -25,7 +25,7 @@ import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace } from "../../utils/navigation";
 import { importsFrom } from "../../utils/sections";
-import { matchesShortcut } from "../../utils/shortcut";
+import { matchesShortcut, pressedKeys, pressesKey } from "../../utils/shortcut";
 import { DEFAULT_SORT } from "../../utils/sort";
 import UploadPanel from "../uploads/upload-panel";
 import FolderView from "./content/folder-view";
@@ -567,7 +567,7 @@ const FileManager = ({
         } else if (
             // Ctrl+H shows and hides hidden files, as in GNOME Files. Not ⌘H, which hides the
             // browser on macOS before the page sees it.
-            event.key.toLowerCase() === "h" &&
+            pressesKey(event, "h") &&
             event.ctrlKey &&
             !event.metaKey &&
             !event.shiftKey &&
@@ -1092,21 +1092,24 @@ const FileManager = ({
         [actions, contextFor],
     );
 
-    // Offered exactly as the menu would offer it, so a shortcut never runs a hidden action.
+    // Offered exactly as the menu would offer it, so a shortcut never runs a hidden action. The key
+    // the layout types is tried first, for every target, before the letter at the key's place.
     const runShortcut = useCallback<RunShortcut>(
         (event, requests) =>
-            requests.some((request) => {
-                const context = contextFor(request);
-                const action = visibleActionGroups(actions, context)
-                    .flatMap((group) => group.actions)
-                    .find((candidate) => candidate.shortcut && matchesShortcut(event, candidate.shortcut));
+            pressedKeys(event).some((key) =>
+                requests.some((request) => {
+                    const context = contextFor(request);
+                    const action = visibleActionGroups(actions, context)
+                        .flatMap((group) => group.actions)
+                        .find((candidate) => candidate.shortcut && matchesShortcut(event, candidate.shortcut, key));
 
-                if (action && !action.disabled?.(context)) {
-                    action.onSelect(context);
-                }
+                    if (action && !action.disabled?.(context)) {
+                        action.onSelect(context);
+                    }
 
-                return !!action;
-            }),
+                    return !!action;
+                }),
+            ),
         [actions, contextFor],
     );
 

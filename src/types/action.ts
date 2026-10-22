@@ -111,7 +111,9 @@ export interface FileAction {
     /**
      * Shown beside the label, e.g. "Ctrl+C" or "Shift+Ctrl+N", and bound to the keyboard while the
      * content has focus. A press runs the action for the selection if it applies there, or else for
-     * the open folder. Ctrl also matches ⌘.
+     * the open folder. Ctrl also matches ⌘. A letter or digit is the key printed with it, on any
+     * layout: the one that types it on a Latin layout (Ctrl+Z is Z on AZERTY too), and the one
+     * marked with it beside the layout's own letter on another script's, such as Russian or Arabic.
      */
     shortcut?: string;
     /** Styles the item as destructive, for actions such as delete. */
