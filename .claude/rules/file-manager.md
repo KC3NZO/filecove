@@ -77,7 +77,7 @@ Opening a file (double-click, Enter, a tap, `open()`) goes to `FileManager`'s op
 Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names inline, because the listing only holds what the adapter returned, and an inline edit has nowhere to keep a failed name. The adapter's optional `createFolder(parentId, name, { signal })` and `rename(entry, name, { signal })` resolve with the entry as it now is.
 
 - The name is trimmed and checked as it's typed (`utils/names.ts`): not ".", "..", or containing "/", and no clash with the folder's cached listing. An empty name only disables the button. The adapter has the final say, and the message of an `Error` it rejects with shows under the field, with the name kept.
-- The field is focused with the name selected once the dialog has faded in (the transition's `onEntered`), not with `autoFocus`, which the closing context menu steals focus back from. Rename selects a file's name up to its extension. New folder starts with an unused "New folder" (`newFolderName`). An unchanged name just closes.
+- The field is focused with the name selected once the dialog has faded in (the transition's `onEntered`), not with `autoFocus`, which the closing context menu steals focus back from. Rename selects a file's name up to its extension. New folder starts with the first unused `untitledFolder` name, "New folder" then "New folder (2)" in English (`newFolderName`). An unchanged name just closes.
 - While the adapter works, the button shows a spinner and the field is read-only. Cancelling aborts the `signal`, but the folder is listed again anyway, since the change may already have been made.
 - Afterwards the folder is listed again, with every listing holding it, for the item count (`relist`). If the folder is open, in whichever section, `file-manager.tsx` asks `FolderView` (`revealId`) to select the entry and scroll to it once the refreshed listing has it.
 - A renamed folder keeps its place in every section showing it: `renameInPlace` (`utils/navigation.ts`) rewrites every place in the history, and its expanded state carries over. When its id changed, as path ids do, the ids below it can't be worked out, so trails into it end at the renamed folder, and the old id and the new one go through `dropFolders`, since either could hold another folder's contents. A section rooted in the folder stays where it is, under the old id.
@@ -141,7 +141,7 @@ Entries in the content and folders in the sidebar tree can be dragged into a fol
 
 ## Sorting
 
-Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrder` (a key of name, size, type or modified, plus a direction), which persists across folders, and `folder-view.tsx` sorts the listing with `entryComparator`.
+Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrder` (a key of name, size, type or modified, plus a direction), which persists across folders, and `folder-view.tsx` sorts the listing with `entryComparator`. Names and type labels compare in the `locale` prop's collation (`Locale.compareNames`), and the keys' and directions' labels come from the text (`SORT_LABELS`; see `locale.md`).
 
 - Folders always come first. Ties fall back to the name, A to Z.
 - Picking a key starts it in its own direction: names and types A to Z, sizes and dates largest and newest first.
@@ -150,7 +150,7 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
   - The list view's column headers, where a click on the active column reverses it.
 
   The menu is the only control in the grid view, and in a list too narrow for its header row.
-- The sidebar tree ignores it and stays by name (`compareEntries`). Section order is the consumer's.
+- The sidebar tree ignores it and stays by name (`nameOrder`), as does the transfer picker. Section order is the consumer's.
 - The same menu has a "Show hidden files" checkbox (see "Hidden files"), and, while the sidebar docks, "Show sidebar" (see "Hiding the docked sidebar").
 
 ## Hidden files
@@ -185,4 +185,4 @@ The playground shows this mode with `?single` in the URL.
 - `dialogs/` holds the modals, which portal to `<body>` like the context menu: `name-dialog.tsx`, `transfer-dialog.tsx`, `paste-dialog.tsx`, `delete-dialog.tsx`, `upload-dialog.tsx` and `preview-dialog.tsx`, with `conflict-step.tsx` shared by the transfer, paste and upload dialogs, and `image-viewer.tsx`, the preview's zoomable image.
 - The upload panel under the content is `components/uploads/upload-panel.tsx`, outside `file-manager/` since it's meant to be shared (see `uploads.md`).
 - `icon-slot.tsx` fits consumer-supplied icons to the same 1.25rem box as the built-in ones.
-- `utils/format.ts` formats sizes, dates and type labels. These are English-only for now.
+- `utils/format.ts` builds the `Locale`: the text, and the formats for sizes, dates and type labels in the `locale` prop's language (see `locale.md`).

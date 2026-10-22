@@ -27,11 +27,12 @@ There is no test runner configured.
 
 **Source.** `src/` is organised by kind of code, and `src/components/` holds only components. File names are lowercase.
 
-- `index.ts` is the public entry. It exports `FileManager`, `IconProvider` and the public types, and nothing else is public.
+- `index.ts` is the public entry. It exports `FileManager`, `IconProvider`, `enUS` (the English text) and the public types, and nothing else is public.
 - `components/file-manager/` is the frame and its parts (`sidebar/`, `header-bar/`, `content/`, `context-menu/`, `dialogs/`).
 - `components/uploads/` has the upload panel, kept free of file manager imports so the planned media manager can reuse it (see `uploads.md`).
 - `components/icons/` has `Icon`, `IconProvider`, and `FileTypeIcon` / `FolderTypeIcon`, the only way to render `@react-symbols/icons`.
 - `types/` holds shared and exported types, one file per domain, re-exported from `types/index.ts`. Files marked internal stay out of `src/index.ts`.
+- `locales/` has the component's text, in English only (`enUS`).
 - `hooks/`, `contexts/`, `store/` (the folder listing cache and the upload queue), `utils/` (plain functions), `styles/` (container-query constants, style helpers) and `icon-sets/`.
 
 Imports are relative, with no path alias. The only barrels are `src/index.ts` and `src/types/index.ts`; everything else is imported by file, e.g. `components/icons/icon`.
@@ -46,6 +47,8 @@ Imports are relative, with no path alias. The only barrels are `src/index.ts` an
 
 Opening a file goes to the optional `onOpenFile(entry, context)`, or to the built-in preview when there's none or it returns `false` (see `preview.md`). There's no built-in editor, by choice.
 
+The optional `localeText` and `locale` set the component's own text, and the language numbers, sizes, dates and the order of names follow (see `locale.md`).
+
 ## Conventions
 
 - Code in `src/` and `playground/` uses 4-space indentation, double quotes, and semicolons. The template-generated config files use 2 spaces and single quotes. Match the file you're editing.
@@ -54,6 +57,7 @@ Opening a file goes to the optional `onOpenFile(entry, context)`, or to the buil
   - `erasableSyntaxOnly`: no `enum`, `namespace`, or constructor parameter properties.
   - `noUnusedLocals` and `noUnusedParameters` are errors in `bun run build`.
 - Oxlint runs the `react`, `typescript` and `oxc` plugins with `react/rules-of-hooks` as an error. Type-aware linting is off.
+- No text is written in a component. Everything shown or read to screen readers is a key of `FileManagerLocaleText`, read with `useLocale()`, and new keys go in `enUS` too (see `locale.md`).
 
 ## Where the details are
 
@@ -72,6 +76,7 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `icons.md` | icon packs, variants, `IconProvider`, adding an icon | `components/icons/`, `icon-sets/`, icon types |
 | `preview.md` | opening files, `onOpenFile`, the adapter's `content`, the preview dialog and what it shows, loading ahead, swiping, zooming images | the preview dialog and its image viewer, the preview contents and swipe hooks, `utils/preview.ts`, preview, adapter and action types, the mock contents |
 | `thumbnails.md` | the adapter's `thumbnail`, its `view` and `size`, the thumbnail cache, how the list and the grid show them | the entry icon, the list and the grid, `use-thumbnail.ts`, the thumbnail cache, the data context, adapter and view types, the mocks |
+| `locale.md` | `localeText` and `locale`, the text keys, `enUS`, how parts read the text and formats | locale types, `locales/`, `utils/format.ts`, the locale hook and context, the frame, the upload panel |
 
 When a feature is added or changed, document it in the matching rule (or a new one), not here. This file stays for things every session needs.
 

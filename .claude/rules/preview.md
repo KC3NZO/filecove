@@ -68,7 +68,7 @@ Files are never run. A web page shows as its source, and a blob going into the P
 - The dialog hands key presses to the viewer first, through its `ref` (`ImageViewerHandle.keyDown`), since the focus is on the dialog rather than the image.
 - Fitted, a sideways swipe steps to another file, and the image moves with it; zoomed in (`ImageViewerHandle.zoomed`), the finger pans it. The swipe puts the image back at rest before a second finger's pinch is measured, and taps are told apart on the screen rather than in the view, which moves with the swipe.
 
-Loading shows a spinner. An adapter's rejection, or the browser failing to load or show the file, shows "Couldn't preview this file" with the message and Try again, which calls `content` afresh, in case a signed URL had run out.
+Loading shows a spinner. An adapter's rejection, or the browser failing to load or show the file, shows "Couldn't preview this file" with the message and Try again, which calls `content` afresh, in case a signed URL had run out. The content keeps the error as it came (`PreviewContent`), and the dialog words it (`errorMessage`): a text file's URL answering with an error status throws a `ResponseError` (`utils/preview.ts`), worded by `serverError`, the browser failing is `previewMediaFailed`, and an error without a message is `previewLoadFailed` (see `locale.md`).
 
 ## Stepping through files
 

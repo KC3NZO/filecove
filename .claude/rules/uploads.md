@@ -17,7 +17,7 @@ The adapter's optional `upload(file, folderId, { signal, conflict, onProgress })
 
 A media manager will be built later as a sibling of `FileManager`, and it will upload too. So the upload code is split into what it can reuse and what belongs to the file manager:
 
-- **Reusable**, and never importing from `components/file-manager/`: the queue (`store/upload-queue.ts`), its hook (`hooks/use-upload-queue.ts`), the panel (`components/uploads/upload-panel.tsx`) and the types (`types/upload.ts`, `UploadOptions` in `types/adapter.ts`).
+- **Reusable**, and never importing from `components/file-manager/`: the queue (`store/upload-queue.ts`), its hook (`hooks/use-upload-queue.ts`), the panel (`components/uploads/upload-panel.tsx`), the types (`types/upload.ts`, `UploadOptions` in `types/adapter.ts`), and the panel's text, the keys of `UploadLocaleText` (`types/locale.ts`), which it reads with `useLocale()` and which is English outside a `FileManager` (see `locale.md`).
 - **The file manager's own**: the conflict check (`dialogs/upload-dialog.tsx`, which reads the folder store), the drop targets and the file picker in `file-manager.tsx`.
 
 Keep it that way: `FileManager` imports the shared parts, never the other way round. Server-side processing (resizing, converting, HLS) is planned as a separate optional adapter surface, not as part of `upload`.
@@ -53,7 +53,7 @@ Every route ends in `askUpload` in `file-manager.tsx`, with a `DroppedFiles` (`f
 
 - The summary has a status icon (a progress ring while active, a check, or an error), a title ("Uploading 3 files", "Couldn't upload 1 file", "Uploaded 4 files") and the bytes sent, or the counts the title leaves out.
 - The chevron folds the list away. The ✕ cancels everything still uploading, which stays listed to retry; once nothing is, ✕ forgets the list and the panel goes.
-- Each row has the file's type icon, its name, a progress bar while uploading, and its status with the destination folder's name, or the adapter's error. Active rows can be cancelled, failed and cancelled ones retried, and done ones show a check.
+- Each row has the file's type icon, its name, a progress bar while uploading, and its status with the destination folder's name, or the adapter's error. An error without a message is kept as undefined in the queue, and the panel says `uploadFailed` in its place. Active rows can be cancelled, failed and cancelled ones retried, and done ones show a check.
 
 ## Not yet
 

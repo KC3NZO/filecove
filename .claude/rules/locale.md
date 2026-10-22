@@ -1,0 +1,49 @@
+---
+paths:
+  - "src/types/locale.ts"
+  - "src/locales/**"
+  - "src/utils/format.ts"
+  - "src/hooks/use-locale.ts"
+  - "src/contexts/locale-context.ts"
+  - "src/components/file-manager/file-manager.tsx"
+  - "src/components/uploads/upload-panel.tsx"
+---
+
+# Text and locale
+
+Every text the component shows or reads to screen readers comes from `FileManagerLocaleText` (`types/locale.ts`, public), never from a string in a component. Section and action labels and `title` are the consumer's already, so they aren't in it. Two props set it:
+
+- **`localeText`** (`Partial<FileManagerLocaleText>`) gives another language or other wording. Keys left out, or given as undefined, stay in English. `enUS` (`locales/en-us.ts`, exported) has every key, as the place to start a translation from.
+- **`locale`** (a BCP 47 tag) is the language numbers, sizes and dates are written in, and names are sorted and matched by. The browser's language when omitted. It changes no text.
+
+The component ships no translations but English. A translation is a value for `localeText`, so ones made later need no change to the API.
+
+## The keys
+
+- Flat, so a consumer overrides one without restating the rest, and named by area (`sort…`, `upload…`, `preview…`).
+- A text about entries is a function, so each language words and pluralizes it its own way: counts come as plain numbers, `name` is the entry's name for when `count` is 1, `kind` is "file" or "folder". A text built around a value the component formats, such as a size or a date, takes it already formatted, as a string.
+- Whole sentences rather than pieces glued together, since word order differs between languages. The only joins left in code are " · " between details, "×" in dimensions and "/" in the preview's counter, ": " before an adapter's message in the picker, and ". " between the tree's `folderLoadFailed` and `retry` in its row's label.
+- `UploadLocaleText` holds the upload panel's keys, which `FileManagerLocaleText` extends, since the panel is meant for the media manager too (see `uploads.md`). The two share no keys: the panel has its own `uploadsClose`.
+- Messages that only a developer sees (an adapter missing a method, a list handing back its cursor, a component outside `FileManager`) stay in English.
+- An adapter's own error message is shown as it is. A text such as `deleteFailed` or `uploadFailed` is only for when it gives none.
+
+Adding a text means adding its key to the interface, with a comment when its use isn't plain from the name, and to `enUS`.
+
+## How the parts get it
+
+`FileManager` builds a `Locale` (`types/locale.ts`, internal) with `createLocale` (`utils/format.ts`) and provides it through `LocaleContext`. Parts read it with `useLocale()`: `text`, every key filled in, and the formats and comparisons that follow `locale`.
+
+- `formatSize` writes bytes in decimal units through `Intl.NumberFormat`'s `unit` style, so units are in the locale's own words too ("1,5 ko" in French): "byte" in full below 1 kB, then kilobytes up to terabytes, short.
+- `formatNumber` writes digits in the locale's script without grouping, for dimensions and counters; `formatPercent` the image viewer's zoom.
+- `describeSize`, `describeDate` and `describeType` describe an entry for the list and the preview. `describeType` takes "PDF", "JSON" and an uppercased extension as they are.
+- `compareNames` sorts names in natural order (`numeric`), and `sameLetters` matches type-ahead, both case and accents aside, both by the locale's collation, so a language that counts "å" as a letter of its own keeps it apart from "a".
+- Sorting goes through it: `entryComparator(sort, locale)` and `nameOrder(locale)` for the tree's and the picker's fixed order, the same function for as long as the locale is, so the tree's sorted folders are cached by locale and listing.
+- Outside a `FileManager`, the context's default is English in the browser's language (`DEFAULT_LOCALE`), so a shared part such as the upload panel works anywhere.
+
+`useLocaleValue` makes the `Locale` afresh only when `locale` or one of the texts changes, compared key by key, since every row rendered reads it, and memoized rows render again with a new one. A `localeText` object written inline is fine; functions written inline are new each render and defeat it, which the prop's comment says.
+
+Text direction is not the locale's: it comes from the page or the theme (`direction`), as in MUI (see `keyboard.md`).
+
+## Not yet
+
+Translations shipped with the package, right-to-left support, taking `localeText` from the theme as MUI's own components do, and a playground page in another language.
