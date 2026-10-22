@@ -106,7 +106,11 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
     const { text } = useLocale();
     const dir = useContext(DirectionContext);
 
-    const [name, setName] = useState(() => entry?.name ?? newFolderName(state?.entries, text));
+    // Null until something is typed, while a new folder's name is the one suggested: the first
+    // unused one, which follows the listing as it comes, since a folder made in from its own menu
+    // may never have been listed.
+    const [typed, setTyped] = useState<string | null>(entry?.name ?? null);
+    const name = typed ?? newFolderName(state?.entries, text);
     const [failure, setFailure] = useState<string | null>(null);
     const [pending, setPending] = useState(false);
     const controller = useRef<AbortController | null>(null);
@@ -116,6 +120,9 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
 
     const trimmed = name.trim();
     const problem = trimmed ? nameProblem(trimmed, kind, state?.entries, text, entry?.id) : undefined;
+    // A new folder's name is checked against all of the folder, so it waits for the whole listing,
+    // unless that failed, when the adapter has the say. A renamed entry's folder is listed already.
+    const waiting = !entry && state?.status !== "error" && (!state?.entries || !!state.partial);
     const message = problem ?? failure;
 
     // Read-only rather than disabled while the adapter works, so the field keeps focus. The name
@@ -145,6 +152,16 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
         [entry],
     );
 
+    // A suggested name that changes while the field has the focus is selected again, so typing
+    // still replaces it.
+    useEffect(() => {
+        const input = inputRef.current;
+
+        if (typed === null && input && document.activeElement === input) {
+            input.select();
+        }
+    }, [typed, name]);
+
     const refresh = () => onChanged(request.adapter, [parent.id]);
 
     // Cancelling can't undo a change the backend has already made, so the folder is listed again.
@@ -161,7 +178,7 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
     const submit = (event: SubmitEvent) => {
         event.preventDefault();
 
-        if (pending || !trimmed || problem) {
+        if (pending || waiting || !trimmed || problem) {
             return;
         }
 
@@ -174,6 +191,9 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
         const current = new AbortController();
 
         controller.current = current;
+        // Kept as it is, so a suggested name doesn't move on to the next unused one as the folder
+        // is listed again with the new one in it, while the dialog fades out.
+        setTyped(name);
         setPending(true);
         setFailure(null);
 
@@ -220,7 +240,7 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
                         slotProps={fieldSlotProps}
                         sx={fieldSx}
                         onChange={(event) => {
-                            setName(event.target.value);
+                            setTyped(event.target.value);
                             setFailure(null);
                         }}
                     />
@@ -230,7 +250,13 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
                 <Button color="inherit" onClick={close}>
                     {text.cancel}
                 </Button>
-                <Button type="submit" form={formId} variant="contained" disabled={!trimmed || !!problem} loading={pending}>
+                <Button
+                    type="submit"
+                    form={formId}
+                    variant="contained"
+                    disabled={waiting || !trimmed || !!problem}
+                    loading={pending}
+                >
                     {entry ? text.rename : text.create}
                 </Button>
             </DialogActions>

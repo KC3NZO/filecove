@@ -13,9 +13,10 @@ import { useTreeRows } from "../../../hooks/use-tree-rows";
 import { useTreeSelection } from "../../../hooks/use-tree-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualRows } from "../../../hooks/use-virtual-rows";
+import { folderKey } from "../../../store/folder-store";
 import { HEADER_HEIGHT, SIDEBAR_WIDTH, rootWide } from "../../../styles/layout";
 import { focusOutline } from "../../../styles/mixins";
-import { focusLost, isRtl } from "../../../utils/dom";
+import { focusLost, isRtl, scrollParent } from "../../../utils/dom";
 import { focusTreeItem, isTypingKey, matchName } from "../../../utils/keyboard";
 import Icon from "../../icons/icon";
 import TreeRowItem, { GuideLine } from "./location-item";
@@ -28,6 +29,7 @@ import type {
     SectionGroup,
     StatusRow,
     TreeItemRow,
+    TreeReveal,
     TreeRow,
 } from "../../../types";
 
@@ -42,11 +44,15 @@ interface SidebarProps {
     showHidden: boolean;
     /** `folderKey` of the open folder. */
     openKey: string | null;
+    /** A folder just created, to scroll the tree to once its row is there. */
+    reveal: TreeReveal | null;
     /** Whether the overlay is showing while the sidebar is collapsed; has no effect once it docks. */
     open: boolean;
     /** Whether the docked sidebar is hidden; has no effect while it's collapsed. */
     hidden: boolean;
     onToggle: (key: string) => void;
+    /** Called once `reveal` has been scrolled to, or given up on. */
+    onRevealed: () => void;
     /** Expands a collapsed folder or section that a drag rests on. */
     onExpand: (key: string) => void;
     onNavigate: (place: Place) => void;
@@ -200,9 +206,11 @@ const Sidebar = ({
     expanded,
     showHidden,
     openKey,
+    reveal,
     open,
     hidden,
     onToggle,
+    onRevealed,
     onExpand,
     onNavigate,
     onOpenMenu,
@@ -264,6 +272,53 @@ const Sidebar = ({
             focusTreeItem(element);
         }
     }, [focusRequest]);
+
+    // A folder just created is scrolled to as soon as its row is there, which is when the folder it
+    // was made in has been listed again, wherever it sorts. Its row is placed by the rows, so it
+    // needn't be rendered. Nothing is expanded for it: it's given up on unless the folder it was
+    // made in shows its folders, since otherwise its row never comes. The focus stays where it is.
+    useEffect(() => {
+        const list = treeRef.current;
+
+        if (!reveal || !list) {
+            return;
+        }
+
+        const row = rows.find((candidate) => reveal.keys.includes(candidate.id));
+
+        if (!row) {
+            const parentShown =
+                (tree !== null && reveal.parentKeys.includes(folderKey(tree.id, tree.rootId))) ||
+                rows.some(
+                    (candidate) =>
+                        (candidate.kind === "folder" || candidate.kind === "section") &&
+                        candidate.expanded &&
+                        reveal.parentKeys.includes(candidate.id),
+                );
+
+            if (!parentShown) {
+                onRevealed();
+            }
+
+            return;
+        }
+
+        const scroller = scrollParent(list);
+
+        if (scroller && scroller.clientHeight > 0) {
+            const panelTop = scroller.getBoundingClientRect().top + scroller.clientTop;
+            const viewTop = panelTop - list.getBoundingClientRect().top;
+            const viewBottom = viewTop + scroller.clientHeight;
+
+            if (row.top < viewTop) {
+                scroller.scrollTop += row.top - viewTop;
+            } else if (row.top + row.height > viewBottom) {
+                scroller.scrollTop += row.top + row.height - viewBottom;
+            }
+        }
+
+        onRevealed();
+    }, [reveal, rows, tree, onRevealed]);
 
     /** Focuses a row and scrolls to it, rendering it first if it isn't. */
     const focusRow = (id: string) => {

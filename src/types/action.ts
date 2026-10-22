@@ -38,6 +38,12 @@ export interface ActionContext {
      */
     createFolder?: () => void;
     /**
+     * Asks for a name and creates a folder in the one folder in `entries`, for a "New folder inside"
+     * action on a folder's menu, in the content and the sidebar tree alike. Missing unless `entries`
+     * is a single folder, and, as with `createFolder`, when the section's adapter has no `createFolder`.
+     */
+    createFolderInto?: () => void;
+    /**
      * Asks for a new name for the one entry in `entries`. Missing when the section's adapter has no
      * `rename`, or when there isn't exactly one entry.
      */

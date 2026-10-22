@@ -82,6 +82,17 @@ export type TreeItemRow = SectionRow | FolderRow | ErrorRow;
 
 export type TreeRow = TreeItemRow | StatusRow | CaptionRow | DividerRow;
 
+/**
+ * A folder just created, whose row the sidebar tree is to scroll to once it has one, which is
+ * after the folder it was made in has been listed again.
+ */
+export interface TreeReveal {
+    /** `folderKey` of the new folder in every section showing it; the first row found is scrolled to. */
+    keys: string[];
+    /** `folderKey` of the folder it was made in, in every section showing it. */
+    parentKeys: string[];
+}
+
 /** The guide line along the folders below an expanded row, from the first of them to the last. */
 export interface TreeGuide {
     /** Depth of the expanded row. */

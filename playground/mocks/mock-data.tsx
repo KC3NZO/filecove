@@ -242,6 +242,15 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 onSelect: (context) => context.createFolder?.(),
             },
             {
+                id: "new-folder-inside",
+                label: "New folder inside…",
+                icon: "newFolder",
+                target: "selection",
+                single: true,
+                visible: (context) => !!context.createFolderInto,
+                onSelect: (context) => context.createFolderInto?.(),
+            },
+            {
                 id: "upload",
                 label: "Upload files…",
                 icon: "upload",

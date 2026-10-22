@@ -22,6 +22,7 @@ import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { visibleActionGroups } from "../../utils/action-groups";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
+import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace } from "../../utils/navigation";
 import { importsFrom } from "../../utils/sections";
 import { matchesShortcut } from "../../utils/shortcut";
@@ -59,6 +60,7 @@ import type {
     Section,
     SectionGroup,
     SortOrder,
+    TreeReveal,
     ViewMode,
 } from "../../types";
 import type { MenuState } from "./context-menu/context-menu";
@@ -301,6 +303,8 @@ const FileManager = ({
     const [uploadCheck, setUploadCheck] = useState<UploadDialogState | null>(null);
     const [previewing, setPreviewing] = useState<PreviewDialogState | null>(null);
     const [reveal, setReveal] = useState<Reveal | null>(null);
+    // A folder just created, which the sidebar tree scrolls to once it shows its row.
+    const [treeReveal, setTreeReveal] = useState<TreeReveal | null>(null);
     // The browser's file picker, and where the files picked with it go.
     const pickerRef = useRef<HTMLInputElement>(null);
     const pickedInto = useRef<((dropped: DroppedFiles) => void) | null>(null);
@@ -579,6 +583,7 @@ const FileManager = ({
     const setSelecting = useCallback((on: boolean) => setSelectingKey(on ? openKey : null), [openKey]);
     const toggleSelecting = useCallback(() => setSelecting(!selecting), [setSelecting, selecting]);
     const clearReveal = useCallback(() => setReveal(null), []);
+    const clearTreeReveal = useCallback(() => setTreeReveal(null), []);
 
     const askName = useCallback((request: NameRequest) => {
         setNaming((prev) => ({ open: true, id: (prev?.id ?? 0) + 1, request }));
@@ -785,13 +790,33 @@ const FileManager = ({
         [adapter, section, place, dropFolders, goTo],
     );
 
-    // A folder made in the transfer picker may take an id that named another folder before, as one
-    // made from the menu may (`handleNamed`). The picker reveals it itself.
-    const handleFolderCreated = useCallback(
-        (served: FileAdapter, entry: FileEntry) => {
-            dropFolders(served, [entry.id]);
+    // The sidebar tree scrolls to a folder just created, in whichever section shows it, once the
+    // folder it was made in has been listed again. Hidden ones aren't, while hidden files are off,
+    // since their row never comes.
+    const revealInTree = useCallback(
+        (served: FileAdapter, parentId: string, entry: FileEntry) => {
+            if (entry.kind !== "folder" || (isHidden(entry) && !showHidden)) {
+                return;
+            }
+
+            const showing = sectionsOf(served);
+
+            setTreeReveal({
+                keys: showing.map((shown) => folderKey(shown.id, entry.id)),
+                parentKeys: showing.map((shown) => folderKey(shown.id, parentId)),
+            });
         },
-        [dropFolders],
+        [sectionsOf, showHidden],
+    );
+
+    // A folder made in the transfer picker may take an id that named another folder before, as one
+    // made from the menu may (`handleNamed`). The picker opens it itself.
+    const handleFolderCreated = useCallback(
+        (served: FileAdapter, entry: FileEntry, parentId: string) => {
+            dropFolders(served, [entry.id]);
+            revealInTree(served, parentId, entry);
+        },
+        [dropFolders, revealInTree],
     );
 
     const handleTransferred = useCallback(
@@ -860,6 +885,10 @@ const FileManager = ({
                 return;
             }
 
+            if (!before) {
+                revealInTree(served, parentId, entry);
+            }
+
             if (entry.id !== before?.id) {
                 dropFolders(served, before ? [entry.id, before.id] : [entry.id]);
             }
@@ -894,7 +923,7 @@ const FileManager = ({
                 });
             }
         },
-        [closeNaming, openKey, sectionsOf, dropFolders, rewrite],
+        [closeNaming, openKey, sectionsOf, dropFolders, revealInTree, rewrite],
     );
 
     const contextFor = useCallback(
@@ -951,6 +980,15 @@ const FileManager = ({
                     goTo({ sectionId: menuSection.id, trail: [...trail, { id: entry.id, name: entry.name }] });
                 },
                 createFolder: folderAdapter.createFolder ? () => askName({ ...base, kind: "create" }) : undefined,
+                createFolderInto:
+                    folderAdapter.createFolder && entries.length === 1 && only.kind === "folder"
+                        ? () =>
+                              askName({
+                                  ...base,
+                                  trail: [...trail, { id: only.id, name: only.name }],
+                                  kind: "create",
+                              })
+                        : undefined,
                 rename:
                     folderAdapter.rename && entries.length === 1
                         ? () => askName({ ...base, kind: "rename", entry: entries[0] })
@@ -1096,9 +1134,11 @@ const FileManager = ({
                                         expanded={expanded}
                                         showHidden={showHidden}
                                         openKey={openKey}
+                                        reveal={treeReveal}
                                         open={sidebarOpen}
                                         hidden={sidebarHidden}
                                         onToggle={toggleExpanded}
+                                        onRevealed={clearTreeReveal}
                                         onExpand={expand}
                                         onNavigate={navigateFromSidebar}
                                         onOpenMenu={openMenu}

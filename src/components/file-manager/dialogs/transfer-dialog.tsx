@@ -76,8 +76,11 @@ interface TransferDialogProps {
     onChanged: (adapter: FileAdapter, folderIds: string[]) => void;
     /** Called once the adapter has copied or moved the entries into `destination`. */
     onDone: (request: TransferRequest, destination: Place) => void;
-    /** Called with a folder made with the picker's New folder button, as the adapter returned it. */
-    onFolderCreated: (adapter: FileAdapter, entry: FileEntry) => void;
+    /**
+     * Called with a folder made with the picker's New folder button, as the adapter returned it,
+     * and the id of the folder it was made in.
+     */
+    onFolderCreated: (adapter: FileAdapter, entry: FileEntry, parentId: string) => void;
 }
 
 /** A row of the folder list: a section, on the list of sections, or a folder. */
@@ -381,7 +384,7 @@ const TransferDialog = ({
     // about to load for it isn't dropped with any stale one.
     const handleCreated = (_: unknown, entry: FileEntry) => {
         closeNaming();
-        onFolderCreated(adapter, entry);
+        onFolderCreated(adapter, entry, targetFolder.id);
 
         if (place) {
             pendingFocus.current = true;

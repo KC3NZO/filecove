@@ -33,6 +33,7 @@ export type {
     StatusRow,
     TreeGuide,
     TreeItemRow,
+    TreeReveal,
     TreeRow,
 } from "./tree";
 export type {
