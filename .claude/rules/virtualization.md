@@ -82,6 +82,10 @@ The tree is flattened into the rows it shows (`hooks/use-tree-rows.ts`, `FlatTre
 
 Keyboard navigation, the hand-off of the focus when the focused row goes, and finding the row to focus as the tree is tabbed to all go by the rows, not the page (see `keyboard.md`).
 
+### Scrolling to a row
+
+A row's place is known from the rows alone, so the tree scrolls to one that isn't rendered: a folder just created (`reveal` of `Sidebar`; see "Creating and renaming" in `file-manager.md`) is found among the rows by its key once the refreshed listing has it, and the tree's scroll panel (`scrollParent`) is moved by the least that shows its `top` and `height`, from where the panel's edges are on the list. The row is rendered by the scroll that follows. It doesn't take the focus, unlike `focusRow`, which also scrolls.
+
 The playground's `datasets` folder, in the API service section, holds 5,000 folders for trying this out.
 
 ## The transfer picker
