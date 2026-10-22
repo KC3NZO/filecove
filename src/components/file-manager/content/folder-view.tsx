@@ -14,6 +14,7 @@ import { useCutIds } from "../../../hooks/use-cut-ids";
 import { useDraggedIds } from "../../../hooks/use-dragged-ids";
 import { useDropTarget } from "../../../hooks/use-drop-target";
 import { useFolder } from "../../../hooks/use-folder";
+import { useLocale } from "../../../hooks/use-locale";
 import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
 import { useSelection } from "../../../hooks/use-selection";
@@ -195,6 +196,8 @@ const FolderView = ({
     const draggedIds = useDraggedIds(section);
     const data = useContext(DataContext);
     const drag = useContext(DragContext);
+    const locale = useLocale();
+    const { text } = locale;
 
     // A drag moves or copies, so it needs an adapter that does one or the other.
     const adapter = section.adapter ?? data?.adapter;
@@ -209,8 +212,8 @@ const FolderView = ({
 
         const listed = showHidden ? [...state.entries] : state.entries.filter((entry) => !isHidden(entry));
 
-        return listed.sort(entryComparator(sort));
-    }, [state?.entries, showHidden, sort]);
+        return listed.sort(entryComparator(sort, locale));
+    }, [state?.entries, showHidden, sort, locale]);
 
     // Where each entry is listed, to find entries by id without searching a large folder.
     const indexById = useMemo(() => new Map(entries?.map((entry, index) => [entry.id, index] as const)), [entries]);
@@ -743,6 +746,7 @@ const FolderView = ({
                 entries.map((entry) => entry.name),
                 index,
                 typeAhead.type(event.key),
+                locale.sameLetters,
             );
 
             if (match >= 0) {
@@ -795,14 +799,14 @@ const FolderView = ({
         content = (
             <Box id={stateId} sx={stateSx}>
                 <Icon name="folderOpen" sx={stateIconSx} />
-                <Typography sx={stateTitleSx}>Folder is empty</Typography>
+                <Typography sx={stateTitleSx}>{text.folderEmpty}</Typography>
             </Box>
         );
     } else if (state?.status === "error") {
         content = (
             <Box id={stateId} sx={stateSx} role="alert">
                 <Icon name="info" sx={stateIconSx} />
-                <Typography sx={stateTitleSx}>Couldn't open this folder</Typography>
+                <Typography sx={stateTitleSx}>{text.folderOpenFailed}</Typography>
                 {state.error instanceof Error && <Typography variant="body2">{state.error.message}</Typography>}
                 <Button
                     size="small"
@@ -812,24 +816,20 @@ const FolderView = ({
                         reload();
                     }}
                 >
-                    Try again
+                    {text.tryAgain}
                 </Button>
             </Box>
         );
     } else {
         content = (
             <Box id={stateId} sx={stateSx}>
-                <CircularProgress size={28} aria-label="Loading" />
+                <CircularProgress size={28} aria-label={text.loading} />
             </Box>
         );
     }
 
     // Screen readers hear how many entries are selected as it changes, e.g. with Shift+arrows or Ctrl+A.
-    let status = "";
-
-    if (selected.length > 0) {
-        status = selected.length === 1 ? "1 item selected" : `${selected.length} items selected`;
-    }
+    const status = selected.length > 0 ? text.selectedCount(selected.length) : "";
 
     // While it lists nothing, the view is tabbed to itself, so the shortcuts and the menu key work
     // there, and it's named for the folder and described by why it's empty.
@@ -861,7 +861,9 @@ const FolderView = ({
             onDragStart={handleDragStart}
             {...drop.handlers}
         >
-            {(busy || state?.status === "loading") && entries && <LinearProgress sx={progressSx} aria-label="Loading" />}
+            {(busy || state?.status === "loading") && entries && (
+                <LinearProgress sx={progressSx} aria-label={text.loading} />
+            )}
             {content}
             {selecting && (
                 <SelectionBar

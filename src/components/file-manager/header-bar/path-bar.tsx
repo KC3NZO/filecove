@@ -3,6 +3,7 @@ import ButtonBase from "@mui/material/ButtonBase";
 import IconButton from "@mui/material/IconButton";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useLocale } from "../../../hooks/use-locale";
 import { focusRing } from "../../../styles/mixins";
 import { belowElement } from "../../../utils/menu-position";
 import Icon from "../../icons/icon";
@@ -95,13 +96,14 @@ const menuButtonSx: SxProps<Theme> = {
 
 /** The section's name first, then the folders opened below its root. */
 const PathBar = ({ section, trail, hasActions, onNavigate, onOpenMenu }: PathBarProps) => {
+    const { text } = useLocale();
     const segments: Segment[] = [
         { id: section.rootId, label: section.label, icon: section.icon },
         ...trail.map((folder) => ({ id: folder.id, label: folder.name })),
     ];
 
     return (
-        <Box component="nav" aria-label="Path" sx={barSx}>
+        <Box component="nav" aria-label={text.path} sx={barSx}>
             <Box sx={scrollerSx}>
                 <Box component="ol" sx={trackSx}>
                     {segments.map((segment, index) => (
@@ -128,7 +130,7 @@ const PathBar = ({ section, trail, hasActions, onNavigate, onOpenMenu }: PathBar
             {hasActions && (
                 <IconButton
                     size="small"
-                    aria-label="Folder menu"
+                    aria-label={text.folderMenu}
                     sx={menuButtonSx}
                     onClick={(event) =>
                         onOpenMenu(belowElement(event.currentTarget), {

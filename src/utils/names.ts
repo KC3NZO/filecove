@@ -1,4 +1,4 @@
-import type { FileEntry } from "../types";
+import type { FileEntry, FileManagerLocaleText } from "../types";
 
 type EntryKind = FileEntry["kind"];
 
@@ -11,20 +11,21 @@ export const nameProblem = (
     name: string,
     kind: EntryKind,
     siblings: FileEntry[] | undefined,
+    text: FileManagerLocaleText,
     /** The entry being renamed, which can't clash with itself. */
     selfId?: string,
 ) => {
     if (name === "." || name === "..") {
-        return `A ${kind} can't be called "${name}".`;
+        return text.nameReserved(name, kind);
     }
 
     if (name.includes("/")) {
-        return `${kind === "folder" ? "Folder" : "File"} names can't contain "/".`;
+        return text.nameHasSlash(kind);
     }
 
     const clash = siblings?.find((entry) => entry.name === name && entry.id !== selfId);
 
-    return clash && `A ${clash.kind} with that name already exists.`;
+    return clash && text.nameTaken(clash.kind);
 };
 
 /** How much of a name to select for renaming: a file's name up to its extension, or a folder's whole name. */
@@ -34,14 +35,14 @@ export const stemLength = (name: string, kind: EntryKind) => {
     return kind === "file" && dot > 0 ? dot : name.length;
 };
 
-/** A name no sibling has yet, to start a new folder with: "New folder", then "New folder (2)" and so on. */
-export const newFolderName = (siblings: FileEntry[] | undefined) => {
+/** A name no sibling has yet, to start a new folder with: in English "New folder", then "New folder (2)" and so on. */
+export const newFolderName = (siblings: FileEntry[] | undefined, text: FileManagerLocaleText) => {
     const taken = new Set(siblings?.map((entry) => entry.name));
-    let name = "New folder";
+    let number = 1;
 
-    for (let count = 2; taken.has(name); count += 1) {
-        name = `New folder (${count})`;
+    while (taken.has(text.untitledFolder(number))) {
+        number += 1;
     }
 
-    return name;
+    return text.untitledFolder(number);
 };

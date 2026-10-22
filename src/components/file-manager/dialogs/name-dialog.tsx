@@ -10,6 +10,7 @@ import TextField from "@mui/material/TextField";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
+import { useLocale } from "../../../hooks/use-locale";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { nameProblem, newFolderName, stemLength } from "../../../utils/names";
 import { folderOf } from "../../../utils/navigation";
@@ -80,8 +81,9 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
 
     const formId = useId();
     const { state } = useFolder(section, parent.id, true);
+    const { text } = useLocale();
 
-    const [name, setName] = useState(() => entry?.name ?? newFolderName(state?.entries));
+    const [name, setName] = useState(() => entry?.name ?? newFolderName(state?.entries, text));
     const [failure, setFailure] = useState<string | null>(null);
     const [pending, setPending] = useState(false);
     const controller = useRef<AbortController | null>(null);
@@ -90,7 +92,7 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
     useEffect(() => () => controller.current?.abort(), []);
 
     const trimmed = name.trim();
-    const problem = trimmed ? nameProblem(trimmed, kind, state?.entries, entry?.id) : undefined;
+    const problem = trimmed ? nameProblem(trimmed, kind, state?.entries, text, entry?.id) : undefined;
     const message = problem ?? failure;
 
     // Read-only rather than disabled while the adapter works, so the field keeps focus.
@@ -169,7 +171,9 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
                         setFailure(
                             error instanceof Error && error.message
                                 ? error.message
-                                : `Couldn't ${entry ? "rename" : "create"} the ${kind}.`,
+                                : entry
+                                  ? text.renameFailed(kind)
+                                  : text.createFailed,
                         );
                     }
                 },
@@ -178,12 +182,12 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
 
     return (
         <Dialog open={open} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
-            <DialogTitle>{entry ? `Rename ${kind}` : "New folder"}</DialogTitle>
+            <DialogTitle>{entry ? text.renameTitle(kind) : text.newFolder}</DialogTitle>
             <DialogContent>
                 <form id={formId} onSubmit={submit}>
                     <TextField
                         fullWidth
-                        label={kind === "folder" ? "Folder name" : "File name"}
+                        label={text.nameLabel(kind)}
                         value={name}
                         error={!!message}
                         // A blank line is kept while there is no message, so the dialog doesn't jump when one shows.
@@ -200,10 +204,10 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
             </DialogContent>
             <DialogActions>
                 <Button color="inherit" onClick={close}>
-                    Cancel
+                    {text.cancel}
                 </Button>
                 <Button type="submit" form={formId} variant="contained" disabled={!trimmed || !!problem} loading={pending}>
-                    {entry ? "Rename" : "Create"}
+                    {entry ? text.rename : text.create}
                 </Button>
             </DialogActions>
         </Dialog>

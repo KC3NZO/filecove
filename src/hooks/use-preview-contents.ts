@@ -27,9 +27,6 @@ interface PreviewContentsOptions {
     pending: boolean;
 }
 
-const errorMessage = (error: unknown) =>
-    error instanceof Error && error.message ? error.message : "Couldn't get the file.";
-
 // Forgets a file: stops loading it, and revokes its object URL.
 const drop = (slot: Slot) => {
     slot.controller.abort();
@@ -95,7 +92,7 @@ const load = (adapter: FileAdapter, entry: FileEntry, ahead: boolean, done: (con
 
             return { status: "url", url };
         })
-        .catch((error: unknown): PreviewContent => ({ status: "error", message: errorMessage(error) }))
+        .catch((error: unknown): PreviewContent => ({ status: "error", error }))
         .then((content) => {
             if (!signal.aborted) {
                 done(content);
@@ -168,8 +165,8 @@ export const usePreviewContents = ({ adapter, entries, index, ahead, pending }: 
     }, []);
 
     /** Shows a file as failed, when the browser couldn't load what came for it, or can't show it. */
-    const fail = useCallback((id: string, message: string) => {
-        setContents((prev) => (prev.has(id) ? new Map(prev).set(id, { status: "error", message }) : prev));
+    const fail = useCallback((id: string, error: unknown) => {
+        setContents((prev) => (prev.has(id) ? new Map(prev).set(id, { status: "error", error }) : prev));
     }, []);
 
     /** Loads a file afresh, in case a signed URL had run out. */

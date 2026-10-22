@@ -8,6 +8,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DragContext } from "../../../contexts/drag-context";
+import { useLocale } from "../../../hooks/use-locale";
 import { useTreeRows } from "../../../hooks/use-tree-rows";
 import { useTreeSelection } from "../../../hooks/use-tree-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
@@ -210,6 +211,7 @@ const Sidebar = ({
     const { selection, select, selectSection, reset } = useTreeSelection(openKey);
     const typeAhead = useTypeAhead();
     const drag = useContext(DragContext);
+    const { text, sameLetters } = useLocale();
     const treeRef = useRef<HTMLDivElement | null>(null);
     const [focusInside, setFocusInside] = useState(false);
     // The row that has the focus, or had it last, which gets it back when the tree is tabbed to.
@@ -400,6 +402,7 @@ const Sidebar = ({
                         items.map((row) => row.label),
                         Math.max(index, 0),
                         typeAhead.type(event.key),
+                        sameLetters,
                     );
 
                     next = items[match];
@@ -446,21 +449,21 @@ const Sidebar = ({
             onBlur={handleBlur}
         >
             <Box sx={headerSx}>
-                <IconButton aria-label="Search">
+                <IconButton aria-label={text.search}>
                     <Icon name="search" fontSize="small" />
                 </IconButton>
                 <Typography component="span" noWrap sx={titleSx}>
                     {title}
                 </Typography>
-                <IconButton aria-label="Main menu">
+                <IconButton aria-label={text.mainMenu}>
                     <Icon name="menu" fontSize="small" />
                 </IconButton>
             </Box>
-            <Box component="nav" aria-label="Sidebar" sx={navSx}>
+            <Box component="nav" aria-label={text.sidebar} sx={navSx}>
                 <Box
                     ref={treeElement}
                     role="tree"
-                    aria-label={tree ? tree.label : "Sections"}
+                    aria-label={tree ? tree.label : text.sections}
                     aria-multiselectable
                     tabIndex={focusInside ? -1 : 0}
                     sx={treeSx}

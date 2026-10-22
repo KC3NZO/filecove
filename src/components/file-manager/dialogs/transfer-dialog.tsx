@@ -18,6 +18,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
+import { useLocale } from "../../../hooks/use-locale";
 import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
@@ -25,7 +26,7 @@ import { dialogPaperSx, focusOutline, focusRing, hoverBackground } from "../../.
 import { isHidden } from "../../../utils/hidden";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { folderLeft, folderOf } from "../../../utils/navigation";
-import { compareEntries } from "../../../utils/sort";
+import { nameOrder } from "../../../utils/sort";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import PathBar from "../header-bar/path-bar";
@@ -197,6 +198,8 @@ const isFolder = (entry: FileEntry) => entry.kind === "folder";
 const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone }: TransferDialogProps) => {
     const { kind, section, adapter, trail, entries, destinations } = request;
     const sourceId = folderOf(section, trail).id;
+    const locale = useLocale();
+    const { text } = locale;
 
     // Null on the list of sections, which is only reachable with more than one.
     const [place, setPlace] = useState<Place | null>({ sectionId: section.id, trail });
@@ -210,8 +213,8 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
         () =>
             state?.entries
                 ?.filter((entry) => isFolder(entry) && (showHidden || !isHidden(entry)))
-                .sort(compareEntries),
-        [state?.entries, showHidden],
+                .sort(nameOrder(locale)),
+        [state?.entries, showHidden, locale],
     );
     const movingIds = useMemo(() => new Set(entries.map((entry) => entry.id)), [entries]);
     // All of the folder has come, not just some of its pages, so its names can be checked for clashes.
@@ -220,8 +223,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
 
     // Ids are unique within an adapter, so the same folder is the same id whichever section shows it.
     const sameFolder = place !== null && targetFolder.id === sourceId;
-    const verb = kind === "copy" ? "Copy" : "Move";
-    const what = entries.length === 1 ? `“${entries[0].name}”` : `${entries.length} items`;
+    const title = (kind === "copy" ? text.copyToTitle : text.moveToTitle)(entries.length, entries[0].name);
 
     // The adapter can't undo a change it has made, so both folders are listed again however it ended.
     const refresh = () => onChanged(adapter, kind === "move" ? [targetFolder.id, sourceId] : [targetFolder.id]);
@@ -257,7 +259,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
     const rows = useMemo(() => items.filter((item) => !item.disabled), [items]);
     const tabStop = rows.find((row) => row.id === focusId)?.id ?? rows[0]?.id ?? null;
     const loaded = place === null || listed || failed;
-    const listLabel = place ? `Folders in ${targetFolder.name}` : "Locations";
+    const listLabel = place ? text.pickerFolders(targetFolder.name) : text.pickerLocations;
 
     // The row with the Tab stop stays rendered wherever the list is scrolled, so it keeps the focus.
     const { lines, settled } = useVirtualLines(items.length, [items.findIndex((item) => item.id === tabStop)]);
@@ -384,6 +386,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
                 rows.map((item) => item.name),
                 Math.max(index, 0),
                 typeAhead.type(event.key),
+                locale.sameLetters,
             );
         }
 
@@ -519,13 +522,14 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
                 onKeyDown={handleListKeyDown}
             >
                 <Box id={stateId} sx={stateSx}>
-                    {listed && <Typography variant="body2">No folders</Typography>}
+                    {listed && <Typography variant="body2">{text.noFolders}</Typography>}
                     {failed && (
                         <Typography variant="body2">
-                            Couldn't open this folder{state.error instanceof Error && `: ${state.error.message}`}
+                            {text.folderOpenFailed}
+                            {state.error instanceof Error && `: ${state.error.message}`}
                         </Typography>
                     )}
-                    {!loaded && <CircularProgress size={24} aria-label="Loading" />}
+                    {!loaded && <CircularProgress size={24} aria-label={text.loading} />}
                 </Box>
             </Box>
         );
@@ -533,13 +537,11 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
 
     return (
         <Dialog open={open} fullWidth maxWidth="sm" slotProps={slotProps} onClose={close}>
-            <DialogTitle>
-                {verb} {what} to…
-            </DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
             <DialogContent sx={contentSx}>
                 {!conflicts && (
                     <Box sx={toolbarSx}>
-                        <IconButton size="small" aria-label="Back" disabled={!canGoUp} onClick={goUp}>
+                        <IconButton size="small" aria-label={text.back} disabled={!canGoUp} onClick={goUp}>
                             <Icon name="arrowBack" fontSize="small" />
                         </IconButton>
                         <Box sx={locationSx}>
@@ -553,7 +555,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
                                 />
                             ) : (
                                 <Typography variant="body2" fontWeight={600}>
-                                    Locations
+                                    {text.pickerLocations}
                                 </Typography>
                             )}
                         </Box>
@@ -577,7 +579,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
                             setConflicts(null);
                         }}
                     >
-                        Back
+                        {text.back}
                     </Button>
                     <Box sx={spacerSx} />
                     <ConflictChoices pending={pending} onChoose={run} />
@@ -585,7 +587,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
             ) : (
                 <DialogActions>
                     <Button color="inherit" onClick={close}>
-                        Cancel
+                        {text.cancel}
                     </Button>
                     {/* The folder's names are checked for clashes, so it can't be chosen before they've all come. */}
                     <Button
@@ -594,7 +596,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
                         loading={!!pending}
                         onClick={confirm}
                     >
-                        {verb} here
+                        {kind === "copy" ? text.copyHere : text.moveHere}
                     </Button>
                 </DialogActions>
             )}

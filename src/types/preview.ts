@@ -16,4 +16,5 @@ export type PreviewContent =
     | { status: "text"; excerpt: TextExcerpt }
     /** A text file that turned out not to be text. */
     | { status: "binary" }
-    | { status: "error"; message: string };
+    /** What the adapter rejected with, or the browser failed with, worded by the preview. */
+    | { status: "error"; error: unknown };

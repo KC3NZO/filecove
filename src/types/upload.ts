@@ -22,7 +22,7 @@ export interface UploadItem {
     status: UploadStatus;
     /** How much has been sent, from 0 to 1, once the adapter has reported any. */
     progress?: number;
-    /** Why it failed, to show beside it. */
+    /** Why it failed, as the adapter said, to show beside it. */
     error?: string;
 }
 

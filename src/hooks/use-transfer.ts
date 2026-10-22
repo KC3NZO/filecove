@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useLocale } from "./use-locale";
+
 import type { ConflictPolicy, FileAdapter, FileEntry, TransferOptions } from "../types";
 
 /** A copy or move for the adapter to carry out. */
@@ -44,6 +46,7 @@ export const useTransfer = (job: TransferJob, refresh: () => void) => {
     const [pending, setPending] = useState<ConflictPolicy | null>(null);
     const [failure, setFailure] = useState<string | null>(null);
     const controller = useRef<AbortController | null>(null);
+    const { text } = useLocale();
 
     useEffect(() => () => controller.current?.abort(), []);
 
@@ -84,7 +87,7 @@ export const useTransfer = (job: TransferJob, refresh: () => void) => {
                     setFailure(
                         error instanceof Error && error.message
                             ? error.message
-                            : `Couldn't ${job.kind} ${job.entries.length === 1 ? "it" : "them"}.`,
+                            : (job.kind === "move" ? text.moveFailed : text.copyFailed)(job.entries.length),
                     );
 
                     return "failed";

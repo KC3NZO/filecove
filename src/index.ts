@@ -1,5 +1,6 @@
 export { default as FileManager } from "./components/file-manager/file-manager";
 export { default as IconProvider } from "./components/icons/icon-provider";
+export { enUS } from "./locales/en-us";
 
 export type { FileManagerProps } from "./components/file-manager/file-manager";
 export type {
@@ -12,6 +13,7 @@ export type {
     FileAdapter,
     FileContent,
     FileEntry,
+    FileManagerLocaleText,
     FolderRef,
     IconName,
     IconOverrides,

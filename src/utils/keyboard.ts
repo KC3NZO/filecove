@@ -2,8 +2,6 @@ import type { KeyboardEvent } from "react";
 
 import type { EntryLayout } from "../types";
 
-const collator = new Intl.Collator(undefined, { sensitivity: "base" });
-
 /** The keys that open a context menu: the Menu key, or Shift+F10. */
 export const isMenuKey = (event: KeyboardEvent) =>
     event.key === "ContextMenu" ||
@@ -69,18 +67,23 @@ export const stepIndex = (
  * The index of the next of `names` that starts with `query`, looking from `from` and wrapping
  * around, or -1. One letter typed again and again steps through the names starting with it, so
  * it looks from the name after `from`; a longer query stays on `from` while it still fits.
- * Case and accents don't count.
+ * Letters are compared by `sameLetters`, which leaves case and accents aside (`Locale.sameLetters`).
  */
-export const matchName = (names: string[], from: number, query: string) => {
+export const matchName = (
+    names: string[],
+    from: number,
+    query: string,
+    sameLetters: (a: string, b: string) => boolean,
+) => {
     const chars = [...query];
-    const repeated = chars.every((char) => collator.compare(char, chars[0]) === 0);
+    const repeated = chars.every((char) => sameLetters(char, chars[0]));
     const prefix = repeated ? chars[0] : query;
     const start = Math.max(repeated ? from + 1 : from, 0);
 
     for (let offset = 0; offset < names.length; offset += 1) {
         const index = (start + offset) % names.length;
 
-        if (collator.compare(names[index].slice(0, prefix.length), prefix) === 0) {
+        if (sameLetters(names[index].slice(0, prefix.length), prefix)) {
             return index;
         }
     }

@@ -10,6 +10,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
+import { useLocale } from "../../../hooks/use-locale";
 import { clashingNames } from "../../../hooks/use-transfer";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { folderOf } from "../../../utils/navigation";
@@ -66,6 +67,7 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
     const { section, trail, dropped } = request;
     const { files, folders } = dropped;
     const target = folderOf(section, trail);
+    const { text } = useLocale();
 
     // The folder is listed first when it isn't cached, as a folder dropped onto may never have been
     // opened, and its clashes are only looked for once all its pages have come.
@@ -108,24 +110,19 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
         }
     }, [listed]);
 
-    const what = files.length === 1 ? `“${files[0].name}”` : `${files.length} files`;
-    const leftOut = folders.length === 1 ? `“${folders[0]}” is` : `${folders.length} folders are`;
-
     // Only folders were dropped, so there's nothing to upload.
     if (files.length === 0) {
         return (
             <Dialog open={open && !!conflicts} fullWidth maxWidth="xs" slotProps={slotProps} onClose={onClose}>
-                <DialogTitle>
-                    Couldn't upload {folders.length === 1 ? `“${folders[0]}”` : `${folders.length} folders`}
-                </DialogTitle>
+                <DialogTitle>{text.uploadFoldersFailedTitle(folders.length, folders[0])}</DialogTitle>
                 <DialogContent sx={contentSx}>
                     <Typography variant="body2" color="text.secondary">
-                        Folders can't be uploaded yet, only files.
+                        {text.uploadFoldersOnly}
                     </Typography>
                 </DialogContent>
                 <DialogActions>
                     <Button variant="contained" onClick={onClose}>
-                        Close
+                        {text.close}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -134,20 +131,18 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
 
     return (
         <Dialog open={open && !!conflicts} fullWidth maxWidth="xs" slotProps={slotProps} onClose={onClose}>
-            <DialogTitle>
-                Upload {what} to “{target.name}”
-            </DialogTitle>
+            <DialogTitle>{text.uploadTitle(files.length, files[0].name, target.name)}</DialogTitle>
             <DialogContent sx={contentSx}>
                 {conflicts && conflicts.length > 0 && <ConflictMessage names={conflicts} folderName={target.name} />}
                 {folders.length > 0 && (
                     <Typography variant="body2" color="text.secondary">
-                        Folders can't be uploaded yet, so {leftOut} left out.
+                        {text.uploadFoldersLeftOut(folders.length, folders[0])}
                     </Typography>
                 )}
             </DialogContent>
             <DialogActions>
                 <Button color="inherit" onClick={onClose}>
-                    Cancel
+                    {text.cancel}
                 </Button>
                 {conflicts && conflicts.length > 0 ? (
                     <>
@@ -156,7 +151,7 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                     </>
                 ) : (
                     <Button variant="contained" onClick={() => upload("keepBoth")}>
-                        Upload
+                        {text.upload}
                     </Button>
                 )}
             </DialogActions>

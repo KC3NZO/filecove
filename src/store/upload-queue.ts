@@ -104,7 +104,8 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                 (error: unknown) =>
                     settle({
                         status: "failed",
-                        error: error instanceof Error && error.message ? error.message : "Couldn't upload it.",
+                        // Without a message, the panel says why in its own words.
+                        error: error instanceof Error && error.message ? error.message : undefined,
                     }),
             );
     };

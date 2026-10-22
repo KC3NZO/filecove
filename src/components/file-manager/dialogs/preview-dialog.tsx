@@ -9,18 +9,18 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useLocale } from "../../../hooks/use-locale";
 import { usePreviewContents } from "../../../hooks/use-preview-contents";
 import { useSwipe } from "../../../hooks/use-swipe";
 import { dialogPaperSx, focusOutline, visuallyHiddenSx } from "../../../styles/mixins";
-import { describeDate, describeSize, describeType, formatSize } from "../../../utils/format";
 import { isRtl } from "../../../utils/keyboard";
-import { TEXT_LIMIT, previewKind } from "../../../utils/preview";
+import { ResponseError, TEXT_LIMIT, previewKind } from "../../../utils/preview";
 import { FileTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import ImageViewer from "./image-viewer";
 import type { ImageViewerHandle } from "./image-viewer";
 
-import type { FileAdapter, FileEntry, FolderRef, Section } from "../../../types";
+import type { FileAdapter, FileEntry, FileManagerLocaleText, FolderRef, Section } from "../../../types";
 
 export interface PreviewRequest {
     section: Section;
@@ -68,7 +68,14 @@ interface Dimensions {
     height: number;
 }
 
-const MEDIA_ERROR = "The browser couldn't load it, or can't show this kind of file.";
+// Why a file couldn't be shown: the adapter's message, the server's answer, or else a general one.
+const errorMessage = (error: unknown, text: FileManagerLocaleText) => {
+    if (error instanceof ResponseError) {
+        return text.serverError(error.status, error.statusText);
+    }
+
+    return error instanceof Error && error.message ? error.message : text.previewLoadFailed;
+};
 
 // As large as the page allows, up to a size that still reads as a dialog.
 const dialogSx: SxProps<Theme> = {
@@ -229,6 +236,7 @@ const audioSx: SxProps<Theme> = {
 const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, onStep }: PreviewDialogProps) => {
     const { adapter, entries } = request;
     const count = entries.length;
+    const { text, formatNumber, formatSize, describeDate, describeSize, describeType } = useLocale();
 
     const [index, setIndex] = useState(() => Math.min(Math.max(request.index, 0), count - 1));
     // The way the last step went, where the file loaded ahead lies.
@@ -278,7 +286,7 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
     });
 
     // The browser couldn't load the URL, or can't show what it holds.
-    const handleMediaError = () => fail(entry.id, MEDIA_ERROR);
+    const handleMediaError = () => fail(entry.id, new Error(text.previewMediaFailed));
 
     const measure = (width: number, height: number) => setDimensions({ id: entry.id, width, height });
 
@@ -319,7 +327,9 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
     const details = [
         describeType(entry),
         entry.size === undefined ? null : describeSize(entry),
-        size && size.width > 0 && size.height > 0 ? `${size.width} × ${size.height}` : null,
+        size && size.width > 0 && size.height > 0
+            ? `${formatNumber(size.width)} × ${formatNumber(size.height)}`
+            : null,
     ]
         .filter(Boolean)
         .join(" · ");
@@ -327,23 +337,23 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
     let body: ReactNode;
 
     if (!shown && kind !== "none") {
-        body = <CircularProgress size={28} aria-label="Loading" />;
+        body = <CircularProgress size={28} aria-label={text.loading} />;
     } else if (kind === "none" || !shown || shown.status === "binary") {
         body = (
             <Box sx={stateSx}>
                 <FileTypeIcon fileName={entry.name} size="5rem" />
-                <Typography sx={stateTitleSx}>No preview available</Typography>
-                {entry.modifiedAt && <Typography variant="body2">Modified {describeDate(entry)}</Typography>}
+                <Typography sx={stateTitleSx}>{text.previewUnavailable}</Typography>
+                {entry.modifiedAt && <Typography variant="body2">{text.modifiedOn(describeDate(entry))}</Typography>}
             </Box>
         );
     } else if (shown.status === "error") {
         body = (
             <Box sx={stateSx} role="alert">
                 <Icon name="info" sx={stateIconSx} />
-                <Typography sx={stateTitleSx}>Couldn't preview this file</Typography>
-                <Typography variant="body2">{shown.message}</Typography>
+                <Typography sx={stateTitleSx}>{text.previewFailed}</Typography>
+                <Typography variant="body2">{errorMessage(shown.error, text)}</Typography>
                 <Button size="small" variant="outlined" onClick={() => retry(entry.id)}>
-                    Try again
+                    {text.tryAgain}
                 </Button>
             </Box>
         );
@@ -356,14 +366,14 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
                 </Box>
                 {shown.excerpt.truncated && (
                     <Typography variant="caption" sx={noteSx}>
-                        Showing the first {formatSize(TEXT_LIMIT)}
+                        {text.previewTruncated(formatSize(TEXT_LIMIT))}
                     </Typography>
                 )}
             </Box>
         ) : (
             <Box sx={stateSx}>
                 <FileTypeIcon fileName={entry.name} size="5rem" />
-                <Typography sx={stateTitleSx}>File is empty</Typography>
+                <Typography sx={stateTitleSx}>{text.fileEmpty}</Typography>
             </Box>
         );
     } else if (kind === "image") {
@@ -432,18 +442,18 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
                 </Box>
                 {count > 1 && (
                     <Box sx={stepperSx}>
-                        <IconButton aria-label="Previous" disabled={index === 0} onClick={() => step(-1)}>
+                        <IconButton aria-label={text.previous} disabled={index === 0} onClick={() => step(-1)}>
                             <Icon name="chevronLeft" />
                         </IconButton>
                         <Typography variant="body2" color="text.secondary" sx={counterSx} aria-hidden>
-                            {index + 1} / {count}
+                            {formatNumber(index + 1)} / {formatNumber(count)}
                         </Typography>
-                        <IconButton aria-label="Next" disabled={index === count - 1} onClick={() => step(1)}>
+                        <IconButton aria-label={text.next} disabled={index === count - 1} onClick={() => step(1)}>
                             <Icon name="chevronRight" />
                         </IconButton>
                     </Box>
                 )}
-                <IconButton aria-label="Close" onClick={onClose}>
+                <IconButton aria-label={text.close} onClick={onClose}>
                     <Icon name="close" />
                 </IconButton>
             </Box>
@@ -454,7 +464,7 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
             </Box>
             {/* Screen readers hear which file the arrows stepped to. */}
             <Box sx={visuallyHiddenSx} role="status">
-                {count > 1 ? `${entry.name}, ${index + 1} of ${count}` : ""}
+                {count > 1 ? text.previewPosition(entry.name, index + 1, count) : ""}
             </Box>
         </Dialog>
     );

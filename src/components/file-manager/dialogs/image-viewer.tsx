@@ -6,6 +6,7 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useLocale } from "../../../hooks/use-locale";
 import Icon from "../../icons/icon";
 
 /** What the preview hands the image it shows. */
@@ -229,6 +230,7 @@ const percentSx: SxProps<Theme> = {
  * waiting on a measure; zoomed, it's placed from its own size and the view's.
  */
 const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
+    const { text, formatPercent } = useLocale();
     const stageRef = useRef<HTMLDivElement>(null);
     const imageRef = useRef<HTMLImageElement>(null);
     // The image's own size once it has loaded, and the view's, for rendering. Handlers read both
@@ -550,7 +552,7 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
                 <Box sx={toolbarSx}>
                     <IconButton
                         size="small"
-                        aria-label="Zoom out"
+                        aria-label={text.zoomOut}
                         aria-keyshortcuts="-"
                         disabled={!zoom}
                         onClick={() => zoomAround((current) => stepScale(current, -1))}
@@ -558,11 +560,11 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
                         <Icon name="zoomOut" fontSize="small" />
                     </IconButton>
                     <Typography variant="body2" color="text.secondary" sx={percentSx}>
-                        {Math.round(scale * 100)}%
+                        {formatPercent(scale)}
                     </Typography>
                     <IconButton
                         size="small"
-                        aria-label="Zoom in"
+                        aria-label={text.zoomIn}
                         aria-keyshortcuts="Plus"
                         disabled={scale >= maxScale(image, view) - 1e-9}
                         onClick={() => zoomAround((current) => stepScale(current, 1))}
@@ -571,7 +573,7 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
                     </IconButton>
                     <IconButton
                         size="small"
-                        aria-label="Best fit"
+                        aria-label={text.zoomFit}
                         aria-keyshortcuts="0"
                         disabled={!zoom}
                         onClick={() => zoomAround((_, best) => best)}

@@ -4,6 +4,7 @@ import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useLocale } from "../../../hooks/use-locale";
 import { HEADER_HEIGHT, rootMedium, rootWide } from "../../../styles/layout";
 import Icon from "../../icons/icon";
 import ViewMenu from "./view-menu";
@@ -121,52 +122,56 @@ const HeaderBar = ({
     onShowSidebar,
     onToggleSidebar,
     sidebarButtonRef,
-}: HeaderBarProps) => (
-    <Box sx={headerSx}>
-        <Box sx={startGroupSx}>
-            <IconButton
-                ref={sidebarButtonRef}
-                aria-label="Show sidebar"
-                aria-keyshortcuts="F9"
-                sx={sidebarHidden ? undefined : collapsedOnlySx}
-                onClick={onShowSidebar}
-            >
-                <Icon name="menu" fontSize="small" />
-            </IconButton>
-            <IconButton aria-label="Back" disabled={!canGoBack} onClick={onBack}>
-                <Icon name="arrowBack" fontSize="small" />
-            </IconButton>
-            <IconButton aria-label="Forward" disabled={!canGoForward} sx={mediumUpSx} onClick={onForward}>
-                <Icon name="arrowForward" fontSize="small" />
-            </IconButton>
+}: HeaderBarProps) => {
+    const { text } = useLocale();
+
+    return (
+        <Box sx={headerSx}>
+            <Box sx={startGroupSx}>
+                <IconButton
+                    ref={sidebarButtonRef}
+                    aria-label={text.showSidebar}
+                    aria-keyshortcuts="F9"
+                    sx={sidebarHidden ? undefined : collapsedOnlySx}
+                    onClick={onShowSidebar}
+                >
+                    <Icon name="menu" fontSize="small" />
+                </IconButton>
+                <IconButton aria-label={text.back} disabled={!canGoBack} onClick={onBack}>
+                    <Icon name="arrowBack" fontSize="small" />
+                </IconButton>
+                <IconButton aria-label={text.forward} disabled={!canGoForward} sx={mediumUpSx} onClick={onForward}>
+                    <Icon name="arrowForward" fontSize="small" />
+                </IconButton>
+            </Box>
+            <Box sx={pathSlotSx}>{pathBar}</Box>
+            <Box sx={endGroupSx}>
+                <IconButton
+                    aria-label={selecting ? text.doneSelecting : text.select}
+                    aria-pressed={selecting}
+                    sx={selectButtonSx}
+                    onClick={onToggleSelecting}
+                >
+                    <Icon name="selectMode" fontSize="small" />
+                </IconButton>
+                <IconButton aria-label={text.search} sx={sidebarHidden ? undefined : collapsedOnlySx}>
+                    <Icon name="search" fontSize="small" />
+                </IconButton>
+                <IconButton aria-label={view === "list" ? text.gridView : text.listView} onClick={onToggleView}>
+                    <Icon name={view === "list" ? "gridView" : "listView"} fontSize="small" />
+                </IconButton>
+                <ViewMenu
+                    sort={sort}
+                    showHidden={showHidden}
+                    sidebarHidden={sidebarHidden}
+                    sidebarDocked={sidebarDocked}
+                    onSortChange={onSortChange}
+                    onToggleHidden={onToggleHidden}
+                    onToggleSidebar={onToggleSidebar}
+                />
+            </Box>
         </Box>
-        <Box sx={pathSlotSx}>{pathBar}</Box>
-        <Box sx={endGroupSx}>
-            <IconButton
-                aria-label={selecting ? "Done selecting" : "Select"}
-                aria-pressed={selecting}
-                sx={selectButtonSx}
-                onClick={onToggleSelecting}
-            >
-                <Icon name="selectMode" fontSize="small" />
-            </IconButton>
-            <IconButton aria-label="Search" sx={sidebarHidden ? undefined : collapsedOnlySx}>
-                <Icon name="search" fontSize="small" />
-            </IconButton>
-            <IconButton aria-label={view === "list" ? "Grid view" : "List view"} onClick={onToggleView}>
-                <Icon name={view === "list" ? "gridView" : "listView"} fontSize="small" />
-            </IconButton>
-            <ViewMenu
-                sort={sort}
-                showHidden={showHidden}
-                sidebarHidden={sidebarHidden}
-                sidebarDocked={sidebarDocked}
-                onSortChange={onSortChange}
-                onToggleHidden={onToggleHidden}
-                onToggleSidebar={onToggleSidebar}
-            />
-        </Box>
-    </Box>
-);
+    );
+};
 
 export default HeaderBar;

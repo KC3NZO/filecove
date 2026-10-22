@@ -4,6 +4,7 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useLocale } from "../../../hooks/use-locale";
 import Icon from "../../icons/icon";
 
 interface SelectionBarProps {
@@ -49,22 +50,23 @@ const countSx: SxProps<Theme> = {
 /** The touch selection mode's bar: leave the mode, the count, select all or none, and the action menu. */
 const SelectionBar = ({ count, total, hasActions, onClose, onSelectAll, onSelectNone, onMenu }: SelectionBarProps) => {
     const allSelected = total > 0 && count === total;
+    const { text } = useLocale();
 
     return (
         // Its taps are its own, not clicks on the folder's empty space.
         <Box sx={barSx} data-no-marquee onClick={(event) => event.stopPropagation()}>
-            <IconButton aria-label="Done selecting" onClick={onClose}>
+            <IconButton aria-label={text.doneSelecting} onClick={onClose}>
                 <Icon name="close" fontSize="small" />
             </IconButton>
             <Typography variant="body2" noWrap sx={countSx}>
-                {count === 0 ? "Select items" : `${count} selected`}
+                {count === 0 ? text.selectItems : text.selectionCount(count)}
             </Typography>
             <Button size="small" onClick={allSelected ? onSelectNone : onSelectAll}>
-                {allSelected ? "Select none" : "Select all"}
+                {allSelected ? text.selectNone : text.selectAll}
             </Button>
             {hasActions && (
                 <IconButton
-                    aria-label="Actions for the selection"
+                    aria-label={text.selectionActions}
                     disabled={count === 0}
                     onClick={(event) => onMenu(event.currentTarget)}
                 >

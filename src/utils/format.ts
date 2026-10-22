@@ -1,63 +1,98 @@
-import type { FileEntry } from "../types";
+import { enUS } from "../locales/en-us";
 
-const sizeFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
-const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" });
+import type { FileEntry, FileManagerLocaleText, Locale } from "../types";
 
-const SIZE_UNITS = ["kB", "MB", "GB", "TB"];
+// Decimal units, as GNOME Files shows them, above bytes.
+const SIZE_UNITS = ["kilobyte", "megabyte", "gigabyte", "terabyte"];
 
-const MIME_LABELS: [prefix: string, label: string][] = [
-    ["image/", "Image"],
-    ["video/", "Video"],
-    ["audio/", "Audio"],
-    ["text/", "Text"],
-    ["application/pdf", "PDF"],
-    ["application/json", "JSON"],
-    ["application/zip", "Archive"],
+const MIME_LABELS: [prefix: string, label: (text: FileManagerLocaleText) => string][] = [
+    ["image/", (text) => text.typeImage],
+    ["video/", (text) => text.typeVideo],
+    ["audio/", (text) => text.typeAudio],
+    ["text/", (text) => text.typeText],
+    ["application/pdf", () => "PDF"],
+    ["application/json", () => "JSON"],
+    ["application/zip", (text) => text.typeArchive],
 ];
 
-/** Decimal units, as GNOME Files shows them. */
-export const formatSize = (bytes: number) => {
-    if (bytes < 1000) {
-        return `${bytes} ${bytes === 1 ? "byte" : "bytes"}`;
-    }
+/**
+ * The text and formats for a `FileManager`: `localeText` over the English defaults, with keys
+ * given as undefined kept in English, and numbers, sizes, dates and the order of names in
+ * `locale`, a BCP 47 tag, or the browser's language when it's undefined. Sizes and their units come
+ * from `Intl` too, so they need no text.
+ */
+export const createLocale = (
+    localeText: Partial<FileManagerLocaleText> | undefined,
+    locale: string | undefined,
+): Locale => {
+    const given = localeText && Object.entries(localeText).filter(([, value]) => value !== undefined);
+    const text: FileManagerLocaleText = given
+        ? { ...enUS, ...(Object.fromEntries(given) as Partial<FileManagerLocaleText>) }
+        : enUS;
 
-    let value = bytes / 1000;
-    let unit = 0;
+    const numberFormat = new Intl.NumberFormat(locale, { useGrouping: false });
+    const percentFormat = new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 });
+    const byteFormat = new Intl.NumberFormat(locale, { style: "unit", unit: "byte", unitDisplay: "long" });
+    const unitFormats = SIZE_UNITS.map(
+        (unit) => new Intl.NumberFormat(locale, { style: "unit", unit, maximumFractionDigits: 1 }),
+    );
+    const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "short" });
+    const nameCollator = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
+    const letterCollator = new Intl.Collator(locale, { sensitivity: "base" });
 
-    while (value >= 1000 && unit < SIZE_UNITS.length - 1) {
-        value /= 1000;
-        unit += 1;
-    }
+    const formatSize = (bytes: number) => {
+        if (bytes < 1000) {
+            return byteFormat.format(bytes);
+        }
 
-    return `${sizeFormat.format(value)} ${SIZE_UNITS[unit]}`;
+        let value = bytes / 1000;
+        let unit = 0;
+
+        while (value >= 1000 && unit < unitFormats.length - 1) {
+            value /= 1000;
+            unit += 1;
+        }
+
+        return unitFormats[unit].format(value);
+    };
+
+    const describeSize = (entry: FileEntry) => {
+        if (entry.kind === "folder") {
+            return entry.childCount === undefined ? "—" : text.itemCount(entry.childCount);
+        }
+
+        return entry.size === undefined ? "—" : formatSize(entry.size);
+    };
+
+    const describeType = (entry: FileEntry) => {
+        if (entry.kind === "folder") {
+            return text.typeFolder;
+        }
+
+        const mimeType = entry.mimeType;
+        const match = mimeType ? MIME_LABELS.find(([prefix]) => mimeType.startsWith(prefix)) : undefined;
+
+        if (match) {
+            return match[1](text);
+        }
+
+        const dot = entry.name.lastIndexOf(".");
+
+        return dot > 0 ? entry.name.slice(dot + 1).toUpperCase() : text.typeFile;
+    };
+
+    return {
+        text,
+        formatNumber: (value) => numberFormat.format(value),
+        formatPercent: (value) => percentFormat.format(value),
+        formatSize,
+        describeSize,
+        describeDate: (entry) => (entry.modifiedAt ? dateFormat.format(entry.modifiedAt) : "—"),
+        describeType,
+        compareNames: (a, b) => nameCollator.compare(a, b),
+        sameLetters: (a, b) => letterCollator.compare(a, b) === 0,
+    };
 };
 
-export const describeSize = (entry: FileEntry) => {
-    if (entry.kind === "folder") {
-        return entry.childCount === undefined
-            ? "—"
-            : `${entry.childCount} ${entry.childCount === 1 ? "item" : "items"}`;
-    }
-
-    return entry.size === undefined ? "—" : formatSize(entry.size);
-};
-
-export const describeDate = (entry: FileEntry) => (entry.modifiedAt ? dateFormat.format(entry.modifiedAt) : "—");
-
-/** A short type label from the MIME type, falling back to the extension. */
-export const describeType = (entry: FileEntry) => {
-    if (entry.kind === "folder") {
-        return "Folder";
-    }
-
-    const mimeType = entry.mimeType;
-    const match = mimeType ? MIME_LABELS.find(([prefix]) => mimeType.startsWith(prefix)) : undefined;
-
-    if (match) {
-        return match[1];
-    }
-
-    const dot = entry.name.lastIndexOf(".");
-
-    return dot > 0 ? entry.name.slice(dot + 1).toUpperCase() : "File";
-};
+/** English, in the browser's language, for parts shown outside a `FileManager`. */
+export const DEFAULT_LOCALE = createLocale(undefined, undefined);

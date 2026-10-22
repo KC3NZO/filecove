@@ -13,7 +13,8 @@ import Radio from "@mui/material/Radio";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { SORT_KEYS, SORT_KEY_INFO, withSortKey } from "../../../utils/sort";
+import { useLocale } from "../../../hooks/use-locale";
+import { SORT_KEYS, SORT_LABELS, withSortKey } from "../../../utils/sort";
 import Icon from "../../icons/icon";
 
 import type { SortDirection, SortOrder } from "../../../types";
@@ -85,12 +86,13 @@ const ViewMenu = ({
     // The menu portals out of the file manager, where its container queries don't reach, so
     // whether the sidebar docks is read as it opens. Collapsed, the header's button shows it.
     const [docked, setDocked] = useState(false);
-    const keyInfo = SORT_KEY_INFO[sort.key];
+    const { text } = useLocale();
+    const keyLabels = SORT_LABELS[sort.key](text);
 
     return (
         <>
             <IconButton
-                aria-label="View options"
+                aria-label={text.viewOptions}
                 aria-haspopup="menu"
                 aria-expanded={!!anchor}
                 onClick={(event) => {
@@ -108,7 +110,7 @@ const ViewMenu = ({
                 slotProps={slotProps}
                 onClose={() => setAnchor(null)}
             >
-                <ListSubheader sx={subheaderSx}>Sort by</ListSubheader>
+                <ListSubheader sx={subheaderSx}>{text.sortBy}</ListSubheader>
                 {SORT_KEYS.map((key) => (
                     <MenuItem
                         key={key}
@@ -119,7 +121,7 @@ const ViewMenu = ({
                         <ListItemIcon>
                             <Radio size="small" checked={key === sort.key} tabIndex={-1} disableRipple sx={controlSx} />
                         </ListItemIcon>
-                        <ListItemText>{SORT_KEY_INFO[key].label}</ListItemText>
+                        <ListItemText>{SORT_LABELS[key](text).label}</ListItemText>
                     </MenuItem>
                 ))}
                 <Divider />
@@ -139,7 +141,7 @@ const ViewMenu = ({
                                 sx={controlSx}
                             />
                         </ListItemIcon>
-                        <ListItemText>{keyInfo[direction]}</ListItemText>
+                        <ListItemText>{keyLabels[direction]}</ListItemText>
                     </MenuItem>
                 ))}
                 <Divider />
@@ -147,7 +149,7 @@ const ViewMenu = ({
                     <ListItemIcon>
                         <Checkbox size="small" checked={showHidden} tabIndex={-1} disableRipple sx={controlSx} />
                     </ListItemIcon>
-                    <ListItemText>Show hidden files</ListItemText>
+                    <ListItemText>{text.showHiddenFiles}</ListItemText>
                 </MenuItem>
                 {docked && (
                     <MenuItem
@@ -165,7 +167,7 @@ const ViewMenu = ({
                                 sx={controlSx}
                             />
                         </ListItemIcon>
-                        <ListItemText>Show sidebar</ListItemText>
+                        <ListItemText>{text.showSidebar}</ListItemText>
                         <Typography variant="body2" sx={shortcutSx}>
                             F9
                         </Typography>

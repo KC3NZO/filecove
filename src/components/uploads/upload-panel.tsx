@@ -9,11 +9,11 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { formatSize } from "../../utils/format";
+import { useLocale } from "../../hooks/use-locale";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 
-import type { UploadItem, UploadStatus } from "../../types";
+import type { Locale, UploadItem, UploadStatus } from "../../types";
 
 interface UploadPanelProps {
     items: UploadItem[];
@@ -109,8 +109,6 @@ const doneSx: SxProps<Theme> = {
     color: "primary.main",
 };
 
-const files = (count: number) => (count === 1 ? "1 file" : `${count} files`);
-
 const isActive = (item: UploadItem) => item.status === "queued" || item.status === "uploading";
 
 /** How many uploads are at each status, and how much of those waiting or under way has been sent. */
@@ -133,43 +131,50 @@ const summarize = (items: UploadItem[]) => {
     return { count, active: count.queued + count.uploading, size, sent, measured };
 };
 
-const describeRow = ({ file, folder, status, progress, error }: UploadItem) => {
+const describeRow = ({ file, folder, status, progress, error }: UploadItem, { text, formatSize }: Locale) => {
     switch (status) {
         case "queued":
-            return `Waiting · ${folder.name}`;
-        case "uploading":
-            return progress === undefined
-                ? `Uploading · ${folder.name}`
-                : `${formatSize(Math.round(file.size * progress))} of ${formatSize(file.size)} · ${folder.name}`;
+            return `${text.uploadQueued} · ${folder.name}`;
+        case "uploading": {
+            if (progress === undefined) {
+                return `${text.uploadUploading} · ${folder.name}`;
+            }
+
+            const sent = formatSize(Math.round(file.size * progress));
+
+            return `${text.uploadProgress(sent, formatSize(file.size))} · ${folder.name}`;
+        }
         case "done":
             return `${formatSize(file.size)} · ${folder.name}`;
         case "cancelled":
-            return `Cancelled · ${folder.name}`;
+            return `${text.uploadCancelled} · ${folder.name}`;
         case "failed":
-            return error ?? "Couldn't upload it.";
+            return error ?? text.uploadFailed;
     }
 };
 
 const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
     const { id, file, status, progress } = item;
+    const locale = useLocale();
+    const { text } = locale;
 
     let action: ReactNode;
 
     if (isActive(item)) {
         action = (
-            <IconButton size="small" aria-label={`Cancel uploading ${file.name}`} onClick={() => onCancel(id)}>
+            <IconButton size="small" aria-label={text.uploadCancel(file.name)} onClick={() => onCancel(id)}>
                 <Icon name="close" fontSize="small" />
             </IconButton>
         );
     } else if (status === "done") {
         action = (
             <Box sx={doneSx}>
-                <Icon name="check" fontSize="small" titleAccess="Uploaded" />
+                <Icon name="check" fontSize="small" titleAccess={text.uploadDone} />
             </Box>
         );
     } else {
         action = (
-            <IconButton size="small" aria-label={`Upload ${file.name} again`} onClick={() => onRetry(id)}>
+            <IconButton size="small" aria-label={text.uploadRetry(file.name)} onClick={() => onRetry(id)}>
                 <Icon name="refresh" fontSize="small" />
             </IconButton>
         );
@@ -192,7 +197,7 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
                     />
                 )}
                 <Typography variant="caption" color={status === "failed" ? "error" : "text.secondary"} noWrap>
-                    {describeRow(item)}
+                    {describeRow(item, locale)}
                 </Typography>
             </Box>
             {action}
@@ -208,13 +213,14 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
  */
 const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadPanelProps) => {
     const [expanded, setExpanded] = useState(true);
+    const { text, formatSize } = useLocale();
     const { count, active, size, sent, measured } = summarize(items);
 
     let title: string;
     let status: ReactNode;
 
     if (active > 0) {
-        title = `Uploading ${files(active)}`;
+        title = text.uploadsActive(active);
         status = (
             <CircularProgress
                 size={20}
@@ -223,29 +229,29 @@ const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadP
             />
         );
     } else if (count.failed > 0) {
-        title = `Couldn't upload ${files(count.failed)}`;
+        title = text.uploadsFailed(count.failed);
         status = <Icon name="info" color="error" />;
     } else if (count.done > 0) {
-        title = `Uploaded ${files(count.done)}`;
+        title = text.uploadsDone(count.done);
         status = <Icon name="check" color="primary" />;
     } else {
-        title = "Uploads cancelled";
+        title = text.uploadsCancelled;
         status = <Icon name="upload" color="disabled" />;
     }
 
     // What the title leaves out.
     const detail =
         active > 0
-            ? `${formatSize(Math.round(sent))} of ${formatSize(size)}`
+            ? text.uploadProgress(formatSize(Math.round(sent)), formatSize(size))
             : [
-                  count.failed > 0 && count.done > 0 && `${count.done} uploaded`,
-                  count.cancelled > 0 && count.failed + count.done > 0 && `${count.cancelled} cancelled`,
+                  count.failed > 0 && count.done > 0 && text.uploadsDoneCount(count.done),
+                  count.cancelled > 0 && count.failed + count.done > 0 && text.uploadsCancelledCount(count.cancelled),
               ]
                   .filter(Boolean)
                   .join(" · ");
 
     return (
-        <Box component="section" sx={panelSx} aria-label="Uploads">
+        <Box component="section" sx={panelSx} aria-label={text.uploads}>
             <Box sx={headerSx}>
                 <Box sx={slotSx}>{status}</Box>
                 <Box sx={textSx}>
@@ -259,14 +265,14 @@ const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadP
                     )}
                 </Box>
                 <IconButton
-                    aria-label={expanded ? "Hide the uploads" : "Show the uploads"}
+                    aria-label={expanded ? text.uploadsHide : text.uploadsShow}
                     aria-expanded={expanded}
                     onClick={() => setExpanded((prev) => !prev)}
                 >
                     <Icon name="expand" fontSize="small" sx={toggleIconSx} />
                 </IconButton>
                 <IconButton
-                    aria-label={active > 0 ? "Cancel every upload" : "Close"}
+                    aria-label={active > 0 ? text.uploadsCancelAll : text.uploadsClose}
                     onClick={active > 0 ? onCancelAll : onClear}
                 >
                     <Icon name="close" fontSize="small" />

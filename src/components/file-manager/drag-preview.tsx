@@ -4,6 +4,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useLocale } from "../../hooks/use-locale";
 import ItemIcon from "./content/item-icon";
 
 import type { FileEntry } from "../../types";
@@ -95,6 +96,7 @@ const layerStyle = (layer: number) => ({ "--layer": layer }) as CSSProperties;
  * entry up to `MAX_LAYERS`, with a count of them all when others go along.
  */
 const DragPreview = ({ ref, entry, count }: DragPreviewProps) => {
+    const { formatNumber } = useLocale();
     // Deepest first, so each card paints over the one below it.
     const depth = Math.min(count, MAX_LAYERS) - 1;
     const layers = Array.from({ length: depth }, (_, index) => depth - index).map((layer) => (
@@ -110,7 +112,7 @@ const DragPreview = ({ ref, entry, count }: DragPreviewProps) => {
                     <Typography variant="body2" noWrap sx={nameSx}>
                         {entry.name}
                     </Typography>
-                    {count > 1 && <Box sx={countSx}>{count}</Box>}
+                    {count > 1 && <Box sx={countSx}>{formatNumber(count)}</Box>}
                 </Box>
             </Box>
         </Box>

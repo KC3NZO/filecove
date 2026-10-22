@@ -129,12 +129,25 @@ export const previewKind = (entry: FileEntry): PreviewKind => {
     return (dot > 0 && KINDS_BY_EXTENSION.get(name.slice(dot + 1))) || "none";
 };
 
+/** A text file's URL answering with an error status, which the preview words in its own language. */
+export class ResponseError extends Error {
+    readonly status: number;
+    readonly statusText: string;
+
+    constructor(response: Response) {
+        super(`The server answered ${response.status}${response.statusText && ` ${response.statusText}`}.`);
+        this.name = "ResponseError";
+        this.status = response.status;
+        this.statusText = response.statusText;
+    }
+}
+
 /** The first `TEXT_LIMIT` bytes at a URL, and whether there were more, reading no further than that. */
 const fetchStart = async (url: string, signal: AbortSignal) => {
     const response = await fetch(url, { signal });
 
     if (!response.ok) {
-        throw new Error(`The server answered ${response.status}${response.statusText && ` ${response.statusText}`}.`);
+        throw new ResponseError(response);
     }
 
     if (!response.body) {

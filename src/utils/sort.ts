@@ -1,12 +1,10 @@
-import { describeType } from "./format";
+import type { FileEntry, FileManagerLocaleText, Locale, SortDirection, SortKey, SortOrder } from "../types";
 
-import type { FileEntry, SortDirection, SortKey, SortOrder } from "../types";
+type Comparator = (a: FileEntry, b: FileEntry) => number;
 
-interface SortKeyInfo {
+interface SortKeyLabels {
     /** The list column's label, which the view menu uses too. */
     label: string;
-    /** The direction the key starts in when picked. */
-    initial: SortDirection;
     /** How the view menu names each direction for this key. */
     asc: string;
     desc: string;
@@ -15,34 +13,42 @@ interface SortKeyInfo {
 /** In the order the list view's columns show them. */
 export const SORT_KEYS: readonly SortKey[] = ["name", "size", "type", "modified"];
 
-// Sizes and dates start largest and newest first, as in most file managers.
-export const SORT_KEY_INFO: Record<SortKey, SortKeyInfo> = {
-    name: { label: "Name", initial: "asc", asc: "A to Z", desc: "Z to A" },
-    size: { label: "Size", initial: "desc", asc: "Smallest first", desc: "Largest first" },
-    type: { label: "Type", initial: "asc", asc: "A to Z", desc: "Z to A" },
-    modified: { label: "Modified", initial: "desc", asc: "Oldest first", desc: "Newest first" },
+// The direction each key starts in when picked. Sizes and dates start largest and newest first, as
+// in most file managers.
+const INITIAL_DIRECTIONS: Record<SortKey, SortDirection> = {
+    name: "asc",
+    size: "desc",
+    type: "asc",
+    modified: "desc",
+};
+
+/** How the list's column and the view menu name each key, and each of its directions. */
+export const SORT_LABELS: Record<SortKey, (text: FileManagerLocaleText) => SortKeyLabels> = {
+    name: (text) => ({ label: text.sortName, asc: text.sortAToZ, desc: text.sortZToA }),
+    size: (text) => ({ label: text.sortSize, asc: text.sortSmallestFirst, desc: text.sortLargestFirst }),
+    type: (text) => ({ label: text.sortType, asc: text.sortAToZ, desc: text.sortZToA }),
+    modified: (text) => ({ label: text.sortModified, asc: text.sortOldestFirst, desc: text.sortNewestFirst }),
 };
 
 export const DEFAULT_SORT: SortOrder = { key: "name", direction: "asc" };
 
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-
 /** Folders by item count, files by bytes; unknown sizes sort as the smallest. */
 const sizeOf = (entry: FileEntry) => (entry.kind === "folder" ? entry.childCount : entry.size) ?? -1;
 
-// Each one ascending. Unknown dates sort as the oldest.
-const compareBy: Record<SortKey, (a: FileEntry, b: FileEntry) => number> = {
-    name: (a, b) => collator.compare(a.name, b.name),
+// Each one ascending, names and types in the locale's order. Unknown dates sort as the oldest.
+const comparators = (locale: Locale): Record<SortKey, Comparator> => ({
+    name: (a, b) => locale.compareNames(a.name, b.name),
     size: (a, b) => sizeOf(a) - sizeOf(b),
-    type: (a, b) => collator.compare(describeType(a), describeType(b)),
+    type: (a, b) => locale.compareNames(locale.describeType(a), locale.describeType(b)),
     modified: (a, b) => (a.modifiedAt?.getTime() ?? 0) - (b.modifiedAt?.getTime() ?? 0),
-};
+});
 
 /**
  * Folders first in either direction, then by the key in natural order, so "file2" sorts before
  * "file10". Ties fall back to the name A to Z, so entries of one size or type stay easy to scan.
  */
-export const entryComparator = ({ key, direction }: SortOrder) => {
+export const entryComparator = ({ key, direction }: SortOrder, locale: Locale): Comparator => {
+    const compareBy = comparators(locale);
     const compare = compareBy[key];
     const sign = direction === "asc" ? 1 : -1;
 
@@ -55,12 +61,27 @@ export const entryComparator = ({ key, direction }: SortOrder) => {
     };
 };
 
-/** The sidebar tree's fixed order, which the content's sort never changes. */
-export const compareEntries = entryComparator({ key: "name", direction: "asc" });
+const nameOrders = new WeakMap<Locale, Comparator>();
+
+/**
+ * The fixed order of the sidebar tree and the transfer picker, by name, which the content's sort
+ * never changes. It's the same function for as long as the locale is, so lists sorted by it can
+ * be kept.
+ */
+export const nameOrder = (locale: Locale) => {
+    let compare = nameOrders.get(locale);
+
+    if (!compare) {
+        compare = entryComparator(DEFAULT_SORT, locale);
+        nameOrders.set(locale, compare);
+    }
+
+    return compare;
+};
 
 /** Switches to `key` in the direction it starts in; picking the current key keeps its direction. */
 export const withSortKey = (sort: SortOrder, key: SortKey): SortOrder =>
-    key === sort.key ? sort : { key, direction: SORT_KEY_INFO[key].initial };
+    key === sort.key ? sort : { key, direction: INITIAL_DIRECTIONS[key] };
 
 /** As a column header does: the current key reverses, and any other starts in its own direction. */
 export const toggleSortKey = (sort: SortOrder, key: SortKey): SortOrder =>

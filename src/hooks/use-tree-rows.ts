@@ -3,10 +3,21 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { folderKey } from "../store/folder-store";
 import { TREE_CAPTION_HEIGHT, TREE_DIVIDER_HEIGHT, TREE_FOLDER_HEIGHT, TREE_SECTION_HEIGHT } from "../styles/layout";
 import { isHidden } from "../utils/hidden";
-import { compareEntries } from "../utils/sort";
+import { nameOrder } from "../utils/sort";
 import { useData } from "./use-folder";
+import { useLocale } from "./use-locale";
 
-import type { FileEntry, FlatTree, FolderRef, FolderState, Section, SectionGroup, TreeGuide, TreeRow } from "../types";
+import type {
+    FileEntry,
+    FlatTree,
+    FolderRef,
+    FolderState,
+    Locale,
+    Section,
+    SectionGroup,
+    TreeGuide,
+    TreeRow,
+} from "../types";
 
 /** A folder whose listing the tree shows, to be listed if it isn't. */
 interface Shown {
@@ -37,21 +48,28 @@ interface SortedFolders {
 }
 
 // A listing's folders in the tree's order, with their keys, all of them and the ones not hidden,
-// sorted once per listing, since a listing is replaced rather than changed.
-const sortedFolders = new WeakMap<FileEntry[], { all: SortedFolders; unhidden: SortedFolders }>();
+// sorted once per listing and locale, since a listing is replaced rather than changed.
+const sortedFolders = new WeakMap<Locale, WeakMap<FileEntry[], { all: SortedFolders; unhidden: SortedFolders }>>();
 
-const foldersOf = (sectionId: string, entries: FileEntry[], showHidden: boolean) => {
-    let sorted = sortedFolders.get(entries);
+const foldersOf = (sectionId: string, entries: FileEntry[], showHidden: boolean, locale: Locale) => {
+    let byListing = sortedFolders.get(locale);
+
+    if (!byListing) {
+        byListing = new WeakMap();
+        sortedFolders.set(locale, byListing);
+    }
+
+    let sorted = byListing.get(entries);
 
     if (!sorted) {
         const withKeys = (folders: FileEntry[]) => ({
             folders,
             keys: folders.map((entry) => folderKey(sectionId, entry.id)),
         });
-        const all = entries.filter(isFolder).sort(compareEntries);
+        const all = entries.filter(isFolder).sort(nameOrder(locale));
 
         sorted = { all: withKeys(all), unhidden: withKeys(all.filter((entry) => !isHidden(entry))) };
-        sortedFolders.set(entries, sorted);
+        byListing.set(entries, sorted);
     }
 
     return showHidden ? sorted.all : sorted.unhidden;
@@ -66,6 +84,7 @@ const flatten = (
     single: Section | null,
     expanded: ReadonlySet<string>,
     showHidden: boolean,
+    locale: Locale,
     stateOf: (section: Section, folderId: string) => FolderState | undefined,
 ) => {
     const hasFolders = (entries: FileEntry[]) => entries.some((entry) => isShownFolder(entry, showHidden));
@@ -93,7 +112,7 @@ const flatten = (
                 depth,
                 position: 1,
                 siblingCount: 1,
-                label: "Couldn't load. Retry",
+                label: `${locale.text.folderLoadFailed}. ${locale.text.retry}`,
                 section,
                 folderId,
             });
@@ -105,7 +124,7 @@ const flatten = (
             return;
         }
 
-        const { folders, keys } = foldersOf(section.id, state.entries, showHidden);
+        const { folders, keys } = foldersOf(section.id, state.entries, showHidden, locale);
 
         folders.forEach((entry, index) => {
             const key = keys[index];
@@ -256,15 +275,16 @@ export const useTreeRows = (
     showHidden: boolean,
 ): FlatTree => {
     const { store, adapter } = useData();
+    const locale = useLocale();
     const version = useSyncExternalStore(store.subscribe, store.version);
 
     const tree = useMemo(
         () =>
-            flatten(groups, single, expanded, showHidden, (section, folderId) =>
+            flatten(groups, single, expanded, showHidden, locale, (section, folderId) =>
                 store.get(folderKey(section.id, folderId)),
             ),
         // `version` stands for the listings `flatten` reads.
-        [groups, single, expanded, showHidden, store, version],
+        [groups, single, expanded, showHidden, locale, store, version],
     );
 
     // Only folders the tree has just come to show are listed, so a folder whose listing failed is

@@ -10,6 +10,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useFolder } from "../../../hooks/use-folder";
+import { useLocale } from "../../../hooks/use-locale";
 import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { folderOf } from "../../../utils/navigation";
@@ -72,6 +73,7 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
     const kind = clipboard.kind === "cut" ? "move" : "copy";
     const target = folderOf(section, trail);
     const sourceId = folderOf(clipboard.section, clipboard.trail).id;
+    const { text } = useLocale();
 
     // The target is listed first when it isn't cached, as a folder dropped onto may never have been
     // opened, and its clashes are only looked for once all its pages have come.
@@ -122,8 +124,9 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
         onClose();
     };
 
-    const what = entries.length === 1 ? `“${entries[0].name}”` : `${entries.length} items`;
-    const title = failure ? `Couldn't ${kind} ${what}` : `${kind === "move" ? "Move" : "Copy"} ${what}`;
+    const askingTitle = kind === "move" ? text.moveTitle : text.copyTitle;
+    const failedTitle = kind === "move" ? text.moveFailedTitle : text.copyFailedTitle;
+    const title = (failure ? failedTitle : askingTitle)(entries.length, entries[0].name);
 
     return (
         <Dialog open={open && (!!conflicts || !!failure)} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
@@ -140,13 +143,13 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
             {failure ? (
                 <DialogActions>
                     <Button variant="contained" onClick={close}>
-                        Close
+                        {text.close}
                     </Button>
                 </DialogActions>
             ) : (
                 <DialogActions>
                     <Button color="inherit" disabled={!!pending} onClick={close}>
-                        Cancel
+                        {text.cancel}
                     </Button>
                     <Box sx={spacerSx} />
                     <ConflictChoices pending={pending} onChoose={paste} />

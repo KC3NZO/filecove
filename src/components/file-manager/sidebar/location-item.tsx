@@ -12,6 +12,7 @@ import { useCutIds } from "../../../hooks/use-cut-ids";
 import { useDraggedIds } from "../../../hooks/use-dragged-ids";
 import { useDropTarget } from "../../../hooks/use-drop-target";
 import { useData } from "../../../hooks/use-folder";
+import { useLocale } from "../../../hooks/use-locale";
 import { folderKey } from "../../../store/folder-store";
 import {
     cutMarker,
@@ -416,6 +417,7 @@ const TreeItem = ({
 /** A row saying a folder's sub-folders couldn't be listed, which Enter, Space or its link lists again. */
 const ErrorItem = ({ row }: ErrorItemProps) => {
     const { store, adapter } = useData();
+    const { text } = useLocale();
     const { section, folderId } = row;
 
     const retry = () => store.load(folderKey(section.id, folderId), section.adapter ?? adapter, folderId, true);
@@ -442,21 +444,25 @@ const ErrorItem = ({ row }: ErrorItemProps) => {
             data-error
             onKeyDown={handleKeyDown}
         >
-            Couldn't load
+            {text.folderLoadFailed}
             <Box component="span" sx={retrySx} onClick={retry}>
-                Retry
+                {text.retry}
             </Box>
         </Box>
     );
 };
 
 /** In place of a single section's folders: loading, or "No folders". */
-const StatusItem = ({ row }: StatusItemProps) => (
-    <Box component="li" role="none" sx={statusRowSx} style={placeStyle(row, 0)}>
-        {row.loading && <CircularProgress size={12} color="inherit" />}
-        {row.loading ? "Loading" : "No folders"}
-    </Box>
-);
+const StatusItem = ({ row }: StatusItemProps) => {
+    const { text } = useLocale();
+
+    return (
+        <Box component="li" role="none" sx={statusRowSx} style={placeStyle(row, 0)}>
+            {row.loading && <CircularProgress size={12} color="inherit" />}
+            {row.loading ? text.loading : text.noFolders}
+        </Box>
+    );
+};
 
 /**
  * A folder's row. Memoized, like a section's, so scrolling only renders the rows coming into view.

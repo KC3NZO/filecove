@@ -8,6 +8,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useLocale } from "../../../hooks/use-locale";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { folderOf } from "../../../utils/navigation";
 
@@ -56,6 +57,7 @@ const contentSx: SxProps<Theme> = {
  */
 const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialogProps) => {
     const { section, adapter, trail, entries } = request;
+    const { text } = useLocale();
 
     const [pending, setPending] = useState(false);
     const [failure, setFailure] = useState<string | null>(null);
@@ -125,28 +127,21 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
                         setFailure(
                             error instanceof Error && error.message
                                 ? error.message
-                                : `Couldn't delete ${entries.length === 1 ? "it" : "them"}.`,
+                                : text.deleteFailed(entries.length),
                         );
                     }
                 },
             );
     };
 
-    const single = entries.length === 1;
-    const what = single ? `“${entries[0].name}”` : `${entries.length} items`;
     const hasFolders = entries.some((entry) => entry.kind === "folder");
-    const folderNote = !hasFolders
-        ? ""
-        : single
-          ? "Everything in it is deleted too. "
-          : "Folders are deleted with everything in them. ";
 
     return (
         <Dialog open={open} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
-            <DialogTitle>Delete {what}?</DialogTitle>
+            <DialogTitle>{text.deleteTitle(entries.length, entries[0].name)}</DialogTitle>
             <DialogContent sx={contentSx}>
                 <Typography variant="body2" color="text.secondary">
-                    {folderNote}This can't be undone.
+                    {text.deleteWarning(entries.length, hasFolders)}
                 </Typography>
                 {failure && (
                     <Typography variant="body2" color="error">
@@ -156,10 +151,10 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
             </DialogContent>
             <DialogActions>
                 <Button color="inherit" onClick={close}>
-                    Cancel
+                    {text.cancel}
                 </Button>
                 <Button ref={confirmRef} variant="contained" color="error" loading={pending} onClick={confirm}>
-                    Delete
+                    {text.delete}
                 </Button>
             </DialogActions>
         </Dialog>
