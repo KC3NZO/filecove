@@ -26,6 +26,7 @@ The component ships no translations but English. A translation is a value for `l
 - `UploadLocaleText` holds the upload panel's keys, which `FileManagerLocaleText` extends, since the panel is meant for the media manager too (see `uploads.md`). The two share no keys: the panel has its own `uploadsClose`.
 - Messages that only a developer sees (an adapter missing a method, a list handing back its cursor, a component outside `FileManager`) stay in English.
 - An adapter's own error message is shown as it is. A text such as `deleteFailed` or `uploadFailed` is only for when it gives none.
+- A name, an adapter's or server's message, or a size or date handed to a text comes isolated between FSI and PDI (`isolate`), so it keeps its own direction in a sentence in any language, and a translation doesn't isolate it again. The joins in code isolate their pieces (`joinIsolated`) (see `rtl.md`).
 
 Adding a text means adding its key to the interface, with a comment when its use isn't plain from the name, and to `enUS`.
 
@@ -42,8 +43,8 @@ Adding a text means adding its key to the interface, with a comment when its use
 
 `useLocaleValue` makes the `Locale` afresh only when `locale` or one of the texts changes, compared key by key, since every row rendered reads it, and memoized rows render again with a new one. A `localeText` object written inline is fine; functions written inline are new each render and defeat it, which the prop's comment says.
 
-Text direction is not the locale's: it comes from the page or the theme (`direction`), as in MUI (see `keyboard.md`).
+Text direction is not the locale's: it comes from the page's `dir`, as in MUI (see `rtl.md`).
 
 ## Not yet
 
-Translations shipped with the package, right-to-left support, taking `localeText` from the theme as MUI's own components do, and a playground page in another language.
+Translations shipped with the package, taking `localeText` from the theme as MUI's own components do, and a playground page in another language (`?locale=` only sets the formats).

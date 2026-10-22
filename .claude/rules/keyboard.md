@@ -21,7 +21,7 @@ A key press goes to the consumer's shortcuts before the component's own keys, so
 
 | Where | Keys |
 |---|---|
-| Anywhere in the file manager (`file-manager.tsx`) | F6 between the sidebar tree and the content, F9 to show and hide the sidebar, Alt+Left and Alt+Right for back and forward |
+| Anywhere in the file manager (`file-manager.tsx`) | F6 between the sidebar tree and the content, F9 to show and hide the sidebar, Alt+Left and Alt+Right for back and forward (swapped right to left) |
 | Content (`content/folder-view.tsx`) | arrows, Home, End, PageUp, PageDown, Space, Shift+Space, Enter, Alt+Down, Backspace, Alt+Up, Ctrl+A, Escape, typing, Menu or Shift+F10 |
 | Sidebar tree (`sidebar/sidebar.tsx`, `TreeItem` in `sidebar/location-item.tsx`) | Up, Down, Home, End, Right, Left, Enter, Space, Shift+Space, typing, Menu or Shift+F10, Escape (closes the overlay) |
 | "Move to…" and "Copy to…" (`dialogs/transfer-dialog.tsx`) | Up, Down, Home, End, PageUp, PageDown, typing, Enter or Space to open, Backspace or Alt+Up to go up |
@@ -29,7 +29,7 @@ A key press goes to the consumer's shortcuts before the component's own keys, so
 
 - The root's handler ignores presses from the menus and dialogs, which portal out of it but still bubble through React's tree, by checking that the DOM holds the target.
 - Browsers keep some keys. Chrome never passes Ctrl+N, Ctrl+T or Ctrl+W to a page, and F6, F9 or Alt+Left may be taken by the browser before the page sees them.
-- Left and Right swap when the view or tree computes as `direction: rtl` (`isRtl`), ahead of RTL support.
+- Left and Right swap when the view or tree computes as `direction: rtl` (`isRtl` in `utils/dom.ts`), and Alt+Left and Alt+Right swap when the file manager does (`useTextDirection`), as the back and forward arrows are mirrored (see `rtl.md`).
 
 ## Content
 

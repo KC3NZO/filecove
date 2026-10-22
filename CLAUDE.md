@@ -23,7 +23,7 @@ There is no test runner configured.
 
 ## Layout
 
-**Playground.** `index.html` loads `playground/main.tsx`, which mounts `<App />` (`playground/app.tsx`) inside `StrictMode` and the `Theme` wrapper (`playground/theme.tsx`, `ThemeProvider` plus `CssBaseline`). The theme in `playground/styles/theme.ts` (CSS variables, light and dark following the OS, GNOME-like colors, ripples off) styles the dev host only. `App` renders `<FileManager>` full-viewport, imported from `src/index.ts` as a consumer would, with data from `playground/mocks/`: an in-memory adapter with simulated latency keyed by full paths, plus fake sections and demo actions. A folder named `restricted` deliberately fails to load, to show the error state.
+**Playground.** `index.html` loads `playground/main.tsx`, which mounts `<App />` (`playground/app.tsx`) inside `StrictMode` and the `Theme` wrapper (`playground/theme.tsx`, `ThemeProvider` plus `CssBaseline`). The theme in `playground/styles/theme.ts` (CSS variables, light and dark following the OS, GNOME-like colors, ripples off) styles the dev host only. `App` renders `<FileManager>` full-viewport, imported from `src/index.ts` as a consumer would, with switches read from the URL in `playground/options.ts` (`?single`, `?rtl`, `?locale=`) and data from `playground/mocks/`: an in-memory adapter with simulated latency keyed by full paths, plus fake sections and demo actions. A folder named `restricted` deliberately fails to load, to show the error state.
 
 **Source.** `src/` is organised by kind of code, and `src/components/` holds only components. File names are lowercase.
 
@@ -57,6 +57,7 @@ The optional `localeText` and `locale` set the component's own text, and the lan
   - `erasableSyntaxOnly`: no `enum`, `namespace`, or constructor parameter properties.
   - `noUnusedLocals` and `noUnusedParameters` are errors in `bun run build`.
 - Oxlint runs the `react`, `typescript` and `oxc` plugins with `react/rules-of-hooks` as an error. Type-aware linting is off.
+- Styles use logical properties (`insetInline`, `paddingInlineStart`, `textAlign: "end"`), never left or right, so the component follows a right-to-left page that sets only `dir`, with no RTL plugin or theme `direction` asked of the consumer. A MUI component used here gets its physical left and right overridden (see `rtl.md`).
 - No text is written in a component. Everything shown or read to screen readers is a key of `FileManagerLocaleText`, read with `useLocale()`, and new keys go in `enUS` too (see `locale.md`).
 
 ## Where the details are
@@ -76,6 +77,7 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `icons.md` | icon packs, variants, `IconProvider`, adding an icon | `components/icons/`, `icon-sets/`, icon types |
 | `preview.md` | opening files, `onOpenFile`, the adapter's `content`, the preview dialog and what it shows, loading ahead, swiping, zooming images | the preview dialog and its image viewer, the preview contents and swipe hooks, `utils/preview.ts`, preview, adapter and action types, the mock contents |
 | `thumbnails.md` | the adapter's `thumbnail`, its `view` and `size`, the thumbnail cache, how the list and the grid show them | the entry icon, the list and the grid, `use-thumbnail.ts`, the thumbnail cache, the data context, adapter and view types, the mocks |
+| `rtl.md` | right to left: logical properties, what Emotion's RTL plugin flips, mirrored icons, menus, isolating names, the playground's `?rtl` | the direction and bidi utils, `styles/direction.ts`, the direction hook and context, the frame, menu positions, `Icon`, the header bar, context menu, sidebar, drag image, dialogs, folder view, list, upload panel, marquee, playground options, theme and mock data |
 | `locale.md` | `localeText` and `locale`, the text keys, `enUS`, how parts read the text and formats | locale types, `locales/`, `utils/format.ts`, the locale hook and context, the frame, the upload panel |
 
 When a feature is added or changed, document it in the matching rule (or a new one), not here. This file stays for things every session needs.

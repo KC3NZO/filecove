@@ -28,6 +28,10 @@ The icon variant (`filled`, `outlined`, `rounded`, `sharp`, `twoTone`) is chosen
 - `<Icon name variant?>` renders from that context, and its `variant` prop overrides the provider for that icon only.
 - The context and its default variant, `outlined` (`DEFAULT_ICON_VARIANT`), are in `contexts/icon-context.ts`. Components read it with `useIconConfig` (`hooks/use-icon-config.ts`).
 
+## Mirrored right to left
+
+`Icon` mirrors the names in `MIRRORED` on a right-to-left page (`scale: -1 1` under `:dir(rtl)`): back and forward, the chevrons, `move` and `selectMode`, the icons that point the way the text runs, and a consumer's overrides of them too. A new icon with a direction to it goes in that set. See `rtl.md`.
+
 ## Adding an icon
 
 Add the name to `IconName`, then map it in **all five** `icon-sets/` variant files (`filled`, `outlined`, `rounded`, `sharp`, `two-tone`). The `IconSet` type makes the compiler reject a variant that is missing a name.

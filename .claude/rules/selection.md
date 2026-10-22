@@ -35,7 +35,7 @@ The keyboard selects too (see `keyboard.md`): in the content, plain arrows selec
 
 - The entries under it are found from the view's layout (`entriesIn`, answered by `useVirtualLines`' `indexesIn`), not in the page, since only the entries in or near view are rendered (see `virtualization.md`). Presses on `data-no-marquee` parts (a whole list row or grid tile) or on buttons stay clicks, and those parts are what an entry is dragged by (see "Drag and drop" in `file-manager.md`). So a marquee only starts from empty space: below the entries, between them, and the view's padding.
 - Dragging near the panel's top or bottom edge scrolls it.
-- The rectangle is moved through CSS custom properties without re-rendering. The view only re-renders when the covered entries change.
+- The rectangle is moved through its inline style without re-rendering, from the surface's left edge in either direction (see `rtl.md`). The view only re-renders when the covered entries change.
 - The click that ends a drag is swallowed so it doesn't clear the new selection.
 
 ## Touch selection mode

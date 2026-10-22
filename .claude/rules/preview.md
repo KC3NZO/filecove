@@ -50,7 +50,7 @@ There's no editor in the component, by choice: editing needs a way to save throu
 - **image**: only the formats browsers draw (no TIFF, HEIC or PSD), shrunk to fit, never stretched, and zoomable (see "Zooming images").
 - **video** and **audio**: the browser's own players, `preload="metadata"`, not autoplaying.
 - **pdf**: an `<iframe>`, so the browser's PDF viewer. Mobile browsers may not have one.
-- **text**: the first 256 kB (`TEXT_LIMIT`), decoded as UTF-8, with a note when there's more. A NUL byte in the first 8,000 means it isn't text after all, and it's described instead. Long lines wrap, so Left and Right stay free for stepping. The `pre` is tabbable, to scroll from the keyboard.
+- **text**: the first 256 kB (`TEXT_LIMIT`), decoded as UTF-8, with a note when there's more. A NUL byte in the first 8,000 means it isn't text after all, and it's described instead. Long lines wrap, so Left and Right stay free for stepping, and each line runs the way its own letters do (`unicode-bidi: plaintext`), so code reads left to right on a right-to-left page. The `pre` is tabbable, to scroll from the keyboard.
 - **none**: the type icon, "No preview available" and the date modified.
 
 Files are never run. A web page shows as its source, and a blob going into the PDF frame is retyped `application/pdf` first, since a blob URL shares the page's origin and a page in it would run there. A URL's type is the consumer's server's to get right.

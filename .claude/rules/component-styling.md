@@ -11,10 +11,16 @@ These apply to the component in `src/`, not to the playground.
 
 The component adapts to the box it is placed in, not the viewport. `src/styles/layout.ts` defines two named containers and their breakpoints:
 
-- The root (`rootMedium`, `rootWide`). At `rootWide` (900px or wider) the sidebar docks, unless it's hidden (`data-hidden`, with the frame's `data-sidebar-hidden` giving the panels back their left margin); below it, the sidebar is an in-component overlay.
+- The root (`rootMedium`, `rootWide`). At `rootWide` (900px or wider) the sidebar docks, unless it's hidden (`data-hidden`, with the frame's `data-sidebar-hidden` giving the panels back their margin on its side); below it, the sidebar is an in-component overlay.
 - The content view (`viewMedium`, `viewWide`), which decides which list columns show.
 
 Use these constants as `sx` keys. Don't use `theme.breakpoints` or `useMediaQuery` inside the component. The one exception is `@media (hover: none)`, which detects a touch device rather than a size (it shows the header's Select button).
+
+## Right to left: logical properties
+
+Styles use logical properties (`insetInline`, `paddingInlineStart`, `marginInlineStart`, `textAlign: "end"`), never `left`, `right`, `ml`, `pr` or `textAlign: "right"`, so they follow the page's `dir` with Emotion's RTL plugin or without it, and a consumer needs only `dir`. What differs right to left goes under `&:dir(rtl)` as a value the plugin doesn't flip, MUI components' physical left and right are overridden where we use them (`styles/direction.ts`), and geometry measured on the screen stays physical in `style`. See `rtl.md`.
+
+## Dynamic geometry
 
 Dynamic geometry (tree depth, list column templates) goes through CSS custom properties set in `style`, so the `sx` objects stay static at module scope. Geometry worked out in JS from measurements, such as where a virtualized entry sits (`top`, `gridColumn`) or how tall its listbox is, goes in `style` as plain properties.
 
