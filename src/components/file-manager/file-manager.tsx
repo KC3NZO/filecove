@@ -785,6 +785,15 @@ const FileManager = ({
         [adapter, section, place, dropFolders, goTo],
     );
 
+    // A folder made in the transfer picker may take an id that named another folder before, as one
+    // made from the menu may (`handleNamed`). The picker reveals it itself.
+    const handleFolderCreated = useCallback(
+        (served: FileAdapter, entry: FileEntry) => {
+            dropFolders(served, [entry.id]);
+        },
+        [dropFolders],
+    );
+
     const handleTransferred = useCallback(
         (request: TransferRequest, destination: Place) => {
             closeTransfer();
@@ -1188,6 +1197,7 @@ const FileManager = ({
                                         onClose={closeTransfer}
                                         onChanged={relist}
                                         onDone={handleTransferred}
+                                        onFolderCreated={handleFolderCreated}
                                     />
                                 )}
                                 {deleting && (

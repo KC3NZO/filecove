@@ -35,8 +35,10 @@ import Icon from "../../icons/icon";
 import PathBar from "../header-bar/path-bar";
 import IconSlot from "../icon-slot";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
+import NameDialog from "./name-dialog";
 
 import type { ConflictPolicy, FileAdapter, FileEntry, FolderRef, OpenMenu, Place, Section } from "../../../types";
+import type { NameDialogState, NameRequest } from "./name-dialog";
 
 export interface TransferRequest {
     kind: "copy" | "move";
@@ -74,6 +76,8 @@ interface TransferDialogProps {
     onChanged: (adapter: FileAdapter, folderIds: string[]) => void;
     /** Called once the adapter has copied or moved the entries into `destination`. */
     onDone: (request: TransferRequest, destination: Place) => void;
+    /** Called with a folder made with the picker's New folder button, as the adapter returned it. */
+    onFolderCreated: (adapter: FileAdapter, entry: FileEntry) => void;
 }
 
 /** A row of the folder list: a section, on the list of sections, or a folder. */
@@ -198,8 +202,19 @@ const isFolder = (entry: FileEntry) => entry.kind === "folder";
  * the Back button does. Opening a folder or going up from the list keeps the focus in it, on the
  * first row, or going up on the folder left through. Only the rows in or near view are rendered,
  * and the focused one, so a folder of thousands of folders opens as fast as a small one.
+ *
+ * When the adapter can create folders, the New folder button asks for a name over the picker, and
+ * the new folder is opened, as the destination it was made to be. Going back up lands on it.
  */
-const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone }: TransferDialogProps) => {
+const TransferDialog = ({
+    open,
+    request,
+    showHidden,
+    onClose,
+    onChanged,
+    onDone,
+    onFolderCreated,
+}: TransferDialogProps) => {
     const { kind, section, adapter, trail, entries, destinations } = request;
     const sourceId = folderOf(section, trail).id;
     const locale = useLocale();
@@ -244,6 +259,10 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
     const [focusId, setFocusId] = useState<string | null>(null);
     // Set while the list is to take the focus once it has rows to focus.
     const pendingFocus = useRef(false);
+    // Set while the row with the Tab stop is to be scrolled to, focused or not.
+    const pendingScroll = useRef(false);
+    // The New folder button's name dialog, over the picker.
+    const [naming, setNaming] = useState<NameDialogState | null>(null);
 
     // What the list shows, in display order: the sections, or the folders, the entries themselves
     // among them.
@@ -278,23 +297,27 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
         [linesRef],
     );
 
-    // Gives the focus to the row with the Tab stop, read from the page so it works from the
-    // transition's callback too, once the rows are in their places. While the folder loads, the
-    // box in the list's place holds it.
+    // Gives the focus to the row with the Tab stop, or only scrolls to it, read from the page so it
+    // works from the transition's callback too, once the rows are in their places. While the
+    // folder loads, the box in the list's place holds the focus.
     const settleFocus = useCallback(() => {
         const body = listRef.current ?? frameRef.current;
 
-        if (!pendingFocus.current || !body || !settled()) {
+        if (!(pendingFocus.current || pendingScroll.current) || !body || !settled()) {
             return;
         }
 
         const row = body.querySelector<HTMLElement>('[data-row-id][tabindex="0"]');
 
-        (row ?? body).focus({ preventScroll: true });
+        if (pendingFocus.current) {
+            (row ?? body).focus({ preventScroll: true });
+        }
+
         row?.scrollIntoView({ block: "nearest" });
 
         if (row || body.getAttribute("aria-busy") !== "true") {
             pendingFocus.current = false;
+            pendingScroll.current = false;
         }
     }, [settled]);
 
@@ -317,7 +340,8 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
     );
 
     // Opening a folder from the list, or going up from it, takes the focused row away, so the list
-    // takes the focus again. Going up, the folder left through gets the Tab stop, as in the content.
+    // takes the focus again. Going up, the folder left through gets the Tab stop and is scrolled
+    // to, as in the content, by whichever route.
     const go = (next: Place | null) => {
         if (pending) {
             return;
@@ -330,9 +354,39 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
             pendingFocus.current = true;
         }
 
-        setFocusId(left?.id ?? (next === null ? (place?.sectionId ?? null) : null));
+        const stop = left?.id ?? (next === null ? (place?.sectionId ?? null) : null);
+
+        pendingScroll.current = stop !== null;
+        setFocusId(stop);
         setPlace(next);
         clearFailure();
+    };
+
+    // The listing is complete first, so the name starts unused and clashes are caught as it's typed.
+    const canCreate = !!adapter.createFolder && !!place && listed && !pending;
+
+    const askName = () => {
+        if (place && canCreate) {
+            const nameRequest: NameRequest = { kind: "create", section: target, adapter, trail: place.trail };
+
+            setNaming((prev) => ({ open: true, id: (prev?.id ?? 0) + 1, request: nameRequest }));
+        }
+    };
+
+    const closeNaming = () => setNaming((prev) => prev && { ...prev, open: false });
+
+    // The picker's destination is the folder it shows, so a folder made in it is opened, ready for
+    // "Copy here" or "Move here", and the list takes the focus. Going back up lands on it, scrolled
+    // to, as the folder left through (`folderLeft`). Its id leaves the cache first, so the listing
+    // about to load for it isn't dropped with any stale one.
+    const handleCreated = (_: unknown, entry: FileEntry) => {
+        closeNaming();
+        onFolderCreated(adapter, entry);
+
+        if (place) {
+            pendingFocus.current = true;
+            go({ ...place, trail: [...place.trail, { id: entry.id, name: entry.name }] });
+        }
     };
 
     // Up to the folder above, or from a section's root to the list of sections when there are several.
@@ -541,71 +595,95 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
     }
 
     return (
-        <Dialog dir={dir} open={open} fullWidth maxWidth="sm" slotProps={slotProps} onClose={close}>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogContent sx={contentSx}>
-                {!conflicts && (
-                    <Box sx={toolbarSx}>
-                        <IconButton size="small" aria-label={text.back} disabled={!canGoUp} onClick={goUp}>
-                            <Icon name="arrowBack" fontSize="small" />
-                        </IconButton>
-                        <Box sx={locationSx}>
-                            {place ? (
-                                <PathBar
-                                    section={target}
-                                    trail={place.trail}
-                                    hasActions={false}
-                                    onNavigate={go}
-                                    onOpenMenu={NO_MENU}
-                                />
-                            ) : (
-                                <Typography variant="body2" fontWeight={600}>
-                                    {text.pickerLocations}
-                                </Typography>
+        <>
+            <Dialog dir={dir} open={open} fullWidth maxWidth="sm" slotProps={slotProps} onClose={close}>
+                <DialogTitle>{title}</DialogTitle>
+                <DialogContent sx={contentSx}>
+                    {!conflicts && (
+                        <Box sx={toolbarSx}>
+                            <IconButton size="small" aria-label={text.back} disabled={!canGoUp} onClick={goUp}>
+                                <Icon name="arrowBack" fontSize="small" />
+                            </IconButton>
+                            <Box sx={locationSx}>
+                                {place ? (
+                                    <PathBar
+                                        section={target}
+                                        trail={place.trail}
+                                        hasActions={false}
+                                        onNavigate={go}
+                                        onOpenMenu={NO_MENU}
+                                    />
+                                ) : (
+                                    <Typography variant="body2" fontWeight={600}>
+                                        {text.pickerLocations}
+                                    </Typography>
+                                )}
+                            </Box>
+                            {adapter.createFolder && (
+                                <IconButton
+                                    size="small"
+                                    aria-label={text.newFolder}
+                                    disabled={!canCreate}
+                                    onClick={askName}
+                                >
+                                    <Icon name="newFolder" fontSize="small" />
+                                </IconButton>
                             )}
                         </Box>
-                    </Box>
+                    )}
+                    {body}
+                    {failure && (
+                        <Typography variant="body2" color="error">
+                            {failure}
+                        </Typography>
+                    )}
+                </DialogContent>
+                {conflicts ? (
+                    <DialogActions sx={dialogActionsSx}>
+                        <Button
+                            color="inherit"
+                            disabled={!!pending}
+                            onClick={() => {
+                                // The list comes back in place of this button, so it takes the focus.
+                                pendingFocus.current = true;
+                                setConflicts(null);
+                            }}
+                        >
+                            {text.back}
+                        </Button>
+                        <Box sx={spacerSx} />
+                        <ConflictChoices pending={pending} onChoose={run} />
+                    </DialogActions>
+                ) : (
+                    <DialogActions sx={dialogActionsSx}>
+                        <Button color="inherit" onClick={close}>
+                            {text.cancel}
+                        </Button>
+                        {/* The folder's names are checked for clashes, so it can't be chosen before they've
+                            all come. */}
+                        <Button
+                            variant="contained"
+                            disabled={!place || !loaded || (kind === "move" && sameFolder)}
+                            loading={!!pending}
+                            onClick={confirm}
+                        >
+                            {kind === "copy" ? text.copyHere : text.moveHere}
+                        </Button>
+                    </DialogActions>
                 )}
-                {body}
-                {failure && (
-                    <Typography variant="body2" color="error">
-                        {failure}
-                    </Typography>
-                )}
-            </DialogContent>
-            {conflicts ? (
-                <DialogActions sx={dialogActionsSx}>
-                    <Button
-                        color="inherit"
-                        disabled={!!pending}
-                        onClick={() => {
-                            // The list comes back in place of this button, so it takes the focus.
-                            pendingFocus.current = true;
-                            setConflicts(null);
-                        }}
-                    >
-                        {text.back}
-                    </Button>
-                    <Box sx={spacerSx} />
-                    <ConflictChoices pending={pending} onChoose={run} />
-                </DialogActions>
-            ) : (
-                <DialogActions sx={dialogActionsSx}>
-                    <Button color="inherit" onClick={close}>
-                        {text.cancel}
-                    </Button>
-                    {/* The folder's names are checked for clashes, so it can't be chosen before they've all come. */}
-                    <Button
-                        variant="contained"
-                        disabled={!place || !loaded || (kind === "move" && sameFolder)}
-                        loading={!!pending}
-                        onClick={confirm}
-                    >
-                        {kind === "copy" ? text.copyHere : text.moveHere}
-                    </Button>
-                </DialogActions>
+            </Dialog>
+            {/* Outside the picker's dialog, so its key presses don't bubble through the picker. */}
+            {naming && (
+                <NameDialog
+                    key={naming.id}
+                    open={naming.open}
+                    request={naming.request}
+                    onClose={closeNaming}
+                    onChanged={onChanged}
+                    onDone={handleCreated}
+                />
             )}
-        </Dialog>
+        </>
     );
 };
 
