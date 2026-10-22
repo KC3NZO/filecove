@@ -158,7 +158,7 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 
 ## Hidden files
 
-"Show hidden files" in the header's view menu, off to start with, is `showHidden` in `file-manager.tsx`. It persists across folders, as the sort does. Whether an entry is hidden is `isHidden` (`utils/hidden.ts`): the entry's optional `hidden` when the adapter sets it, or else a name starting with a dot. So a backend with its own idea of hidden says so, and `hidden: false` keeps a dotfile always shown.
+"Show hidden files" in the header's view menu, off to start with, is `showHidden` in `file-manager.tsx`. Ctrl+H turns it on and off from anywhere in the file manager, as in GNOME Files, and the menu shows the key beside it (`showHiddenFilesShortcut`, as the language's keyboards name it). It's Ctrl only, not ⌘, since ⌘H hides the browser on macOS before the page sees it (see `keyboard.md`). It persists across folders, as the sort does. Whether an entry is hidden is `isHidden` (`utils/hidden.ts`): the entry's optional `hidden` when the adapter sets it, or else a name starting with a dot. So a backend with its own idea of hidden says so, and `hidden: false` keeps a dotfile always shown.
 
 - Listings are filtered where they're shown, never in the store, so clash checks (the paste, upload and name dialogs) and `relist` still see every entry: a hidden name can clash too.
 - The content view (`folder-view.tsx`) leaves hidden entries out before sorting, so selection, Select all, type-ahead, the marquee, the arrow keys, the selection bar's total, the screen reader's count and the preview's stepping (the `listing` of a `MenuRequest`) all go by what's shown. A folder holding only hidden entries reads "Folder is empty", as in GNOME Files.
@@ -168,7 +168,8 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 - Selected entries that get hidden stay in the selection's id set, as removed ones do, but don't count: `selected` only holds listed entries. Turning the option back on brings them back selected.
 - A created or renamed entry to be revealed (`revealId`), or a folder left through that is hidden, is given up on while hidden entries are off, rather than waiting for a listing that will never show it.
 - `childCount` and `hasSubfolders` are the adapter's own and count hidden entries as the backend does.
-- Not yet: a shortcut for the checkbox (GNOME has Ctrl+H), the option's initial value as a prop, and keeping it across reloads.
+- An entry or tree row that has the focus when it gets hidden hands it on as a removed one does: to the entry now in its place, or the row shown before it.
+- Not yet: the option's initial value as a prop, and keeping it across reloads.
 
 ## The parts
 
