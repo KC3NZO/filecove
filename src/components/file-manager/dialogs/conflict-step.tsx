@@ -2,6 +2,7 @@ import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 
 import { useLocale } from "../../../hooks/use-locale";
+import { isolate } from "../../../utils/bidi";
 
 import type { ConflictPolicy } from "../../../types";
 
@@ -24,7 +25,7 @@ export const ConflictMessage = ({ names, folderName }: ConflictMessageProps) => 
     return (
         <>
             <Typography color="text.primary" fontWeight={600}>
-                {text.conflictMessage(names.length, names[0], folderName)}
+                {text.conflictMessage(names.length, isolate(names[0]), isolate(folderName))}
             </Typography>
             <Typography variant="body2" color="text.secondary">
                 {text.conflictHint(names.length)}

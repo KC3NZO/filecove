@@ -121,11 +121,13 @@ export const useMarquee = ({ enabled, entriesIn, onStart, onChange }: MarqueeOpt
 
                 const marquee = marqueeRef.current;
 
+                // Measured from the surface's left edge, right to left too, so it's placed by
+                // `left` in its inline style, which Emotion's RTL plugin doesn't see to flip.
                 if (marquee) {
-                    marquee.style.setProperty("--marquee-left", `${box.left}px`);
-                    marquee.style.setProperty("--marquee-top", `${box.top}px`);
-                    marquee.style.setProperty("--marquee-width", `${box.right - box.left}px`);
-                    marquee.style.setProperty("--marquee-height", `${box.bottom - box.top}px`);
+                    marquee.style.left = `${box.left}px`;
+                    marquee.style.top = `${box.top}px`;
+                    marquee.style.width = `${box.right - box.left}px`;
+                    marquee.style.height = `${box.bottom - box.top}px`;
                     marquee.dataset.active = "true";
                 }
 

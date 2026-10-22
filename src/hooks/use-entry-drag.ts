@@ -2,6 +2,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { DragEvent, PointerEvent } from "react";
 import { flushSync } from "react-dom";
 
+import { isRtl } from "../utils/dom";
+
 import type { DragContextValue } from "../contexts/drag-context";
 import type { DraggedEntries, DragSource, DropInto, FileAdapter, FileEntry } from "../types";
 
@@ -54,8 +56,11 @@ export const useEntryDrag = (
             // Firefox starts no drag without data. Dropped on a text field, the names go in as text.
             event.dataTransfer.setData("text/plain", entries.map((entry) => entry.name).join("\n"));
 
-            if (previewRef.current) {
-                event.dataTransfer.setDragImage(previewRef.current, 0, 0);
+            const preview = previewRef.current;
+
+            // Held by its top corner on the start side, the right one right to left.
+            if (preview) {
+                event.dataTransfer.setDragImage(preview, isRtl(preview) ? preview.offsetWidth : 0, 0);
             }
 
             // The picture has been taken by the next frame, which is painted without the preview.

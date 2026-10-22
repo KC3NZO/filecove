@@ -63,8 +63,7 @@ const tilesSx: SxProps<Theme> = {
 // the grid area it's placed in as its box, so it fills its column's width.
 const tileSx: SxProps<Theme> = (theme) => ({
     position: "absolute",
-    left: 0,
-    right: 0,
+    insetInline: 0,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -150,7 +149,7 @@ const FileTile = memo(
         >
             <ItemIcon entry={entry} size={3.5} adapter={adapter} view="grid" />
             <Typography variant="body2" sx={nameSx}>
-                {entry.name}
+                <bdi>{entry.name}</bdi>
             </Typography>
         </Box>
     ),

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
@@ -8,8 +8,11 @@ import DialogTitle from "@mui/material/DialogTitle";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
+import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
+import { isolate } from "../../../utils/bidi";
 import { folderOf } from "../../../utils/navigation";
 
 import type { FileAdapter, FileEntry, FolderRef, Section } from "../../../types";
@@ -58,6 +61,7 @@ const contentSx: SxProps<Theme> = {
 const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialogProps) => {
     const { section, adapter, trail, entries } = request;
     const { text } = useLocale();
+    const dir = useContext(DirectionContext);
 
     const [pending, setPending] = useState(false);
     const [failure, setFailure] = useState<string | null>(null);
@@ -126,7 +130,7 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
                         setPending(false);
                         setFailure(
                             error instanceof Error && error.message
-                                ? error.message
+                                ? isolate(error.message)
                                 : text.deleteFailed(entries.length),
                         );
                     }
@@ -137,8 +141,8 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
     const hasFolders = entries.some((entry) => entry.kind === "folder");
 
     return (
-        <Dialog open={open} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
-            <DialogTitle>{text.deleteTitle(entries.length, entries[0].name)}</DialogTitle>
+        <Dialog dir={dir} open={open} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
+            <DialogTitle>{text.deleteTitle(entries.length, isolate(entries[0].name))}</DialogTitle>
             <DialogContent sx={contentSx}>
                 <Typography variant="body2" color="text.secondary">
                     {text.deleteWarning(entries.length, hasFolders)}
@@ -149,7 +153,7 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
                     </Typography>
                 )}
             </DialogContent>
-            <DialogActions>
+            <DialogActions sx={dialogActionsSx}>
                 <Button color="inherit" onClick={close}>
                     {text.cancel}
                 </Button>

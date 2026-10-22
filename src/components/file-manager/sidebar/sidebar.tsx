@@ -15,8 +15,8 @@ import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualRows } from "../../../hooks/use-virtual-rows";
 import { HEADER_HEIGHT, SIDEBAR_WIDTH, rootWide } from "../../../styles/layout";
 import { focusOutline } from "../../../styles/mixins";
-import { focusLost } from "../../../utils/dom";
-import { focusTreeItem, isRtl, isTypingKey, matchName } from "../../../utils/keyboard";
+import { focusLost, isRtl } from "../../../utils/dom";
+import { focusTreeItem, isTypingKey, matchName } from "../../../utils/keyboard";
 import Icon from "../../icons/icon";
 import TreeRowItem, { GuideLine } from "./location-item";
 
@@ -61,24 +61,28 @@ const sidebarSx: SxProps<Theme> = (theme) => ({
     flexShrink: 0,
     bgcolor: "background.default",
 
-    // Collapsed: an overlay drawer that slides in over the content. It stays inside the
-    // file manager rather than portalling to <body>, so an embedded instance overlays only itself.
+    // Collapsed: an overlay drawer that slides in over the content from the start side, the left
+    // or, right to left, the right. It stays inside the file manager rather than portalling to
+    // <body>, so an embedded instance overlays only itself. It slides by `translate` rather than
+    // `transform`, which Emotion's RTL plugin would flip a second time.
     position: "absolute",
     zIndex: 2,
     top: 0,
     bottom: 0,
-    left: 0,
+    insetInlineStart: 0,
     width: `min(${SIDEBAR_WIDTH + 32}px, 85%)`,
     boxShadow: 8,
-    transform: "translateX(-100%)",
+    "--closed-shift": "-100%",
+    "&:dir(rtl)": { "--closed-shift": "100%" },
+    translate: "var(--closed-shift)",
     // Hidden, not just off-screen, so its buttons drop out of the tab order while closed.
     visibility: "hidden",
-    transition: theme.transitions.create(["transform", "visibility"], {
+    transition: theme.transitions.create(["translate", "visibility"], {
         duration: theme.transitions.duration.enteringScreen,
         easing: theme.transitions.easing.easeOut,
     }),
     '&[data-open="true"]': {
-        transform: "none",
+        translate: "none",
         visibility: "visible",
     },
 
@@ -88,7 +92,7 @@ const sidebarSx: SxProps<Theme> = (theme) => ({
         zIndex: "auto",
         width: SIDEBAR_WIDTH,
         boxShadow: "none",
-        transform: "none",
+        translate: "none",
         visibility: "visible",
         transition: "none",
         '&[data-hidden="true"]': { display: "none" },
@@ -123,8 +127,7 @@ const navSx: SxProps<Theme> = {
 // Placed by the tree, like the rows.
 const groupTitleSx: SxProps<Theme> = {
     position: "absolute",
-    left: 0,
-    right: 0,
+    insetInline: 0,
     display: "flex",
     alignItems: "center",
     px: 1.5,
@@ -134,8 +137,7 @@ const groupTitleSx: SxProps<Theme> = {
 
 const ruleSx: SxProps<Theme> = {
     position: "absolute",
-    left: 0,
-    right: 0,
+    insetInline: 0,
 };
 
 const dividerSx: SxProps<Theme> = {

@@ -15,6 +15,12 @@ export const scrollParent = (element: HTMLElement) => {
 export const gridColumns = (element: Element) =>
     getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length || 1;
 
+/**
+ * Whether an element's text runs right to left, as a `dir` on it or above it makes it. That swaps
+ * what Left and Right mean, and which way a menu opens.
+ */
+export const isRtl = (element: Element) => getComputedStyle(element).direction === "rtl";
+
 /** Whether the focus has left the page, as it does when the focused element is removed. */
 export const focusLost = () => !document.activeElement || document.activeElement === document.body;
 

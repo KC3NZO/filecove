@@ -19,6 +19,7 @@ import {
     stripeBackground,
     visuallyHiddenSx,
 } from "../../../styles/mixins";
+import { joinIsolated } from "../../../utils/bidi";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
 import { SORT_LABELS, toggleSortKey } from "../../../utils/sort";
@@ -105,8 +106,7 @@ const rowsSx: SxProps<Theme> = {
 // for them all.
 const rowSx: SxProps<Theme> = (theme) => ({
     position: "absolute",
-    left: 0,
-    right: 0,
+    insetInline: 0,
     display: "grid",
     gridTemplateColumns: "var(--columns)",
     alignItems: "center",
@@ -147,12 +147,12 @@ const nameCellSx: SxProps<Theme> = {
 
 // Lines the label up with the file names: 1.75rem icon plus the 12px gap.
 const nameHeaderSx: SxProps<Theme> = {
-    pl: 5,
+    paddingInlineStart: 5,
 };
 
-// The arrow goes before the label here, so the label stays flush with the right-aligned dates.
+// The arrow goes before the label here, so the label stays flush with the dates, aligned to the end.
 const modifiedHeaderSx: SxProps<Theme> = {
-    textAlign: "right",
+    textAlign: "end",
     "& > button": { flexDirection: "row-reverse" },
 };
 
@@ -196,7 +196,7 @@ const typeCellSx: SxProps<Theme> = {
 
 const modifiedCellSx: SxProps<Theme> = {
     display: "none",
-    textAlign: "right",
+    textAlign: "end",
     [viewMedium]: { display: "block" },
 };
 
@@ -301,10 +301,10 @@ const FileRow = memo(
                     <ItemIcon entry={entry} size={1.75} adapter={adapter} view="list" />
                     <Box sx={nameTextSx}>
                         <Typography variant="body2" noWrap>
-                            {entry.name}
+                            <bdi>{entry.name}</bdi>
                         </Typography>
                         <Typography variant="caption" noWrap sx={secondaryLineSx}>
-                            {describeSize(entry)} · {describeDate(entry)}
+                            {joinIsolated([describeSize(entry), describeDate(entry)])}
                         </Typography>
                     </Box>
                 </Box>

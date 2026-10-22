@@ -42,6 +42,7 @@ export type {
     SortDirection,
     SortKey,
     SortOrder,
+    TextDirection,
     ViewMode,
     VirtualLines,
 } from "./view";

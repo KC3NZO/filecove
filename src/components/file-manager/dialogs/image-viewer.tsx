@@ -187,12 +187,10 @@ const fittedImageSx: SxProps<Theme> = {
     maxHeight: `calc(100% - ${2 * GAP}px)`,
 };
 
-// Sized and moved through `style`, from the zoom.
+// Placed, sized and moved through `style`, from the zoom.
 const zoomedImageSx: SxProps<Theme> = {
     display: "block",
     position: "absolute",
-    top: 0,
-    left: 0,
     maxWidth: "none",
     maxHeight: "none",
 };
@@ -516,6 +514,11 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
     const placed: CSSProperties | undefined =
         zoom && image
             ? {
+                  // From the view's top left, right to left too: the zoom is worked out from the
+                  // pointer's place on the screen, and a style set inline isn't flipped by Emotion's
+                  // RTL plugin.
+                  top: 0,
+                  left: 0,
                   width: image.width * zoom.scale,
                   height: image.height * zoom.scale,
                   transform: `translate(${zoom.x}px, ${zoom.y}px)`,

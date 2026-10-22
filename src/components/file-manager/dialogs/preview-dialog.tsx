@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from "react";
+import { useContext, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
@@ -9,11 +9,13 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
 import { usePreviewContents } from "../../../hooks/use-preview-contents";
 import { useSwipe } from "../../../hooks/use-swipe";
 import { dialogPaperSx, focusOutline, visuallyHiddenSx } from "../../../styles/mixins";
-import { isRtl } from "../../../utils/keyboard";
+import { isolate, joinIsolated } from "../../../utils/bidi";
+import { isRtl } from "../../../utils/dom";
 import { ResponseError, TEXT_LIMIT, previewKind } from "../../../utils/preview";
 import { FileTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
@@ -71,10 +73,10 @@ interface Dimensions {
 // Why a file couldn't be shown: the adapter's message, the server's answer, or else a general one.
 const errorMessage = (error: unknown, text: FileManagerLocaleText) => {
     if (error instanceof ResponseError) {
-        return text.serverError(error.status, error.statusText);
+        return text.serverError(error.status, error.statusText && isolate(error.statusText));
     }
 
-    return error instanceof Error && error.message ? error.message : text.previewLoadFailed;
+    return error instanceof Error && error.message ? isolate(error.message) : text.previewLoadFailed;
 };
 
 // As large as the page allows, up to a size that still reads as a dialog.
@@ -94,8 +96,8 @@ const headerSx: SxProps<Theme> = {
     gap: 1.5,
     minHeight: 56,
     py: 1,
-    pl: 2,
-    pr: 1,
+    paddingInlineStart: 2,
+    paddingInlineEnd: 1,
 };
 
 const titleSx: SxProps<Theme> = {
@@ -183,6 +185,9 @@ const textSx: SxProps<Theme> = {
     lineHeight: 1.6,
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
+    // Each line runs, and lines up, the way its own letters do, as in a text editor, so code reads
+    // left to right in a right-to-left file manager, and Arabic or Hebrew lines right to left.
+    unicodeBidi: "plaintext",
     tabSize: 4,
     touchAction: "pan-y pinch-zoom",
     outline: "none",
@@ -237,6 +242,7 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
     const { adapter, entries } = request;
     const count = entries.length;
     const { text, formatNumber, formatSize, describeDate, describeSize, describeType } = useLocale();
+    const dir = useContext(DirectionContext);
 
     const [index, setIndex] = useState(() => Math.min(Math.max(request.index, 0), count - 1));
     // The way the last step went, where the file loaded ahead lies.
@@ -324,15 +330,15 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
         }
     };
 
-    const details = [
-        describeType(entry),
-        entry.size === undefined ? null : describeSize(entry),
-        size && size.width > 0 && size.height > 0
-            ? `${formatNumber(size.width)} × ${formatNumber(size.height)}`
-            : null,
-    ]
-        .filter(Boolean)
-        .join(" · ");
+    const details = joinIsolated(
+        [
+            describeType(entry),
+            entry.size === undefined ? null : describeSize(entry),
+            size && size.width > 0 && size.height > 0
+                ? joinIsolated([formatNumber(size.width), formatNumber(size.height)], " × ")
+                : null,
+        ].filter((part): part is string => part !== null),
+    );
 
     let body: ReactNode;
 
@@ -343,7 +349,9 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
             <Box sx={stateSx}>
                 <FileTypeIcon fileName={entry.name} size="5rem" />
                 <Typography sx={stateTitleSx}>{text.previewUnavailable}</Typography>
-                {entry.modifiedAt && <Typography variant="body2">{text.modifiedOn(describeDate(entry))}</Typography>}
+                {entry.modifiedAt && (
+                    <Typography variant="body2">{text.modifiedOn(isolate(describeDate(entry)))}</Typography>
+                )}
             </Box>
         );
     } else if (shown.status === "error") {
@@ -366,7 +374,7 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
                 </Box>
                 {shown.excerpt.truncated && (
                     <Typography variant="caption" sx={noteSx}>
-                        {text.previewTruncated(formatSize(TEXT_LIMIT))}
+                        {text.previewTruncated(isolate(formatSize(TEXT_LIMIT)))}
                     </Typography>
                 )}
             </Box>
@@ -421,6 +429,7 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
 
     return (
         <Dialog
+            dir={dir}
             open={open}
             maxWidth={false}
             sx={dialogSx}
@@ -434,7 +443,7 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
                 <FileTypeIcon fileName={entry.name} size="1.75rem" />
                 <Box sx={titleSx}>
                     <Typography id={titleId} component="h2" variant="body1" noWrap sx={nameSx}>
-                        {entry.name}
+                        <bdi>{entry.name}</bdi>
                     </Typography>
                     <Typography variant="caption" color="text.secondary" noWrap>
                         {details}
@@ -446,7 +455,7 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
                             <Icon name="chevronLeft" />
                         </IconButton>
                         <Typography variant="body2" color="text.secondary" sx={counterSx} aria-hidden>
-                            {formatNumber(index + 1)} / {formatNumber(count)}
+                            {joinIsolated([formatNumber(index + 1), formatNumber(count)], " / ")}
                         </Typography>
                         <IconButton aria-label={text.next} disabled={index === count - 1} onClick={() => step(1)}>
                             <Icon name="chevronRight" />
@@ -464,7 +473,7 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
             </Box>
             {/* Screen readers hear which file the arrows stepped to. */}
             <Box sx={visuallyHiddenSx} role="status">
-                {count > 1 ? text.previewPosition(entry.name, index + 1, count) : ""}
+                {count > 1 ? text.previewPosition(isolate(entry.name), index + 1, count) : ""}
             </Box>
         </Dialog>
     );

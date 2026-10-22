@@ -4,6 +4,9 @@ import type { SelectModifiers } from "./selection";
 
 export type ViewMode = "list" | "grid";
 
+/** Which way the file manager's text runs, as the `dir` on or above it sets it. Internal. */
+export type TextDirection = "ltr" | "rtl";
+
 export type SortKey = "name" | "size" | "type" | "modified";
 
 export type SortDirection = "asc" | "desc";

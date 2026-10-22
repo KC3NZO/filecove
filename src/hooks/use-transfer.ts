@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { isolate } from "../utils/bidi";
 import { useLocale } from "./use-locale";
 
 import type { ConflictPolicy, FileAdapter, FileEntry, TransferOptions } from "../types";
@@ -86,7 +87,7 @@ export const useTransfer = (job: TransferJob, refresh: () => void) => {
                     setPending(null);
                     setFailure(
                         error instanceof Error && error.message
-                            ? error.message
+                            ? isolate(error.message)
                             : (job.kind === "move" ? text.moveFailed : text.copyFailed)(job.entries.length),
                     );
 

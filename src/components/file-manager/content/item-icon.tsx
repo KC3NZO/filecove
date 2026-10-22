@@ -45,7 +45,7 @@ const thumbnailSx: SxProps<Theme> = {
 const badgeSx: SxProps<Theme> = {
     display: "none",
     position: "absolute",
-    right: -2,
+    insetInlineEnd: -2,
     bottom: -2,
     width: "max(0.875rem, 36%)",
     aspectRatio: "1",

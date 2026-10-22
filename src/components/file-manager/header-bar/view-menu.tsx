@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 
 import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
@@ -13,7 +13,9 @@ import Radio from "@mui/material/Radio";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
+import { isRtl } from "../../../utils/dom";
 import { SORT_KEYS, SORT_LABELS, withSortKey } from "../../../utils/sort";
 import Icon from "../../icons/icon";
 
@@ -43,9 +45,18 @@ const slotProps: MenuProps["slotProps"] = {
     list: { dense: true },
 };
 
-// Hangs from the button's right edge, since the button sits at the header's right end.
-const anchorOrigin: MenuProps["anchorOrigin"] = { vertical: "bottom", horizontal: "right" };
-const transformOrigin: MenuProps["transformOrigin"] = { vertical: "top", horizontal: "right" };
+// Hangs from the button's end edge, since the button sits at the header's end: its right edge, or
+// its left edge right to left.
+const ORIGINS: Record<"ltr" | "rtl", Pick<MenuProps, "anchorOrigin" | "transformOrigin">> = {
+    ltr: {
+        anchorOrigin: { vertical: "bottom", horizontal: "right" },
+        transformOrigin: { vertical: "top", horizontal: "right" },
+    },
+    rtl: {
+        anchorOrigin: { vertical: "bottom", horizontal: "left" },
+        transformOrigin: { vertical: "top", horizontal: "left" },
+    },
+};
 
 // Not sticky, and without its own background, which wouldn't match the menu paper's elevation tint.
 const subheaderSx: SxProps<Theme> = {
@@ -64,7 +75,7 @@ const controlSx: SxProps<Theme> = {
 };
 
 const shortcutSx: SxProps<Theme> = {
-    ml: 3,
+    marginInlineStart: 3,
     color: "text.secondary",
 };
 
@@ -86,7 +97,9 @@ const ViewMenu = ({
     // The menu portals out of the file manager, where its container queries don't reach, so
     // whether the sidebar docks is read as it opens. Collapsed, the header's button shows it.
     const [docked, setDocked] = useState(false);
+    const [rtl, setRtl] = useState(false);
     const { text } = useLocale();
+    const dir = useContext(DirectionContext);
     const keyLabels = SORT_LABELS[sort.key](text);
 
     return (
@@ -97,16 +110,17 @@ const ViewMenu = ({
                 aria-expanded={!!anchor}
                 onClick={(event) => {
                     setDocked(sidebarDocked());
+                    setRtl(isRtl(event.currentTarget));
                     setAnchor(event.currentTarget);
                 }}
             >
                 <Icon name="expand" fontSize="small" />
             </IconButton>
             <Menu
+                dir={dir}
                 open={!!anchor}
                 anchorEl={anchor}
-                anchorOrigin={anchorOrigin}
-                transformOrigin={transformOrigin}
+                {...ORIGINS[rtl ? "rtl" : "ltr"]}
                 slotProps={slotProps}
                 onClose={() => setAnchor(null)}
             >

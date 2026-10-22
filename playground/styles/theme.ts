@@ -1,9 +1,12 @@
 import { createTheme } from "@mui/material/styles";
 
+import { muiRtl } from "../options";
+
 // GNOME Files flavour for the dev host. The file manager only reads palette tokens
 // (background.default for the window and sidebar, background.paper for the content panel,
 // primary for selection), so a consumer's own theme restyles it without code changes.
 const theme = createTheme({
+    direction: muiRtl ? "rtl" : "ltr",
     cssVariables: true,
     colorSchemes: {
         light: {

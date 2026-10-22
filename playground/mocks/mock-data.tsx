@@ -59,6 +59,18 @@ export const serverAdapter = createMockAdapter({
             file("robots.txt", 68, "2026-07-03T19:21", "text/plain"),
         ]),
         { ...folder("restricted", "2026-10-11T08:00", []), fails: true },
+        // "Documents": names in Arabic and Hebrew, mixed with Latin, or starting and ending with
+        // punctuation, to try text running both ways, with `?rtl` and without.
+        folder("مستندات", "2026-10-20T09:30", [
+            folder("صور", "2026-10-20T09:30", [
+                file("غلاف (نهائي).png", 940_000, "2026-10-20T09:30", "image/png"),
+            ]),
+            file("تقرير الربع الثالث.pdf", 318_000, "2026-10-19T11:05", "application/pdf"),
+            file("סיכום פגישה.md", 2_400, "2026-10-18T16:20"),
+            file("ملاحظات (2).txt", 820, "2026-10-17T10:12", "text/plain"),
+            file("Q3 تقرير.xlsx", 64_000, "2026-10-16T08:45"),
+            file("(draft) roadmap.md", 1_900, "2026-10-15T14:30"),
+        ]),
         folder("src", "2026-10-17T18:08", [
             folder("assets", "2026-10-12T16:40", []),
             folder("components", "2026-10-17T18:08", [

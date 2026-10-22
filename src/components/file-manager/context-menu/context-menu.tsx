@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useContext, useMemo } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
 import Divider from "@mui/material/Divider";
@@ -6,9 +6,11 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import type { PopoverOrigin } from "@mui/material/Popover";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DirectionContext } from "../../../contexts/direction-context";
 import { ariaShortcut } from "../../../utils/shortcut";
 import IconSlot from "../icon-slot";
 
@@ -33,7 +35,9 @@ const paperSx: SxProps<Theme> = {
     borderRadius: 2,
 };
 
+// A label without an icon is inset, which MUI does with a `padding-left`.
 const itemSx: SxProps<Theme> = {
+    "& .MuiListItemText-inset": { paddingLeft: 0, paddingInlineStart: "36px" },
     '&[data-destructive="true"]': {
         color: "error.main",
         "& .MuiListItemIcon-root": { color: "inherit" },
@@ -41,9 +45,14 @@ const itemSx: SxProps<Theme> = {
 };
 
 const shortcutSx: SxProps<Theme> = {
-    ml: 3,
+    marginInlineStart: 3,
     color: "text.secondary",
 };
+
+// The menu opens leftwards from its point when the part it was opened in runs right to left. MUI's
+// own default goes by the theme's `direction` instead, which a page with `dir` set may not have.
+const LTR_ORIGIN: PopoverOrigin = { vertical: "top", horizontal: "left" };
+const RTL_ORIGIN: PopoverOrigin = { vertical: "top", horizontal: "right" };
 
 const renderItems = ({ groups, context }: MenuState, onClose: () => void) => {
     // Labels without an icon are inset so they line up with the ones that have one.
@@ -76,7 +85,7 @@ const renderItems = ({ groups, context }: MenuState, onClose: () => void) => {
                     <ListItemText inset={hasIcons && !action.icon}>{action.label}</ListItemText>
                     {action.shortcut && (
                         <Typography variant="body2" sx={shortcutSx}>
-                            {action.shortcut}
+                            <bdi>{action.shortcut}</bdi>
                         </Typography>
                     )}
                 </MenuItem>,
@@ -88,6 +97,7 @@ const renderItems = ({ groups, context }: MenuState, onClose: () => void) => {
 };
 
 const ContextMenu = ({ menu, onClose }: ContextMenuProps) => {
+    const dir = useContext(DirectionContext);
     const slotProps = useMemo(
         () => ({
             paper: { sx: paperSx },
@@ -110,9 +120,11 @@ const ContextMenu = ({ menu, onClose }: ContextMenuProps) => {
 
     return (
         <Menu
+            dir={dir}
             open={!!menu?.open}
             anchorReference="anchorPosition"
             anchorPosition={menu?.position}
+            transformOrigin={menu?.position.rtl ? RTL_ORIGIN : LTR_ORIGIN}
             slotProps={slotProps}
             onClose={onClose}
         >

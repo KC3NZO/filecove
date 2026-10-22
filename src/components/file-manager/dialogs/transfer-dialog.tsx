@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
@@ -17,12 +17,15 @@ import ListItemText from "@mui/material/ListItemText";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DirectionContext } from "../../../contexts/direction-context";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
 import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
+import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx, focusOutline, focusRing, hoverBackground } from "../../../styles/mixins";
+import { isolate } from "../../../utils/bidi";
 import { isHidden } from "../../../utils/hidden";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { folderLeft, folderOf } from "../../../utils/navigation";
@@ -138,11 +141,11 @@ const listSx: SxProps<Theme> = {
     "&:focus-visible": focusOutline,
 };
 
-// Placed at its line by `top`, set in `style`.
+// Placed at its line by `top`, set in `style`. MUI aligns a list item's text with `text-align: left`.
 const itemSx: SxProps<Theme> = {
     position: "absolute",
-    left: 0,
-    right: 0,
+    insetInline: 0,
+    textAlign: "start",
 };
 
 // Holds the focus in place of the list while the folder loads, or when it has no folders.
@@ -156,6 +159,7 @@ const emptySx: SxProps<Theme> = {
 const rowSx: SxProps<Theme> = (theme) => ({
     mx: 0.5,
     borderRadius: 1.5,
+    textAlign: "start",
     "&:hover": { bgcolor: hoverBackground(theme) },
     ...focusRing,
 });
@@ -200,6 +204,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
     const sourceId = folderOf(section, trail).id;
     const locale = useLocale();
     const { text } = locale;
+    const dir = useContext(DirectionContext);
 
     // Null on the list of sections, which is only reachable with more than one.
     const [place, setPlace] = useState<Place | null>({ sectionId: section.id, trail });
@@ -223,7 +228,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
 
     // Ids are unique within an adapter, so the same folder is the same id whichever section shows it.
     const sameFolder = place !== null && targetFolder.id === sourceId;
-    const title = (kind === "copy" ? text.copyToTitle : text.moveToTitle)(entries.length, entries[0].name);
+    const title = (kind === "copy" ? text.copyToTitle : text.moveToTitle)(entries.length, isolate(entries[0].name));
 
     // The adapter can't undo a change it has made, so both folders are listed again however it ended.
     const refresh = () => onChanged(adapter, kind === "move" ? [targetFolder.id, sourceId] : [targetFolder.id]);
@@ -259,7 +264,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
     const rows = useMemo(() => items.filter((item) => !item.disabled), [items]);
     const tabStop = rows.find((row) => row.id === focusId)?.id ?? rows[0]?.id ?? null;
     const loaded = place === null || listed || failed;
-    const listLabel = place ? text.pickerFolders(targetFolder.name) : text.pickerLocations;
+    const listLabel = place ? text.pickerFolders(isolate(targetFolder.name)) : text.pickerLocations;
 
     // The row with the Tab stop stays rendered wherever the list is scrolled, so it keeps the focus.
     const { lines, settled } = useVirtualLines(items.length, [items.findIndex((item) => item.id === tabStop)]);
@@ -501,7 +506,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
                                             <FolderTypeIcon folderName={item.name} size="1.25rem" />
                                         )}
                                     </ListItemIcon>
-                                    <ListItemText primary={item.name} slotProps={TEXT_SLOTS} />
+                                    <ListItemText primary={<bdi>{item.name}</bdi>} slotProps={TEXT_SLOTS} />
                                 </ListItemButton>
                             </ListItem>
                         );
@@ -526,7 +531,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
                     {failed && (
                         <Typography variant="body2">
                             {text.folderOpenFailed}
-                            {state.error instanceof Error && `: ${state.error.message}`}
+                            {state.error instanceof Error && `: ${isolate(state.error.message)}`}
                         </Typography>
                     )}
                     {!loaded && <CircularProgress size={24} aria-label={text.loading} />}
@@ -536,7 +541,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
     }
 
     return (
-        <Dialog open={open} fullWidth maxWidth="sm" slotProps={slotProps} onClose={close}>
+        <Dialog dir={dir} open={open} fullWidth maxWidth="sm" slotProps={slotProps} onClose={close}>
             <DialogTitle>{title}</DialogTitle>
             <DialogContent sx={contentSx}>
                 {!conflicts && (
@@ -569,7 +574,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
                 )}
             </DialogContent>
             {conflicts ? (
-                <DialogActions>
+                <DialogActions sx={dialogActionsSx}>
                     <Button
                         color="inherit"
                         disabled={!!pending}
@@ -585,7 +590,7 @@ const TransferDialog = ({ open, request, showHidden, onClose, onChanged, onDone 
                     <ConflictChoices pending={pending} onChoose={run} />
                 </DialogActions>
             ) : (
-                <DialogActions>
+                <DialogActions sx={dialogActionsSx}>
                     <Button color="inherit" onClick={close}>
                         {text.cancel}
                     </Button>

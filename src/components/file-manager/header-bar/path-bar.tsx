@@ -35,22 +35,25 @@ const barSx: SxProps<Theme> = {
     bgcolor: "action.hover",
 };
 
-// An LTR track inside an RTL scroller. A scroller starts at its inline-start edge, which for
-// RTL is the right, so a path too long to fit shows its last segments and scrolls back
-// towards the root, with no JavaScript measuring.
+// The track sits in a reversed flex row, which lines it up with the scroller's end and starts
+// scrolled there, so a path too long to fit shows its last segments and scrolls back towards the
+// root, with no JavaScript measuring. That holds both ways the text runs, as `direction` tricks
+// wouldn't: the path still reads from the root at the start, on the right right to left.
 const scrollerSx: SxProps<Theme> = {
     flex: 1,
     minWidth: 0,
-    direction: "rtl",
+    display: "flex",
+    flexDirection: "row-reverse",
     overflowX: "auto",
     scrollbarWidth: "none",
     "&::-webkit-scrollbar": { display: "none" },
 };
 
+// At least as wide as the scroller, so a short path starts at its start rather than its end.
 const trackSx: SxProps<Theme> = {
-    direction: "ltr",
     display: "flex",
     alignItems: "center",
+    flexShrink: 0,
     width: "max-content",
     minWidth: "100%",
     listStyle: "none",
@@ -91,7 +94,7 @@ const labelSx: SxProps<Theme> = {
 };
 
 const menuButtonSx: SxProps<Theme> = {
-    ml: 0.25,
+    marginInlineStart: 0.25,
 };
 
 /** The section's name first, then the folders opened below its root. */
@@ -119,7 +122,7 @@ const PathBar = ({ section, trail, hasActions, onNavigate, onOpenMenu }: PathBar
                                 onClick={() => onNavigate({ sectionId: section.id, trail: trail.slice(0, index) })}
                             >
                                 {segment.icon && <IconSlot icon={segment.icon} />}
-                                <Box component="span" sx={labelSx}>
+                                <Box component="bdi" sx={labelSx}>
                                     {segment.label}
                                 </Box>
                             </ButtonBase>

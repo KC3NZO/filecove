@@ -1,3 +1,5 @@
+import { isolate } from "./bidi";
+
 import type { FileEntry, FileManagerLocaleText } from "../types";
 
 type EntryKind = FileEntry["kind"];
@@ -16,7 +18,7 @@ export const nameProblem = (
     selfId?: string,
 ) => {
     if (name === "." || name === "..") {
-        return text.nameReserved(name, kind);
+        return text.nameReserved(isolate(name), kind);
     }
 
     if (name.includes("/")) {

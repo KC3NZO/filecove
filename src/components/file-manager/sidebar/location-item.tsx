@@ -22,7 +22,8 @@ import {
     selectedBackground,
     selectedHoverBackground,
 } from "../../../styles/mixins";
-import { isMenuKey, isRtl } from "../../../utils/keyboard";
+import { isRtl } from "../../../utils/dom";
+import { isMenuKey } from "../../../utils/keyboard";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { selectModifiers } from "../../../utils/selection";
@@ -146,8 +147,7 @@ const placeStyle = (row: { top: number; height: number }, depth: number) =>
 // Placed by `placeStyle`. The item takes the focus, but the row inside it shows the ring.
 const itemSx: SxProps<Theme> = {
     position: "absolute",
-    left: 0,
-    right: 0,
+    insetInline: 0,
     listStyle: "none",
     outline: "none",
 };
@@ -183,16 +183,16 @@ const mainPartSx = {
 const sectionButtonSx: SxProps<Theme> = {
     ...mainPartSx,
     gap: 1.5,
-    pl: `${INSET}px`,
-    // Room for the expand toggle on the right.
-    pr: 4.5,
+    paddingInlineStart: `${INSET}px`,
+    // Room for the expand toggle at the end.
+    paddingInlineEnd: 4.5,
 };
 
 const folderButtonSx: SxProps<Theme> = {
     ...mainPartSx,
     gap: 1,
-    pl: indent(CHEVRON + 4),
-    pr: 1,
+    paddingInlineStart: indent(CHEVRON + 4),
+    paddingInlineEnd: 1,
     "& > svg": { flexShrink: 0 },
 };
 
@@ -206,7 +206,9 @@ const folderLabelSx: SxProps<Theme> = {
     fontSize: "0.8125rem",
 };
 
-// The chevrons are for pointers; the keyboard expands and collapses with Right and Left.
+// The chevrons are for pointers; the keyboard expands and collapses with Right and Left. Expanded,
+// a chevron turns to point down: clockwise from pointing right, or anticlockwise right to left,
+// where the icon is mirrored to point left (`Icon`).
 const toggleSx = {
     position: "absolute",
     top: "50%",
@@ -217,37 +219,38 @@ const toggleSx = {
     borderRadius: 1,
     color: "text.secondary",
     cursor: "pointer",
+    "--chevron-turn": "90deg",
+    "&:dir(rtl)": { "--chevron-turn": "-90deg" },
     "&:hover": { bgcolor: "action.hover", color: "text.primary" },
+    '&[data-expanded="true"] > svg': { rotate: "var(--chevron-turn)" },
 } as const;
 
 // Sections keep the plain GNOME look, so their toggle only shows on hover, on keyboard focus,
 // while expanded, or always on touch screens where there is no hover.
 const sectionToggleSx: SxProps<Theme> = {
     ...toggleSx,
-    right: 6,
+    insetInlineEnd: 6,
     width: 24,
     height: 24,
     opacity: 0,
     transition: "opacity 120ms",
     '*:hover > &, [role="treeitem"]:focus-visible > * > &, &[data-expanded="true"]': { opacity: 1 },
     "@media (hover: none)": { opacity: 1 },
-    "& > svg": { fontSize: "1.125rem", transition: "transform 150ms" },
-    '&[data-expanded="true"] > svg': { transform: "rotate(90deg)" },
+    "& > svg": { fontSize: "1.125rem", transition: "rotate 150ms" },
 };
 
 const folderToggleSx: SxProps<Theme> = {
     ...toggleSx,
-    left: indent(0),
+    insetInlineStart: indent(0),
     width: CHEVRON,
     height: CHEVRON,
-    "& > svg": { fontSize: "1rem", transition: "transform 150ms" },
-    '&[data-expanded="true"] > svg': { transform: "rotate(90deg)" },
+    "& > svg": { fontSize: "1rem", transition: "rotate 150ms" },
 };
 
 // Along the folders below an expanded row, placed by the tree like a row, behind the rows.
 const guideSx: SxProps<Theme> = {
     position: "absolute",
-    left: indent(CHEVRON / 2),
+    insetInlineStart: indent(CHEVRON / 2),
     width: "1px",
     bgcolor: "divider",
     pointerEvents: "none",
@@ -256,13 +259,12 @@ const guideSx: SxProps<Theme> = {
 // A row in place of folders: a load error, or the single section tree's loading and empty states.
 const statusRowSx: SxProps<Theme> = {
     position: "absolute",
-    left: 0,
-    right: 0,
+    insetInline: 0,
     listStyle: "none",
     display: "flex",
     alignItems: "center",
     gap: 1,
-    pl: indent(CHEVRON + 4),
+    paddingInlineStart: indent(CHEVRON + 4),
     borderRadius: 2,
     color: "text.secondary",
     fontSize: "0.8125rem",
@@ -395,7 +397,7 @@ const TreeItem = ({
                 <Box sx={isSection ? sectionButtonSx : folderButtonSx} onClick={onSelect}>
                     {icon}
                     <Typography component="span" noWrap sx={isSection ? sectionLabelSx : folderLabelSx}>
-                        {row.label}
+                        <bdi>{row.label}</bdi>
                     </Typography>
                 </Box>
                 {expandable && (

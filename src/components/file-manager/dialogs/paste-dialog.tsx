@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -9,10 +9,13 @@ import DialogTitle from "@mui/material/DialogTitle";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DirectionContext } from "../../../contexts/direction-context";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
 import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
+import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
+import { isolate } from "../../../utils/bidi";
 import { folderOf } from "../../../utils/navigation";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 
@@ -74,6 +77,7 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
     const target = folderOf(section, trail);
     const sourceId = folderOf(clipboard.section, clipboard.trail).id;
     const { text } = useLocale();
+    const dir = useContext(DirectionContext);
 
     // The target is listed first when it isn't cached, as a folder dropped onto may never have been
     // opened, and its clashes are only looked for once all its pages have come.
@@ -126,10 +130,17 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
 
     const askingTitle = kind === "move" ? text.moveTitle : text.copyTitle;
     const failedTitle = kind === "move" ? text.moveFailedTitle : text.copyFailedTitle;
-    const title = (failure ? failedTitle : askingTitle)(entries.length, entries[0].name);
+    const title = (failure ? failedTitle : askingTitle)(entries.length, isolate(entries[0].name));
 
     return (
-        <Dialog open={open && (!!conflicts || !!failure)} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
+        <Dialog
+            dir={dir}
+            open={open && (!!conflicts || !!failure)}
+            fullWidth
+            maxWidth="xs"
+            slotProps={slotProps}
+            onClose={close}
+        >
             <DialogTitle>{title}</DialogTitle>
             <DialogContent sx={contentSx}>
                 {failure ? (
@@ -141,13 +152,13 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
                 )}
             </DialogContent>
             {failure ? (
-                <DialogActions>
+                <DialogActions sx={dialogActionsSx}>
                     <Button variant="contained" onClick={close}>
                         {text.close}
                     </Button>
                 </DialogActions>
             ) : (
-                <DialogActions>
+                <DialogActions sx={dialogActionsSx}>
                     <Button color="inherit" disabled={!!pending} onClick={close}>
                         {text.cancel}
                     </Button>

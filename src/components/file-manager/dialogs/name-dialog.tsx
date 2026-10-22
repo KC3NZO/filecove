@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { SubmitEvent } from "react";
 
 import Button from "@mui/material/Button";
@@ -9,9 +9,12 @@ import DialogTitle from "@mui/material/DialogTitle";
 import TextField from "@mui/material/TextField";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DirectionContext } from "../../../contexts/direction-context";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
+import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
+import { isolate } from "../../../utils/bidi";
 import { nameProblem, newFolderName, stemLength } from "../../../utils/names";
 import { folderOf } from "../../../utils/navigation";
 
@@ -50,8 +53,27 @@ interface NameDialogProps {
 }
 
 // Outlined labels sit on the field's top edge, so the field needs room below the title.
+//
+// MUI places that label with `left`, a pixel shift and `transform-origin: top left`, and aligns the
+// border's notch and the error text with `text-align: left`. Only its RTL plugin flips those, so on
+// a page that sets just `dir` they would sit on the wrong side. Here they're placed logically, with
+// the shift and the origin as custom properties of lengths and percentages, since the plugin would
+// swap a `left` or `right` written in a custom property's value.
 const fieldSx: SxProps<Theme> = {
     mt: 1,
+    "--label-shift": "14px",
+    "--label-origin": "0%",
+    "&:dir(rtl)": { "--label-shift": "-14px", "--label-origin": "100%" },
+    "& .MuiInputLabel-root": {
+        left: "auto",
+        insetInlineStart: 0,
+        transformOrigin: "var(--label-origin) top",
+        transform: "translate(var(--label-shift), 16px) scale(1)",
+    },
+    "& .MuiInputLabel-root.MuiInputLabel-shrink": {
+        transform: "translate(var(--label-shift), -9px) scale(0.75)",
+    },
+    "& fieldset, & .MuiFormHelperText-root": { textAlign: "start" },
 };
 
 const run = (request: NameRequest, parentId: string, name: string, signal: AbortSignal) => {
@@ -82,6 +104,7 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
     const formId = useId();
     const { state } = useFolder(section, parent.id, true);
     const { text } = useLocale();
+    const dir = useContext(DirectionContext);
 
     const [name, setName] = useState(() => entry?.name ?? newFolderName(state?.entries, text));
     const [failure, setFailure] = useState<string | null>(null);
@@ -95,9 +118,10 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
     const problem = trimmed ? nameProblem(trimmed, kind, state?.entries, text, entry?.id) : undefined;
     const message = problem ?? failure;
 
-    // Read-only rather than disabled while the adapter works, so the field keeps focus.
+    // Read-only rather than disabled while the adapter works, so the field keeps focus. The name
+    // runs the way its own letters do (`dir="auto"`), so ".bashrc" keeps its dot in front right to left.
     const fieldSlotProps = useMemo(
-        () => ({ htmlInput: { readOnly: pending, spellCheck: false, autoComplete: "off" } }),
+        () => ({ htmlInput: { readOnly: pending, spellCheck: false, autoComplete: "off", dir: "auto" } }),
         [pending],
     );
 
@@ -170,7 +194,7 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
                         setPending(false);
                         setFailure(
                             error instanceof Error && error.message
-                                ? error.message
+                                ? isolate(error.message)
                                 : entry
                                   ? text.renameFailed(kind)
                                   : text.createFailed,
@@ -181,7 +205,7 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
     };
 
     return (
-        <Dialog open={open} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
+        <Dialog dir={dir} open={open} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
             <DialogTitle>{entry ? text.renameTitle(kind) : text.newFolder}</DialogTitle>
             <DialogContent>
                 <form id={formId} onSubmit={submit}>
@@ -202,7 +226,7 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
                     />
                 </form>
             </DialogContent>
-            <DialogActions>
+            <DialogActions sx={dialogActionsSx}>
                 <Button color="inherit" onClick={close}>
                     {text.cancel}
                 </Button>

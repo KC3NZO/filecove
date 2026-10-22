@@ -10,6 +10,8 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
+import { mirroredBarSx } from "../../styles/direction";
+import { isolate, joinIsolated } from "../../utils/bidi";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 
@@ -43,8 +45,8 @@ const headerSx: SxProps<Theme> = {
     alignItems: "center",
     gap: 1.5,
     minHeight: 52,
-    pl: 2,
-    pr: 1,
+    paddingInlineStart: 2,
+    paddingInlineEnd: 1,
 };
 
 // Every status icon and file icon sits in the same column.
@@ -88,16 +90,13 @@ const rowSx: SxProps<Theme> = {
     alignItems: "center",
     gap: 1.5,
     minHeight: 52,
-    pl: 2,
-    pr: 1,
+    paddingInlineStart: 2,
+    paddingInlineEnd: 1,
     py: 0.5,
 };
 
-const rowBarSx: SxProps<Theme> = {
-    my: 0.5,
-    height: 3,
-    borderRadius: 1.5,
-};
+// Fills from the start side: MUI fills from the left unless the theme says right to left.
+const rowBarSx: SxProps<Theme> = [{ my: 0.5, height: 3, borderRadius: 1.5 }, mirroredBarSx];
 
 // The same width as a small IconButton, so a done row's check lines up with the other rows' buttons.
 const doneSx: SxProps<Theme> = {
@@ -134,22 +133,22 @@ const summarize = (items: UploadItem[]) => {
 const describeRow = ({ file, folder, status, progress, error }: UploadItem, { text, formatSize }: Locale) => {
     switch (status) {
         case "queued":
-            return `${text.uploadQueued} · ${folder.name}`;
+            return joinIsolated([text.uploadQueued, folder.name]);
         case "uploading": {
             if (progress === undefined) {
-                return `${text.uploadUploading} · ${folder.name}`;
+                return joinIsolated([text.uploadUploading, folder.name]);
             }
 
             const sent = formatSize(Math.round(file.size * progress));
 
-            return `${text.uploadProgress(sent, formatSize(file.size))} · ${folder.name}`;
+            return joinIsolated([text.uploadProgress(isolate(sent), isolate(formatSize(file.size))), folder.name]);
         }
         case "done":
-            return `${formatSize(file.size)} · ${folder.name}`;
+            return joinIsolated([formatSize(file.size), folder.name]);
         case "cancelled":
-            return `${text.uploadCancelled} · ${folder.name}`;
+            return joinIsolated([text.uploadCancelled, folder.name]);
         case "failed":
-            return error ?? text.uploadFailed;
+            return error === undefined ? text.uploadFailed : isolate(error);
     }
 };
 
@@ -162,7 +161,7 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
 
     if (isActive(item)) {
         action = (
-            <IconButton size="small" aria-label={text.uploadCancel(file.name)} onClick={() => onCancel(id)}>
+            <IconButton size="small" aria-label={text.uploadCancel(isolate(file.name))} onClick={() => onCancel(id)}>
                 <Icon name="close" fontSize="small" />
             </IconButton>
         );
@@ -174,7 +173,7 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
         );
     } else {
         action = (
-            <IconButton size="small" aria-label={text.uploadRetry(file.name)} onClick={() => onRetry(id)}>
+            <IconButton size="small" aria-label={text.uploadRetry(isolate(file.name))} onClick={() => onRetry(id)}>
                 <Icon name="refresh" fontSize="small" />
             </IconButton>
         );
@@ -187,7 +186,7 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
             </Box>
             <Box sx={textSx}>
                 <Typography variant="body2" noWrap>
-                    {file.name}
+                    <bdi>{file.name}</bdi>
                 </Typography>
                 {status === "uploading" && (
                     <LinearProgress
@@ -242,13 +241,15 @@ const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadP
     // What the title leaves out.
     const detail =
         active > 0
-            ? text.uploadProgress(formatSize(Math.round(sent)), formatSize(size))
-            : [
-                  count.failed > 0 && count.done > 0 && text.uploadsDoneCount(count.done),
-                  count.cancelled > 0 && count.failed + count.done > 0 && text.uploadsCancelledCount(count.cancelled),
-              ]
-                  .filter(Boolean)
-                  .join(" · ");
+            ? text.uploadProgress(isolate(formatSize(Math.round(sent))), isolate(formatSize(size)))
+            : joinIsolated(
+                  [
+                      count.failed > 0 && count.done > 0 && text.uploadsDoneCount(count.done),
+                      count.cancelled > 0 &&
+                          count.failed + count.done > 0 &&
+                          text.uploadsCancelledCount(count.cancelled),
+                  ].filter((part): part is string => !!part),
+              );
 
     return (
         <Box component="section" sx={panelSx} aria-label={text.uploads}>

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { PointerEvent, RefObject } from "react";
 
-import { isRtl } from "../utils/keyboard";
+import { isRtl } from "../utils/dom";
 
 /** How far a finger moves before the swipe is taken as sideways, or as a scroll, in px. */
 const SLOP = 10;

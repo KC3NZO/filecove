@@ -11,9 +11,6 @@ export const isMenuKey = (event: KeyboardEvent) =>
 export const isTypingKey = (event: KeyboardEvent) =>
     [...event.key].length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey;
 
-/** Whether an element's text runs right to left, which swaps what Left and Right mean. */
-export const isRtl = (element: Element) => getComputedStyle(element).direction === "rtl";
-
 /** How many rows of `item`'s height PageUp and PageDown move by in `scroller`, keeping one in view. */
 export const pageRows = (scroller: HTMLElement, item: HTMLElement) =>
     Math.max(1, Math.floor(scroller.clientHeight / Math.max(item.offsetHeight, 1)) - 1);

@@ -6,9 +6,12 @@ import type { ActionTarget } from "./action";
 import type { FileEntry } from "./adapter";
 import type { FolderRef, Section } from "./section";
 
+/** A point on the page the menu hangs from, as `Popover`'s `anchorPosition` takes it. */
 export interface MenuPosition {
     top: number;
     left: number;
+    /** It was opened in a right-to-left part, so it opens leftwards from the point. */
+    rtl: boolean;
 }
 
 /** A context menu request from the sidebar or the content, turned into an `ActionContext` by the file manager. */

@@ -20,10 +20,11 @@ import { useMarquee } from "../../../hooks/use-marquee";
 import { useSelection } from "../../../hooks/use-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
+import { mirroredBarSx } from "../../../styles/direction";
 import { focusOutline, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
-import { focusLost } from "../../../utils/dom";
+import { focusLost, isRtl } from "../../../utils/dom";
 import { isHidden } from "../../../utils/hidden";
-import { isMenuKey, isRtl, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
+import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { belowElement, insideElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
@@ -117,15 +118,11 @@ const surfaceSx: SxProps<Theme> = {
     "&:focus-visible": { ...focusOutline, borderRadius: 3 },
 };
 
-// Geometry comes from custom properties that `useMarquee` sets while dragging.
+// Placed and sized in its inline style, which `useMarquee` sets while dragging.
 const marqueeSx: SxProps<Theme> = (theme) => ({
     display: "none",
     position: "absolute",
     zIndex: 3,
-    left: "var(--marquee-left)",
-    top: "var(--marquee-top)",
-    width: "var(--marquee-width)",
-    height: "var(--marquee-height)",
     border: "1px solid",
     borderColor: "primary.main",
     borderRadius: 0.5,
@@ -134,13 +131,9 @@ const marqueeSx: SxProps<Theme> = (theme) => ({
     '&[data-active="true"]': { display: "block" },
 });
 
-// Overlays the top edge while a loaded folder refreshes, without pushing the content down.
-const progressSx: SxProps<Theme> = {
-    position: "sticky",
-    top: 0,
-    zIndex: 2,
-    mb: "-4px",
-};
+// Overlays the top edge while a loaded folder refreshes, without pushing the content down, and runs
+// from the start side.
+const progressSx: SxProps<Theme> = [{ position: "sticky", top: 0, zIndex: 2, mb: "-4px" }, mirroredBarSx];
 
 const stateSx: SxProps<Theme> = {
     flex: 1,
@@ -807,7 +800,11 @@ const FolderView = ({
             <Box id={stateId} sx={stateSx} role="alert">
                 <Icon name="info" sx={stateIconSx} />
                 <Typography sx={stateTitleSx}>{text.folderOpenFailed}</Typography>
-                {state.error instanceof Error && <Typography variant="body2">{state.error.message}</Typography>}
+                {state.error instanceof Error && (
+                    <Typography variant="body2">
+                        <bdi>{state.error.message}</bdi>
+                    </Typography>
+                )}
                 <Button
                     size="small"
                     variant="outlined"
