@@ -92,6 +92,8 @@ export interface FileManagerLocaleText extends UploadLocaleText {
     listView: string;
     viewOptions: string;
     showHiddenFiles: string;
+    /** Ctrl+H, shown beside "Show hidden files" as the language's keyboards name it ("Strg+H" in German). */
+    showHiddenFilesShortcut: string;
     /** The path bar's name for screen readers. */
     path: string;
     folderMenu: string;

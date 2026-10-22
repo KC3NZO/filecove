@@ -543,8 +543,8 @@ const FileManager = ({
         }
     };
 
-    // Keys that work anywhere in the file manager: F6, F9, and Alt+Left and Alt+Right for back and
-    // forward, the other way round right to left, as the arrows on the buttons are.
+    // Keys that work anywhere in the file manager: F6, F9, Ctrl+H, and Alt+Left and Alt+Right for
+    // back and forward, the other way round right to left, as the arrows on the buttons are.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         // Menus and dialogs portal out of the file manager, but their key presses still bubble here
         // through React's tree; they aren't the file manager's.
@@ -564,6 +564,16 @@ const FileManager = ({
             switchPane();
         } else if (event.key === "F9" && plain) {
             toggleSidebar();
+        } else if (
+            // Ctrl+H shows and hides hidden files, as in GNOME Files. Not ⌘H, which hides the
+            // browser on macOS before the page sees it.
+            event.key.toLowerCase() === "h" &&
+            event.ctrlKey &&
+            !event.metaKey &&
+            !event.shiftKey &&
+            !event.altKey
+        ) {
+            toggleHidden();
         } else if (event.altKey && !others && event.key === (direction === "rtl" ? "ArrowRight" : "ArrowLeft")) {
             goBack();
         } else if (event.altKey && !others && event.key === (direction === "rtl" ? "ArrowLeft" : "ArrowRight")) {

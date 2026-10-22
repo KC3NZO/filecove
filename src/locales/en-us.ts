@@ -49,6 +49,7 @@ export const enUS: FileManagerLocaleText = {
     listView: "List view",
     viewOptions: "View options",
     showHiddenFiles: "Show hidden files",
+    showHiddenFilesShortcut: "Ctrl+H",
     path: "Path",
     folderMenu: "Folder menu",
 

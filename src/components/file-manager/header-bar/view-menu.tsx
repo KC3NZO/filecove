@@ -159,11 +159,19 @@ const ViewMenu = ({
                     </MenuItem>
                 ))}
                 <Divider />
-                <MenuItem role="menuitemcheckbox" aria-checked={showHidden} onClick={onToggleHidden}>
+                <MenuItem
+                    role="menuitemcheckbox"
+                    aria-checked={showHidden}
+                    aria-keyshortcuts="Control+H"
+                    onClick={onToggleHidden}
+                >
                     <ListItemIcon>
                         <Checkbox size="small" checked={showHidden} tabIndex={-1} disableRipple sx={controlSx} />
                     </ListItemIcon>
                     <ListItemText>{text.showHiddenFiles}</ListItemText>
+                    <Typography variant="body2" sx={shortcutSx}>
+                        {text.showHiddenFilesShortcut}
+                    </Typography>
                 </MenuItem>
                 {docked && (
                     <MenuItem
