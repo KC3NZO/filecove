@@ -1,4 +1,5 @@
 export type { ActionContext, ActionGroup, ActionTarget, FileAction } from "./action";
+export type { FileManagerApi, RefreshOptions } from "./api";
 export type {
     ConflictPolicy,
     ContentOptions,

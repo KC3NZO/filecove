@@ -379,20 +379,23 @@ const FolderView = ({
         reportSelection(selectedIds, selected);
     }, [reportSelection, selectedIds, selected]);
 
-    // An entry to reveal that is hidden is never listed, so it's given up on.
-    const revealHidden = useMemo(
-        () =>
-            revealId !== undefined &&
-            !showHidden &&
-            !!state?.entries?.some((entry) => entry.id === revealId && isHidden(entry)),
-        [revealId, showHidden, state?.entries],
-    );
+    // An entry to reveal that is hidden is never listed, so it's given up on, and so is one the
+    // whole folder has come without, such as one asked for from outside that isn't there.
+    const revealLost = useMemo(() => {
+        if (revealId === undefined || !state?.entries) {
+            return false;
+        }
+
+        const entry = state.entries.find((candidate) => candidate.id === revealId);
+
+        return entry ? !showHidden && isHidden(entry) : state.status === "ready";
+    }, [revealId, showHidden, state]);
 
     useEffect(() => {
-        if (revealHidden) {
+        if (revealLost) {
             onRevealed();
         }
-    }, [revealHidden, onRevealed]);
+    }, [revealLost, onRevealed]);
 
     // Scrolls to the entry asked for, focusing it if asked to, once it's rendered, which it is once
     // it has the view's focus, and once the entries are in their places. An entry that's gone from

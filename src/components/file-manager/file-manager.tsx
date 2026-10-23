@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent } from "react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent, Ref } from "react";
 import { createPortal, flushSync } from "react-dom";
 
 import Backdrop from "@mui/material/Backdrop";
@@ -55,12 +55,14 @@ import type {
     DropTarget,
     FileAdapter,
     FileEntry,
+    FileManagerApi,
     FileManagerLocaleText,
     FileManagerLocation,
     FolderRef,
     LocationChangeReason,
     MenuRequest,
     OpenMenu,
+    RefreshOptions,
     RunShortcut,
     Section,
     SectionFolder,
@@ -204,6 +206,11 @@ interface BaseProps {
      * text: that's `localeText`.
      */
     locale?: string;
+    /**
+     * Takes the `FileManagerApi`, for going somewhere, listing folders again, showing an entry in
+     * its folder or moving the focus in, from outside.
+     */
+    apiRef?: Ref<FileManagerApi>;
 }
 
 interface MultiSectionProps extends BaseProps {
@@ -385,6 +392,7 @@ const FileManager = ({
     onOpenFile,
     localeText,
     locale,
+    apiRef,
 }: FileManagerProps) => {
     const localeValue = useLocaleValue(localeText, locale);
     const [store] = useState(createFolderStore);
@@ -542,7 +550,8 @@ const FileManager = ({
     // Going up to a folder the open one is in, however it's reached, the user's way or the
     // consumer's, selects the folder it was left through, as desktop file managers do. A place
     // rewritten in place, as after the folder it was in was deleted, doesn't count. An entry still
-    // waiting to be selected is forgotten once another folder opens.
+    // waiting to be selected is forgotten once another folder opens, unless it was meant for that
+    // one, as `FileManagerApi.reveal` with a location asks.
     const [shownPlace, setShownPlace] = useState(place);
 
     if (shownPlace !== place) {
@@ -550,13 +559,9 @@ const FileManager = ({
 
         setShownPlace(place);
 
-        if (left && openKey) {
-            setReveal({ key: openKey, id: left.id });
-        } else if (reveal && reveal.key !== openKey) {
-            setReveal(null);
+        if (!(reveal && reveal.key === openKey)) {
+            setReveal(left && openKey ? { key: openKey, id: left.id } : null);
         }
-    } else if (reveal && reveal.key !== openKey) {
-        setReveal(null);
     }
 
     // The consumer's selected ids, as a set that stays the same while they hold the same ids, so
@@ -643,6 +648,9 @@ const FileManager = ({
 
     const busy =
         !!folder && !!pasteIds && pasteIds.adapter === (section?.adapter ?? adapter) && pasteIds.ids.has(folder.id);
+
+    // A reveal may be waiting for its folder to open.
+    const revealId = reveal?.key === openKey ? reveal.id : undefined;
 
     // Expands without ever collapsing, for a drag resting on a collapsed folder or section.
     const expand = useCallback(
@@ -1005,6 +1013,21 @@ const FileManager = ({
             sectionsOf(served).forEach((shown) => store.relist(shown.id, served, folderIds));
         },
         [sectionsOf, store],
+    );
+
+    // `FileManagerApi.refresh`: as `relist`, for one adapter's sections or all of them, and for every
+    // folder they've listed when no ids are given.
+    const refresh = useCallback(
+        (folderIds?: readonly string[], options?: RefreshOptions) => {
+            sectionsById.forEach((shown) => {
+                const served = shown.adapter ?? adapter;
+
+                if (!options?.adapter || options.adapter === served) {
+                    store.relist(shown.id, served, folderIds);
+                }
+            });
+        },
+        [adapter, sectionsById, store],
     );
 
     // Uploads run in the background, a few at a time, while the user browses; the folders they end
@@ -1391,6 +1414,47 @@ const FileManager = ({
         [actions, contextFor],
     );
 
+    // `FileManagerApi.reveal`: the entry is selected and scrolled to by the folder view once the
+    // folder it's in, the open one or the one gone to, lists it.
+    const revealEntry = useCallback(
+        (entryId: string, target?: FileManagerLocation) => {
+            const at = target ?? place;
+            const atSection = sectionsById.get(at.sectionId);
+
+            if (!atSection) {
+                return;
+            }
+
+            setReveal({ key: folderKey(atSection.id, folderOf(atSection, at.trail).id), id: entryId });
+
+            if (target) {
+                goTo(target);
+            }
+        },
+        [place, sectionsById, goTo],
+    );
+
+    // The API stays the same object while the file manager is mounted, so a consumer can keep it;
+    // its methods go to what's current when they're called.
+    const api = useRef({ goTo, goBack, goForward, refresh, revealEntry });
+
+    useLayoutEffect(() => {
+        api.current = { goTo, goBack, goForward, refresh, revealEntry };
+    });
+
+    useImperativeHandle(
+        apiRef,
+        (): FileManagerApi => ({
+            navigate: (target) => api.current.goTo(target),
+            back: () => api.current.goBack(),
+            forward: () => api.current.goForward(),
+            refresh: (folderIds, options) => api.current.refresh(folderIds, options),
+            reveal: (entryId, target) => api.current.revealEntry(entryId, target),
+            focus: () => setFocusContent(true),
+        }),
+        [],
+    );
+
     return (
         <LocaleContext value={localeValue}>
             <DirectionContext value={direction}>
@@ -1483,7 +1547,7 @@ const FileManager = ({
                                                         selecting={selecting}
                                                         busy={busy}
                                                         takeFocus={focusContent}
-                                                        revealId={reveal?.id}
+                                                        revealId={revealId}
                                                         selectedIds={selectionControlled ? selectedIdSet : undefined}
                                                         defaultSelectedIds={
                                                             initialSelection?.key === openKey

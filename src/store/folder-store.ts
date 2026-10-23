@@ -160,12 +160,13 @@ export const createFolderStore = () => {
 
         /**
          * Lists again, through `adapter`, a section's cached listings of the folders, and every
-         * cached listing holding one of them, for its item count, e.g. after their contents changed.
-         * All of the section's listings are looked through, found by the section's part of their
-         * key, so none is missed and no folder id is parsed.
+         * cached listing holding one of them, for its item count, e.g. after their contents changed,
+         * or every listing the section has cached when `folderIds` is omitted. All of the section's
+         * listings are looked through, found by the section's part of their key, so none is missed
+         * and no folder id is parsed.
          */
-        relist(sectionId: string, adapter: FileAdapter, folderIds: Iterable<string>) {
-            const changed = new Set(folderIds);
+        relist(sectionId: string, adapter: FileAdapter, folderIds?: Iterable<string>) {
+            const changed = folderIds && new Set(folderIds);
             const prefix = folderKey(sectionId, "");
 
             [...states].forEach(([key, state]) => {
@@ -173,7 +174,7 @@ export const createFolderStore = () => {
 
                 if (
                     key.startsWith(prefix) &&
-                    (changed.has(folderId) || state.entries?.some((entry) => changed.has(entry.id)))
+                    (!changed || changed.has(folderId) || state.entries?.some((entry) => changed.has(entry.id)))
                 ) {
                     load(key, adapter, folderId, true);
                 }
