@@ -42,7 +42,8 @@ export const file = (name: string, size: number, modified: string, mimeType?: st
     mimeType,
 });
 
-const join = (parent: string, name: string) => `${parent.replace(/\/$/, "")}/${name}`;
+/** The id the mock gives an entry named `name` in the folder `parent`: its full path. */
+export const childId = (parent: string, name: string) => `${parent.replace(/\/$/, "")}/${name}`;
 
 const parentOf = (path: string) => {
     const cut = path.lastIndexOf("/");
@@ -53,7 +54,7 @@ const parentOf = (path: string) => {
 const clone = (node: MockNode): MockNode => ({ ...node, children: node.children?.map(clone) });
 
 const toEntry = (parentPath: string, node: MockNode): FileEntry => ({
-    id: join(parentPath, node.name),
+    id: childId(parentPath, node.name),
     name: node.name,
     kind: node.children ? "folder" : "file",
     size: node.size,
@@ -78,7 +79,7 @@ export const createMockAdapter = (
 
     const index = (path: string, node: MockNode) => {
         folders.set(path, node);
-        node.children?.forEach((child) => child.children && index(join(path, child.name), child));
+        node.children?.forEach((child) => child.children && index(childId(path, child.name), child));
     };
 
     // Forgets a folder and everything below it, before it is indexed again under a new path.
@@ -188,7 +189,7 @@ export const createMockAdapter = (
         parent.children = parent.children?.filter((child) => child !== node);
 
         if (node.children) {
-            unindex(join(parentId, node.name));
+            unindex(childId(parentId, node.name));
         }
     };
 
@@ -218,7 +219,7 @@ export const createMockAdapter = (
         target.children = [...(target.children ?? []), node];
 
         if (node.children) {
-            index(join(targetId, node.name), node);
+            index(childId(targetId, node.name), node);
         }
     };
 
@@ -246,7 +247,7 @@ export const createMockAdapter = (
                 const node = folder(name, new Date().toISOString(), []);
 
                 parent.children = [...(parent.children ?? []), node];
-                index(join(parentId, name), node);
+                index(childId(parentId, name), node);
 
                 return toEntry(parentId, node);
             }),
@@ -260,7 +261,7 @@ export const createMockAdapter = (
 
                 if (node.children) {
                     unindex(entry.id);
-                    index(join(parentId, name), node);
+                    index(childId(parentId, name), node);
                 }
 
                 return toEntry(parentId, node);

@@ -5,6 +5,14 @@ const params = new URLSearchParams(window.location.search);
 export const single = params.has("single");
 
 /**
+ * `?uncontrolled`: the file manager keeps its location, view settings and selection itself. By
+ * default the playground keeps them: the location in the URL's hash, so a reload or the browser's
+ * back button follows it, and the view settings in local storage. Uncontrolled, those only set where
+ * it starts (the `default…` props), and the footer still shows the selection it's told.
+ */
+export const uncontrolled = params.has("uncontrolled");
+
+/**
  * `?rtl`: the page right to left with nothing but `dir="rtl"` on `<html>`, which is all the file
  * manager asks of a page. The theme's `direction` and Emotion's RTL plugin are left out, so this is
  * how to check it looks right without them.
