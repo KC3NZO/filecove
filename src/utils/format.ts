@@ -5,6 +5,9 @@ import type { FileEntry, FileManagerLocaleText, Locale } from "../types";
 // Decimal units, as GNOME Files shows them, above bytes.
 const SIZE_UNITS = ["kilobyte", "megabyte", "gigabyte", "terabyte"];
 
+// Accents and other combining marks, left out of what's searched for.
+const MARKS = /\p{M}/gu;
+
 const MIME_LABELS: [prefix: string, label: (text: FileManagerLocaleText) => string][] = [
     ["image/", (text) => text.typeImage],
     ["video/", (text) => text.typeVideo],
@@ -91,6 +94,11 @@ export const createLocale = (
         describeType,
         compareNames: (a, b) => nameCollator.compare(a, b),
         sameLetters: (a, b) => letterCollator.compare(a, b) === 0,
+        // Lowercased the locale's way (a Turkish "I" is "ı"), then split into letters and marks,
+        // compatibility forms such as full-width letters and ligatures included, with the marks
+        // dropped. Collation can't find text within text, so unlike `sameLetters` this leaves out
+        // the accents of every language, as GNOME Files' search does.
+        foldLetters: (value) => value.toLocaleLowerCase(locale).normalize("NFKD").replace(MARKS, ""),
     };
 };
 

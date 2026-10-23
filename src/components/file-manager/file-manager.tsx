@@ -589,7 +589,8 @@ const FileManager = ({
     }, [focusContent]);
 
     // What the search field in the path bar's place searches, the open folder or every section,
-    // or null while it isn't there, and what's typed in it. Nothing is searched yet.
+    // or null while it isn't there, and what's typed in it. A folder search lists only the open
+    // folder's entries that match; a search everywhere searches nothing yet.
     const [searchScope, setSearchScope] = useState<SearchScope | null>(null);
     const [query, setQuery] = useState("");
     // Sections a search everywhere leaves out, kept while the file manager is mounted, so a section
@@ -1819,6 +1820,7 @@ const FileManager = ({
                                                         view={view}
                                                         sort={sort}
                                                         showHidden={showHidden}
+                                                        query={searchScope === "folder" ? query : ""}
                                                         hasActions={hasActions}
                                                         selecting={selecting}
                                                         busy={busy}
@@ -1838,6 +1840,7 @@ const FileManager = ({
                                                         onOpenMenu={openMenu}
                                                         onShortcut={runShortcut}
                                                         onRevealed={clearReveal}
+                                                        onRevealUnmatched={closeSearch}
                                                     />
                                                 )}
                                             </Box>

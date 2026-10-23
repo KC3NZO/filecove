@@ -74,6 +74,9 @@ export const enUS: FileManagerLocaleText = {
 
     folderEmpty: "Folder is empty",
     folderOpenFailed: "Couldn't open this folder",
+    searchNoResults: "No results found",
+    searchNoResultsHint: "Try a different search",
+    searchResultCount: (count) => (count === 0 ? "No results" : count === 1 ? "1 result" : `${count} results`),
     selectedCount: (count) => (count === 1 ? "1 item selected" : `${count} items selected`),
     selectItems: "Select items",
     selectionCount: (count) => `${count} selected`,

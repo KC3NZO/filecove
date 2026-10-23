@@ -176,6 +176,12 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     // Content
     folderEmpty: string;
     folderOpenFailed: string;
+    /** In place of the entries while a folder search matches none of them. */
+    searchNoResults: string;
+    /** Below `searchNoResults`. */
+    searchNoResultsHint: string;
+    /** Read to screen readers as a folder search's results change: "3 results", or none. */
+    searchResultCount: (count: number) => string;
     /** Read to screen readers as the selection changes. */
     selectedCount: (count: number) => string;
     /** The touch selection bar's title while nothing is selected. */
@@ -300,4 +306,6 @@ export interface Locale {
     compareNames: (a: string, b: string) => number;
     /** Whether two strings have the same letters, case and accents aside, for type-ahead. */
     sameLetters: (a: string, b: string) => boolean;
+    /** Text with case and accents left out, to find what's typed in a search within names. */
+    foldLetters: (text: string) => string;
 }

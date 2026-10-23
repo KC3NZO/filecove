@@ -27,6 +27,7 @@ import { isHidden } from "../../../utils/hidden";
 import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { belowElement, insideElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
+import { holdsTerms, searchTerms } from "../../../utils/search";
 import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import { sameIds } from "../../../utils/sets";
 import { pressesKey } from "../../../utils/shortcut";
@@ -59,6 +60,11 @@ interface FolderViewProps {
     sort: SortOrder;
     /** Whether hidden entries are listed with the rest. */
     showHidden: boolean;
+    /**
+     * What a folder search has typed: only entries whose names hold every word of it are listed,
+     * and all of them while it's empty.
+     */
+    query: string;
     hasActions: boolean;
     /** Touch selection mode: taps toggle entries, and the selection bar shows. */
     selecting: boolean;
@@ -90,6 +96,8 @@ interface FolderViewProps {
     onShortcut: RunShortcut;
     /** Called once `revealId` has been selected. */
     onRevealed: () => void;
+    /** Called while `revealId` is listed but left out by `query`, so ending the search shows it. */
+    onRevealUnmatched: () => void;
 }
 
 /** Where the view's focus is among the entries: the entry, and where it was listed. */
@@ -181,6 +189,7 @@ const FolderView = ({
     view,
     sort,
     showHidden,
+    query,
     hasActions,
     selecting,
     busy,
@@ -196,6 +205,7 @@ const FolderView = ({
     onOpenMenu,
     onShortcut,
     onRevealed,
+    onRevealUnmatched,
 }: FolderViewProps) => {
     const folder = folderOf(section, trail);
     const { state, reload } = useFolder(section, folder.id, true);
@@ -212,7 +222,7 @@ const FolderView = ({
 
     // Hidden entries are left out here rather than in the store, since clashing names are looked for
     // among all of them. Sorted here too, since the sidebar tree shares the listing and keeps its own order.
-    const entries = useMemo(() => {
+    const shown = useMemo(() => {
         if (!state?.entries) {
             return undefined;
         }
@@ -221,6 +231,28 @@ const FolderView = ({
 
         return listed.sort(entryComparator(sort, locale));
     }, [state?.entries, showHidden, sort, locale]);
+
+    // A folder search lists only the entries whose names hold every word typed, so everything that
+    // goes by what's listed goes by the results. Names are folded once per listing rather than per
+    // letter typed, and the sorted entries are filtered rather than sorted again.
+    const terms = useMemo(() => searchTerms(query, locale.foldLetters), [query, locale]);
+    const searching = terms.length > 0;
+
+    const foldedNames = useMemo(
+        () =>
+            searching && state?.entries
+                ? new Map(state.entries.map((entry) => [entry.id, locale.foldLetters(entry.name)] as const))
+                : undefined,
+        [searching, state?.entries, locale],
+    );
+
+    const entries = useMemo(
+        () =>
+            shown && foldedNames
+                ? shown.filter((entry) => holdsTerms(foldedNames.get(entry.id) ?? "", terms))
+                : shown,
+        [shown, foldedNames, terms],
+    );
 
     // Where each entry is listed, to find entries by id without searching a large folder.
     const indexById = useMemo(() => new Map(entries?.map((entry, index) => [entry.id, index] as const)), [entries]);
@@ -245,6 +277,20 @@ const FolderView = ({
 
     if (focus && focusIndex >= 0 && focusIndex !== focus.index) {
         setFocus({ id: focus.id, index: focusIndex });
+    }
+
+    // What's searched for changing starts the results over: the Tab stop goes back to the first
+    // match, or the first one selected, and the panel scrolls back to the top (below). Once nothing
+    // is, the whole folder shows with the Tab stop where it was, on what was found.
+    const searchKey = terms.join(" ");
+    const [searchedFor, setSearchedFor] = useState(searchKey);
+
+    if (searchedFor !== searchKey) {
+        setSearchedFor(searchKey);
+
+        if (searchKey) {
+            setFocus(null);
+        }
     }
 
     let focusId: string | null = null;
@@ -311,6 +357,24 @@ const FolderView = ({
             pendingFocus.current = true;
         }
     }, [takeFocus]);
+
+    // Results start at the top. The whole folder, back from a search, is scrolled to the entry with
+    // the Tab stop, without taking the focus.
+    const scrolledFor = useRef(searchKey);
+
+    useEffect(() => {
+        if (scrolledFor.current === searchKey) {
+            return;
+        }
+
+        scrolledFor.current = searchKey;
+
+        if (searchKey) {
+            marquee.surfaceRef.current?.parentElement?.scrollTo({ top: 0 });
+        } else if (focusId !== null) {
+            pendingScroll.current = { id: focusId, focus: false };
+        }
+    }, [searchKey, focusId, marquee.surfaceRef]);
 
     // Waits for the refreshed listing, which arrives after the entry was created or renamed. The
     // entry takes the focus too while the view has it, or is to take it.
@@ -397,6 +461,16 @@ const FolderView = ({
         }
     }, [revealLost, onRevealed]);
 
+    // One a folder search leaves out, the only other reason a listed entry isn't shown, is waited
+    // for while the search is ended, rather than given up on.
+    const revealUnmatched = revealId !== undefined && revealIndex < 0 && !revealLost && !!foldedNames?.has(revealId);
+
+    useEffect(() => {
+        if (revealUnmatched) {
+            onRevealUnmatched();
+        }
+    }, [revealUnmatched, onRevealUnmatched]);
+
     // Scrolls to the entry asked for, focusing it if asked to, once it's rendered, which it is once
     // it has the view's focus, and once the entries are in their places. An entry that's gone from
     // the listing is given up on.
@@ -476,7 +550,11 @@ const FolderView = ({
 
     // Dragged entries already listed here came from this folder, or are its folders dragged from the
     // sidebar, so its empty space doesn't take them and a drag that ends where it began does nothing.
-    const listsDragged = useMemo(() => !!entries?.some((entry) => draggedIds.has(entry.id)), [entries, draggedIds]);
+    // That goes for those hidden or left out by a search too.
+    const listsDragged = useMemo(
+        () => !!state?.entries?.some((entry) => draggedIds.has(entry.id)),
+        [state?.entries, draggedIds],
+    );
 
     // Dropped onto a folder, the entries go into it, by the same rules as pasting. Dropped anywhere
     // else, a file included, they go into the open folder, keyed by its id, which none of its
@@ -843,6 +921,9 @@ const FolderView = ({
     };
 
     const ContentView = view === "list" ? FileList : FileGrid;
+    // Until something shows, a folder still coming in page by page waits with the spinner, so
+    // neither "Folder is empty" nor "No results found" shows before all of it has come.
+    const shownSoFar = entries?.length || !state?.partial ? entries : undefined;
     let content: ReactNode;
 
     if (entries?.length) {
@@ -866,7 +947,15 @@ const FolderView = ({
                 onSortChange={onSortChange}
             />
         );
-    } else if (entries) {
+    } else if (shownSoFar && searching) {
+        content = (
+            <Box id={stateId} sx={stateSx}>
+                <Icon name="search" sx={stateIconSx} />
+                <Typography sx={stateTitleSx}>{text.searchNoResults}</Typography>
+                <Typography variant="body2">{text.searchNoResultsHint}</Typography>
+            </Box>
+        );
+    } else if (shownSoFar) {
         content = (
             <Box id={stateId} sx={stateSx}>
                 <Icon name="folderOpen" sx={stateIconSx} />
@@ -903,8 +992,10 @@ const FolderView = ({
         );
     }
 
-    // Screen readers hear how many entries are selected as it changes, e.g. with Shift+arrows or Ctrl+A.
+    // Screen readers hear how many entries are selected as it changes, e.g. with Shift+arrows or Ctrl+A,
+    // and how many a folder search finds, from the field, once all of the folder has come.
     const status = selected.length > 0 ? text.selectedCount(selected.length) : "";
+    const results = searching && entries && !state?.partial ? text.searchResultCount(entries.length) : "";
 
     // While it lists nothing, the view is tabbed to itself, so the shortcuts and the menu key work
     // there, and it's named for the folder and described by why it's empty.
@@ -936,7 +1027,7 @@ const FolderView = ({
             onDragStart={handleDragStart}
             {...drop.handlers}
         >
-            {(busy || state?.status === "loading") && entries && (
+            {(busy || state?.status === "loading") && shownSoFar && (
                 <LinearProgress sx={progressSx} aria-label={text.loading} />
             )}
             {content}
@@ -954,6 +1045,9 @@ const FolderView = ({
             <Box ref={marquee.marqueeRef} sx={marqueeSx} />
             <Box sx={visuallyHiddenSx} role="status">
                 {status}
+            </Box>
+            <Box sx={visuallyHiddenSx} role="status">
+                {results}
             </Box>
         </Box>
     );
