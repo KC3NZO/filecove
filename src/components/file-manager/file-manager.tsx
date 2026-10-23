@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent, Ref } from "react";
+import type { ChangeEvent, ComponentPropsWithoutRef, CSSProperties, DragEvent, KeyboardEvent, Ref } from "react";
 import { createPortal, flushSync } from "react-dom";
 
 import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
-import { useControlled } from "@mui/material/utils";
+import { useControlled, useForkRef } from "@mui/material/utils";
 
 import { CutContext } from "../../contexts/cut-context";
 import { DataContext } from "../../contexts/data-context";
@@ -23,6 +23,7 @@ import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { createFolderStore, folderKey, keyFolder } from "../../store/folder-store";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
+import { withSx } from "../../styles/sx";
 import { visibleActionGroups } from "../../utils/action-groups";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { isHidden } from "../../utils/hidden";
@@ -80,6 +81,10 @@ import type { PreviewDialogState, PreviewRequest } from "./dialogs/preview-dialo
 import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-dialog";
 import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
 
+// The root element's own attributes, which go on it as they do on a MUI component's root, so an
+// `id`, an `aria-label`, a `data-` attribute or a handler can be set there. `title` is the sidebar's.
+type RootAttributes = Omit<ComponentPropsWithoutRef<"div">, "title" | "children">;
+
 /*
  * The location, the view settings, the tree's expanded folders and the selection below can each be
  * controlled, as MUI's props are: pass the value and change it in its `on…Change` callback, or
@@ -87,7 +92,7 @@ import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
  * mounting, and MUI warns in development about switching later. Controlled, the user's changes are
  * only asked for through the callback, and made once they're passed back.
  */
-interface BaseProps {
+interface BaseProps extends RootAttributes {
     /** Backend for every section that doesn't bring its own. */
     adapter: FileAdapter;
     /** Context menu actions, in groups. */
@@ -211,6 +216,13 @@ interface BaseProps {
      * its folder or moving the focus in, from outside.
      */
     apiRef?: Ref<FileManagerApi>;
+    /** The root element, which fills the box it's placed in. */
+    ref?: Ref<HTMLDivElement>;
+    /**
+     * Styles the root element, over its own, e.g. to size it. It fills its container by default,
+     * and lays itself out by its own width (container queries), not the viewport's.
+     */
+    sx?: SxProps<Theme>;
 }
 
 interface MultiSectionProps extends BaseProps {
@@ -276,15 +288,15 @@ const refuseFiles = (event: DragEvent) => {
 };
 
 // The root only establishes the container; a container can't match its own queries, so the
-// visible frame is the child below it.
-const rootSx: SxProps<Theme> = {
+// visible frame is the child below it. The consumer's `sx` goes over it.
+const rootSx = {
     containerType: "inline-size",
     containerName: ROOT_CONTAINER,
     position: "relative",
     width: "100%",
     height: "100%",
     overflow: "hidden",
-};
+} satisfies SxProps<Theme>;
 
 const frameSx: SxProps<Theme> = {
     display: "flex",
@@ -393,6 +405,15 @@ const FileManager = ({
     localeText,
     locale,
     apiRef,
+    ref,
+    sx,
+    onKeyDown,
+    onDragEnter,
+    onDragOver,
+    onDrop,
+    onDragEnd,
+    onPointerDownCapture,
+    ...rootAttributes
 }: FileManagerProps) => {
     const localeValue = useLocaleValue(localeText, locale);
     const [store] = useState(createFolderStore);
@@ -528,6 +549,8 @@ const FileManager = ({
     const [selectingKey, setSelectingKey] = useState<string | null>(null);
     const selecting = openKey !== null && selectingKey === openKey;
     const rootRef = useRef<HTMLDivElement>(null);
+    const rootElementRef = useForkRef(rootRef, ref);
+    const rootStyle = useMemo(() => withSx(rootSx, sx), [sx]);
     // Handed to what portals out of the file manager, so it runs the same way (`DirectionContext`).
     const direction = useTextDirection(rootRef);
     const panelRef = useRef<HTMLDivElement>(null);
@@ -1461,18 +1484,37 @@ const FileManager = ({
                 <DataContext value={data}>
                     <CutContext value={cut}>
                         <DragContext value={drag.context}>
+                            {/* The consumer's handlers run first, so one can take an event before the
+                                file manager does, e.g. a key press, by calling `preventDefault`. */}
                             <Box
-                                ref={rootRef}
-                                sx={rootSx}
-                                onPointerDownCapture={drag.onPointerDownCapture}
-                                onDragEnter={refuseFiles}
-                                onDragOver={refuseFiles}
+                                {...rootAttributes}
+                                ref={rootElementRef}
+                                sx={rootStyle}
+                                onPointerDownCapture={(event) => {
+                                    onPointerDownCapture?.(event);
+                                    drag.onPointerDownCapture(event);
+                                }}
+                                onDragEnter={(event) => {
+                                    onDragEnter?.(event);
+                                    refuseFiles(event);
+                                }}
+                                onDragOver={(event) => {
+                                    onDragOver?.(event);
+                                    refuseFiles(event);
+                                }}
                                 onDrop={(event) => {
+                                    onDrop?.(event);
                                     refuseFiles(event);
                                     drag.end();
                                 }}
-                                onDragEnd={drag.end}
-                                onKeyDown={handleKeyDown}
+                                onDragEnd={(event) => {
+                                    onDragEnd?.(event);
+                                    drag.end();
+                                }}
+                                onKeyDown={(event) => {
+                                    onKeyDown?.(event);
+                                    handleKeyDown(event);
+                                }}
                             >
                                 <Box sx={frameSx} data-sidebar-hidden={sidebarHidden}>
                                     <Backdrop
