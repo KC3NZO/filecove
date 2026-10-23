@@ -70,7 +70,7 @@ The tree is flattened into the rows it shows (`hooks/use-tree-rows.ts`, `FlatTre
 `useTreeRows` reads every listing it shows from the store, and is flattened again whenever any listing changes, by the store's `version`. Each listing's folders are sorted once, kept in a `WeakMap` by the listing, which is replaced rather than changed.
 
 - A folder is listed once the tree comes to show its folders: when it's expanded along with every row above it, and its `hasSubfolders` hint isn't false. A section's root is listed when the section is expanded, and a single section's root at once.
-- Only folders the tree has just come to show are listed, so a listing that failed isn't tried again on every change, only from its Retry or once it's shown again.
+- Only folders the tree has just come to show are listed, so a listing that failed isn't tried again on every change, only from its Retry or once it's shown again. So is a folder shown already whose section another adapter now serves, since `requested` remembers which adapter each was listed with, and that section's listings are dropped (see `props.md`).
 
 ### What stays rendered
 

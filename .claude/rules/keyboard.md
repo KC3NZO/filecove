@@ -61,9 +61,10 @@ The list and the grid are each a `listbox` (`aria-multiselectable`, named by the
 
 The folder view is remounted per folder, so the focused element goes with it. `file-manager.tsx` sets `focusContent` for one render (`takeFocus` on `FolderView`, cleared in an effect after the children's run), and the new view takes the focus as soon as it has something to focus, holding it on itself while the folder loads.
 
-- `arrive` sets it when the focus was in the content panel, or in the context menu opened from it (`menuOpener`), so an "Open" action picked there counts.
+- `leaveFor` sets it, as the file manager goes somewhere itself (the user, or `FileManagerApi.navigate`, `back` and `forward`), when the focus was in the content panel, or in the context menu opened from it (`menuOpener`), so an "Open" action picked there counts. A `location` the consumer changes doesn't move the focus.
 - Navigating from the overlay sidebar sets it too, since the overlay closes.
-- Going up to a folder the open one is in, by any route (Backspace, the path bar, back), reveals the folder left through (`folderLeft` in `utils/navigation.ts`): it's selected, scrolled to and, when the view has or takes the focus, focused, as in GNOME Files.
+- `FileManagerApi.focus()` sets it, for a consumer moving the focus into the file manager.
+- Going up to a folder the open one is in, by any route (Backspace, the path bar, back, a `location` the consumer passes), reveals the folder left through (`folderLeft` in `utils/navigation.ts`), worked out as the place changes while rendering (`shownPlace`): it's selected, scrolled to and, when the view has or takes the focus, focused, as in GNOME Files.
 - Removing the focused entry drops the focus to the page without a blur, and React never sees a blur from a removed node, so `focusWithin` stays set and the entry taking its place gets the focus back. A blur that really leaves the view clears it. A created or renamed entry that's revealed takes the focus the same way, after the dialog has given it back.
 
 ## Sidebar tree

@@ -84,7 +84,7 @@ A single file steps through the files of the view it's listed in, in the content
 
 - +, -, 0 and 1 zoom an image, and the arrows pan it while it's zoomed in (see "Zooming images"). 0 and 1 are the keys printed with them on any layout, so AZERTY's digit row works without Shift (see "Keyboard layouts" in `keyboard.md`).
 - Escape closes, and so does Space, as in GNOME's and macOS's previewers, except on a button, link or player, and not when it's a key held down from opening the preview (`event.repeat`).
-- Opened from the content (`focusInContent`, shared with `arrive`, which counts the context menu opened from the content), the dialog doesn't hand the focus back itself (`disableRestoreFocus`). Once it has faded out (`onExited`), `focusContent` gives it to the content's focused entry, which is the file shown last when the selection followed. Opened from anywhere else, MUI hands it back.
+- Opened from the content (`focusInContent`, shared with `leaveFor`, which counts the context menu opened from the content), the dialog doesn't hand the focus back itself (`disableRestoreFocus`). Once it has faded out (`onExited`), `focusContent` gives it to the content's focused entry, which is the file shown last when the selection followed. Opened from anywhere else, MUI hands it back.
 
 ## The playground
 

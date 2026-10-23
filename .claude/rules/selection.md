@@ -29,6 +29,9 @@ The keyboard selects too (see `keyboard.md`): in the content, plain arrows selec
 
 `content/folder-view.tsx` holds the selection through `hooks/use-selection.ts`. The view remounts per folder, so every folder opens with nothing selected.
 
+- The consumer can control it (`selectedIds`) or set it for the folder the file manager opens in (`defaultSelectedIds`), and is told it (`onSelectionChange`), as it's made and whenever the listing under it changes it. A selection set from outside is scrolled to once the folder is listed. See "Selection" in `props.md`.
+- Ids the folder doesn't list leave the selection once all of the folder has come (`retain`), such as entries deleted or moved away; hidden entries are listed, so they stay. Until then the set may hold ids of entries not listed yet, which don't count: `selected` only holds listed entries.
+
 ## Marquee (rubber band)
 
 `hooks/use-marquee.ts`. Content only, mouse only (on touch a drag scrolls). A press on blank space that moves 4px draws a rectangle, and every entry it touches is selected (`marqueeSelection`): plain replaces, Shift adds, Ctrl or ⌘ flips.

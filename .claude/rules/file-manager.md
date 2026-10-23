@@ -9,7 +9,7 @@ paths:
 
 # File manager internals
 
-`src/components/file-manager/file-manager.tsx` is the frame (sidebar, header bar, inset content panel). It owns navigation, tree expansion, the sort order, touch selection mode and the context menu state. Selection has its own rule, `selection.md`.
+`src/components/file-manager/file-manager.tsx` is the frame (sidebar, header bar, inset content panel). It owns navigation, tree expansion, the sort order, touch selection mode and the context menu state. Selection has its own rule, `selection.md`, and the public props that control or drive these (the location, the view settings, the selection, `apiRef`, the root element, props changing after mounting) have `props.md`.
 
 ## Data
 
@@ -19,6 +19,7 @@ paths:
 - `relist(sectionId, adapter, folderIds)` lists again the section's cached listings of those folders, and every cached listing holding one of them, for its item count. It looks through all of the section's listings, found by the section's part of their key, so none is missed and no folder id is parsed.
 - `cachedTree(sectionId, folderId)` gives the ids of a folder and of every folder below it whose listing the section has cached, found by walking the cached listings, so the folders below one are known without parsing ids.
 - `forget(sectionId, folderIds)` drops the listings of those folders and of everything cached below them (`cachedTree`). Only use it on folders no enabled `useFolder` is showing, since nothing reloads them on its own.
+- `relist` without folder ids lists again every listing the section has cached, for `FileManagerApi.refresh()`. `forgetSection(sectionId)` drops all of a section's listings, for a section another adapter now serves; `useFolder` and the tree list what they show again, since they follow the adapter (see "Props changing after mounting" in `props.md`).
 - In the sidebar, a folder's listing, once there is one, overrides the adapter's `hasSubfolders` hint for its chevron.
 
 ### Paging
@@ -43,15 +44,16 @@ Sections served by the same adapter object can show the same folders, under the 
 
 ## Navigation
 
-`hooks/use-place-history.ts` holds the current `Place` (a section plus a trail of `FolderRef`s) and the back/forward history. `utils/navigation.ts` has `folderOf`, which returns the folder a place points at.
+`hooks/use-location-history.ts` holds the current place, a `FileManagerLocation` (a section plus a trail of `FolderRef`s), and the back/forward history, and lets the consumer control it (see `props.md`). `utils/navigation.ts` has `folderOf`, which returns the folder a place points at, and `samePlace` and `equalPlace`, which compare places by id, and by name too.
 
 - Breadcrumbs come from the trail, not from parsing ids. The path bar starts with the section label, followed by the folders below its root.
-- Navigating never expands or collapses the sidebar tree; only its chevrons, Right and Left on a row, and a drag resting on a row do (see "Drag and drop"), and the path bar shows where you are. Only the first section shown starts expanded.
-- Going up to a folder the open one is in, by any route, selects the folder left through, and opening a folder from the content takes the focus into it (`arrive`; see `keyboard.md`). The header's back and forward go through `goBack` and `goForward` for this, which read where they lead from `usePlaceHistory`'s `previous` and `next`.
+- Navigating never expands or collapses the sidebar tree; only its chevrons, Right and Left on a row, and a drag resting on a row do (see "Drag and drop"), and the path bar shows where you are. Only the first section shown starts expanded, unless the consumer says otherwise: the expanded folders can be controlled too (`expandedFolders`; see `props.md`).
+- Going up to a folder the open one is in, by any route, the consumer's included, selects the folder left through, worked out during rendering as the place changes (`shownPlace`), and opening a folder from the content takes the focus into it (`leaveFor`; see `keyboard.md`). The header's back and forward go through `goBack` and `goForward` for this, which read where they lead from `useLocationHistory`'s `previous` and `next`.
+- Places in the history are rewritten with `revise` after a rename, a delete or a section changing, told as "replace", and the current one is the first section's root whenever its section is missing (see `props.md`).
 
 ## Hiding the docked sidebar
 
-Below `rootWide` the sidebar is an overlay, opened and closed with `sidebarOpen`. Docked, it can be hidden instead, with `sidebarHidden` in `file-manager.tsx`, as in GNOME Files:
+Below `rootWide` the sidebar is an overlay, opened and closed with `sidebarOpen`. Docked, it can be hidden instead, with `sidebarHidden` in `file-manager.tsx`, as in GNOME Files. The consumer can control it, or set where it starts (`sidebarHidden`, `defaultSidebarHidden`, `onSidebarHiddenChange`; see `props.md`):
 
 - F9 hides and shows it (see `keyboard.md`), as does "Show sidebar" in the header's view menu, with F9 beside it. The menu portals out of the file manager, where its container queries don't reach, so it reads whether the sidebar docks as it opens (`sidebarDocked`, from the sidebar's computed `position`), and only offers the item then.
 - While it's hidden, the header shows the "Show sidebar" button and search, as it does while the sidebar is collapsed.
@@ -80,7 +82,7 @@ Both use one small modal, `dialogs/name-dialog.tsx`, rather than editing names i
 - The name is trimmed and checked as it's typed (`utils/names.ts`): not ".", "..", or containing "/", and no clash with the folder's cached listing. An empty name only disables the button. The adapter has the final say, and the message of an `Error` it rejects with shows under the field, with the name kept.
 - The field is focused with the name selected once the dialog has faded in (the transition's `onEntered`), not with `autoFocus`, which the closing context menu steals focus back from. Rename selects a file's name up to its extension. New folder starts with the first unused `untitledFolder` name, "New folder" then "New folder (2)" in English (`newFolderName`). Until something is typed, the suggestion follows the folder's listing as it comes (and is selected again if it changes), and Create waits for all of it unless listing failed, since a folder created in from its own menu (`createFolderInto`) may never have been listed. Submitting keeps the name as it is, so it doesn't move on as the folder is listed again during the fade-out. An unchanged name just closes.
 - While the adapter works, the button shows a spinner and the field is read-only. Cancelling aborts the `signal`, but the folder is listed again anyway, since the change may already have been made.
-- Afterwards the folder is listed again, with every listing holding it, for the item count (`relist`). If the folder is open, in whichever section, `file-manager.tsx` asks `FolderView` (`revealId`) to select the entry and scroll to it once the refreshed listing has it.
+- Afterwards the folder is listed again, with every listing holding it, for the item count (`relist`). If the folder is open, in whichever section, `file-manager.tsx` asks `FolderView` (`revealId`) to select the entry and scroll to it once the refreshed listing has it. `FileManagerApi.reveal` goes the same way; a reveal is dropped once another folder opens, or when the folder's whole listing has come without the entry (`revealLost`).
 - A new folder is also scrolled to in the sidebar tree (`treeReveal`, a `TreeReveal`, from `revealInTree`, which a folder made in the transfer picker goes through too), in the first section whose tree has its row. It waits for the row, which comes with the refreshed listing, and scrolls the tree just far enough to show it (see `virtualization.md`). Nothing is expanded or selected for it, and the focus stays where it is, so navigation still never opens the tree. It's given up on when the folder it was made in isn't shown expanded in the tree, as when the sidebar has it collapsed, and for a hidden name while hidden files are off. A rename isn't scrolled to.
 - A renamed folder keeps its place in every section showing it: `renameInPlace` (`utils/navigation.ts`) rewrites every place in the history, and its expanded state carries over. When its id changed, as path ids do, the ids below it can't be worked out, so trails into it end at the renamed folder, and the old id and the new one go through `dropFolders`, since either could hold another folder's contents. A section rooted in the folder stays where it is, under the old id.
 
@@ -144,7 +146,7 @@ Entries in the content and folders in the sidebar tree can be dragged into a fol
 
 ## Sorting
 
-Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrder` (a key of name, size, type or modified, plus a direction), which persists across folders, and `folder-view.tsx` sorts the listing with `entryComparator`. Names and type labels compare in the `locale` prop's collation (`Locale.compareNames`), and the keys' and directions' labels come from the text (`SORT_LABELS`; see `locale.md`).
+Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrder` (a key of name, size, type or modified, plus a direction), which persists across folders and the consumer can control (`sort`, `defaultSort`, `onSortChange`; see `props.md`), and `folder-view.tsx` sorts the listing with `entryComparator`. So can the view, list or grid (`view`, `defaultView`, `onViewChange`). Names and type labels compare in the `locale` prop's collation (`Locale.compareNames`), and the keys' and directions' labels come from the text (`SORT_LABELS`; see `locale.md`).
 
 - Folders always come first. Ties fall back to the name, A to Z.
 - Picking a key starts it in its own direction: names and types A to Z, sizes and dates largest and newest first.
@@ -158,18 +160,17 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 
 ## Hidden files
 
-"Show hidden files" in the header's view menu, off to start with, is `showHidden` in `file-manager.tsx`. Ctrl+H turns it on and off from anywhere in the file manager, as in GNOME Files, and the menu shows the key beside it (`showHiddenFilesShortcut`, as the language's keyboards name it). It's Ctrl only, not ⌘, since ⌘H hides the browser on macOS before the page sees it (see `keyboard.md`). It persists across folders, as the sort does. Whether an entry is hidden is `isHidden` (`utils/hidden.ts`): the entry's optional `hidden` when the adapter sets it, or else a name starting with a dot. So a backend with its own idea of hidden says so, and `hidden: false` keeps a dotfile always shown.
+"Show hidden files" in the header's view menu, off to start with, is `showHidden` in `file-manager.tsx`, which the consumer can control or start on (`showHidden`, `defaultShowHidden`, `onShowHiddenChange`; see `props.md`), e.g. to keep it across reloads. Ctrl+H turns it on and off from anywhere in the file manager, as in GNOME Files, and the menu shows the key beside it (`showHiddenFilesShortcut`, as the language's keyboards name it). It's Ctrl only, not ⌘, since ⌘H hides the browser on macOS before the page sees it (see `keyboard.md`). It persists across folders, as the sort does. Whether an entry is hidden is `isHidden` (`utils/hidden.ts`): the entry's optional `hidden` when the adapter sets it, or else a name starting with a dot. So a backend with its own idea of hidden says so, and `hidden: false` keeps a dotfile always shown.
 
 - Listings are filtered where they're shown, never in the store, so clash checks (the paste, upload and name dialogs) and `relist` still see every entry: a hidden name can clash too.
 - The content view (`folder-view.tsx`) leaves hidden entries out before sorting, so selection, Select all, type-ahead, the marquee, the arrow keys, the selection bar's total, the screen reader's count and the preview's stepping (the `listing` of a `MenuRequest`) all go by what's shown. A folder holding only hidden entries reads "Folder is empty", as in GNOME Files.
 - The sidebar tree (`use-tree-rows.ts`) leaves out hidden folders, and a folder whose listing holds none that show loses its chevron. `sortedFolders` keeps both the whole sorted list and the unhidden one per listing. Expanded state is kept by folder key, so a hidden folder comes back as it was.
 - The "Move to…" and "Copy to…" picker leaves them out too, so a hidden destination is reached by turning the option on first.
 - The open folder stays open when it is hidden and the option is turned off, or when it's reached with it off, and the path bar shows it; only what's listed in it is filtered.
-- Selected entries that get hidden stay in the selection's id set, as removed ones do, but don't count: `selected` only holds listed entries. Turning the option back on brings them back selected.
+- Selected entries that get hidden stay in the selection's id set, since the listing still has them, unlike removed ones, but don't count: `selected` only holds listed entries. Turning the option back on brings them back selected. `onSelectionChange` has them in its ids but not its entries.
 - A created or renamed entry to be revealed (`revealId`), or a folder left through that is hidden, is given up on while hidden entries are off, rather than waiting for a listing that will never show it.
 - `childCount` and `hasSubfolders` are the adapter's own and count hidden entries as the backend does.
 - An entry or tree row that has the focus when it gets hidden hands it on as a removed one does: to the entry now in its place, or the row shown before it.
-- Not yet: the option's initial value as a prop, and keeping it across reloads.
 
 ## The parts
 
@@ -177,7 +178,7 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 
 ## Single section
 
-`FileManager` takes either `sections` (groups) or a single `section`, never both; `FileManagerProps` is a union that enforces it, and `defaultSectionId` only exists with `sections`. Inside, a single section becomes one group of one, so navigation, the store and the path bar don't tell the modes apart. Only the sidebar does:
+`FileManager` takes either `sections` (groups) or a single `section`, never both; `FileManagerProps` is a union that enforces it. A location (`defaultLocation`, `location`) names the single section by its id too. Inside, a single section becomes one group of one, so navigation, the store and the path bar don't tell the modes apart. Only the sidebar does:
 
 - `useTreeRows`, given the `single` section, lists the root's folders as the sidebar's top level, with no section row and nothing to collapse. The root loads straight away and shows loading, empty ("No folders") and error rows in place of the tree.
 - The root itself is reached through the path bar's first crumb, since there is no row for it. There is no sidebar menu for the root either; the content background's menu covers it.

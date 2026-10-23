@@ -23,7 +23,7 @@ There is no test runner configured.
 
 ## Layout
 
-**Playground.** `index.html` loads `playground/main.tsx`, which mounts `<App />` (`playground/app.tsx`) inside `StrictMode` and the `Theme` wrapper (`playground/theme.tsx`, `ThemeProvider` plus `CssBaseline`). The theme in `playground/styles/theme.ts` (CSS variables, light and dark following the OS, GNOME-like colors, ripples off) styles the dev host only. `App` renders `<FileManager>` full-viewport, imported from `src/index.ts` as a consumer would, with switches read from the URL in `playground/options.ts` (`?single`, `?rtl`, `?locale=`) and data from `playground/mocks/`: an in-memory adapter with simulated latency keyed by full paths, plus fake sections and demo actions. A folder named `restricted` deliberately fails to load, to show the error state.
+**Playground.** `index.html` loads `playground/main.tsx`, which mounts `<App />` (`playground/app.tsx`) inside `StrictMode` and the `Theme` wrapper (`playground/theme.tsx`, `ThemeProvider` plus `CssBaseline`). The theme in `playground/styles/theme.ts` (CSS variables, light and dark following the OS, GNOME-like colors, ripples off) styles the dev host only. `App` renders `<FileManager>` full-viewport, imported from `src/index.ts` as a consumer would, with switches read from the URL in `playground/options.ts` (`?single`, `?rtl`, `?locale=`, `?uncontrolled`) and data from `playground/mocks/`: an in-memory adapter with simulated latency keyed by full paths, plus fake sections and demo actions. A folder named `restricted` deliberately fails to load, to show the error state. The playground controls the file manager as an app would, through its own hooks in `playground/hooks/`: the location in the URL's hash, the view settings in local storage, and the selection shown in a footer whose buttons call `apiRef` (see `props.md`).
 
 **Source.** `src/` is organised by kind of code, and `src/components/` holds only components. File names are lowercase.
 
@@ -48,6 +48,8 @@ Imports are relative, with no path alias. The only barrels are `src/index.ts` an
 Opening a file goes to the optional `onOpenFile(entry, context)`, or to the built-in preview when there's none or it returns `false` (see `preview.md`). There's no built-in editor, by choice.
 
 The optional `localeText` and `locale` set the component's own text, and the language numbers, sizes, dates and the order of names follow (see `locale.md`).
+
+The rest are optional, and MUI-like (see `props.md`): the location, the view, the order, hidden files, the hidden sidebar, the tree's expanded folders and the content's selection can each be controlled (`location` / `defaultLocation` / `onLocationChange`, and so on), `apiRef` takes a `FileManagerApi` (navigate, back, forward, refresh, reveal, focus), and the root takes `sx`, `ref` and the `div`'s own attributes. Props may change after mounting, `sections` and `adapter` included.
 
 ## Conventions
 
@@ -79,6 +81,7 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `thumbnails.md` | the adapter's `thumbnail`, its `view` and `size`, the thumbnail cache, how the list and the grid show them | the entry icon, the list and the grid, `use-thumbnail.ts`, the thumbnail cache, the data context, adapter and view types, the mocks |
 | `rtl.md` | right to left: logical properties, what Emotion's RTL plugin flips, mirrored icons, menus, isolating names, the playground's `?rtl` | the direction and bidi utils, `styles/direction.ts`, the direction hook and context, the frame, menu positions, `Icon`, the header bar, context menu, sidebar, drag image, dialogs, folder view, list, upload panel, marquee, playground options, theme and mock data |
 | `locale.md` | `localeText` and `locale`, the text keys, `enUS`, how parts read the text and formats | locale types, `locales/`, `utils/format.ts`, the locale hook and context, the frame, the upload panel |
+| `props.md` | the public props: controlled and uncontrolled state, the location and its history, the selection, `apiRef`, the root element, props changing after mounting, the playground's use of them | `src/index.ts`, the frame, the API, navigation and selection types, the setting, stable set, location history and selection hooks, `styles/sx.ts`, the playground's app, options and hooks |
 
 When a feature is added or changed, document it in the matching rule (or a new one), not here. This file stays for things every session needs.
 
