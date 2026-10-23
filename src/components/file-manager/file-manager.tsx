@@ -13,6 +13,7 @@ import { DirectionContext } from "../../contexts/direction-context";
 import { DragContext } from "../../contexts/drag-context";
 import { LocaleContext } from "../../contexts/locale-context";
 import { carriesFiles } from "../../hooks/use-drop-target";
+import { useDownloadQueue } from "../../hooks/use-download-queue";
 import { useEntryDrag } from "../../hooks/use-entry-drag";
 import { useLocaleValue } from "../../hooks/use-locale";
 import { useLocationHistory } from "../../hooks/use-location-history";
@@ -26,12 +27,14 @@ import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { withSx } from "../../styles/sx";
 import { visibleActionGroups } from "../../utils/action-groups";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
+import { canDownload, downloadedEntries } from "../../utils/download";
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
 import { importsFrom } from "../../utils/sections";
 import { sameIds } from "../../utils/sets";
 import { matchesShortcut, pressedKeys, pressesKey } from "../../utils/shortcut";
 import { DEFAULT_SORT, sameSort } from "../../utils/sort";
+import DownloadPanel from "../downloads/download-panel";
 import UploadPanel from "../uploads/upload-panel";
 import FolderView from "./content/folder-view";
 import ContextMenu from "./context-menu/context-menu";
@@ -373,8 +376,9 @@ const viewSx: SxProps<Theme> = {
     overflowY: "auto",
 };
 
-// The upload panel is a second inset panel under the content, so it never covers the files.
-const uploadsSx: SxProps<Theme> = {
+// The download and upload panels are further inset panels under the content, so they never cover
+// the files.
+const taskPanelSx: SxProps<Theme> = {
     marginInline: 0.75,
     mb: 0.75,
     ...besideSidebar,
@@ -1015,6 +1019,24 @@ const FileManager = ({
 
     const closePreview = useCallback(() => setPreviewing((prev) => prev && { ...prev, open: false }), []);
 
+    // Downloads are prepared in the background while the user browses, and the panel shows those
+    // that take a moment or need the user. A folder's hidden files go along only while they show.
+    const downloads = useDownloadQueue();
+    const shownDownloads = useMemo(() => downloads.items.filter((item) => item.shown), [downloads.items]);
+
+    const askDownload = useCallback(
+        (served: FileAdapter, entries: FileEntry[], folder: FolderRef) =>
+            downloads.queue.add(served, entries, folder.name, showHidden),
+        [downloads.queue, showHidden],
+    );
+
+    // The preview's Download button saves the file shown.
+    const handlePreviewDownload = useCallback(
+        ({ section: shown, adapter: served, trail }: PreviewRequest, entry: FileEntry) =>
+            askDownload(served, [entry], folderOf(shown, trail)),
+        [askDownload],
+    );
+
     // Once the preview has faded out, the content takes the focus back if the preview was opened
     // from there, on the file shown last when the selection followed it.
     const handlePreviewClosed = useCallback(() => {
@@ -1354,6 +1376,9 @@ const FileManager = ({
 
             const [only] = entries;
             const files = entries.filter((entry) => entry.kind === "file");
+            // A folder's own menu, its empty space, the path bar's or a section row's, downloads the
+            // folder itself.
+            const downloaded = downloadedEntries(entries, menuFolder);
 
             // A single file steps through the files of the view it's listed in, in its order, and
             // the selection follows; several files step through themselves.
@@ -1408,6 +1433,9 @@ const FileManager = ({
                         ? () => setClipboard({ ...base, kind: "copy", entries })
                         : undefined,
                 delete: folderAdapter.delete && entries.length > 0 ? () => askDelete({ ...base, entries }) : undefined,
+                download: canDownload(folderAdapter, downloaded)
+                    ? () => askDownload(folderAdapter, downloaded, menuFolder)
+                    : undefined,
                 upload:
                     uploadHere &&
                     ((files?: File[]) => (files ? uploadHere({ files, folders: [] }) : pickFiles(uploadHere))),
@@ -1441,6 +1469,7 @@ const FileManager = ({
             askName,
             askDestination,
             askDelete,
+            askDownload,
             askPreview,
             offerPaste,
             offerUpload,
@@ -1527,12 +1556,38 @@ const FileManager = ({
         [place, sectionsById, goTo],
     );
 
+    // `FileManagerApi.download`: as the context menu's Download, for entries of the open folder or
+    // the one at `target`, or with none, that folder itself.
+    const downloadFrom = useCallback(
+        (entries: readonly FileEntry[] = [], target?: FileManagerLocation) => {
+            const at = target ?? place;
+            const atSection = sectionsById.get(at.sectionId);
+
+            if (!atSection) {
+                return false;
+            }
+
+            const served = atSection.adapter ?? adapter;
+            const folder = folderOf(atSection, at.trail);
+            const downloaded = downloadedEntries(entries, folder);
+
+            if (!canDownload(served, downloaded)) {
+                return false;
+            }
+
+            askDownload(served, downloaded, folder);
+
+            return true;
+        },
+        [adapter, place, sectionsById, askDownload],
+    );
+
     // The API stays the same object while the file manager is mounted, so a consumer can keep it;
     // its methods go to what's current when they're called.
-    const api = useRef({ goTo, goBack, goForward, refresh, revealEntry });
+    const api = useRef({ goTo, goBack, goForward, refresh, revealEntry, downloadFrom });
 
     useLayoutEffect(() => {
-        api.current = { goTo, goBack, goForward, refresh, revealEntry };
+        api.current = { goTo, goBack, goForward, refresh, revealEntry, downloadFrom };
     });
 
     useImperativeHandle(
@@ -1543,6 +1598,7 @@ const FileManager = ({
             forward: () => api.current.goForward(),
             refresh: (folderIds, options) => api.current.refresh(folderIds, options),
             reveal: (entryId, target) => api.current.revealEntry(entryId, target),
+            download: (entries, target) => api.current.downloadFrom(entries, target),
             focus: () => setFocusContent(true),
         }),
         [],
@@ -1678,8 +1734,20 @@ const FileManager = ({
                                                 )}
                                             </Box>
                                         </Box>
+                                        {shownDownloads.length > 0 && (
+                                            <Box sx={taskPanelSx}>
+                                                <DownloadPanel
+                                                    items={shownDownloads}
+                                                    onCancel={downloads.queue.cancel}
+                                                    onRetry={downloads.queue.retry}
+                                                    onSave={downloads.queue.save}
+                                                    onCancelAll={downloads.queue.cancelAll}
+                                                    onClear={downloads.queue.clear}
+                                                />
+                                            </Box>
+                                        )}
                                         {uploads.items.length > 0 && (
-                                            <Box sx={uploadsSx}>
+                                            <Box sx={taskPanelSx}>
                                                 <UploadPanel
                                                     items={uploads.items}
                                                     onCancel={uploads.queue.cancel}
@@ -1752,6 +1820,7 @@ const FileManager = ({
                                         onClose={closePreview}
                                         onClosed={handlePreviewClosed}
                                         onStep={handlePreviewStep}
+                                        onDownload={handlePreviewDownload}
                                     />
                                 )}
                                 <input

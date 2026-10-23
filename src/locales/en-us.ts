@@ -7,6 +7,8 @@ const entries = (count: number, name: string) => (count === 1 ? `“${name}”` 
 
 const files = (count: number) => (count === 1 ? "1 file" : `${count} files`);
 
+const downloads = (count: number) => (count === 1 ? "a download" : `${count} downloads`);
+
 /**
  * The component's own text in US English, which every key left out of `localeText` falls back to.
  * It has every key, so it's the place to start a translation from.
@@ -125,6 +127,8 @@ export const enUS: FileManagerLocaleText = {
     uploadFoldersLeftOut: (count, name) =>
         `Folders can't be uploaded yet, so ${count === 1 ? `“${name}” is` : `${count} folders are`} left out.`,
 
+    download: "Download",
+
     previous: "Previous",
     next: "Next",
     previewPosition: (name, position, count) => `${name}, ${position} of ${count}`,
@@ -159,4 +163,24 @@ export const enUS: FileManagerLocaleText = {
     uploadDone: "Uploaded",
     uploadCancel: (fileName) => `Cancel uploading ${fileName}`,
     uploadRetry: (fileName) => `Upload ${fileName} again`,
+
+    downloads: "Downloads",
+    downloadsPreparing: (count) => `Preparing ${downloads(count)}`,
+    downloadsReady: (count) => (count === 1 ? "A download is ready" : `${count} downloads are ready`),
+    downloadsFailed: (count) => (count === 1 ? "A download failed" : `${count} downloads failed`),
+    downloadsReadyCount: (count) => `${count} ready`,
+    downloadsFailedCount: (count) => `${count} failed`,
+    downloadsHide: "Hide the downloads",
+    downloadsShow: "Show the downloads",
+    downloadsCancelAll: "Cancel every download",
+    downloadsClose: "Close",
+    downloadItems: (count) => `${count} items`,
+    downloadQueued: "Waiting",
+    downloadPreparing: "Preparing…",
+    downloadProgress: (loaded, total) => `${loaded} of ${total}`,
+    downloadReady: "Ready to download",
+    downloadFailed: (count) => `Couldn't download ${itOrThem(count)}.`,
+    downloadCancel: (count, name) => `Cancel downloading ${entries(count, name)}`,
+    downloadRetry: (count, name) => `Download ${entries(count, name)} again`,
+    downloadSave: (count, name) => `Download ${entries(count, name)}`,
 };

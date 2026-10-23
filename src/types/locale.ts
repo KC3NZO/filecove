@@ -41,12 +41,52 @@ export interface UploadLocaleText {
 }
 
 /**
+ * What the download panel says. Kept apart from the rest, as the upload panel's is, since the
+ * panel is meant to be shared with the media manager to come. A download is of one entry, its
+ * `name` given, or of `count` of them.
+ */
+export interface DownloadLocaleText {
+    /** The panel's name for screen readers. */
+    downloads: string;
+    /** The panel's title while downloads wait or are being prepared. */
+    downloadsPreparing: (count: number) => string;
+    /** The panel's title once nothing is being prepared and some downloads wait for a click. */
+    downloadsReady: (count: number) => string;
+    /** The panel's title once nothing is being prepared or ready, and some downloads failed. */
+    downloadsFailed: (count: number) => string;
+    /** Under the title, how many are ready, when others are being prepared. */
+    downloadsReadyCount: (count: number) => string;
+    /** Under the title, how many failed, when others are being prepared or ready. */
+    downloadsFailedCount: (count: number) => string;
+    downloadsHide: string;
+    downloadsShow: string;
+    downloadsCancelAll: string;
+    downloadsClose: string;
+    /** A download of several entries, named by how many. */
+    downloadItems: (count: number) => string;
+    /** A download's status while it waits for its turn. */
+    downloadQueued: string;
+    /** A download's status while the adapter prepares it, before it has said how far it got. */
+    downloadPreparing: string;
+    /** How much the adapter has fetched or packed of the total, both already formatted, e.g. "1.5 MB" and "4 MB". */
+    downloadProgress: (loaded: string, total: string) => string;
+    /** A download's status when the browser wouldn't start it on its own, so it waits for a click. */
+    downloadReady: string;
+    /** Why a download failed, when the adapter didn't say. */
+    downloadFailed: (count: number) => string;
+    downloadCancel: (count: number, name: string) => string;
+    downloadRetry: (count: number, name: string) => string;
+    /** The button that starts a ready download. */
+    downloadSave: (count: number, name: string) => string;
+}
+
+/**
  * Every text `FileManager` shows or reads to screen readers, apart from what the consumer passes it
  * (section and action labels, `title`). Texts about entries are functions, so each language words
  * and pluralizes them its own way. Counts come as plain numbers, and `name` is the entry's name,
  * meant for when `count` is 1. `kind` is "file" or "folder".
  */
-export interface FileManagerLocaleText extends UploadLocaleText {
+export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleText {
     // Shared
     loading: string;
     cancel: string;
@@ -187,6 +227,10 @@ export interface FileManagerLocaleText extends UploadLocaleText {
     uploadFoldersOnly: string;
     /** When folders were dropped with files. `name` is the folder's name, meant for when `count` is 1. */
     uploadFoldersLeftOut: (count: number, name: string) => string;
+
+    // Downloading
+    /** The preview's Download button. */
+    download: string;
 
     // Preview
     previous: string;

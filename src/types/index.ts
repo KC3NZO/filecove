@@ -3,6 +3,8 @@ export type { FileManagerApi, RefreshOptions } from "./api";
 export type {
     ConflictPolicy,
     ContentOptions,
+    DownloadContent,
+    DownloadOptions,
     FileAdapter,
     FileContent,
     FileEntry,
@@ -14,10 +16,11 @@ export type {
     UploadOptions,
 } from "./adapter";
 export type { Clipboard } from "./clipboard";
+export type { DownloadItem, DownloadStatus, PreparedDownload } from "./download";
 export type { DraggedEntries, DragSource, DropInto, DropTarget } from "./drag";
 export type { FolderState } from "./folder";
 export type { IconComponent, IconName, IconOverrides, IconSet, IconSource, IconVariant } from "./icon";
-export type { FileManagerLocaleText, Locale, UploadLocaleText } from "./locale";
+export type { DownloadLocaleText, FileManagerLocaleText, Locale, UploadLocaleText } from "./locale";
 export type { MenuPosition, MenuRequest, OpenMenu, RunShortcut } from "./menu";
 export type { FileManagerLocation, LocationChangeReason } from "./navigation";
 export type { PreviewContent, PreviewKind, TextExcerpt } from "./preview";

@@ -4,6 +4,10 @@ import { previewKind, readText } from "../utils/preview";
 
 import type { FileAdapter, FileEntry, PreviewContent } from "../types";
 
+// The preview shows a spinner while a file loads, with no figure, so what an adapter reports is
+// left unused.
+const ignoreProgress = () => undefined;
+
 /** A file being loaded, or loaded, for the preview. */
 interface Slot {
     controller: AbortController;
@@ -59,7 +63,7 @@ const load = (adapter: FileAdapter, entry: FileEntry, ahead: boolean, done: (con
                 throw new Error("Not supported here.");
             }
 
-            return adapter.content(entry, { signal });
+            return adapter.content(entry, { signal, purpose: "preview", onProgress: ignoreProgress });
         })
         .then(async (content): Promise<PreviewContent> => {
             signal.throwIfAborted();

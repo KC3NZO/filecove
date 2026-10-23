@@ -31,3 +31,13 @@ export const muiRtl = rtl && params.get("rtl") === "mui";
  * names. Its text stays English, since the playground has no translation.
  */
 export const locale = params.get("locale") || undefined;
+
+/**
+ * `?downloadUrls`: the media bucket hands some files over to download as URLs on another origin, as
+ * a bucket's signed links would be, to see how the file manager saves those. `release-1.0.0.zip` is
+ * a GitHub archive, sent as an attachment, so a tab opens and closes as the browser saves it;
+ * `intro.webm` is MDN's sample, which isn't, so it plays in that tab; and `walkthrough.mp4` comes
+ * after 7 s, too late for the browser to open a tab on its own, so it waits in the download panel
+ * for a click. They need the network.
+ */
+export const downloadUrls = params.has("downloadUrls");

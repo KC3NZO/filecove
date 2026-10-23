@@ -3,6 +3,7 @@ import FileCopyOutlined from "@mui/icons-material/FileCopyOutlined";
 import FolderZipOutlined from "@mui/icons-material/FolderZipOutlined";
 import LanguageOutlined from "@mui/icons-material/LanguageOutlined";
 
+import { downloadUrls } from "../options";
 import { createMockAdapter, file, folder } from "./mock-adapter";
 
 import type { ActionContext, ActionGroup, SectionGroup } from "../../src";
@@ -137,7 +138,22 @@ const mediaAdapter = createMockAdapter(
             file("release-1.0.0.zip", 3_300_000, "2026-10-14T14:26", "application/zip"),
         ],
     },
-    { latency: [600, 1200] },
+    {
+        latency: [600, 1200],
+        // `?downloadUrls`, to see URLs on another origin saved (see `options.ts`).
+        downloadUrls: downloadUrls
+            ? {
+                  "/release-1.0.0.zip": {
+                      url: "https://github.com/octocat/Hello-World/archive/refs/heads/master.zip",
+                  },
+                  "/videos/intro.webm": { url: "https://mdn.github.io/shared-assets/videos/flower.webm" },
+                  "/videos/walkthrough.mp4": {
+                      url: "https://mdn.github.io/shared-assets/videos/flower.mp4",
+                      delay: 7000,
+                  },
+              }
+            : undefined,
+    },
 );
 
 // The three server sections show each kind of `importFrom`: Website takes entries only from API
@@ -223,9 +239,9 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 id: "download",
                 label: "Download",
                 icon: "download",
-                target: "selection",
-                visible: (context) => context.entries.every((entry) => entry.kind === "file"),
-                onSelect: (context) => notify(`Download ${names(context)}`),
+                // On a folder's empty space, the path bar or a section row, it downloads the folder itself.
+                visible: (context) => !!context.download,
+                onSelect: (context) => context.download?.(),
             },
         ],
     },

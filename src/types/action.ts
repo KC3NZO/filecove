@@ -33,6 +33,14 @@ export interface ActionContext {
      */
     preview?: () => void;
     /**
+     * Saves `entries` on the user's device, or with none, `folder` itself: a single file from the
+     * section's adapter's `content`, and folders or several entries as the one file its `download`
+     * hands over, such as a zip. It's prepared in the background, the file manager's download panel
+     * shows it if it takes a moment, and the browser's own downloads show it from there. Missing
+     * when the adapter has no `download` and `entries` isn't a single file it has `content` for.
+     */
+    download?: () => void;
+    /**
      * Asks for a name and creates a folder in `folder`. Missing when the section's adapter has no
      * `createFolder`, so an action can hide with `visible: (context) => !!context.createFolder`.
      */

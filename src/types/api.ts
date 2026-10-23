@@ -1,4 +1,4 @@
-import type { FileAdapter } from "./adapter";
+import type { FileAdapter, FileEntry } from "./adapter";
 import type { FileManagerLocation } from "./navigation";
 
 export interface RefreshOptions {
@@ -42,6 +42,15 @@ export interface FileManagerApi {
      * files are off, for a hidden one. A controlled selection is asked to take it.
      */
     reveal: (entryId: string, location?: FileManagerLocation) => void;
+    /**
+     * Downloads entries as the context menu's `download` does, e.g. from a toolbar of the
+     * consumer's own: prepared in the background, shown in the download panel if it takes a moment,
+     * and saved by the browser. The entries are in the open folder, or in the one at `location`,
+     * which isn't gone to; with none, that folder itself is downloaded. Returns false when nothing
+     * was asked for: `location`'s section is missing, or its adapter can't hand the entries over
+     * (no `download`, and they aren't a single file it has `content` for).
+     */
+    download: (entries?: readonly FileEntry[], location?: FileManagerLocation) => boolean;
     /** Moves the focus to the content, as F6 does, e.g. once the file manager shows in a dialog. */
     focus: () => void;
 }

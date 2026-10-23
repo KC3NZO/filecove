@@ -1,6 +1,8 @@
 import { sampleContent, shrink, thumbnailSource } from "./mock-content";
+import { zip } from "./mock-zip";
 
 import type { ConflictPolicy, FileAdapter, FileContent, FileEntry, ListResult } from "../../src";
+import type { ZipItem } from "./mock-zip";
 
 /** A file or folder of the fake backend, written as nested literals. */
 export interface MockNode {
@@ -25,6 +27,11 @@ interface MockAdapterOptions {
     latency?: [min: number, max: number];
     /** Entries per page; a larger folder is listed in pages, each a round trip of its own. */
     pageSize?: number;
+    /**
+     * Files handed over to download as these URLs rather than as bytes, by id, after `delay` ms on
+     * top of the latency, as a backend's signed links on another origin would be.
+     */
+    downloadUrls?: Record<string, { url: string; delay?: number }>;
 }
 
 /** Simulated upload speed, in bytes per second. */
@@ -32,6 +39,19 @@ const UPLOAD_SPEED = 5_000_000;
 
 /** Shortest and longest simulated upload, in ms, so small files still show progress and large ones end. */
 const UPLOAD_TIME: [min: number, max: number] = [500, 8000];
+
+/** Most files and folders a download packs, so one of `archive` or `datasets` shows the error. */
+const DOWNLOAD_LIMIT = 500;
+
+/** Simulated time to pack a download, in ms per file or folder, and the shortest and longest. */
+const PACK_TIME_EACH = 40;
+const PACK_TIME: [min: number, max: number] = [1500, 6000];
+
+/** Simulated speed a single file is fetched at to be downloaded, in bytes per second. */
+const DOWNLOAD_SPEED = 2_000_000;
+
+/** Shortest and longest simulated fetch of a file to download, in ms, so a small one is too quick to show. */
+const DOWNLOAD_TIME: [min: number, max: number] = [300, 8000];
 
 export const folder = (name: string, modified: string, children: MockNode[]): MockNode => ({ name, modified, children });
 
@@ -53,6 +73,105 @@ const parentOf = (path: string) => {
 
 const clone = (node: MockNode): MockNode => ({ ...node, children: node.children?.map(clone) });
 
+const clamp = (value: number, [min, max]: [min: number, max: number]) => Math.min(Math.max(value, min), max);
+
+/** Waits `ms`, or rejects as soon as `signal` aborts. */
+const wait = (signal: AbortSignal, ms: number) =>
+    new Promise<void>((resolve, reject) => {
+        if (signal.aborted) {
+            reject(signal.reason);
+
+            return;
+        }
+
+        const timer = setTimeout(resolve, ms);
+
+        signal.addEventListener(
+            "abort",
+            () => {
+                clearTimeout(timer);
+                reject(signal.reason);
+            },
+            { once: true },
+        );
+    });
+
+/**
+ * Simulates moving `size` bytes over `duration` ms, an upload or a download being prepared,
+ * reporting progress as it goes, and rejects as soon as `signal` aborts.
+ */
+const transfer = (
+    signal: AbortSignal,
+    size: number,
+    duration: number,
+    onProgress: (loaded: number, total: number) => void,
+) =>
+    new Promise<void>((resolve, reject) => {
+        if (signal.aborted) {
+            reject(signal.reason);
+
+            return;
+        }
+
+        const started = performance.now();
+        const timer = setInterval(() => {
+            const done = Math.min((performance.now() - started) / duration, 1);
+
+            onProgress(Math.round(size * done), size);
+
+            if (done === 1) {
+                clearInterval(timer);
+                resolve();
+            }
+        }, 100);
+
+        signal.addEventListener(
+            "abort",
+            () => {
+                clearInterval(timer);
+                reject(signal.reason);
+            },
+            { once: true },
+        );
+    });
+
+/**
+ * What a download of `node` packs, named `name`: a file, or a folder and everything in it. What's
+ * inside that can't be read is left out, as a backend packing only what the user may read would,
+ * and so are dotfiles while hidden files aren't shown.
+ */
+const packed = (node: MockNode, name: string, showHidden: boolean): { path: string; node: MockNode }[] => {
+    if (!node.children) {
+        return [{ path: name, node }];
+    }
+
+    const inside = `${name}/`;
+    const readable = node.children.filter((child) => !child.fails && (showHidden || !child.name.startsWith(".")));
+
+    return [{ path: inside, node }, ...readable.flatMap((child) => packed(child, `${inside}${child.name}`, showHidden))];
+};
+
+/** A file's contents: an uploaded file's own bytes, or else contents made up from its name. */
+const contentOf = (node: MockNode): FileContent =>
+    node.blob ? { blob: node.blob } : sampleContent(node.name, node.size, node.mimeType);
+
+/** A file's bytes, fetched when its contents are a URL, as the videos' are. */
+const bytesOf = async (node: MockNode, signal: AbortSignal) => {
+    const content = contentOf(node);
+
+    if (content.url === undefined) {
+        return content.blob;
+    }
+
+    const response = await fetch(content.url, { signal });
+
+    if (!response.ok) {
+        throw new Error(`"${node.name}" couldn't be fetched: ${response.status}`);
+    }
+
+    return response.blob();
+};
+
 const toEntry = (parentPath: string, node: MockNode): FileEntry => ({
     id: childId(parentPath, node.name),
     name: node.name,
@@ -73,7 +192,7 @@ const toEntry = (parentPath: string, node: MockNode): FileEntry => ({
  */
 export const createMockAdapter = (
     roots: Record<string, MockNode[]>,
-    { latency = [250, 700], pageSize = 2500 }: MockAdapterOptions = {},
+    { latency = [250, 700], pageSize = 2500, downloadUrls = {} }: MockAdapterOptions = {},
 ): FileAdapter => {
     const folders = new Map<string, MockNode>();
 
@@ -109,39 +228,6 @@ export const createMockAdapter = (
                 "abort",
                 () => {
                     clearTimeout(timer);
-                    reject(signal.reason);
-                },
-                { once: true },
-            );
-        });
-
-    /** Simulates sending `size` bytes, reporting progress as it goes. */
-    const send = (signal: AbortSignal, size: number, onProgress: (loaded: number, total: number) => void) =>
-        new Promise<void>((resolve, reject) => {
-            if (signal.aborted) {
-                reject(signal.reason);
-
-                return;
-            }
-
-            const [min, max] = UPLOAD_TIME;
-            const duration = Math.min(Math.max((size / UPLOAD_SPEED) * 1000, min), max);
-            const started = performance.now();
-            const timer = setInterval(() => {
-                const done = Math.min((performance.now() - started) / duration, 1);
-
-                onProgress(Math.round(size * done), size);
-
-                if (done === 1) {
-                    clearInterval(timer);
-                    resolve();
-                }
-            }, 100);
-
-            signal.addEventListener(
-                "abort",
-                () => {
-                    clearInterval(timer);
                     reject(signal.reason);
                 },
                 { once: true },
@@ -314,7 +400,9 @@ export const createMockAdapter = (
         upload: (file, folderId, { signal, conflict, onProgress }) =>
             Promise.resolve()
                 .then(() => folderAt(folderId))
-                .then(() => send(signal, file.size, onProgress))
+                .then(() =>
+                    transfer(signal, file.size, clamp((file.size / UPLOAD_SPEED) * 1000, UPLOAD_TIME), onProgress),
+                )
                 .then(() =>
                     respond(signal, () => {
                         const target = folderAt(folderId);
@@ -333,16 +421,87 @@ export const createMockAdapter = (
                 ),
 
         // An uploaded file is handed back as it was; the rest get contents made up from their names.
-        content: (entry, { signal }) =>
-            respond<FileContent>(signal, () => {
+        // To download, a file is handed over as bytes after a simulated fetch at `DOWNLOAD_SPEED`,
+        // reporting progress as it goes, as an adapter fetching a blob would, or as its URL in
+        // `downloadUrls`. A video's URL, one of MDN's samples, isn't sent as an attachment, so the
+        // browser would play it in a tab rather than save it, and it's fetched too.
+        content: (entry, { signal, purpose, onProgress }) =>
+            respond(signal, () => {
                 const { node } = locate(entry);
 
                 if (node.children) {
                     throw new Error(`"${entry.name}" is a folder.`);
                 }
 
-                return node.blob ? { blob: node.blob } : sampleContent(node.name, node.size, node.mimeType);
+                return node;
+            }).then(async (node): Promise<FileContent> => {
+                if (purpose === "preview") {
+                    return contentOf(node);
+                }
+
+                const handed = downloadUrls[entry.id];
+
+                if (handed) {
+                    await wait(signal, handed.delay ?? 0);
+
+                    return { url: handed.url };
+                }
+
+                const size = node.size ?? node.blob?.size ?? 0;
+
+                await transfer(signal, size, clamp((size / DOWNLOAD_SPEED) * 1000, DOWNLOAD_TIME), onProgress);
+
+                return { blob: await bytesOf(node, signal) };
             }),
+
+        // A zip of the entries, folders with everything in them, after a wait that grows with what
+        // it holds, as a backend packing one would take, reporting the bytes of the files packed so
+        // far, as a backend saying how far it has got would. An entry that can't be read fails it,
+        // as `restricted` does, and so does packing more than `DOWNLOAD_LIMIT` files and folders, as
+        // `archive`, `datasets` or API service's root would; what can't be read inside a folder is
+        // left out, as `docs`' `contract.pdf` is. A folder downloaded from its own menu comes with
+        // only its id, which is how a section's root is found. Named after the one entry, or the
+        // folder they're in.
+        download: (entries, { signal, showHidden, onProgress }) =>
+            respond(signal, () => {
+                const items = entries.flatMap((entry) =>
+                    packed(entry.kind === "folder" ? folderAt(entry.id) : locate(entry).node, entry.name, showHidden),
+                );
+
+                if (items.length > DOWNLOAD_LIMIT) {
+                    throw new Error(
+                        `That's ${items.length} files and folders, more than the ${DOWNLOAD_LIMIT} this server packs at once.`,
+                    );
+                }
+
+                return items;
+            })
+                // The files' bytes are gathered first, videos fetched, so the bytes reported while
+                // packing are the ones that go in.
+                .then((items) =>
+                    Promise.all(
+                        items.map(
+                            async ({ path, node }): Promise<ZipItem> => ({
+                                path,
+                                data: node.children ? null : await bytesOf(node, signal),
+                                modified: node.modified ? new Date(node.modified) : new Date(),
+                            }),
+                        ),
+                    ),
+                )
+                .then((items) => {
+                    const size = items.reduce((sum, item) => sum + (item.data?.size ?? 0), 0);
+
+                    return transfer(signal, size, clamp(items.length * PACK_TIME_EACH, PACK_TIME), onProgress).then(
+                        () => zip(items),
+                    );
+                })
+                .then((blob) => {
+                    const [first] = entries;
+                    const folderName = parentOf(first.id).split("/").filter(Boolean).pop() ?? "download";
+
+                    return { blob, name: `${entries.length === 1 ? first.name : folderName}.zip` };
+                }),
 
         // Made to order, shrunk to the size asked for in either view; a backend keeping a few sizes
         // would pick one by `view`. A file with none is answered at once, without a round trip.

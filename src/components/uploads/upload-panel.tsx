@@ -10,7 +10,17 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
-import { mirroredBarSx } from "../../styles/direction";
+import {
+    panelBarSx,
+    panelHeaderSx,
+    panelListSx,
+    panelRowSx,
+    panelSlotSx,
+    panelSx,
+    panelTextSx,
+    panelTitleSx,
+    panelToggleIconSx,
+} from "../../styles/panel";
 import { isolate, joinIsolated } from "../../utils/bidi";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
@@ -32,71 +42,6 @@ interface UploadRowProps {
     onCancel: (id: number) => void;
     onRetry: (id: number) => void;
 }
-
-const panelSx: SxProps<Theme> = {
-    flexShrink: 0,
-    borderRadius: 3,
-    overflow: "hidden",
-    bgcolor: "background.paper",
-};
-
-const headerSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1.5,
-    minHeight: 52,
-    paddingInlineStart: 2,
-    paddingInlineEnd: 1,
-};
-
-// Every status icon and file icon sits in the same column.
-const slotSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    width: "1.5rem",
-};
-
-const textSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minWidth: 0,
-};
-
-const titleSx: SxProps<Theme> = {
-    fontWeight: 600,
-};
-
-// Points down while the list shows, to fold it away, and up while it's folded.
-const toggleIconSx: SxProps<Theme> = {
-    transition: "transform 150ms",
-    '[aria-expanded="false"] > &': { transform: "rotate(180deg)" },
-};
-
-const listSx: SxProps<Theme> = {
-    m: 0,
-    p: 0,
-    listStyle: "none",
-    maxHeight: "15rem",
-    overflowY: "auto",
-    borderTop: 1,
-    borderColor: "divider",
-};
-
-const rowSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1.5,
-    minHeight: 52,
-    paddingInlineStart: 2,
-    paddingInlineEnd: 1,
-    py: 0.5,
-};
-
-// Fills from the start side: MUI fills from the left unless the theme says right to left.
-const rowBarSx: SxProps<Theme> = [{ my: 0.5, height: 3, borderRadius: 1.5 }, mirroredBarSx];
 
 // The same width as a small IconButton, so a done row's check lines up with the other rows' buttons.
 const doneSx: SxProps<Theme> = {
@@ -180,11 +125,11 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
     }
 
     return (
-        <Box component="li" sx={rowSx}>
-            <Box sx={slotSx}>
+        <Box component="li" sx={panelRowSx}>
+            <Box sx={panelSlotSx}>
                 <FileTypeIcon fileName={file.name} />
             </Box>
-            <Box sx={textSx}>
+            <Box sx={panelTextSx}>
                 <Typography variant="body2" noWrap>
                     <bdi>{file.name}</bdi>
                 </Typography>
@@ -192,7 +137,7 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
                     <LinearProgress
                         variant={progress === undefined ? "indeterminate" : "determinate"}
                         value={(progress ?? 0) * 100}
-                        sx={rowBarSx}
+                        sx={panelBarSx}
                     />
                 )}
                 <Typography variant="caption" color={status === "failed" ? "error" : "text.secondary"} noWrap>
@@ -253,10 +198,10 @@ const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadP
 
     return (
         <Box component="section" sx={panelSx} aria-label={text.uploads}>
-            <Box sx={headerSx}>
-                <Box sx={slotSx}>{status}</Box>
-                <Box sx={textSx}>
-                    <Typography variant="body2" noWrap sx={titleSx} aria-live="polite">
+            <Box sx={panelHeaderSx}>
+                <Box sx={panelSlotSx}>{status}</Box>
+                <Box sx={panelTextSx}>
+                    <Typography variant="body2" noWrap sx={panelTitleSx} aria-live="polite">
                         {title}
                     </Typography>
                     {detail && (
@@ -270,7 +215,7 @@ const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadP
                     aria-expanded={expanded}
                     onClick={() => setExpanded((prev) => !prev)}
                 >
-                    <Icon name="expand" fontSize="small" sx={toggleIconSx} />
+                    <Icon name="expand" fontSize="small" sx={panelToggleIconSx} />
                 </IconButton>
                 <IconButton
                     aria-label={active > 0 ? text.uploadsCancelAll : text.uploadsClose}
@@ -280,7 +225,7 @@ const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadP
                 </IconButton>
             </Box>
             <Collapse in={expanded}>
-                <Box component="ul" sx={listSx}>
+                <Box component="ul" sx={panelListSx}>
                     {items.map((item) => (
                         <UploadRow key={item.id} item={item} onCancel={onCancel} onRetry={onRetry} />
                     ))}

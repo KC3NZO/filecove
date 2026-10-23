@@ -61,6 +61,8 @@ interface PreviewDialogProps {
     onClosed: () => void;
     /** Called as the dialog steps to another file. */
     onStep: (request: PreviewRequest, entry: FileEntry) => void;
+    /** Called to save the file shown, from the header's Download button. */
+    onDownload: (request: PreviewRequest, entry: FileEntry) => void;
 }
 
 /** An image's or a video's own size, once it has loaded: 0 for a picture with none, such as some SVGs. */
@@ -232,13 +234,21 @@ const audioSx: SxProps<Theme> = {
  * Shows files one at a time, as GNOME's and macOS's previewers do: images, videos, audio and PDFs
  * as the browser shows them, the start of text files, and an icon with the file's details for the
  * rest. The arrows, the buttons, or a swipe on touch step through the files it was given, and
- * Space or Escape closes it.
+ * Space or Escape closes it. The header's Download button saves the file shown.
  *
  * The adapter's `content` says where each file's contents are. A URL is used as it is; a `Blob` is
  * shown through an object URL. The next file loads once the one shown has, so stepping on shows
  * it at once (see `usePreviewContents`).
  */
-const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, onStep }: PreviewDialogProps) => {
+const PreviewDialog = ({
+    open,
+    request,
+    disableRestoreFocus,
+    onClose,
+    onClosed,
+    onStep,
+    onDownload,
+}: PreviewDialogProps) => {
     const { adapter, entries } = request;
     const count = entries.length;
     const { text, formatNumber, formatSize, describeDate, describeSize, describeType } = useLocale();
@@ -462,6 +472,9 @@ const PreviewDialog = ({ open, request, disableRestoreFocus, onClose, onClosed, 
                         </IconButton>
                     </Box>
                 )}
+                <IconButton aria-label={text.download} onClick={() => onDownload(request, entry)}>
+                    <Icon name="download" />
+                </IconButton>
                 <IconButton aria-label={text.close} onClick={onClose}>
                     <Icon name="close" />
                 </IconButton>

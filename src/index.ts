@@ -9,6 +9,8 @@ export type {
     ActionTarget,
     ConflictPolicy,
     ContentOptions,
+    DownloadContent,
+    DownloadOptions,
     FileAction,
     FileAdapter,
     FileContent,

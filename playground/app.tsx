@@ -26,6 +26,8 @@ import type {
 interface Selection {
     ids: string[];
     entries: FileEntry[];
+    /** Where they're selected; missing until something is told. */
+    location?: FileManagerLocation;
 }
 
 /** A file to show in its folder from outside the file manager, as a link elsewhere in an app might. */
@@ -115,13 +117,27 @@ const App = () => {
     const [selection, setSelection] = useState(NOTHING_SELECTED);
 
     const handleSelectionChange = useCallback(
-        (ids: string[], { entries }: SelectionDetails) => setSelection({ ids, entries }),
+        (ids: string[], { entries, location: at }: SelectionDetails) => setSelection({ ids, entries, location: at }),
         [],
     );
 
     // Goes to the file's folder and selects the file, scrolled to once the folder is listed. With
     // the location and the selection controlled, both are asked of the playground, and it takes them.
     const showFile = () => apiRef.current?.reveal(SHOWN.id, SHOWN.location);
+
+    // Downloads the selection, or with nothing selected, the open folder, as a toolbar of an app's
+    // own would, through the download panel.
+    const selected = selection.entries.length > 0;
+
+    const download = () => {
+        const asked = selected
+            ? apiRef.current?.download(selection.entries, selection.location)
+            : apiRef.current?.download();
+
+        if (asked === false) {
+            setNotice({ open: true, message: "Nothing here can be downloaded" });
+        }
+    };
 
     // Uncontrolled, what the playground keeps only sets where the file manager starts.
     const settings = uncontrolled
@@ -170,6 +186,9 @@ const App = () => {
                 <Typography variant="body2" noWrap sx={summarySx}>
                     {describe(selection)}
                 </Typography>
+                <Button size="small" color="inherit" onClick={download}>
+                    {selected ? "Download selection" : "Download folder"}
+                </Button>
                 <Button size="small" color="inherit" onClick={showFile}>
                     Show a file
                 </Button>

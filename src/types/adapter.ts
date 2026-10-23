@@ -100,8 +100,27 @@ export interface UploadOptions extends OperationOptions {
 
 /** Passed to `content`. */
 export interface ContentOptions {
-    /** Aborted when the file is no longer wanted, e.g. the preview moved on to another file or closed. */
+    /**
+     * Aborted when the file is no longer wanted, e.g. the preview moved on to another file or closed,
+     * or the user cancelled the download.
+     */
     signal: AbortSignal;
+    /**
+     * What the contents are for: "preview", to show them in the preview, or "download", to save
+     * them. A URL on another origin is only saved when its server answers with
+     * `Content-Disposition: attachment`, so a backend whose preview URLs don't, such as signed links
+     * to a bucket, hands over one that does for "download".
+     */
+    purpose: "preview" | "download";
+    /**
+     * Reports how much of the file has come, while it's being downloaded and handed over as a blob,
+     * e.g. from `XMLHttpRequest`'s `onprogress` with `event.loaded` and `event.total`, or by
+     * counting the bytes of a `fetch` response's body as they're read. The download panel shows
+     * it; the preview doesn't. Calling it is optional, and pointless for a URL, which the browser
+     * downloads itself and shows the progress of. Without it, or while the total isn't known, the
+     * download shows as being prepared with no figure.
+     */
+    onProgress: (loaded: number, total: number) => void;
 }
 
 /**
@@ -110,6 +129,38 @@ export interface ContentOptions {
  * headers a URL can't carry. An object rather than a bare value, so fields can be added later.
  */
 export type FileContent = { url: string; blob?: never } | { blob: Blob; url?: never };
+
+/** Passed to `download`. */
+export interface DownloadOptions {
+    /** Aborted when the user cancels while the download is being prepared. */
+    signal: AbortSignal;
+    /**
+     * Whether the file manager showed hidden files when the download was asked for, so a backend
+     * can leave what's hidden out of a folder's download while the user isn't seeing it. The
+     * entries themselves are always meant, hidden or not.
+     */
+    showHidden: boolean;
+    /**
+     * Reports how far it has got before handing the file over, in bytes: fetching a blob, as
+     * `content`'s `onProgress` does, or packing a zip, when the server says how far it has got.
+     * The download panel shows it. Calling it is optional; without it, or while the total isn't
+     * known, the download shows as being prepared with no figure.
+     */
+    onProgress: (loaded: number, total: number) => void;
+}
+
+/**
+ * What `download` hands over: one file to save, such as a zip of the entries, as a URL or the bytes,
+ * as `content` gives them.
+ */
+export type DownloadContent = FileContent & {
+    /**
+     * The name to save it under, e.g. "project.zip". A URL can leave it to its server's
+     * `Content-Disposition`. A blob without one is saved under its own name when it's a `File`, or
+     * else the entry's name, or for several entries, the name of the folder they're in.
+     */
+    name?: string;
+};
 
 /** Passed to `thumbnail`. */
 export interface ThumbnailOptions {
@@ -172,13 +223,27 @@ export interface FileAdapter {
      */
     upload?(file: File, folderId: string, options: UploadOptions): Promise<void>;
     /**
-     * Says where a file's contents are, for the preview: a URL to load them from, or the bytes. A
-     * URL is used as it is, in an `<img>`, `<video>`, `<audio>` or `<iframe>`, and text is fetched
-     * from it, which needs CORS when it's on another origin. Only called for files the preview can
-     * show. Without it, the file manager has no way to show what's in a file. Reject with an
-     * `Error` to show its message to the user.
+     * Says where a file's contents are, for the preview or to download it (`purpose`): a URL to load
+     * them from, or the bytes. For the preview, a URL is used as it is, in an `<img>`, `<video>`,
+     * `<audio>` or `<iframe>`, and text is fetched from it, which needs CORS when it's on another
+     * origin; it's only called for files the preview can show. To download, a URL on the page's
+     * origin is saved under the file's name, and one on another origin opens in a new tab, which the
+     * browser closes as it saves the file, provided the server answers with
+     * `Content-Disposition: attachment`; otherwise the file shows in that tab. Without it, the file
+     * manager has no way to show what's in a file, and downloads files through `download`, if
+     * there. Reject with an `Error` to show its message to the user.
      */
     content?(entry: FileEntry, options: ContentOptions): Promise<FileContent>;
+    /**
+     * Hands over entries as one file to save, such as a zip the server builds: folders with
+     * everything in them, several entries, or a single file when there's no `content`, which a
+     * single file is otherwise downloaded from. The entries share a parent. A folder downloaded
+     * from its own menu, the open folder or a section's root, comes as an entry with only `id`,
+     * `name` and `kind`, a root named after its section. A URL is saved as `content`'s are.
+     * Without it, only single files can be downloaded, through `content`. Reject with an `Error`
+     * to show its message to the user, e.g. when the folder is too large.
+     */
+    download?(entries: FileEntry[], options: DownloadOptions): Promise<DownloadContent>;
     /**
      * Gives a small picture of a file, which the list and the grid show in place of its icon: a URL
      * or the bytes, as `content` does, or null for a file with none. It's asked for as the file
