@@ -23,17 +23,17 @@ There is no test runner configured.
 
 ## Layout
 
-**Playground.** `index.html` loads `playground/main.tsx`, which mounts `<App />` (`playground/app.tsx`) inside `StrictMode` and the `Theme` wrapper (`playground/theme.tsx`, `ThemeProvider` plus `CssBaseline`). The theme in `playground/styles/theme.ts` (CSS variables, light and dark following the OS, GNOME-like colors, ripples off) styles the dev host only. `App` renders `<FileManager>` full-viewport, imported from `src/index.ts` as a consumer would, with switches read from the URL in `playground/options.ts` (`?single`, `?rtl`, `?locale=`, `?uncontrolled`) and data from `playground/mocks/`: an in-memory adapter with simulated latency keyed by full paths, plus fake sections and demo actions. A folder named `restricted` deliberately fails to load, to show the error state. The playground controls the file manager as an app would, through its own hooks in `playground/hooks/`: the location in the URL's hash, the view settings in local storage, and the selection shown in a footer whose buttons call `apiRef` (see `props.md`).
+**Playground.** `index.html` loads `playground/main.tsx`, which mounts `<App />` (`playground/app.tsx`) inside `StrictMode` and the `Theme` wrapper (`playground/theme.tsx`, `ThemeProvider` plus `CssBaseline`). The theme in `playground/styles/theme.ts` (CSS variables, light and dark following the OS, GNOME-like colors, ripples off) styles the dev host only. `App` renders `<FileManager>` full-viewport, imported from `src/index.ts` as a consumer would, with switches read from the URL in `playground/options.ts` (`?single`, `?rtl`, `?locale=`, `?uncontrolled`, `?downloadUrls`) and data from `playground/mocks/`: an in-memory adapter with simulated latency keyed by full paths, plus fake sections and demo actions. A folder named `restricted` deliberately fails to load, to show the error state. The playground controls the file manager as an app would, through its own hooks in `playground/hooks/`: the location in the URL's hash, the view settings in local storage, and the selection shown in a footer whose buttons call `apiRef` (see `props.md`).
 
 **Source.** `src/` is organised by kind of code, and `src/components/` holds only components. File names are lowercase.
 
 - `index.ts` is the public entry. It exports `FileManager`, `IconProvider`, `enUS` (the English text) and the public types, and nothing else is public.
 - `components/file-manager/` is the frame and its parts (`sidebar/`, `header-bar/`, `content/`, `context-menu/`, `dialogs/`).
-- `components/uploads/` has the upload panel, kept free of file manager imports so the planned media manager can reuse it (see `uploads.md`).
+- `components/uploads/` and `components/downloads/` have the upload and download panels, kept free of file manager imports so the planned media manager can reuse them (see `uploads.md` and `download.md`).
 - `components/icons/` has `Icon`, `IconProvider`, and `FileTypeIcon` / `FolderTypeIcon`, the only way to render `@react-symbols/icons`.
 - `types/` holds shared and exported types, one file per domain, re-exported from `types/index.ts`. Files marked internal stay out of `src/index.ts`.
 - `locales/` has the component's text, in English only (`enUS`).
-- `hooks/`, `contexts/`, `store/` (the folder listing cache and the upload queue), `utils/` (plain functions), `styles/` (container-query constants, style helpers) and `icon-sets/`.
+- `hooks/`, `contexts/`, `store/` (the folder listing cache and the upload and download queues), `utils/` (plain functions), `styles/` (container-query constants, style helpers) and `icon-sets/`.
 
 Imports are relative, with no path alias. The only barrels are `src/index.ts` and `src/types/index.ts`; everything else is imported by file, e.g. `components/icons/icon`.
 
@@ -41,15 +41,15 @@ Imports are relative, with no path alias. The only barrels are `src/index.ts` an
 
 `FileManager` (`src/components/file-manager/file-manager.tsx`) is a file manager for the web, so it has no built-in locations (no Home, Trash or Network). The consumer supplies everything:
 
-- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal, cursor })` returns `{ entries, nextCursor }` for one folder, called only when a folder is first opened or expanded, and again for each further page while it hands back a `nextCursor`. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working. Optional members switch features on: `createFolder`, `rename`, `copy`, `move`, `delete`, `upload`, `content` (a file's URL or bytes, for the preview) and `thumbnail` (a small picture of a file for the list and the grid, asked for per view) so far.
+- **`adapter`** (`types/adapter.ts`) is the backend contract. It is lazy: `list(folderId, { signal, cursor })` returns `{ entries, nextCursor }` for one folder, called only when a folder is first opened or expanded, and again for each further page while it hands back a `nextCursor`. `FileEntry.id` is opaque (a full path or a database id) and is only ever handed back to the adapter; the component never parses or joins paths. Grow the contract by adding optional members, never by changing `list`, so existing adapters keep working. Optional members switch features on: `createFolder`, `rename`, `copy`, `move`, `delete`, `upload`, `content` (a file's URL or bytes, for the preview and for downloading a file), `download` (folders or several entries as one file to save, such as a zip) and `thumbnail` (a small picture of a file for the list and the grid, asked for per view) so far.
 - **`sections`** is `SectionGroup[]`. Each `Section` (id, label, icon, `rootId`, optional own `adapter`, optional `showFolders`, optional `importFrom`) is an independent root, with no connection to other sections even when they share an adapter. A single `section` can be passed instead, and its folders then fill the sidebar (see `file-manager.md`).
 - **`actions`** is `ActionGroup[]` for the context menu.
 
-Opening a file goes to the optional `onOpenFile(entry, context)`, or to the built-in preview when there's none or it returns `false` (see `preview.md`). There's no built-in editor, by choice.
+Opening a file goes to the optional `onOpenFile(entry, context)`, or to the built-in preview when there's none or it returns `false` (see `preview.md`). There's no built-in editor, by choice. Downloading saves a single file from `content`, and folders or several entries from `download`, prepared in the background and shown in a panel while it takes a moment, and the browser's own downloads show the progress (see `download.md`).
 
 The optional `localeText` and `locale` set the component's own text, and the language numbers, sizes, dates and the order of names follow (see `locale.md`).
 
-The rest are optional, and MUI-like (see `props.md`): the location, the view, the order, hidden files, the hidden sidebar, the tree's expanded folders and the content's selection can each be controlled (`location` / `defaultLocation` / `onLocationChange`, and so on), `apiRef` takes a `FileManagerApi` (navigate, back, forward, refresh, reveal, focus), and the root takes `sx`, `ref` and the `div`'s own attributes. Props may change after mounting, `sections` and `adapter` included.
+The rest are optional, and MUI-like (see `props.md`): the location, the view, the order, hidden files, the hidden sidebar, the tree's expanded folders and the content's selection can each be controlled (`location` / `defaultLocation` / `onLocationChange`, and so on), `apiRef` takes a `FileManagerApi` (navigate, back, forward, refresh, reveal, focus, download), and the root takes `sx`, `ref` and the `div`'s own attributes. Props may change after mounting, `sections` and `adapter` included.
 
 ## Conventions
 
@@ -72,6 +72,7 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `types.md` | where types live | `src/` |
 | `component-styling.md` | container queries, palette tokens, CSS custom properties | `src/` |
 | `file-manager.md` | data store and paging, navigation, hiding the sidebar, context menu, sorting, the parts | `src/components/file-manager/`, `hooks/`, `store/`, `utils/` |
+| `download.md` | `ActionContext.download`, the adapter's `content` for a download and its `download`, saving blobs and URLs, the download queue and panel, the mock's zips | the download panel, store and hook, the preview dialog, `utils/download.ts`, `styles/panel.ts`, download, adapter and action types, the mock adapter and zip |
 | `uploads.md` | the upload queue and panel, dropping files from the desktop, what's shared with the media manager | upload store, hook, panel, dialog and types, `use-drop-target.ts`, `types/adapter.ts` |
 | `selection.md` | content and sidebar selection, marquee, touch selection mode | selection components, hooks and utils |
 | `keyboard.md` | keyboard navigation, focus, ARIA roles of the content and the tree | the frame, content, sidebar, context menu, transfer dialog, keyboard utils |

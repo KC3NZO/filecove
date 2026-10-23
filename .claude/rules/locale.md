@@ -20,10 +20,10 @@ The component ships no translations but English. A translation is a value for `l
 
 ## The keys
 
-- Flat, so a consumer overrides one without restating the rest, and named by area (`sort…`, `upload…`, `preview…`).
+- Flat, so a consumer overrides one without restating the rest, and named by area (`sort…`, `upload…`, `download…`, `preview…`).
 - A text about entries is a function, so each language words and pluralizes it its own way: counts come as plain numbers, `name` is the entry's name for when `count` is 1, `kind` is "file" or "folder". A text built around a value the component formats, such as a size or a date, takes it already formatted, as a string.
 - Whole sentences rather than pieces glued together, since word order differs between languages. The only joins left in code are " · " between details, "×" in dimensions and "/" in the preview's counter, ": " before an adapter's message in the picker, and ". " between the tree's `folderLoadFailed` and `retry` in its row's label.
-- `UploadLocaleText` holds the upload panel's keys, which `FileManagerLocaleText` extends, since the panel is meant for the media manager too (see `uploads.md`). The two share no keys: the panel has its own `uploadsClose`.
+- `UploadLocaleText` and `DownloadLocaleText` hold the upload and download panels' keys, which `FileManagerLocaleText` extends, since the panels are meant for the media manager too (see `uploads.md` and `download.md`). They share no keys: each panel has its own close, and the download panel its own `downloadItems` for "3 items".
 - Messages that only a developer sees (an adapter missing a method, a list handing back its cursor, a component outside `FileManager`) stay in English.
 - An adapter's own error message is shown as it is. A text such as `deleteFailed` or `uploadFailed` is only for when it gives none.
 - A name, an adapter's or server's message, or a size or date handed to a text comes isolated between FSI and PDI (`isolate`), so it keeps its own direction in a sentence in any language, and a translation doesn't isolate it again. The joins in code isolate their pieces (`joinIsolated`) (see `rtl.md`).

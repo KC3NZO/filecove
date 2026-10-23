@@ -26,7 +26,7 @@ There's no editor in the component, by choice: editing needs a way to save throu
 
 ## The adapter's `content`
 
-`content(entry, { signal })` resolves with a `FileContent`: `{ url }` or `{ blob }`. It's called only for files the preview can show, so describing a zip downloads nothing, and the signal aborts as the preview steps on or closes. Downloading, when it comes, is meant to use it too. The list's and the grid's thumbnails come from the adapter's separate `thumbnail`, never from `content` (see `thumbnails.md`).
+`content(entry, { signal, purpose })` resolves with a `FileContent`: `{ url }` or `{ blob }`. The preview asks with `purpose: "preview"`, only for files it can show, so describing a zip downloads nothing, and the signal aborts as the preview steps on or closes. Downloading a single file asks with `purpose: "download"` (see `download.md`). The list's and the grid's thumbnails come from the adapter's separate `thumbnail`, never from `content` (see `thumbnails.md`).
 
 - A URL is used as it is, as the `src` of an `<img>`, `<video>`, `<audio>` or `<iframe>`, so it streams and caches as any URL does. Text is fetched from it, which needs CORS on another origin, and only the first `TEXT_LIMIT` bytes are read before the download is cancelled.
 - A blob is shown through an object URL, or read in part for text. The URL is revoked once the file is more than a step away from the one shown, or the preview has gone.
@@ -43,7 +43,7 @@ There's no editor in the component, by choice: editing needs a way to save throu
 
 ## What the preview shows
 
-`dialogs/preview-dialog.tsx`, a large modal like the other dialogs (portalled, `dialogPaperSx`), sized `min(72rem, 100% - 2rem)` by `min(54rem, 100% - 2rem)`. The header has the file's type icon, its name, a line with its type, size and, once loaded, an image's or video's dimensions, the stepper and a close button. The file sits on `background.paper` inside, as the folder view does in the window.
+`dialogs/preview-dialog.tsx`, a large modal like the other dialogs (portalled, `dialogPaperSx`), sized `min(72rem, 100% - 2rem)` by `min(54rem, 100% - 2rem)`. The header has the file's type icon, its name, a line with its type, size and, once loaded, an image's or video's dimensions, the stepper, a Download button for the file shown (see `download.md`) and a close button. The file sits on `background.paper` inside, as the folder view does in the window.
 
 `previewKind` (`utils/preview.ts`) decides how from the entry's MIME type, or else its name: the extension, a dotfile (text), or a name such as `Dockerfile` or `go.mod`.
 
@@ -92,4 +92,4 @@ A single file steps through the files of the view it's listed in, in the content
 
 ## Not yet
 
-Downloading, the consumer's actions in the preview's header, sliding between files on the buttons and the keys, swiping on past a zoomed image's edge, Safari's touchpad pinch (it sends `gesturechange`, not Ctrl+wheel), momentum when panning by touch, animating zoom steps, rotating images, full screen, highlighted code or rendered Markdown, and fonts, office documents or archives' contents.
+The consumer's actions in the preview's header, sliding between files on the buttons and the keys, swiping on past a zoomed image's edge, Safari's touchpad pinch (it sends `gesturechange`, not Ctrl+wheel), momentum when panning by touch, animating zoom steps, rotating images, full screen, highlighted code or rendered Markdown, and fonts, office documents or archives' contents.

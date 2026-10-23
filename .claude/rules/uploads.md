@@ -17,7 +17,7 @@ The adapter's optional `upload(file, folderId, { signal, conflict, onProgress })
 
 A media manager will be built later as a sibling of `FileManager`, and it will upload too. So the upload code is split into what it can reuse and what belongs to the file manager:
 
-- **Reusable**, and never importing from `components/file-manager/`: the queue (`store/upload-queue.ts`), its hook (`hooks/use-upload-queue.ts`), the panel (`components/uploads/upload-panel.tsx`), the types (`types/upload.ts`, `UploadOptions` in `types/adapter.ts`), and the panel's text, the keys of `UploadLocaleText` (`types/locale.ts`), which it reads with `useLocale()` and which is English outside a `FileManager` (see `locale.md`).
+- **Reusable**, and never importing from `components/file-manager/`: the queue (`store/upload-queue.ts`), its hook (`hooks/use-upload-queue.ts`), the panel (`components/uploads/upload-panel.tsx`, whose look, `styles/panel.ts`, the download panel shares), the types (`types/upload.ts`, `UploadOptions` in `types/adapter.ts`), and the panel's text, the keys of `UploadLocaleText` (`types/locale.ts`), which it reads with `useLocale()` and which is English outside a `FileManager` (see `locale.md`).
 - **The file manager's own**: the conflict check (`dialogs/upload-dialog.tsx`, which reads the folder store), the drop targets and the file picker in `file-manager.tsx`.
 
 Keep it that way: `FileManager` imports the shared parts, never the other way round. Server-side processing (resizing, converting, HLS) is planned as a separate optional adapter surface, not as part of `upload`.
@@ -49,7 +49,7 @@ Every route ends in `askUpload` in `file-manager.tsx`, with a `DroppedFiles` (`f
 
 ## The panel
 
-`components/uploads/upload-panel.tsx` takes the items and the queue's callbacks, and knows nothing of where it's shown. `FileManager` shows it as a second inset panel under the content (`uploadsSx`), only while the queue has items, so it never covers files or the touch selection bar.
+`components/uploads/upload-panel.tsx` takes the items and the queue's callbacks, and knows nothing of where it's shown. `FileManager` shows it as an inset panel under the content (`taskPanelSx`), below the download panel when both show, only while the queue has items, so it never covers files or the touch selection bar.
 
 - The summary has a status icon (a progress ring while active, a check, or an error), a title ("Uploading 3 files", "Couldn't upload 1 file", "Uploaded 4 files") and the bytes sent, or the counts the title leaves out.
 - The chevron folds the list away. The ✕ cancels everything still uploading, which stays listed to retry; once nothing is, ✕ forgets the list and the panel goes.
