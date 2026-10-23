@@ -62,16 +62,35 @@ Below `rootWide` the sidebar is an overlay, opened and closed with `sidebarOpen`
 
 ## Search
 
-Only the interface is built so far: nothing is filtered or fetched, and what's typed is kept for the open-folder filter and a later optional `adapter.search`. Searching is a passing state of the open folder, not a dialog, so the results can show in the content view, where selection, the menus, dragging, opening and downloading already work.
+Only the interface is built so far: nothing is filtered or fetched, and what's typed is kept for the open-folder filter and a later optional `adapter.search`. Searching is a passing state, not a dialog, so the results can show in the content view, where selection, the menus, dragging, opening and downloading already work.
 
-- While `searching` (`file-manager.tsx`), the search field (`header-bar/search-field.tsx`) takes the path bar's place, the same pill in the same grid area, so nothing in the header moves: on its own row below the buttons when narrow, centred between them from `rootMedium`. It's a `search` landmark holding a `type="search"` input named "Search", with "Search in ‹folder›" (`searchIn`, the open folder's name, or the section's at its root) as its placeholder, and a ✕ that clears what's typed, or closes the search when nothing is ("Clear search" / "Close search"). The browser's own clear button is hidden.
-- The Search buttons, in the sidebar's header and, while the sidebar is collapsed or hidden, in the header bar, are toggles (`aria-pressed`, `primary.main` while pressed). Ctrl+F or ⌘F opens it from anywhere in the file manager, in place of the browser's find, or focuses the field with what's typed selected when it's open already (see `keyboard.md`).
-- The field takes the focus as it opens. Escape, the ✕ with nothing typed, or a Search button closes it and gives the focus back to what had it before (`searchOpener`), or to the content when that's gone or hidden, as the header's button is once the sidebar docks. The ✕ and the buttons keep the focus in the field as they're pressed (`preventDefault` on `mousedown`), so a press doesn't first blur it.
-- Down or Enter goes on to the content (`focusContent`). The focus leaving the field with nothing typed closes the search and leaves the focus where it went, checked once it's gone so the window losing the focus doesn't count; with something typed, the field stays.
-- Opening another folder, by any route, the consumer's included, ends the search and drops what's typed, as in GNOME Files. It's worked out as the place changes during rendering, with the folder left through (`shownPlace`); a place rewritten to the same folders, as after a rename, keeps it.
+There are two scopes (`SearchScope`, `types/search.ts`, internal), as in GNOME Files 46:
+
+| | Folder search (`"folder"`) | Search everywhere (`"everywhere"`) |
+|---|---|---|
+| Button | right after the path bar, in its grid area, so it stays beside the path bar or the field | the magnifier at the top of the sidebar, and the header bar's while the sidebar is collapsed or hidden |
+| Icon | `searchFolder` (`ManageSearch`; Material has no folder with a magnifier) | `search` |
+| Keys | Ctrl+F or ⌘F | Ctrl+Shift+F or ⌘⇧F |
+| Covers | the open folder | every section checked in the field's sections menu |
+| Placeholder | "Search in ‹folder›" (`searchIn`) | "Search everywhere", "Search in ‹section›" with one checked, "Search in 3 sections" (`searchInSections`) |
+
+- While `searchScope` is set (`file-manager.tsx`), the search field (`header-bar/search-field.tsx`) takes the path bar's place, the same pill in the same place, so nothing in the header moves: on its own row below the buttons when narrow, centred between them from `rootMedium`. It's a `search` landmark holding a `type="search"` input named "Search", led by the scope's icon, with a ✕ that clears what's typed, or closes the search when nothing is ("Clear search" / "Close search"). The browser's own clear button is hidden.
+- The buttons are toggles (`aria-pressed`, `primary.main` while pressed): one closes its own scope's search, and opens it or switches an open search to it otherwise, keeping what's typed. The keys open or switch the same way, and focus the field with what's typed selected. The keys are kept from the browser's find while the focus is in the file manager (see `keyboard.md`).
+- The field takes the focus as it opens. Escape, from any part of the field, the ✕ with nothing typed, or the open scope's button closes it and gives the focus back to what had it before (`searchOpener`), or to the content when that's gone or hidden, as the header's magnifier is once the sidebar docks. The ✕, the sections button and the search buttons keep the focus in the field as they're pressed (`preventDefault` on `mousedown`), so a press doesn't first blur it.
+- Down or Enter in the input goes on to the content (`focusContent`). The focus leaving the field, all of it, with nothing typed closes the search and leaves the focus where it went, checked once it's gone so the window losing the focus doesn't count, nor the sections menu having it; with something typed, the field stays.
+- Opening another folder, by any route, the consumer's included, ends the search and drops what's typed, as in GNOME Files, a search everywhere too for now. It's worked out as the place changes during rendering, with the folder left through (`shownPlace`); a place rewritten to the same folders, as after a rename, keeps it.
 - Typing in the content is still type-ahead and doesn't start a search.
-- The query runs as its own letters do (`unicode-bidi: plaintext`), and the folder's name in the placeholder is isolated (`isolate`).
-- The open state and the query are internal. They become props (`search`, `defaultSearch`, `onSearchChange`) with the results, since how the deeper search is scoped decides their shape.
+- The query runs as its own letters do (`unicode-bidi: plaintext`), and names in the placeholder are isolated (`isolate`).
+
+### Sections searched everywhere
+
+A search everywhere covers every section unless some are unchecked in the field's sections menu (`header-bar/search-sections-menu.tsx`), which is only there when the file manager has more than one section.
+
+- Its button sits between the input and the ✕ and says what's covered: "All sections" or "3 sections" (`allSections`, `sectionCount`), with a chevron, named "Sections to search" (`searchSections`). Alt+Down in the input opens it too, as a combobox's list.
+- The menu is built as the view menu is (`dense`, `menuitemcheckbox` items with a display-only `Checkbox`, unsticky subheaders, hanging from the button's end edge by its element direction): "All sections" first, checked when all are and mixed (`aria-checked="mixed"`, indeterminate) otherwise, then each `SectionGroup`'s `title` as a subheader, when it has one, and its sections with their icons and isolated labels. Picking "All sections" checks them all.
+- It stays open while sections are toggled, and gives the focus back to the field as it closes. The last checked section is disabled, so a search never covers nothing.
+- `file-manager.tsx` keeps the unchecked ids (`searchExcluded`) while it's mounted, across searches, so a section added later is checked. Ids of sections gone don't count, and every section left unchecked counts as none (`excludedSections`).
+- The open scope, the query and the sections are internal. They become props (`search`, `defaultSearch`, `onSearchChange`) with the results, since how the deeper search works decides their shape.
 
 ## Context menu and actions
 
