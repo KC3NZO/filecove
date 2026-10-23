@@ -32,6 +32,9 @@ export const SORT_LABELS: Record<SortKey, (text: FileManagerLocaleText) => SortK
 
 export const DEFAULT_SORT: SortOrder = { key: "name", direction: "asc" };
 
+/** Whether two orders are the same, by key and direction. */
+export const sameSort = (a: SortOrder, b: SortOrder) => a.key === b.key && a.direction === b.direction;
+
 /** Folders by item count, files by bytes; unknown sizes sort as the smallest. */
 const sizeOf = (entry: FileEntry) => (entry.kind === "folder" ? entry.childCount : entry.size) ?? -1;
 

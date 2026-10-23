@@ -16,9 +16,11 @@ import { carriesFiles } from "../../hooks/use-drop-target";
 import { useEntryDrag } from "../../hooks/use-entry-drag";
 import { useLocaleValue } from "../../hooks/use-locale";
 import { useLocationHistory } from "../../hooks/use-location-history";
+import { useSetting } from "../../hooks/use-setting";
+import { useStableSet } from "../../hooks/use-stable-set";
 import { useTextDirection } from "../../hooks/use-text-direction";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
-import { createFolderStore, folderKey } from "../../store/folder-store";
+import { createFolderStore, folderKey, keyFolder } from "../../store/folder-store";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { visibleActionGroups } from "../../utils/action-groups";
@@ -26,8 +28,9 @@ import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace } from "../../utils/navigation";
 import { importsFrom } from "../../utils/sections";
+import { sameIds } from "../../utils/sets";
 import { matchesShortcut, pressedKeys, pressesKey } from "../../utils/shortcut";
-import { DEFAULT_SORT } from "../../utils/sort";
+import { DEFAULT_SORT, sameSort } from "../../utils/sort";
 import UploadPanel from "../uploads/upload-panel";
 import FolderView from "./content/folder-view";
 import ContextMenu from "./context-menu/context-menu";
@@ -60,6 +63,7 @@ import type {
     OpenMenu,
     RunShortcut,
     Section,
+    SectionFolder,
     SectionGroup,
     SortOrder,
     TreeReveal,
@@ -74,10 +78,11 @@ import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-di
 import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
 
 /*
- * The location below can be controlled, as MUI's props are: pass it and change it in
- * `onLocationChange`, or leave it to the file manager, starting from `defaultLocation`. Which one
- * is decided on mounting, and MUI warns in development about switching later. Controlled, the
- * user's changes are only asked for through the callback, and made once they're passed back.
+ * The location, the view settings and the tree's expanded folders below can each be controlled, as
+ * MUI's props are: pass the value and change it in its `on…Change` callback, or leave it to the
+ * file manager, starting from its `default…` prop. Which one is decided on mounting, and MUI warns
+ * in development about switching later. Controlled, the user's changes are only asked for through
+ * the callback, and made once they're passed back.
  */
 interface BaseProps {
     /** Backend for every section that doesn't bring its own. */
@@ -106,9 +111,56 @@ interface BaseProps {
      * it was in was renamed or deleted, which a URL kept in step replaces rather than pushes.
      */
     onLocationChange?: (location: FileManagerLocation, reason: LocationChangeReason) => void;
+    /** The content's view, for a consumer that keeps it, e.g. across reloads. */
+    view?: ViewMode;
+    /** The view at first, when the file manager keeps it; "list" when omitted. */
     defaultView?: ViewMode;
-    /** Content order at first; name, A to Z, when omitted. The sidebar tree is always by name. */
+    /** Told the view the user switches to, with the header's button. */
+    onViewChange?: (view: ViewMode) => void;
+    /**
+     * The content's order, for a consumer that keeps it. Kept across folders. The sidebar tree and
+     * the "Move to…" and "Copy to…" picker always go by name.
+     */
+    sort?: SortOrder;
+    /** The order at first, when the file manager keeps it; name, A to Z, when omitted. */
     defaultSort?: SortOrder;
+    /** Told the order the user picks, in the view options menu or the list's column headers. */
+    onSortChange?: (sort: SortOrder) => void;
+    /**
+     * Whether hidden entries show, in the content, the sidebar tree and the picker, for a consumer
+     * that keeps it. What's hidden is `FileEntry.hidden`, or else a name starting with a dot.
+     */
+    showHidden?: boolean;
+    /** Whether hidden entries show at first, when the file manager keeps it; false when omitted. */
+    defaultShowHidden?: boolean;
+    /** Told when the user shows or hides hidden entries, with Ctrl+H or the view options menu. */
+    onShowHiddenChange?: (showHidden: boolean) => void;
+    /**
+     * Whether the sidebar is hidden while there's room to dock it, for a consumer that keeps it.
+     * Narrower, it's an overlay the header's button opens either way.
+     */
+    sidebarHidden?: boolean;
+    /** Whether the docked sidebar is hidden at first, when the file manager keeps it; false when omitted. */
+    defaultSidebarHidden?: boolean;
+    /**
+     * Told when the user hides or shows the docked sidebar, with F9, the view options menu or, while
+     * it's hidden, the header's "Show sidebar" button.
+     */
+    onSidebarHiddenChange?: (sidebarHidden: boolean) => void;
+    /**
+     * Folders expanded in the sidebar tree, for a consumer that keeps them, e.g. across reloads. A
+     * section's own row is its root folder. Only the chevrons, Right and Left on a row, and a drag
+     * resting on a collapsed row change them, never going somewhere. A folder the tree doesn't show,
+     * below a collapsed one or in a section that's gone, stays as it is, to show expanded again.
+     */
+    expandedFolders?: readonly SectionFolder[];
+    /**
+     * Folders expanded at first, when the file manager keeps them; when omitted, the section the
+     * file manager opens in, if it shows its folders.
+     */
+    defaultExpandedFolders?: readonly SectionFolder[];
+    /** Told the folders expanded as the user expands or collapses one. */
+    onExpandedFoldersChange?: (folders: SectionFolder[]) => void;
     /**
      * What opening a file does, by double-clicking, tapping or pressing Enter on it, or with
      * `ActionContext.open`, e.g. opening it in an editor of the consumer's. Return false to leave a
@@ -272,8 +324,21 @@ const FileManager = ({
     location: locationProp,
     defaultLocation,
     onLocationChange,
+    view: viewProp,
     defaultView = "list",
+    onViewChange,
+    sort: sortProp,
     defaultSort = DEFAULT_SORT,
+    onSortChange,
+    showHidden: showHiddenProp,
+    defaultShowHidden = false,
+    onShowHiddenChange,
+    sidebarHidden: sidebarHiddenProp,
+    defaultSidebarHidden = false,
+    onSidebarHiddenChange,
+    expandedFolders: expandedFoldersProp,
+    defaultExpandedFolders,
+    onExpandedFoldersChange,
     onOpenFile,
     localeText,
     locale,
@@ -338,20 +403,56 @@ const FileManager = ({
     const folder = section && folderOf(section, place.trail);
     const openKey = section && folder ? folderKey(section.id, folder.id) : null;
 
-    // Only the first section shown starts expanded, if it shows its folders at all; after that,
-    // only the chevrons change the tree.
-    const [expanded, setExpanded] = useState<ReadonlySet<string>>(
-        () => new Set(section && section.showFolders !== false ? [folderKey(section.id, section.rootId)] : []),
+    // Folders expanded in the sidebar tree, by `folderKey`, which the consumer may control as
+    // `SectionFolder`s. Unless they say otherwise, only the first section shown starts expanded, if
+    // it shows its folders at all; after that, only the chevrons change the tree.
+    const [defaultExpanded] = useState<ReadonlySet<string>>(() => {
+        if (defaultExpandedFolders) {
+            return new Set(defaultExpandedFolders.map((shown) => folderKey(shown.sectionId, shown.folderId)));
+        }
+
+        return new Set(section && section.showFolders !== false ? [folderKey(section.id, section.rootId)] : []);
+    });
+    const expandedKeys = useStableSet(
+        expandedFoldersProp?.map((shown) => folderKey(shown.sectionId, shown.folderId)),
     );
+    const [expanded, setExpanded] = useSetting<ReadonlySet<string>>({
+        name: "expandedFolders",
+        value: expandedKeys,
+        defaultValue: defaultExpanded,
+        onChange: onExpandedFoldersChange && ((keys) => onExpandedFoldersChange([...keys].map(keyFolder))),
+        equal: sameIds,
+    });
     const [sidebarOpen, setSidebarOpen] = useState(false);
     // Whether the docked sidebar is hidden, with F9 or the view menu. Collapsed, it shows as an
     // overlay instead, while `sidebarOpen`.
-    const [sidebarHidden, setSidebarHidden] = useState(false);
-    const [view, setView] = useState<ViewMode>(defaultView);
+    const [sidebarHidden, setSidebarHidden] = useSetting({
+        name: "sidebarHidden",
+        value: sidebarHiddenProp,
+        defaultValue: defaultSidebarHidden,
+        onChange: onSidebarHiddenChange,
+    });
+    const [view, setView] = useSetting({
+        name: "view",
+        value: viewProp,
+        defaultValue: defaultView,
+        onChange: onViewChange,
+    });
     // Kept across folders, as the view is.
-    const [sort, setSort] = useState<SortOrder>(defaultSort);
+    const [sort, setSort] = useSetting({
+        name: "sort",
+        value: sortProp,
+        defaultValue: defaultSort,
+        onChange: onSortChange,
+        equal: sameSort,
+    });
     // Kept across folders, as the sort is. Listings are filtered by it where they're shown, never in the store.
-    const [showHidden, setShowHidden] = useState(false);
+    const [showHidden, setShowHidden] = useSetting({
+        name: "showHidden",
+        value: showHiddenProp,
+        defaultValue: defaultShowHidden,
+        onChange: onShowHiddenChange,
+    });
     const [menu, setMenu] = useState<MenuState | null>(null);
     const [naming, setNaming] = useState<NameDialogState | null>(null);
     const [transfer, setTransfer] = useState<TransferDialogState | null>(null);
@@ -456,23 +557,29 @@ const FileManager = ({
         !!folder && !!pasteIds && pasteIds.adapter === (section?.adapter ?? adapter) && pasteIds.ids.has(folder.id);
 
     // Expands without ever collapsing, for a drag resting on a collapsed folder or section.
-    const expand = useCallback((key: string) => {
-        setExpanded((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
-    }, []);
+    const expand = useCallback(
+        (key: string) => {
+            setExpanded((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+        },
+        [setExpanded],
+    );
 
-    const toggleExpanded = useCallback((key: string) => {
-        setExpanded((prev) => {
-            const next = new Set(prev);
+    const toggleExpanded = useCallback(
+        (key: string) => {
+            setExpanded((prev) => {
+                const next = new Set(prev);
 
-            if (next.has(key)) {
-                next.delete(key);
-            } else {
-                next.add(key);
-            }
+                if (next.has(key)) {
+                    next.delete(key);
+                } else {
+                    next.add(key);
+                }
 
-            return next;
-        });
-    }, []);
+                return next;
+            });
+        },
+        [setExpanded],
+    );
 
     // Whether the focus is in the content panel, or in the context menu opened from it, since an
     // action picked in the menu counts as run where the menu was opened.
@@ -590,7 +697,7 @@ const FileManager = ({
         }
 
         setSidebarHidden(!shown);
-    }, []);
+    }, [setSidebarHidden]);
 
     // Docked or not, as container queries decide; hidden, the docked sidebar still says it docks.
     const sidebarDocked = useCallback(() => !!sidebarRef.current && !overlays(sidebarRef.current), []);
@@ -662,8 +769,8 @@ const FileManager = ({
         }
     };
 
-    const toggleView = useCallback(() => setView((prev) => (prev === "list" ? "grid" : "list")), []);
-    const toggleHidden = useCallback(() => setShowHidden((prev) => !prev), []);
+    const toggleView = useCallback(() => setView(view === "list" ? "grid" : "list"), [view, setView]);
+    const toggleHidden = useCallback(() => setShowHidden(!showHidden), [showHidden, setShowHidden]);
     const closeMenu = useCallback(() => setMenu((prev) => prev && { ...prev, open: false }), []);
     const setSelecting = useCallback((on: boolean) => setSelectingKey(on ? openKey : null), [openKey]);
     const toggleSelecting = useCallback(() => setSelecting(!selecting), [setSelecting, selecting]);

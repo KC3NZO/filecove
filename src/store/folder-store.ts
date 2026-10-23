@@ -9,6 +9,13 @@ const PAGE_INTERVAL = 500;
 /** Cache key of a folder. Sections are independent roots, so one id in two sections is two folders. */
 export const folderKey = (sectionId: string, folderId: string) => `${sectionId}\u0000${folderId}`;
 
+/** The section and the folder a `folderKey` was made of; the section's part is the one before the first NUL. */
+export const keyFolder = (key: string) => {
+    const cut = key.indexOf("\u0000");
+
+    return { sectionId: key.slice(0, cut), folderId: key.slice(cut + 1) };
+};
+
 /**
  * Folder listings shared by the sidebar tree and the content view, so a folder is requested
  * once however many places show it. Each state object is replaced, never mutated, so

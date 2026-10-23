@@ -56,3 +56,9 @@ export interface FolderRef {
     id: string;
     name: string;
 }
+
+/** A folder of a section, e.g. one expanded in the sidebar tree. A section's own row is its root folder. */
+export interface SectionFolder {
+    sectionId: string;
+    folderId: string;
+}

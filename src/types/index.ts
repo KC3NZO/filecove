@@ -20,7 +20,7 @@ export type { FileManagerLocaleText, Locale, UploadLocaleText } from "./locale";
 export type { MenuPosition, MenuRequest, OpenMenu, RunShortcut } from "./menu";
 export type { FileManagerLocation, LocationChangeReason } from "./navigation";
 export type { PreviewContent, PreviewKind, TextExcerpt } from "./preview";
-export type { FolderRef, Section, SectionGroup, SectionImports } from "./section";
+export type { FolderRef, Section, SectionFolder, SectionGroup, SectionImports } from "./section";
 export type { EntrySelection, SelectModifiers, TreeSelection, TreeTarget } from "./selection";
 export type { DroppedFiles, UploadItem, UploadStatus } from "./upload";
 export type {

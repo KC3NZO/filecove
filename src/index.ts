@@ -25,6 +25,7 @@ export type {
     LocationChangeReason,
     OperationOptions,
     Section,
+    SectionFolder,
     SectionGroup,
     SectionImports,
     SortDirection,
