@@ -69,6 +69,7 @@ import type {
     OpenMenu,
     RefreshOptions,
     RunShortcut,
+    SearchScope,
     Section,
     SectionFolder,
     SectionGroup,
@@ -587,10 +588,19 @@ const FileManager = ({
         }
     }, [focusContent]);
 
-    // Whether the search field shows in the path bar's place, and what's typed in it. Nothing is
-    // searched yet.
-    const [searching, setSearching] = useState(false);
+    // What the search field in the path bar's place searches, the open folder or every section,
+    // or null while it isn't there, and what's typed in it. Nothing is searched yet.
+    const [searchScope, setSearchScope] = useState<SearchScope | null>(null);
     const [query, setQuery] = useState("");
+    // Sections a search everywhere leaves out, kept while the file manager is mounted, so a section
+    // added later is searched. Ids of sections gone don't count, and leaving out every section left
+    // counts as leaving out none.
+    const [searchExcluded, setSearchExcluded] = useState<ReadonlySet<string>>(NO_IDS);
+    const excludedSections = useMemo(() => {
+        const left = new Set([...searchExcluded].filter((id) => sectionsById.has(id)));
+
+        return left.size === 0 || left.size >= sectionsById.size ? NO_IDS : left;
+    }, [searchExcluded, sectionsById]);
     const searchInputRef = useRef<HTMLInputElement>(null);
     // What had the focus when the search opened, which gets it back as the search closes.
     const searchOpener = useRef<HTMLElement | null>(null);
@@ -609,7 +619,7 @@ const FileManager = ({
 
         // Another folder ends the search, as in GNOME Files, however it's opened.
         if (!samePlace(shownPlace, place)) {
-            setSearching(false);
+            setSearchScope(null);
             setQuery("");
         }
 
@@ -873,33 +883,39 @@ const FileManager = ({
         }
     }, []);
 
-    // Opens the search field and focuses it, or, open already, focuses it with what's typed selected.
-    const openSearch = useCallback(() => {
-        if (!section) {
-            return;
-        }
+    // Opens the search field with this scope and focuses it, or, open already, switches it to this
+    // scope, keeping what's typed, and focuses it with that selected.
+    const openSearch = useCallback(
+        (scope: SearchScope) => {
+            if (!section) {
+                return;
+            }
 
-        if (!searching) {
-            searchOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-            flushSync(() => setSearching(true));
-        }
+            if (!searchScope) {
+                searchOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            }
 
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-    }, [section, searching]);
+            flushSync(() => setSearchScope(scope));
+            searchInputRef.current?.focus();
+            searchInputRef.current?.select();
+        },
+        [section, searchScope],
+    );
 
     const stopSearching = useCallback(() => {
-        setSearching(false);
+        setSearchScope(null);
         setQuery("");
         searchOpener.current = null;
     }, []);
 
-    // Closing with the focus in the field gives it back to what had it before the search opened,
-    // or else to the content, as when that was a button the layout has hidden since.
+    // Closing with the focus in the field, or on its own buttons, gives it back to what had it
+    // before the search opened, or else to the content, as when that was a button the layout has
+    // hidden since.
     const closeSearch = useCallback(() => {
         const opener = searchOpener.current;
+        const field = searchInputRef.current?.closest('[role="search"]');
 
-        if (document.activeElement === searchInputRef.current) {
+        if (field?.contains(document.activeElement)) {
             if (opener && opener !== document.body) {
                 opener.focus();
             }
@@ -912,10 +928,13 @@ const FileManager = ({
         stopSearching();
     }, [stopSearching]);
 
+    // A search button closes the search it opens, and opens or switches to it otherwise.
     const toggleSearch = useCallback(
-        () => (searching ? closeSearch() : openSearch()),
-        [searching, closeSearch, openSearch],
+        (scope: SearchScope) => (searchScope === scope ? closeSearch() : openSearch(scope)),
+        [searchScope, closeSearch, openSearch],
     );
+
+    const searchEverywhere = useCallback(() => toggleSearch("everywhere"), [toggleSearch]);
 
     const focusFromSearch = useCallback(() => setFocusContent(true), []);
 
@@ -987,8 +1006,8 @@ const FileManager = ({
         }
     };
 
-    // Keys that work anywhere in the file manager: F6, F9, Ctrl+H, Ctrl+F, and Alt+Left and
-    // Alt+Right for back and forward, the other way round right to left, as the arrows on the
+    // Keys that work anywhere in the file manager: F6, F9, Ctrl+H, Ctrl+F, Ctrl+Shift+F, and Alt+Left
+    // and Alt+Right for back and forward, the other way round right to left, as the arrows on the
     // buttons are.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         // Menus and dialogs portal out of the file manager, but their key presses still bubble here
@@ -1020,14 +1039,14 @@ const FileManager = ({
         ) {
             toggleHidden();
         } else if (
-            // Ctrl+F or ⌘F searches, in place of the browser's find while the focus is in here.
+            // Ctrl+F or ⌘F searches the open folder, and with Shift every section, as in GNOME Files,
+            // in place of the browser's find while the focus is in here.
             pressesKey(event, "f") &&
             (event.ctrlKey || event.metaKey) &&
-            !event.shiftKey &&
             !event.altKey &&
             section
         ) {
-            openSearch();
+            openSearch(event.shiftKey ? "everywhere" : "folder");
         } else if (event.altKey && !others && event.key === (direction === "rtl" ? "ArrowRight" : "ArrowLeft")) {
             goBack();
         } else if (event.altKey && !others && event.key === (direction === "rtl" ? "ArrowLeft" : "ArrowRight")) {
@@ -1731,7 +1750,7 @@ const FileManager = ({
                                         reveal={treeReveal}
                                         open={sidebarOpen}
                                         hidden={sidebarHidden}
-                                        searching={searching}
+                                        searchScope={searchScope}
                                         onToggle={toggleExpanded}
                                         onRevealed={clearTreeReveal}
                                         onExpand={expand}
@@ -1739,17 +1758,21 @@ const FileManager = ({
                                         onOpenMenu={openMenu}
                                         onShortcut={runShortcut}
                                         onClose={closeSidebar}
-                                        onToggleSearch={toggleSearch}
+                                        onSearchEverywhere={searchEverywhere}
                                     />
                                     <Box sx={mainSx}>
                                         <HeaderBar
                                             pathBar={
-                                                section && searching ? (
+                                                section && searchScope ? (
                                                     <SearchField
+                                                        scope={searchScope}
                                                         query={query}
-                                                        scope={folderOf(section, place.trail).name}
+                                                        folderName={folderOf(section, place.trail).name}
+                                                        groups={sections}
+                                                        excluded={excludedSections}
                                                         inputRef={searchInputRef}
                                                         onQueryChange={setQuery}
+                                                        onExcludedChange={setSearchExcluded}
                                                         onClose={closeSearch}
                                                         onDismiss={stopSearching}
                                                         onFocusContent={focusFromSearch}
@@ -1772,7 +1795,7 @@ const FileManager = ({
                                             sort={sort}
                                             showHidden={showHidden}
                                             selecting={selecting}
-                                            searching={searching}
+                                            searchScope={searchScope}
                                             sidebarHidden={sidebarHidden}
                                             sidebarDocked={sidebarDocked}
                                             onBack={goBack}
@@ -1781,7 +1804,7 @@ const FileManager = ({
                                             onSortChange={setSort}
                                             onToggleHidden={toggleHidden}
                                             onToggleSelecting={toggleSelecting}
-                                            onToggleSearch={toggleSearch}
+                                            onSearch={toggleSearch}
                                             onShowSidebar={showSidebar}
                                             onToggleSidebar={toggleDocked}
                                             sidebarButtonRef={sidebarButtonRef}

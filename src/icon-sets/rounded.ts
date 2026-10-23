@@ -37,6 +37,7 @@ import HistoryRounded from "@mui/icons-material/HistoryRounded";
 import RefreshRounded from "@mui/icons-material/RefreshRounded";
 import DriveFileRenameOutlineRounded from "@mui/icons-material/DriveFileRenameOutlineRounded";
 import SearchRounded from "@mui/icons-material/SearchRounded";
+import ManageSearchRounded from "@mui/icons-material/ManageSearchRounded";
 import SelectAllRounded from "@mui/icons-material/SelectAllRounded";
 import ChecklistRounded from "@mui/icons-material/ChecklistRounded";
 import SettingsRounded from "@mui/icons-material/SettingsRounded";
@@ -92,6 +93,7 @@ const rounded: IconSet = {
     refresh: RefreshRounded,
     rename: DriveFileRenameOutlineRounded,
     search: SearchRounded,
+    searchFolder: ManageSearchRounded,
     selectAll: SelectAllRounded,
     selectMode: ChecklistRounded,
     settings: SettingsRounded,

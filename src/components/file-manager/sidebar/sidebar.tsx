@@ -25,6 +25,7 @@ import type {
     FileManagerLocation,
     OpenMenu,
     RunShortcut,
+    SearchScope,
     Section,
     SectionGroup,
     StatusRow,
@@ -50,9 +51,10 @@ interface SidebarProps {
     open: boolean;
     /** Whether the docked sidebar is hidden; has no effect while it's collapsed. */
     hidden: boolean;
-    /** Whether the search field shows in the path bar's place. */
-    searching: boolean;
-    onToggleSearch: () => void;
+    /** What the open search searches, or null; the magnifier at the top is for searching everywhere. */
+    searchScope: SearchScope | null;
+    /** Opens a search everywhere, switches to it, or closes it when it's the one open. */
+    onSearchEverywhere: () => void;
     onToggle: (key: string) => void;
     /** Called once `reveal` has been scrolled to, or given up on. */
     onRevealed: () => void;
@@ -216,7 +218,7 @@ const Sidebar = ({
     reveal,
     open,
     hidden,
-    searching,
+    searchScope,
     onToggle,
     onRevealed,
     onExpand,
@@ -224,7 +226,7 @@ const Sidebar = ({
     onOpenMenu,
     onShortcut,
     onClose,
-    onToggleSearch,
+    onSearchEverywhere,
 }: SidebarProps) => {
     // The sidebar's own selection; the content's lives in its folder view, and neither sees the other.
     const { selection, select, selectSection, reset } = useTreeSelection(openKey);
@@ -515,14 +517,15 @@ const Sidebar = ({
             onBlur={handleBlur}
         >
             <Box sx={headerSx}>
-                {/* Pressed while searching, it keeps the focus in the field, which it closes. */}
+                {/* Keeps the focus in an open search's field as it's pressed, which it closes or
+                    switches to searching everywhere. */}
                 <IconButton
-                    aria-label={text.search}
-                    aria-pressed={searching}
-                    aria-keyshortcuts="Control+F Meta+F"
+                    aria-label={text.searchEverywhere}
+                    aria-pressed={searchScope === "everywhere"}
+                    aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
                     sx={searchButtonSx}
-                    onMouseDown={(event) => searching && event.preventDefault()}
-                    onClick={onToggleSearch}
+                    onMouseDown={(event) => searchScope && event.preventDefault()}
+                    onClick={onSearchEverywhere}
                 >
                     <Icon name="search" fontSize="small" />
                 </IconButton>

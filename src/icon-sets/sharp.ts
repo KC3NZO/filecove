@@ -37,6 +37,7 @@ import HistorySharp from "@mui/icons-material/HistorySharp";
 import RefreshSharp from "@mui/icons-material/RefreshSharp";
 import DriveFileRenameOutlineSharp from "@mui/icons-material/DriveFileRenameOutlineSharp";
 import SearchSharp from "@mui/icons-material/SearchSharp";
+import ManageSearchSharp from "@mui/icons-material/ManageSearchSharp";
 import SelectAllSharp from "@mui/icons-material/SelectAllSharp";
 import ChecklistSharp from "@mui/icons-material/ChecklistSharp";
 import SettingsSharp from "@mui/icons-material/SettingsSharp";
@@ -92,6 +93,7 @@ const sharp: IconSet = {
     refresh: RefreshSharp,
     rename: DriveFileRenameOutlineSharp,
     search: SearchSharp,
+    searchFolder: ManageSearchSharp,
     selectAll: SelectAllSharp,
     selectMode: ChecklistSharp,
     settings: SettingsSharp,

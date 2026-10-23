@@ -37,6 +37,7 @@ import History from "@mui/icons-material/History";
 import Refresh from "@mui/icons-material/Refresh";
 import DriveFileRenameOutline from "@mui/icons-material/DriveFileRenameOutline";
 import Search from "@mui/icons-material/Search";
+import ManageSearch from "@mui/icons-material/ManageSearch";
 import SelectAll from "@mui/icons-material/SelectAll";
 import Checklist from "@mui/icons-material/Checklist";
 import Settings from "@mui/icons-material/Settings";
@@ -92,6 +93,7 @@ const filled: IconSet = {
     refresh: Refresh,
     rename: DriveFileRenameOutline,
     search: Search,
+    searchFolder: ManageSearch,
     selectAll: SelectAll,
     selectMode: Checklist,
     settings: Settings,

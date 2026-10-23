@@ -127,9 +127,25 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     /** Turns touch selection mode on. */
     select: string;
     doneSelecting: string;
+    /** The search field's name for screen readers. */
     search: string;
-    /** The search field's placeholder, with the name of the folder searched in, e.g. "Search in Documents". */
+    /** The button by the path bar that searches the open folder. */
+    searchFolder: string;
+    /** The magnifier at the top of the sidebar that searches every section, and the field's placeholder then. */
+    searchEverywhere: string;
+    /**
+     * The search field's placeholder, with the name of the folder searched in, e.g. "Search in
+     * Documents", or of the one section a search everywhere is left with.
+     */
     searchIn: (folder: string) => string;
+    /** The search field's placeholder while a search everywhere covers some of the sections. */
+    searchInSections: (count: number) => string;
+    /** The search field's button for the menu of sections a search everywhere covers. */
+    searchSections: string;
+    /** That button's text, and the menu's first item, while every section is checked. */
+    allSections: string;
+    /** That button's text while only some sections are checked. */
+    sectionCount: (count: number) => string;
     /** The search field's ✕ while something is typed in it. */
     clearSearch: string;
     /** The search field's ✕ while nothing is typed in it. */

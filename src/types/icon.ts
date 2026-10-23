@@ -46,6 +46,7 @@ export type IconName =
     | "refresh"
     | "rename"
     | "search"
+    | "searchFolder"
     | "selectAll"
     | "selectMode"
     | "settings"

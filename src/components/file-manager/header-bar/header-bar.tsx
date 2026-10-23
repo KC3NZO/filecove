@@ -9,7 +9,7 @@ import { HEADER_HEIGHT, rootMedium, rootWide } from "../../../styles/layout";
 import Icon from "../../icons/icon";
 import ViewMenu from "./view-menu";
 
-import type { SortOrder, ViewMode } from "../../../types";
+import type { SearchScope, SortOrder, ViewMode } from "../../../types";
 
 interface HeaderBarProps {
     /** Centre slot, the path bar, or the search field while searching. */
@@ -21,8 +21,8 @@ interface HeaderBarProps {
     showHidden: boolean;
     /** Whether touch selection mode is on. */
     selecting: boolean;
-    /** Whether the search field shows in the path bar's place. */
-    searching: boolean;
+    /** What the search field in the path bar's place searches, or null while it isn't there. */
+    searchScope: SearchScope | null;
     /** Whether the docked sidebar is hidden. */
     sidebarHidden: boolean;
     /** Whether the sidebar docks at the moment, rather than collapsing, as container queries decide. */
@@ -33,7 +33,8 @@ interface HeaderBarProps {
     onSortChange: (sort: SortOrder) => void;
     onToggleHidden: () => void;
     onToggleSelecting: () => void;
-    onToggleSearch: () => void;
+    /** Opens a search with this scope, switches to it, or closes it when it's the open one. */
+    onSearch: (scope: SearchScope) => void;
     /** Opens the collapsed sidebar, or shows the hidden docked one. */
     onShowSidebar: () => void;
     /** Hides or shows the docked sidebar. */
@@ -72,8 +73,18 @@ const startGroupSx: SxProps<Theme> = {
     gap: 0.25,
 };
 
+// The path bar, or the search field in its place, then the button that searches the open folder,
+// which stays beside either so it never moves.
 const pathSlotSx: SxProps<Theme> = {
     gridArea: "path",
+    display: "flex",
+    alignItems: "center",
+    gap: 0.5,
+    minWidth: 0,
+};
+
+const pathSx: SxProps<Theme> = {
+    flex: 1,
     minWidth: 0,
 };
 
@@ -86,8 +97,8 @@ const endGroupSx: SxProps<Theme> = {
 };
 
 /**
- * Only while the sidebar is collapsed, or hidden: the button that shows it, and search, which
- * otherwise lives in the sidebar.
+ * Only while the sidebar is collapsed, or hidden: the button that shows it, and search everywhere,
+ * which otherwise lives at the top of the sidebar.
  */
 const collapsedOnlySx: SxProps<Theme> = {
     [rootWide]: { display: "none" },
@@ -123,7 +134,7 @@ const HeaderBar = ({
     sort,
     showHidden,
     selecting,
-    searching,
+    searchScope,
     sidebarHidden,
     sidebarDocked,
     onBack,
@@ -132,7 +143,7 @@ const HeaderBar = ({
     onSortChange,
     onToggleHidden,
     onToggleSelecting,
-    onToggleSearch,
+    onSearch,
     onShowSidebar,
     onToggleSidebar,
     sidebarButtonRef,
@@ -158,7 +169,21 @@ const HeaderBar = ({
                     <Icon name="arrowForward" fontSize="small" />
                 </IconButton>
             </Box>
-            <Box sx={pathSlotSx}>{pathBar}</Box>
+            <Box sx={pathSlotSx}>
+                <Box sx={pathSx}>{pathBar}</Box>
+                {/* Keeps the focus in an open search's field as it's pressed, which it closes or
+                    switches to searching the folder. */}
+                <IconButton
+                    aria-label={text.searchFolder}
+                    aria-pressed={searchScope === "folder"}
+                    aria-keyshortcuts="Control+F Meta+F"
+                    sx={pressedSx}
+                    onMouseDown={(event) => searchScope && event.preventDefault()}
+                    onClick={() => onSearch("folder")}
+                >
+                    <Icon name="searchFolder" fontSize="small" />
+                </IconButton>
+            </Box>
             <Box sx={endGroupSx}>
                 <IconButton
                     aria-label={selecting ? text.doneSelecting : text.select}
@@ -168,14 +193,14 @@ const HeaderBar = ({
                 >
                     <Icon name="selectMode" fontSize="small" />
                 </IconButton>
-                {/* Pressed while searching, it keeps the focus in the field, which it closes. */}
+                {/* The sidebar's magnifier, while the sidebar isn't there to hold it. */}
                 <IconButton
-                    aria-label={text.search}
-                    aria-pressed={searching}
-                    aria-keyshortcuts="Control+F Meta+F"
+                    aria-label={text.searchEverywhere}
+                    aria-pressed={searchScope === "everywhere"}
+                    aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
                     sx={sidebarHidden ? pressedSx : collapsedOnlyPressedSx}
-                    onMouseDown={(event) => searching && event.preventDefault()}
-                    onClick={onToggleSearch}
+                    onMouseDown={(event) => searchScope && event.preventDefault()}
+                    onClick={() => onSearch("everywhere")}
                 >
                     <Icon name="search" fontSize="small" />
                 </IconButton>

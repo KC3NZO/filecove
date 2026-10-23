@@ -37,6 +37,7 @@ import HistoryTwoTone from "@mui/icons-material/HistoryTwoTone";
 import RefreshTwoTone from "@mui/icons-material/RefreshTwoTone";
 import DriveFileRenameOutlineTwoTone from "@mui/icons-material/DriveFileRenameOutlineTwoTone";
 import SearchTwoTone from "@mui/icons-material/SearchTwoTone";
+import ManageSearchTwoTone from "@mui/icons-material/ManageSearchTwoTone";
 import SelectAllTwoTone from "@mui/icons-material/SelectAllTwoTone";
 import ChecklistTwoTone from "@mui/icons-material/ChecklistTwoTone";
 import SettingsTwoTone from "@mui/icons-material/SettingsTwoTone";
@@ -92,6 +93,7 @@ const twoTone: IconSet = {
     refresh: RefreshTwoTone,
     rename: DriveFileRenameOutlineTwoTone,
     search: SearchTwoTone,
+    searchFolder: ManageSearchTwoTone,
     selectAll: SelectAllTwoTone,
     selectMode: ChecklistTwoTone,
     settings: SettingsTwoTone,
