@@ -47,6 +47,7 @@ import UploadDialog from "./dialogs/upload-dialog";
 import DragPreview from "./drag-preview";
 import HeaderBar from "./header-bar/header-bar";
 import PathBar from "./header-bar/path-bar";
+import SearchField from "./header-bar/search-field";
 import Sidebar from "./sidebar/sidebar";
 
 import type {
@@ -586,6 +587,14 @@ const FileManager = ({
         }
     }, [focusContent]);
 
+    // Whether the search field shows in the path bar's place, and what's typed in it. Nothing is
+    // searched yet.
+    const [searching, setSearching] = useState(false);
+    const [query, setQuery] = useState("");
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    // What had the focus when the search opened, which gets it back as the search closes.
+    const searchOpener = useRef<HTMLElement | null>(null);
+
     // Going up to a folder the open one is in, however it's reached, the user's way or the
     // consumer's, selects the folder it was left through, as desktop file managers do. A place
     // rewritten in place, as after the folder it was in was deleted, doesn't count. An entry still
@@ -597,6 +606,12 @@ const FileManager = ({
         const left = placeReason === "replace" ? undefined : folderLeft(shownPlace, place);
 
         setShownPlace(place);
+
+        // Another folder ends the search, as in GNOME Files, however it's opened.
+        if (!samePlace(shownPlace, place)) {
+            setSearching(false);
+            setQuery("");
+        }
 
         if (!(reveal && reveal.key === openKey)) {
             setReveal(left && openKey ? { key: openKey, id: left.id } : null);
@@ -858,6 +873,52 @@ const FileManager = ({
         }
     }, []);
 
+    // Opens the search field and focuses it, or, open already, focuses it with what's typed selected.
+    const openSearch = useCallback(() => {
+        if (!section) {
+            return;
+        }
+
+        if (!searching) {
+            searchOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            flushSync(() => setSearching(true));
+        }
+
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+    }, [section, searching]);
+
+    const stopSearching = useCallback(() => {
+        setSearching(false);
+        setQuery("");
+        searchOpener.current = null;
+    }, []);
+
+    // Closing with the focus in the field gives it back to what had it before the search opened,
+    // or else to the content, as when that was a button the layout has hidden since.
+    const closeSearch = useCallback(() => {
+        const opener = searchOpener.current;
+
+        if (document.activeElement === searchInputRef.current) {
+            if (opener && opener !== document.body) {
+                opener.focus();
+            }
+
+            if (document.activeElement !== opener) {
+                setFocusContent(true);
+            }
+        }
+
+        stopSearching();
+    }, [stopSearching]);
+
+    const toggleSearch = useCallback(
+        () => (searching ? closeSearch() : openSearch()),
+        [searching, closeSearch, openSearch],
+    );
+
+    const focusFromSearch = useCallback(() => setFocusContent(true), []);
+
     // F6 moves the focus between the sidebar tree and the content, as in GNOME Files. While the
     // sidebar is collapsed, it opens the overlay, which takes the focus.
     const switchPane = () => {
@@ -926,8 +987,9 @@ const FileManager = ({
         }
     };
 
-    // Keys that work anywhere in the file manager: F6, F9, Ctrl+H, and Alt+Left and Alt+Right for
-    // back and forward, the other way round right to left, as the arrows on the buttons are.
+    // Keys that work anywhere in the file manager: F6, F9, Ctrl+H, Ctrl+F, and Alt+Left and
+    // Alt+Right for back and forward, the other way round right to left, as the arrows on the
+    // buttons are.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         // Menus and dialogs portal out of the file manager, but their key presses still bubble here
         // through React's tree; they aren't the file manager's.
@@ -957,6 +1019,15 @@ const FileManager = ({
             !event.altKey
         ) {
             toggleHidden();
+        } else if (
+            // Ctrl+F or ⌘F searches, in place of the browser's find while the focus is in here.
+            pressesKey(event, "f") &&
+            (event.ctrlKey || event.metaKey) &&
+            !event.shiftKey &&
+            !event.altKey &&
+            section
+        ) {
+            openSearch();
         } else if (event.altKey && !others && event.key === (direction === "rtl" ? "ArrowRight" : "ArrowLeft")) {
             goBack();
         } else if (event.altKey && !others && event.key === (direction === "rtl" ? "ArrowLeft" : "ArrowRight")) {
@@ -1660,6 +1731,7 @@ const FileManager = ({
                                         reveal={treeReveal}
                                         open={sidebarOpen}
                                         hidden={sidebarHidden}
+                                        searching={searching}
                                         onToggle={toggleExpanded}
                                         onRevealed={clearTreeReveal}
                                         onExpand={expand}
@@ -1667,11 +1739,22 @@ const FileManager = ({
                                         onOpenMenu={openMenu}
                                         onShortcut={runShortcut}
                                         onClose={closeSidebar}
+                                        onToggleSearch={toggleSearch}
                                     />
                                     <Box sx={mainSx}>
                                         <HeaderBar
                                             pathBar={
-                                                section ? (
+                                                section && searching ? (
+                                                    <SearchField
+                                                        query={query}
+                                                        scope={folderOf(section, place.trail).name}
+                                                        inputRef={searchInputRef}
+                                                        onQueryChange={setQuery}
+                                                        onClose={closeSearch}
+                                                        onDismiss={stopSearching}
+                                                        onFocusContent={focusFromSearch}
+                                                    />
+                                                ) : section ? (
                                                     <PathBar
                                                         section={section}
                                                         trail={place.trail}
@@ -1689,6 +1772,7 @@ const FileManager = ({
                                             sort={sort}
                                             showHidden={showHidden}
                                             selecting={selecting}
+                                            searching={searching}
                                             sidebarHidden={sidebarHidden}
                                             sidebarDocked={sidebarDocked}
                                             onBack={goBack}
@@ -1697,6 +1781,7 @@ const FileManager = ({
                                             onSortChange={setSort}
                                             onToggleHidden={toggleHidden}
                                             onToggleSelecting={toggleSelecting}
+                                            onToggleSearch={toggleSearch}
                                             onShowSidebar={showSidebar}
                                             onToggleSidebar={toggleDocked}
                                             sidebarButtonRef={sidebarButtonRef}

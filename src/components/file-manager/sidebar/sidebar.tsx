@@ -50,6 +50,9 @@ interface SidebarProps {
     open: boolean;
     /** Whether the docked sidebar is hidden; has no effect while it's collapsed. */
     hidden: boolean;
+    /** Whether the search field shows in the path bar's place. */
+    searching: boolean;
+    onToggleSearch: () => void;
     onToggle: (key: string) => void;
     /** Called once `reveal` has been scrolled to, or given up on. */
     onRevealed: () => void;
@@ -112,6 +115,10 @@ const headerSx: SxProps<Theme> = {
     flexShrink: 0,
     minHeight: HEADER_HEIGHT,
     px: 1,
+};
+
+const searchButtonSx: SxProps<Theme> = {
+    '&[aria-pressed="true"]': { color: "primary.main" },
 };
 
 const titleSx: SxProps<Theme> = {
@@ -209,6 +216,7 @@ const Sidebar = ({
     reveal,
     open,
     hidden,
+    searching,
     onToggle,
     onRevealed,
     onExpand,
@@ -216,6 +224,7 @@ const Sidebar = ({
     onOpenMenu,
     onShortcut,
     onClose,
+    onToggleSearch,
 }: SidebarProps) => {
     // The sidebar's own selection; the content's lives in its folder view, and neither sees the other.
     const { selection, select, selectSection, reset } = useTreeSelection(openKey);
@@ -506,7 +515,15 @@ const Sidebar = ({
             onBlur={handleBlur}
         >
             <Box sx={headerSx}>
-                <IconButton aria-label={text.search}>
+                {/* Pressed while searching, it keeps the focus in the field, which it closes. */}
+                <IconButton
+                    aria-label={text.search}
+                    aria-pressed={searching}
+                    aria-keyshortcuts="Control+F Meta+F"
+                    sx={searchButtonSx}
+                    onMouseDown={(event) => searching && event.preventDefault()}
+                    onClick={onToggleSearch}
+                >
                     <Icon name="search" fontSize="small" />
                 </IconButton>
                 <Typography component="span" noWrap sx={titleSx}>

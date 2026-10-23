@@ -128,6 +128,12 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     select: string;
     doneSelecting: string;
     search: string;
+    /** The search field's placeholder, with the name of the folder searched in, e.g. "Search in Documents". */
+    searchIn: (folder: string) => string;
+    /** The search field's ✕ while something is typed in it. */
+    clearSearch: string;
+    /** The search field's ✕ while nothing is typed in it. */
+    closeSearch: string;
     gridView: string;
     listView: string;
     viewOptions: string;

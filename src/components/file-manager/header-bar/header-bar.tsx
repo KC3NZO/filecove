@@ -12,7 +12,7 @@ import ViewMenu from "./view-menu";
 import type { SortOrder, ViewMode } from "../../../types";
 
 interface HeaderBarProps {
-    /** Centre slot, normally the path bar. */
+    /** Centre slot, the path bar, or the search field while searching. */
     pathBar: ReactNode;
     canGoBack: boolean;
     canGoForward: boolean;
@@ -21,6 +21,8 @@ interface HeaderBarProps {
     showHidden: boolean;
     /** Whether touch selection mode is on. */
     selecting: boolean;
+    /** Whether the search field shows in the path bar's place. */
+    searching: boolean;
     /** Whether the docked sidebar is hidden. */
     sidebarHidden: boolean;
     /** Whether the sidebar docks at the moment, rather than collapsing, as container queries decide. */
@@ -31,6 +33,7 @@ interface HeaderBarProps {
     onSortChange: (sort: SortOrder) => void;
     onToggleHidden: () => void;
     onToggleSelecting: () => void;
+    onToggleSearch: () => void;
     /** Opens the collapsed sidebar, or shows the hidden docked one. */
     onShowSidebar: () => void;
     /** Hides or shows the docked sidebar. */
@@ -90,6 +93,15 @@ const collapsedOnlySx: SxProps<Theme> = {
     [rootWide]: { display: "none" },
 };
 
+const pressedSx: SxProps<Theme> = {
+    '&[aria-pressed="true"]': { color: "primary.main" },
+};
+
+const collapsedOnlyPressedSx: SxProps<Theme> = {
+    '&[aria-pressed="true"]': { color: "primary.main" },
+    [rootWide]: { display: "none" },
+};
+
 // Touch screens only, which have no Ctrl or Shift to select several entries with. This asks what
 // the input can do, not how wide the screen is, so it is a media query rather than a container one.
 const selectButtonSx: SxProps<Theme> = {
@@ -111,6 +123,7 @@ const HeaderBar = ({
     sort,
     showHidden,
     selecting,
+    searching,
     sidebarHidden,
     sidebarDocked,
     onBack,
@@ -119,6 +132,7 @@ const HeaderBar = ({
     onSortChange,
     onToggleHidden,
     onToggleSelecting,
+    onToggleSearch,
     onShowSidebar,
     onToggleSidebar,
     sidebarButtonRef,
@@ -154,7 +168,15 @@ const HeaderBar = ({
                 >
                     <Icon name="selectMode" fontSize="small" />
                 </IconButton>
-                <IconButton aria-label={text.search} sx={sidebarHidden ? undefined : collapsedOnlySx}>
+                {/* Pressed while searching, it keeps the focus in the field, which it closes. */}
+                <IconButton
+                    aria-label={text.search}
+                    aria-pressed={searching}
+                    aria-keyshortcuts="Control+F Meta+F"
+                    sx={sidebarHidden ? pressedSx : collapsedOnlyPressedSx}
+                    onMouseDown={(event) => searching && event.preventDefault()}
+                    onClick={onToggleSearch}
+                >
                     <Icon name="search" fontSize="small" />
                 </IconButton>
                 <IconButton aria-label={view === "list" ? text.gridView : text.listView} onClick={onToggleView}>
