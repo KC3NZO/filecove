@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent } from "react";
 import { createPortal, flushSync } from "react-dom";
 
 import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
+import { useControlled } from "@mui/material/utils";
 
 import { CutContext } from "../../contexts/cut-context";
 import { DataContext } from "../../contexts/data-context";
@@ -14,7 +15,7 @@ import { LocaleContext } from "../../contexts/locale-context";
 import { carriesFiles } from "../../hooks/use-drop-target";
 import { useEntryDrag } from "../../hooks/use-entry-drag";
 import { useLocaleValue } from "../../hooks/use-locale";
-import { usePlaceHistory } from "../../hooks/use-place-history";
+import { useLocationHistory } from "../../hooks/use-location-history";
 import { useTextDirection } from "../../hooks/use-text-direction";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { createFolderStore, folderKey } from "../../store/folder-store";
@@ -52,10 +53,11 @@ import type {
     FileAdapter,
     FileEntry,
     FileManagerLocaleText,
+    FileManagerLocation,
     FolderRef,
+    LocationChangeReason,
     MenuRequest,
     OpenMenu,
-    Place,
     RunShortcut,
     Section,
     SectionGroup,
@@ -71,6 +73,12 @@ import type { PreviewDialogState, PreviewRequest } from "./dialogs/preview-dialo
 import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-dialog";
 import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
 
+/*
+ * The location below can be controlled, as MUI's props are: pass it and change it in
+ * `onLocationChange`, or leave it to the file manager, starting from `defaultLocation`. Which one
+ * is decided on mounting, and MUI warns in development about switching later. Controlled, the
+ * user's changes are only asked for through the callback, and made once they're passed back.
+ */
 interface BaseProps {
     /** Backend for every section that doesn't bring its own. */
     adapter: FileAdapter;
@@ -78,6 +86,26 @@ interface BaseProps {
     actions?: ActionGroup[];
     /** Shown at the top of the sidebar; `localeText.sidebarTitle`, "Files" in English, when omitted. */
     title?: string;
+    /**
+     * Where the file manager is, for a consumer that keeps it, e.g. in the URL. Every change, the
+     * user's and the file manager's own, is asked for through `onLocationChange`. A location in a
+     * section the file manager doesn't have shows the first section's root, which is asked for as
+     * "replace". The back and forward history stays the file manager's: a location that's where
+     * back or forward leads counts as going there, so the two keep in step with a browser's whose
+     * buttons set it.
+     */
+    location?: FileManagerLocation;
+    /**
+     * Where the file manager opens, when it keeps the location itself; the first section's root when
+     * omitted. One in a section it doesn't have opens that root too, told as "replace".
+     */
+    defaultLocation?: FileManagerLocation;
+    /**
+     * Told every change of the location as it's made, or asked for with `location`, with why: the
+     * user went somewhere, back or forward, or the place was rewritten in place, as when the folder
+     * it was in was renamed or deleted, which a URL kept in step replaces rather than pushes.
+     */
+    onLocationChange?: (location: FileManagerLocation, reason: LocationChangeReason) => void;
     defaultView?: ViewMode;
     /** Content order at first; name, A to Z, when omitted. The sidebar tree is always by name. */
     defaultSort?: SortOrder;
@@ -108,8 +136,6 @@ interface MultiSectionProps extends BaseProps {
     /** Sidebar sections, in groups. Each section is an independent root. */
     sections: SectionGroup[];
     section?: never;
-    /** Section open at first; the first one when omitted. */
-    defaultSectionId?: string;
 }
 
 interface SingleSectionProps extends BaseProps {
@@ -119,7 +145,6 @@ interface SingleSectionProps extends BaseProps {
      */
     section: Section;
     sections?: never;
-    defaultSectionId?: never;
 }
 
 /** Either `sections`, for a sidebar of independent roots, or a single `section`. */
@@ -133,6 +158,7 @@ interface Reveal {
 }
 
 const NO_ACTIONS: ActionGroup[] = [];
+const NO_TRAIL: FolderRef[] = [];
 
 const folderIdsOf = (entries: FileEntry[]) =>
     entries.filter((entry) => entry.kind === "folder").map((entry) => entry.id);
@@ -243,7 +269,9 @@ const FileManager = ({
     section: singleSection,
     actions = NO_ACTIONS,
     title,
-    defaultSectionId,
+    location: locationProp,
+    defaultLocation,
+    onLocationChange,
     defaultView = "list",
     defaultSort = DEFAULT_SORT,
     onOpenFile,
@@ -269,13 +297,43 @@ const FileManager = ({
         [sections],
     );
 
-    const { place, previous, next, canGoBack, canGoForward, navigate, back, forward, rewrite } = usePlaceHistory(
-        () => ({
-            sectionId: defaultSectionId ?? sections[0]?.sections[0]?.id ?? "",
-            trail: [],
-        }),
+    const firstSection = useMemo(
+        () => sections.find((group) => group.sections.length > 0)?.sections[0],
+        [sections],
     );
 
+    // Where a place in a section the file manager doesn't have goes.
+    const fallback = useMemo(
+        () => (firstSection ? { sectionId: firstSection.id, trail: NO_TRAIL } : undefined),
+        [firstSection],
+    );
+
+    // The location is kept by its own hook, which can't use MUI's `useControlled`, so it's called
+    // for its development warnings alone: about switching between controlled and not, and about a
+    // default changing after mounting.
+    useControlled({ controlled: locationProp, default: defaultLocation, name: "FileManager", state: "location" });
+
+    const {
+        place: requested,
+        reason: placeReason,
+        previous,
+        next,
+        canGoBack,
+        canGoForward,
+        navigate,
+        back,
+        forward,
+        revise,
+    } = useLocationHistory({
+        location: locationProp,
+        initial: () => defaultLocation ?? fallback ?? { sectionId: "", trail: NO_TRAIL },
+        onChange: onLocationChange,
+    });
+
+    // A place in a section the file manager doesn't have, which a section removed, or a location
+    // passed for one it never had, leaves, shows the first section's root while the history is put
+    // right (below).
+    const place = sectionsById.has(requested.sectionId) || !fallback ? requested : fallback;
     const section = sectionsById.get(place.sectionId);
     const folder = section && folderOf(section, place.trail);
     const openKey = section && folder ? folderKey(section.id, folder.id) : null;
@@ -331,10 +389,40 @@ const FileManager = ({
         }
     }, [focusContent]);
 
-    // An entry still waiting to be selected is forgotten once another folder opens.
-    if (reveal && reveal.key !== openKey) {
+    // Going up to a folder the open one is in, however it's reached, the user's way or the
+    // consumer's, selects the folder it was left through, as desktop file managers do. A place
+    // rewritten in place, as after the folder it was in was deleted, doesn't count. An entry still
+    // waiting to be selected is forgotten once another folder opens.
+    const [shownPlace, setShownPlace] = useState(place);
+
+    if (shownPlace !== place) {
+        const left = placeReason === "replace" ? undefined : folderLeft(shownPlace, place);
+
+        setShownPlace(place);
+
+        if (left && openKey) {
+            setReveal({ key: openKey, id: left.id });
+        } else if (reveal && reveal.key !== openKey) {
+            setReveal(null);
+        }
+    } else if (reveal && reveal.key !== openKey) {
         setReveal(null);
     }
+
+    // Places in sections the file manager no longer has leave the history, and the current one, if
+    // it's among them, goes to the first section's root, which a controlled location is asked for
+    // as "replace". So does a location passed for a section the file manager doesn't have.
+    useLayoutEffect(() => {
+        if (fallback) {
+            revise((visited, current) => {
+                if (sectionsById.has(visited.sectionId)) {
+                    return visited;
+                }
+
+                return current ? fallback : null;
+            });
+        }
+    }, [sectionsById, fallback, requested, revise]);
 
     const hasActions = useMemo(() => actions.some((group) => group.actions.length > 0), [actions]);
 
@@ -395,55 +483,42 @@ const FileManager = ({
         return !!from && !!panelRef.current?.contains(from);
     }, []);
 
-    // Opening a folder from the content takes the focus along into it, as the view it was in goes
-    // away. Going up to a folder the open one is in selects the folder it was left through, as
-    // desktop file managers do.
-    const arrive = useCallback(
-        (target: Place) => {
-            const targetSection = sectionsById.get(target.sectionId);
-            const left = folderLeft(place, target);
-
-            if (focusInContent()) {
-                setFocusContent(true);
-            }
-
-            if (left && targetSection) {
-                const key = folderKey(targetSection.id, folderOf(targetSection, target.trail).id);
-
-                setReveal({ key, id: left.id });
-            }
-        },
-        [place, sectionsById, focusInContent],
-    );
+    // Going somewhere from inside the file manager takes the focus along into the folder opened when
+    // it was in the content, as the view it was in goes away.
+    const leave = useCallback(() => {
+        if (focusInContent()) {
+            setFocusContent(true);
+        }
+    }, [focusInContent]);
 
     // Going somewhere leaves the sidebar tree as the user left it; the path bar shows where it is.
     const goTo = useCallback(
-        (target: Place) => {
+        (target: FileManagerLocation) => {
             if (sectionsById.has(target.sectionId)) {
-                arrive(target);
+                leave();
                 navigate(target);
             }
         },
-        [arrive, navigate, sectionsById],
+        [leave, navigate, sectionsById],
     );
 
     const goBack = useCallback(() => {
         if (previous) {
-            arrive(previous);
+            leave();
             back();
         }
-    }, [previous, arrive, back]);
+    }, [previous, leave, back]);
 
     const goForward = useCallback(() => {
         if (next) {
-            arrive(next);
+            leave();
             forward();
         }
-    }, [next, arrive, forward]);
+    }, [next, leave, forward]);
 
     // The overlay closes on the place picked in it, so the focus goes on to the content.
     const navigateFromSidebar = useCallback(
-        (target: Place) => {
+        (target: FileManagerLocation) => {
             if (sidebarRef.current?.contains(document.activeElement) && overlays(sidebarRef.current)) {
                 setFocusContent(true);
             }
@@ -769,21 +844,21 @@ const FileManager = ({
             });
 
             if (lostRoots.size > 0) {
-                rewrite((visited) =>
+                revise((visited) =>
                     lostRoots.has(visited.sectionId) && visited.trail.length > 0 ? { ...visited, trail: [] } : visited,
                 );
             }
 
             return dropped;
         },
-        [rewrite, sectionsOf, store],
+        [revise, sectionsOf, store],
     );
 
     // Moved folders go from the cache (`dropFolders`). The open place, in whichever section shows
     // them, can't follow a moved folder it's inside, so it goes where the folder went. Moved entries
     // leave the clipboard too, since their ids may have changed.
     const handleMoved = useCallback(
-        (fromAdapter: FileAdapter, entries: FileEntry[], destination: Place) => {
+        (fromAdapter: FileAdapter, entries: FileEntry[], destination: FileManagerLocation) => {
             const movedIds = new Set(entries.map((entry) => entry.id));
             const dropped = dropFolders(fromAdapter, folderIdsOf(entries));
 
@@ -830,7 +905,7 @@ const FileManager = ({
     );
 
     const handleTransferred = useCallback(
-        (request: TransferRequest, destination: Place) => {
+        (request: TransferRequest, destination: FileManagerLocation) => {
             closeTransfer();
 
             if (request.kind === "move") {
@@ -864,10 +939,10 @@ const FileManager = ({
 
             const dropped = dropFolders(fromAdapter, folderIdsOf(entries));
 
-            rewrite((visited) => (showing.has(visited.sectionId) ? outsideDeleted(visited, dropped) : visited));
+            revise((visited) => (showing.has(visited.sectionId) ? outsideDeleted(visited, dropped) : visited));
             setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, deletedIds));
         },
-        [closeDelete, dropFolders, rewrite, sectionsOf],
+        [closeDelete, dropFolders, revise, sectionsOf],
     );
 
     // The new or renamed entry is selected if its folder is open, in whichever section shows it. A
@@ -909,7 +984,7 @@ const FileManager = ({
 
             const showingIds = new Set(showing.map((shown) => shown.id));
 
-            rewrite((visited) => (showingIds.has(visited.sectionId) ? renameInPlace(visited, before, entry) : visited));
+            revise((visited) => (showingIds.has(visited.sectionId) ? renameInPlace(visited, before, entry) : visited));
 
             // A section rooted in the folder keeps its root expanded as it is, under the old id.
             if (entry.id !== before.id) {
@@ -933,7 +1008,7 @@ const FileManager = ({
                 });
             }
         },
-        [closeNaming, openKey, sectionsOf, dropFolders, revealInTree, rewrite],
+        [closeNaming, openKey, sectionsOf, dropFolders, revealInTree, revise],
     );
 
     const contextFor = useCallback(

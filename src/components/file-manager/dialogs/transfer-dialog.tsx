@@ -37,7 +37,15 @@ import IconSlot from "../icon-slot";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 import NameDialog from "./name-dialog";
 
-import type { ConflictPolicy, FileAdapter, FileEntry, FolderRef, OpenMenu, Place, Section } from "../../../types";
+import type {
+    ConflictPolicy,
+    FileAdapter,
+    FileEntry,
+    FileManagerLocation,
+    FolderRef,
+    OpenMenu,
+    Section,
+} from "../../../types";
 import type { NameDialogState, NameRequest } from "./name-dialog";
 
 export interface TransferRequest {
@@ -75,7 +83,7 @@ interface TransferDialogProps {
      */
     onChanged: (adapter: FileAdapter, folderIds: string[]) => void;
     /** Called once the adapter has copied or moved the entries into `destination`. */
-    onDone: (request: TransferRequest, destination: Place) => void;
+    onDone: (request: TransferRequest, destination: FileManagerLocation) => void;
     /**
      * Called with a folder made with the picker's New folder button, as the adapter returned it,
      * and the id of the folder it was made in.
@@ -225,7 +233,7 @@ const TransferDialog = ({
     const dir = useContext(DirectionContext);
 
     // Null on the list of sections, which is only reachable with more than one.
-    const [place, setPlace] = useState<Place | null>({ sectionId: section.id, trail });
+    const [place, setPlace] = useState<FileManagerLocation | null>({ sectionId: section.id, trail });
     const [conflicts, setConflicts] = useState<string[] | null>(null);
 
     const target = destinations.find((candidate) => candidate.id === place?.sectionId) ?? section;
@@ -345,7 +353,7 @@ const TransferDialog = ({
     // Opening a folder from the list, or going up from it, takes the focused row away, so the list
     // takes the focus again. Going up, the folder left through gets the Tab stop and is scrolled
     // to, as in the content, by whichever route.
-    const go = (next: Place | null) => {
+    const go = (next: FileManagerLocation | null) => {
         if (pending) {
             return;
         }

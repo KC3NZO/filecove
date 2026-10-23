@@ -18,7 +18,7 @@ export type { FolderState } from "./folder";
 export type { IconComponent, IconName, IconOverrides, IconSet, IconSource, IconVariant } from "./icon";
 export type { FileManagerLocaleText, Locale, UploadLocaleText } from "./locale";
 export type { MenuPosition, MenuRequest, OpenMenu, RunShortcut } from "./menu";
-export type { Place } from "./navigation";
+export type { FileManagerLocation, LocationChangeReason } from "./navigation";
 export type { PreviewContent, PreviewKind, TextExcerpt } from "./preview";
 export type { FolderRef, Section, SectionGroup, SectionImports } from "./section";
 export type { EntrySelection, SelectModifiers, TreeSelection, TreeTarget } from "./selection";

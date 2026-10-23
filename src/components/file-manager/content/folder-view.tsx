@@ -39,11 +39,11 @@ import type {
     DropTarget,
     EntrySelection,
     FileEntry,
+    FileManagerLocation,
     FolderRef,
     MenuPosition,
     MenuRequest,
     OpenMenu,
-    Place,
     RunShortcut,
     Section,
     SelectModifiers,
@@ -73,7 +73,7 @@ interface FolderViewProps {
     revealId?: string;
     onSelectingChange: (selecting: boolean) => void;
     onSortChange: (sort: SortOrder) => void;
-    onNavigate: (place: Place) => void;
+    onNavigate: (place: FileManagerLocation) => void;
     /** Opens a file as the file manager says. Returns false when nothing can open it. */
     onOpenFile: (request: MenuRequest) => boolean;
     onOpenMenu: OpenMenu;

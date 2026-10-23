@@ -9,13 +9,13 @@ import { belowElement } from "../../../utils/menu-position";
 import Icon from "../../icons/icon";
 import IconSlot from "../icon-slot";
 
-import type { FolderRef, IconSource, OpenMenu, Place, Section } from "../../../types";
+import type { FileManagerLocation, FolderRef, IconSource, OpenMenu, Section } from "../../../types";
 
 interface PathBarProps {
     section: Section;
     trail: FolderRef[];
     hasActions: boolean;
-    onNavigate: (place: Place) => void;
+    onNavigate: (place: FileManagerLocation) => void;
     onOpenMenu: OpenMenu;
 }
 

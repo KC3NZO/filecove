@@ -22,8 +22,8 @@ import Icon from "../../icons/icon";
 import TreeRowItem, { GuideLine } from "./location-item";
 
 import type {
+    FileManagerLocation,
     OpenMenu,
-    Place,
     RunShortcut,
     Section,
     SectionGroup,
@@ -55,7 +55,7 @@ interface SidebarProps {
     onRevealed: () => void;
     /** Expands a collapsed folder or section that a drag rests on. */
     onExpand: (key: string) => void;
-    onNavigate: (place: Place) => void;
+    onNavigate: (place: FileManagerLocation) => void;
     onOpenMenu: OpenMenu;
     onShortcut: RunShortcut;
     onClose: () => void;
@@ -357,7 +357,7 @@ const Sidebar = ({
 
     // Picking a location closes the overlay; expanding or selecting a folder doesn't, so the tree can be browsed in it.
     const handleNavigate = useCallback(
-        (place: Place) => {
+        (place: FileManagerLocation) => {
             reset();
             onNavigate(place);
             onClose();

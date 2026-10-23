@@ -33,11 +33,11 @@ import IconSlot from "../icon-slot";
 
 import type {
     ErrorRow,
+    FileManagerLocation,
     FolderRef,
     FolderRow,
     MenuPosition,
     OpenMenu,
-    Place,
     RunShortcut,
     SectionRow,
     SelectModifiers,
@@ -61,7 +61,7 @@ interface TreeProps {
     onToggle: (key: string) => void;
     /** Expands the folder or section with that `folderKey`, without collapsing it if it's expanded. */
     onExpand: (key: string) => void;
-    onNavigate: (place: Place) => void;
+    onNavigate: (place: FileManagerLocation) => void;
     onSelectFolder: (target: TreeTarget, modifiers?: SelectModifiers) => void;
     onSelectSection: (key: string) => void;
     onOpenMenu: OpenMenu;
