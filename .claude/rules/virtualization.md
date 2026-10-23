@@ -53,6 +53,8 @@ Anything that used to look entries up in the page now works from where the layou
 - Each option carries `aria-setsize` and `aria-posinset`, so screen readers know where it is among all the entries.
 - `FolderView` finds entries by id in `indexById`, a map, rather than by searching the listing.
 
+A search everywhere's results (`content/search-results.tsx`) use the same hook and views, keyed by result, with the focused result and the one a drag started from kept rendered.
+
 The playground's `archive` folder, in the API service section, holds 10,000 files for trying this out.
 
 ## The sidebar tree

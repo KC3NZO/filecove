@@ -66,6 +66,7 @@ The content's selection is the folder view's (`selection.md`), and is what `sele
 - A selection set from outside, `defaultSelectedIds` or `selectedIds` other than what the view last asked for (`requestedIds`), is revealed once the folder's listing is complete (`revealSelected`): the first of its entries the view lists takes the focus, if the view has it, or the Tab stop, and is scrolled to.
 - Ids the folder doesn't list drop out once all of it has come (`retain`, by `listedIds`), not while it's coming, so a selection passed with a location isn't cut short. Hidden entries are listed, so they stay selected.
 - Leaving touch selection mode clears the selection in an effect rather than while rendering, since a controlled one is changed through the consumer.
+- A search everywhere's results have a selection of their own, which isn't told: `SelectionDetails` has one location, and results come from many. The open folder's stays as it was under them, and is what `onSelectionChange` last heard.
 
 ## The API
 

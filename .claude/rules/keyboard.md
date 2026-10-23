@@ -27,6 +27,7 @@ A key press goes to the consumer's shortcuts before the component's own keys, so
 | Content (`content/folder-view.tsx`) | arrows, Home, End, PageUp, PageDown, Space, Shift+Space, Enter, Alt+Down, Backspace, Alt+Up, Ctrl+A, Escape, typing, Menu or Shift+F10 |
 | Sidebar tree (`sidebar/sidebar.tsx`, `TreeItem` in `sidebar/location-item.tsx`) | Up, Down, Home, End, Right, Left, Enter, Space, Shift+Space, typing, Menu or Shift+F10, Escape (closes the overlay) |
 | The search field (`header-bar/search-field.tsx`) | Escape to close, Down or Enter on to the content, Alt+Down for the sections menu (see "Search" in `file-manager.md`) |
+| A search everywhere's results (`content/search-results.tsx`) | the content's keys but Backspace and Alt+Up, which lead nowhere; on its tabs (`content/search-tabs.tsx`), Left, Right, Home and End (see "Search results" below) |
 | "Move to…" and "Copy to…" (`dialogs/transfer-dialog.tsx`) | Up, Down, Home, End, PageUp, PageDown, typing, Enter or Space to open, Backspace or Alt+Up to go up |
 | The preview (`dialogs/preview-dialog.tsx`) | Left and Right to step through the files, Space or Escape to close, +, -, 0 and 1 to zoom an image (`dialogs/image-viewer.tsx`) and the arrows to pan it zoomed in (see `preview.md`) |
 
@@ -59,6 +60,14 @@ The list and the grid are each a `listbox` (`aria-multiselectable`, named by the
 - Menu or Shift+F10 opens the focused entry's menu below its ⋮ button (or below the tile), or the folder's menu at the panel's top corner. The ⋮ buttons are `aria-hidden` and out of the tab order, since that key reaches the same menu.
 - A folder that lists nothing (loading, empty, error) is tabbed to itself: the surface becomes a `group` named by the folder and described by its state, rings the panel when focused from the keyboard, and keeps the shortcuts working. The error state is an `alert`, and spinners are labelled "Loading".
 - A visually hidden `status` says how many entries are selected as that changes.
+
+### Search results
+
+A search everywhere's results (see "Searching everywhere" in `file-manager.md`) are a `listbox` as a folder's are, named by the open tab's section or "Search results", with the same roving focus, keys, type-ahead and `status` regions, and the count of results heard once they've come. The focus handling is a copy of the folder view's, without the parts tied to a folder (going up, reveals, a controlled selection).
+
+- The menu key opens the focused result's menu, for the selection when it's in one folder; there's no folder menu. Shortcuts run only for such a selection.
+- `takeFocus` goes to the results while they show, and not to the folder view hidden under them, so Down or Enter in the search field goes on to them.
+- The tabs are one tab stop, the open tab's (roving `tabIndex`). Left and Right move to the next or previous tab and open it, swapped when the strip computes as right to left, and Home and End go to the first and last, as a `tablist` with automatic activation does. Each tab is named by its section, then its count ("12 results") or that it couldn't be searched, from visually hidden text, the visible count `aria-hidden`, and the view below is the open tab's `tabpanel`.
 
 ### Focus across folders
 
