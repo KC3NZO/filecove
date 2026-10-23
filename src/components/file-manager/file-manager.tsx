@@ -26,7 +26,7 @@ import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { visibleActionGroups } from "../../utils/action-groups";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { isHidden } from "../../utils/hidden";
-import { folderLeft, folderOf, outsideDeleted, renameInPlace } from "../../utils/navigation";
+import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
 import { importsFrom } from "../../utils/sections";
 import { sameIds } from "../../utils/sets";
 import { matchesShortcut, pressedKeys, pressesKey } from "../../utils/shortcut";
@@ -65,6 +65,7 @@ import type {
     Section,
     SectionFolder,
     SectionGroup,
+    SelectionDetails,
     SortOrder,
     TreeReveal,
     ViewMode,
@@ -78,11 +79,11 @@ import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-di
 import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
 
 /*
- * The location, the view settings and the tree's expanded folders below can each be controlled, as
- * MUI's props are: pass the value and change it in its `on…Change` callback, or leave it to the
- * file manager, starting from its `default…` prop. Which one is decided on mounting, and MUI warns
- * in development about switching later. Controlled, the user's changes are only asked for through
- * the callback, and made once they're passed back.
+ * The location, the view settings, the tree's expanded folders and the selection below can each be
+ * controlled, as MUI's props are: pass the value and change it in its `on…Change` callback, or
+ * leave it to the file manager, starting from its `default…` prop. Which one is decided on
+ * mounting, and MUI warns in development about switching later. Controlled, the user's changes are
+ * only asked for through the callback, and made once they're passed back.
  */
 interface BaseProps {
     /** Backend for every section that doesn't bring its own. */
@@ -162,6 +163,27 @@ interface BaseProps {
     /** Told the folders expanded as the user expands or collapses one. */
     onExpandedFoldersChange?: (folders: SectionFolder[]) => void;
     /**
+     * Ids of the entries selected in the open folder's content, for a consumer that keeps them.
+     * Every folder opens with nothing selected: going somewhere from inside the file manager asks
+     * for an empty selection, while a `location` changed by the consumer leaves the selection to them,
+     * so they can open a folder with an entry selected. Ids the folder doesn't list drop out once all
+     * of it has come. Ids set other than through `onSelectionChange` are revealed: the first of their
+     * entries is scrolled to, and takes the content's focus, or its Tab stop when the focus is
+     * elsewhere. The sidebar tree's selection is its own.
+     */
+    selectedIds?: readonly string[];
+    /**
+     * Ids selected in the folder the file manager opens in, when it keeps the selection, revealed as
+     * `selectedIds` are, e.g. to show a file in its folder.
+     */
+    defaultSelectedIds?: readonly string[];
+    /**
+     * Told the content's selection as it changes: the ids, to pass back as `selectedIds`, and the
+     * selected entries listed, which is what to act on. It also changes as the folder's listing
+     * does, e.g. a selected entry deleted elsewhere, and empties as another folder opens.
+     */
+    onSelectionChange?: (ids: string[], details: SelectionDetails) => void;
+    /**
      * What opening a file does, by double-clicking, tapping or pressing Enter on it, or with
      * `ActionContext.open`, e.g. opening it in an editor of the consumer's. Return false to leave a
      * file to the preview, e.g. one of a type there's no editor for. Without it, a file opens in the
@@ -209,8 +231,26 @@ interface Reveal {
     id: string;
 }
 
+/** `defaultSelectedIds`, for the folder the file manager opened in, until another opens. */
+interface InitialSelection {
+    key: string | null;
+    ids: readonly string[];
+}
+
+/** The content's selection, as `onSelectionChange` was told it last. */
+interface ToldSelection {
+    ids: ReadonlySet<string>;
+    entries: FileEntry[];
+}
+
 const NO_ACTIONS: ActionGroup[] = [];
 const NO_TRAIL: FolderRef[] = [];
+const NO_IDS: ReadonlySet<string> = new Set();
+const NO_ENTRIES: FileEntry[] = [];
+const NOTHING_TOLD: ToldSelection = { ids: NO_IDS, entries: NO_ENTRIES };
+
+const sameEntries = (a: FileEntry[], b: FileEntry[]) =>
+    a === b || (a.length === b.length && a.every((entry, index) => entry === b[index]));
 
 const folderIdsOf = (entries: FileEntry[]) =>
     entries.filter((entry) => entry.kind === "folder").map((entry) => entry.id);
@@ -339,6 +379,9 @@ const FileManager = ({
     expandedFolders: expandedFoldersProp,
     defaultExpandedFolders,
     onExpandedFoldersChange,
+    selectedIds: selectedIdsProp,
+    defaultSelectedIds,
+    onSelectionChange,
     onOpenFile,
     localeText,
     locale,
@@ -373,10 +416,16 @@ const FileManager = ({
         [firstSection],
     );
 
-    // The location is kept by its own hook, which can't use MUI's `useControlled`, so it's called
-    // for its development warnings alone: about switching between controlled and not, and about a
-    // default changing after mounting.
+    // The location and the selection are kept by their own hooks, which can't use MUI's
+    // `useControlled`, so it's called for its development warnings alone: about switching between
+    // controlled and not, and about a default changing after mounting.
     useControlled({ controlled: locationProp, default: defaultLocation, name: "FileManager", state: "location" });
+    useControlled({
+        controlled: selectedIdsProp,
+        default: defaultSelectedIds,
+        name: "FileManager",
+        state: "selectedIds",
+    });
 
     const {
         place: requested,
@@ -510,6 +559,45 @@ const FileManager = ({
         setReveal(null);
     }
 
+    // The consumer's selected ids, as a set that stays the same while they hold the same ids, so
+    // passing a new array of them doesn't count as selecting them anew.
+    const { current: selectionControlled } = useRef(selectedIdsProp !== undefined);
+    const selectedIdSet = useStableSet(selectedIdsProp) ?? NO_IDS;
+
+    // `defaultSelectedIds` are for the folder the file manager opens in, while it's open.
+    const [initialSelection, setInitialSelection] = useState<InitialSelection | null>(() =>
+        defaultSelectedIds?.length && !selectionControlled ? { key: openKey, ids: defaultSelectedIds } : null,
+    );
+
+    if (initialSelection && initialSelection.key !== openKey) {
+        setInitialSelection(null);
+    }
+
+    // The consumer's callback is kept current, since the handlers calling it outlive renders.
+    const callbacks = useRef({ onSelectionChange });
+
+    useLayoutEffect(() => {
+        callbacks.current = { onSelectionChange };
+    });
+
+    // The selection as `onSelectionChange` was told it last, so it's told only what changed, however
+    // many times the folder view reports it.
+    const toldSelection = useRef(NOTHING_TOLD);
+
+    const tellSelection = useCallback(
+        (ids: ReadonlySet<string>, entries: FileEntry[], location: FileManagerLocation) => {
+            const before = toldSelection.current;
+
+            if (sameIds(ids, before.ids) && sameEntries(entries, before.entries)) {
+                return;
+            }
+
+            toldSelection.current = { ids, entries };
+            callbacks.current.onSelectionChange?.([...ids], { entries, location });
+        },
+        [],
+    );
+
     // Places in sections the file manager no longer has leave the history, and the current one, if
     // it's among them, goes to the first section's root, which a controlled location is asked for
     // as "replace". So does a location passed for a section the file manager doesn't have.
@@ -591,37 +679,45 @@ const FileManager = ({
     }, []);
 
     // Going somewhere from inside the file manager takes the focus along into the folder opened when
-    // it was in the content, as the view it was in goes away.
-    const leave = useCallback(() => {
-        if (focusInContent()) {
-            setFocusContent(true);
-        }
-    }, [focusInContent]);
+    // it was in the content, as the view it was in goes away. Each folder opens with nothing
+    // selected, so a controlled selection is asked to empty.
+    const leaveFor = useCallback(
+        (target: FileManagerLocation) => {
+            if (focusInContent()) {
+                setFocusContent(true);
+            }
+
+            if (selectionControlled && !samePlace(target, place)) {
+                tellSelection(NO_IDS, NO_ENTRIES, target);
+            }
+        },
+        [focusInContent, selectionControlled, place, tellSelection],
+    );
 
     // Going somewhere leaves the sidebar tree as the user left it; the path bar shows where it is.
     const goTo = useCallback(
         (target: FileManagerLocation) => {
             if (sectionsById.has(target.sectionId)) {
-                leave();
+                leaveFor(target);
                 navigate(target);
             }
         },
-        [leave, navigate, sectionsById],
+        [leaveFor, navigate, sectionsById],
     );
 
     const goBack = useCallback(() => {
         if (previous) {
-            leave();
+            leaveFor(previous);
             back();
         }
-    }, [previous, leave, back]);
+    }, [previous, leaveFor, back]);
 
     const goForward = useCallback(() => {
         if (next) {
-            leave();
+            leaveFor(next);
             forward();
         }
-    }, [next, leave, forward]);
+    }, [next, leaveFor, forward]);
 
     // The overlay closes on the place picked in it, so the focus goes on to the content.
     const navigateFromSidebar = useCallback(
@@ -1388,6 +1484,13 @@ const FileManager = ({
                                                         busy={busy}
                                                         takeFocus={focusContent}
                                                         revealId={reveal?.id}
+                                                        selectedIds={selectionControlled ? selectedIdSet : undefined}
+                                                        defaultSelectedIds={
+                                                            initialSelection?.key === openKey
+                                                                ? initialSelection.ids
+                                                                : undefined
+                                                        }
+                                                        onSelectionChange={tellSelection}
                                                         onSelectingChange={setSelecting}
                                                         onSortChange={setSort}
                                                         onNavigate={goTo}

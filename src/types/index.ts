@@ -21,7 +21,7 @@ export type { MenuPosition, MenuRequest, OpenMenu, RunShortcut } from "./menu";
 export type { FileManagerLocation, LocationChangeReason } from "./navigation";
 export type { PreviewContent, PreviewKind, TextExcerpt } from "./preview";
 export type { FolderRef, Section, SectionFolder, SectionGroup, SectionImports } from "./section";
-export type { EntrySelection, SelectModifiers, TreeSelection, TreeTarget } from "./selection";
+export type { EntrySelection, SelectionDetails, SelectModifiers, TreeSelection, TreeTarget } from "./selection";
 export type { DroppedFiles, UploadItem, UploadStatus } from "./upload";
 export type {
     CaptionRow,

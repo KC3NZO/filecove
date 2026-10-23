@@ -28,6 +28,7 @@ export type {
     SectionFolder,
     SectionGroup,
     SectionImports,
+    SelectionDetails,
     SortDirection,
     SortKey,
     SortOrder,

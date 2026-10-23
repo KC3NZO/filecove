@@ -1,6 +1,20 @@
-// Internal to the package, not exported from the package entry.
+// Internal to the package, not exported from the package entry, except `SelectionDetails`.
 
+import type { FileEntry } from "./adapter";
+import type { FileManagerLocation } from "./navigation";
 import type { FolderRef } from "./section";
+
+/** What `onSelectionChange` is told along with the selected ids. */
+export interface SelectionDetails {
+    /**
+     * The selected entries the content lists, in its order, which is what an action or a "Choose"
+     * button goes by. An id without an entry here is selected but not listed: hidden while hidden
+     * files are off, or not listed yet.
+     */
+    entries: FileEntry[];
+    /** The folder they're selected in, the one open. */
+    location: FileManagerLocation;
+}
 
 /** Modifier keys held while clicking an entry, named by what they do rather than by key. */
 export interface SelectModifiers {

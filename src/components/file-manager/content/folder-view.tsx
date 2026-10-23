@@ -28,6 +28,7 @@ import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../..
 import { belowElement, insideElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
+import { sameIds } from "../../../utils/sets";
 import { pressesKey } from "../../../utils/shortcut";
 import { entryComparator } from "../../../utils/sort";
 import Icon from "../../icons/icon";
@@ -71,6 +72,15 @@ interface FolderViewProps {
     takeFocus: boolean;
     /** An entry to select and scroll to once the listing has it, e.g. a folder just created. */
     revealId?: string;
+    /** The selected ids, while the consumer controls them; the view keeps its own otherwise. */
+    selectedIds?: ReadonlySet<string>;
+    /** The ids the view's own selection starts with. */
+    defaultSelectedIds?: readonly string[];
+    /**
+     * Told the selection as it changes, with the selected entries listed, whether by the user, by
+     * the listing changing under it, or by the folder opening with it.
+     */
+    onSelectionChange: (ids: ReadonlySet<string>, entries: FileEntry[], location: FileManagerLocation) => void;
     onSelectingChange: (selecting: boolean) => void;
     onSortChange: (sort: SortOrder) => void;
     onNavigate: (place: FileManagerLocation) => void;
@@ -176,6 +186,9 @@ const FolderView = ({
     busy,
     takeFocus,
     revealId,
+    selectedIds: controlledIds,
+    defaultSelectedIds,
+    onSelectionChange,
     onSelectingChange,
     onSortChange,
     onNavigate,
@@ -212,7 +225,16 @@ const FolderView = ({
     // Where each entry is listed, to find entries by id without searching a large folder.
     const indexById = useMemo(() => new Map(entries?.map((entry, index) => [entry.id, index] as const)), [entries]);
 
-    const { selection, selectedIds, selected, select, replace, selectAll, clear } = useSelection(entries);
+    // Where the selection is, as the consumer is told it.
+    const place = useMemo(() => ({ sectionId: section.id, trail }), [section.id, trail]);
+
+    const reportSelection = useCallback(
+        (ids: ReadonlySet<string>, listed: FileEntry[]) => onSelectionChange(ids, listed, place),
+        [onSelectionChange, place],
+    );
+
+    const { selection, selectedIds, selected, requestedIds, select, replace, selectAll, clear, retain } =
+        useSelection(entries, { ids: controlledIds, initialIds: defaultSelectedIds, onChange: reportSelection });
     const typeAhead = useTypeAhead();
     const stateId = useId();
 
@@ -257,16 +279,17 @@ const FolderView = ({
     // Set when the arrow keys move to an entry or one is revealed, which may not be rendered yet.
     const pendingScroll = useRef<ScrollRequest | null>(null);
 
-    // Leaving selection mode, however it is left, drops the selection made in it.
-    const [wasSelecting, setWasSelecting] = useState(selecting);
+    // Leaving selection mode, however it is left, drops the selection made in it. That's done after
+    // rendering, since a controlled selection is the consumer's to change.
+    const wasSelecting = useRef(selecting);
 
-    if (selecting !== wasSelecting) {
-        setWasSelecting(selecting);
-
-        if (!selecting) {
+    useEffect(() => {
+        if (wasSelecting.current && !selecting) {
             clear();
         }
-    }
+
+        wasSelecting.current = selecting;
+    }, [selecting, clear]);
 
     // The pointer of the latest press, which the click and contextmenu that follow it come from.
     // Read per press rather than from the device, so a tablet with a trackpad gets both behaviours.
@@ -304,6 +327,57 @@ const FolderView = ({
         pendingFocus.current = false;
         onRevealed();
     }, [revealId, revealIndex, replace, onRevealed]);
+
+    // A selection set from outside, which the consumer's `selectedIds` (other than what the view
+    // asked them for) or `defaultSelectedIds` makes, is revealed: the first of its entries the view
+    // lists takes the focus there, and is scrolled to, once the whole folder has come.
+    const [revealSelected, setRevealSelected] = useState(() => selection.ids.size > 0);
+    const [passedIds, setPassedIds] = useState(controlledIds);
+
+    if (controlledIds !== passedIds) {
+        setPassedIds(controlledIds);
+
+        if (controlledIds && controlledIds.size > 0 && !sameIds(controlledIds, requestedIds)) {
+            setRevealSelected(true);
+        }
+    }
+
+    useEffect(() => {
+        if (!revealSelected || (state?.status !== "ready" && state?.status !== "error")) {
+            return;
+        }
+
+        const [first] = selected;
+        const index = first ? (indexById.get(first.id) ?? -1) : -1;
+
+        setRevealSelected(false);
+
+        if (index >= 0) {
+            setFocus({ id: first.id, index });
+            pendingScroll.current = { id: first.id, focus: pendingFocus.current || focusWithin.current };
+            pendingFocus.current = false;
+        }
+    }, [revealSelected, state?.status, selected, indexById]);
+
+    // Ids the folder doesn't list drop out of the selection, such as entries deleted or moved away,
+    // once all of the folder has come, so a selection passed in isn't cut short by a listing still
+    // coming. Hidden entries are listed, so they stay selected while they're hidden.
+    const listedIds = useMemo(
+        () =>
+            state?.status === "ready" && state.entries ? new Set(state.entries.map((entry) => entry.id)) : undefined,
+        [state],
+    );
+
+    useEffect(() => {
+        if (listedIds) {
+            retain(listedIds);
+        }
+    }, [listedIds, selectedIds, retain]);
+
+    // The file manager hears the selection as it is, whatever changed it, and passes on what changed.
+    useEffect(() => {
+        reportSelection(selectedIds, selected);
+    }, [reportSelection, selectedIds, selected]);
 
     // An entry to reveal that is hidden is never listed, so it's given up on.
     const revealHidden = useMemo(
