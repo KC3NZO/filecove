@@ -73,6 +73,7 @@ const sidebarSx: SxProps<Theme> = (theme) => ({
     flexDirection: "column",
     flexShrink: 0,
     bgcolor: "background.default",
+    outline: "none",
 
     // Collapsed: an overlay drawer that slides in over the content from the start side, the left
     // or, right to left, the right. It stays inside the file manager rather than portalling to
@@ -511,8 +512,12 @@ const Sidebar = ({
     );
 
     return (
+        // Focusable but not tabbable, so a press on its empty space keeps the focus in the sidebar:
+        // the keys work anywhere in the file manager, F6 goes on to the content, and the overlay
+        // stays open.
         <Box
             ref={ref}
+            tabIndex={-1}
             sx={sidebarSx}
             data-open={open}
             data-hidden={hidden}

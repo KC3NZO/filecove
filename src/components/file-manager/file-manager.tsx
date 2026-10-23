@@ -315,6 +315,8 @@ const rootSx = {
     width: "100%",
     height: "100%",
     overflow: "hidden",
+    // It takes the focus only from a press on nothing focusable, never by Tab.
+    outline: "none",
 } satisfies SxProps<Theme>;
 
 const frameSx: SxProps<Theme> = {
@@ -1775,7 +1777,11 @@ const FileManager = ({
                         <DragContext value={drag.context}>
                             {/* The consumer's handlers run first, so one can take an event before the
                                 file manager does, e.g. a key press, by calling `preventDefault`. */}
+                            {/* Focusable but not tabbable, so a press on its empty space, such as the
+                                header's, keeps the focus in here rather than dropping it to the page,
+                                where the keys handled below would never come. */}
                             <Box
+                                tabIndex={-1}
                                 {...rootAttributes}
                                 ref={rootElementRef}
                                 sx={rootStyle}
