@@ -206,6 +206,27 @@ export const createFolderStore = () => {
         },
 
         /**
+         * Drops every listing a section has cached and cancels its requests, e.g. when another
+         * adapter serves it, whose ids its listings mean nothing to. What shows them lists them again.
+         */
+        forgetSection(sectionId: string) {
+            const prefix = folderKey(sectionId, "");
+            let dropped = false;
+
+            [...states.keys(), ...requests.keys()].forEach((key) => {
+                if (key.startsWith(prefix)) {
+                    requests.get(key)?.abort();
+                    requests.delete(key);
+                    dropped = states.delete(key) || dropped;
+                }
+            });
+
+            if (dropped) {
+                notify();
+            }
+        },
+
+        /**
          * Cancels every request in flight, e.g. on unmount, and forgets their loading state. A
          * listing being replaced is kept; one only partly listed is dropped, to be listed again.
          */

@@ -240,7 +240,13 @@ interface SingleSectionProps extends BaseProps {
     sections?: never;
 }
 
-/** Either `sections`, for a sidebar of independent roots, or a single `section`. */
+/**
+ * Either `sections`, for a sidebar of independent roots, or a single `section`. Both may change
+ * after mounting: a section that goes takes its places out of the history, the open one going to
+ * the first section's root, and one rooted elsewhere or served by another adapter goes back to its
+ * root, its listings dropped when the adapter changed. So does every section served by the
+ * file manager's `adapter`, when that changes.
+ */
 export type FileManagerProps = MultiSectionProps | SingleSectionProps;
 
 /** An entry to select in the open folder once its listing has it. */
@@ -254,6 +260,12 @@ interface Reveal {
 interface InitialSelection {
     key: string | null;
     ids: readonly string[];
+}
+
+/** What serves a section and where it's rooted, to tell when either changes. */
+interface Served {
+    rootId: string;
+    adapter: FileAdapter;
 }
 
 /** The content's selection, as `onSelectionChange` was told it last. */
@@ -640,6 +652,64 @@ const FileManager = ({
             });
         }
     }, [sectionsById, fallback, requested, revise]);
+
+    // What served each section, and where it was rooted, as of the last time they changed.
+    const servedBefore = useRef<ReadonlyMap<string, Served>>(new Map());
+
+    // A section rooted elsewhere, or served by another adapter, as when the file manager's `adapter`
+    // changes, goes back to its root, in the history too, since its trails lead nowhere now. Another
+    // adapter's ids mean something else, so the section's listings are dropped and listed again by
+    // what shows them, and a clipboard of entries no section's adapter serves can't be pasted any more.
+    useLayoutEffect(() => {
+        const before = servedBefore.current;
+        const now = new Map(
+            [...sectionsById.values()].map(
+                (shown) => [shown.id, { rootId: shown.rootId, adapter: shown.adapter ?? adapter }] as const,
+            ),
+        );
+        const changed = [...now].flatMap(([id, served]) => {
+            const was = before.get(id);
+
+            return was && (was.rootId !== served.rootId || was.adapter !== served.adapter) ? [{ id, was, served }] : [];
+        });
+
+        servedBefore.current = now;
+
+        changed.forEach(({ id, was, served }) => {
+            if (was.adapter !== served.adapter) {
+                store.forgetSection(id);
+            }
+        });
+
+        if (changed.length > 0) {
+            const reset = new Set(changed.map(({ id }) => id));
+
+            revise((visited) =>
+                reset.has(visited.sectionId) && visited.trail.length > 0 ? { ...visited, trail: NO_TRAIL } : visited,
+            );
+
+            // A section rooted elsewhere stays expanded or collapsed as it was.
+            setExpanded((prev) => {
+                const rerooted = changed.filter(
+                    ({ id, was, served }) => was.rootId !== served.rootId && prev.has(folderKey(id, was.rootId)),
+                );
+
+                if (rerooted.length === 0) {
+                    return prev;
+                }
+
+                const expandedNow = new Set(prev);
+
+                rerooted.forEach(({ id, served }) => expandedNow.add(folderKey(id, served.rootId)));
+
+                return expandedNow;
+            });
+        }
+
+        const adapters = new Set([...now.values()].map((served) => served.adapter));
+
+        setClipboard((prev) => (prev && !adapters.has(prev.adapter) ? null : prev));
+    }, [sectionsById, adapter, store, revise]);
 
     const hasActions = useMemo(() => actions.some((group) => group.actions.length > 0), [actions]);
 

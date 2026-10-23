@@ -8,6 +8,7 @@ import { useData } from "./use-folder";
 import { useLocale } from "./use-locale";
 
 import type {
+    FileAdapter,
     FileEntry,
     FlatTree,
     FolderRef,
@@ -288,21 +289,25 @@ export const useTreeRows = (
     );
 
     // Only folders the tree has just come to show are listed, so a folder whose listing failed is
-    // tried again from its Retry, or once it's shown again, rather than on every change.
-    const requested = useRef<ReadonlySet<string>>(new Set());
+    // tried again from its Retry, or once it's shown again, rather than on every change. So are
+    // folders shown already whose section another adapter now serves, whose listings the file
+    // manager drops (`forgetSection`).
+    const requested = useRef<ReadonlyMap<string, FileAdapter>>(new Map());
 
     useEffect(() => {
-        const keys = new Set<string>();
+        const served = new Map<string, FileAdapter>();
 
         tree.shown.forEach(({ key, section, folderId }) => {
-            keys.add(key);
+            const folderAdapter = section.adapter ?? adapter;
 
-            if (!requested.current.has(key)) {
-                store.load(key, section.adapter ?? adapter, folderId);
+            served.set(key, folderAdapter);
+
+            if (requested.current.get(key) !== folderAdapter) {
+                store.load(key, folderAdapter, folderId);
             }
         });
 
-        requested.current = keys;
+        requested.current = served;
     }, [tree.shown, store, adapter]);
 
     return tree;
