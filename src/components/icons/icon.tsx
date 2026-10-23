@@ -3,6 +3,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useIconConfig } from "../../hooks/use-icon-config";
 import iconSets from "../../icon-sets/registry";
+import { withSx } from "../../styles/sx";
 
 import type { IconName, IconVariant } from "../../types";
 
@@ -11,8 +12,6 @@ interface IconProps extends SvgIconProps {
     /** Overrides the variant from `IconProvider` for this icon only. */
     variant?: IconVariant;
 }
-
-type SxArray = Extract<SxProps<Theme>, ReadonlyArray<unknown>>;
 
 /**
  * Icons that point the way the text runs. They're drawn for left to right and mirrored right to
@@ -34,23 +33,13 @@ const mirroredSx = {
     "&:dir(rtl)": { scale: "-1 1" },
 } satisfies SxProps<Theme>;
 
-const isSxArray = (sx: SxProps<Theme>): sx is SxArray => Array.isArray(sx);
-
-// The mirroring goes first, so the icon's own `sx` can still override it.
-const withMirroring = (sx: SxProps<Theme> | undefined): SxProps<Theme> => {
-    if (!sx) {
-        return mirroredSx;
-    }
-
-    return isSxArray(sx) ? [mirroredSx, ...sx] : [mirroredSx, sx];
-};
-
 const Icon = ({ name, variant, sx, ...props }: IconProps) => {
     const config = useIconConfig();
 
     const Component = config.overrides[name] ?? iconSets[variant ?? config.variant][name];
 
-    return <Component {...props} sx={MIRRORED.has(name) ? withMirroring(sx) : sx} />;
+    // The mirroring goes first, so the icon's own `sx` can still override it.
+    return <Component {...props} sx={MIRRORED.has(name) ? withSx(mirroredSx, sx) : sx} />;
 };
 
 export default Icon;
