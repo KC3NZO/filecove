@@ -31,9 +31,10 @@ import { canDownload, downloadedEntries } from "../../utils/download";
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
 import { importsFrom } from "../../utils/sections";
+import { sameSearch } from "../../utils/search";
 import { sameIds } from "../../utils/sets";
 import { matchesShortcut, pressedKeys, pressesKey } from "../../utils/shortcut";
-import { DEFAULT_SORT, sameSort } from "../../utils/sort";
+import { DEFAULT_SORT, entryComparator, sameSort } from "../../utils/sort";
 import DownloadPanel from "../downloads/download-panel";
 import UploadPanel from "../uploads/upload-panel";
 import FolderView from "./content/folder-view";
@@ -64,6 +65,7 @@ import type {
     FileManagerApi,
     FileManagerLocaleText,
     FileManagerLocation,
+    FileManagerSearch,
     FolderRef,
     LocationChangeReason,
     MenuRequest,
@@ -93,9 +95,9 @@ import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
 type RootAttributes = Omit<ComponentPropsWithoutRef<"div">, "title" | "children">;
 
 /*
- * The location, the view settings, the tree's expanded folders and the selection below can each be
- * controlled, as MUI's props are: pass the value and change it in its `on…Change` callback, or
- * leave it to the file manager, starting from its `default…` prop. Which one is decided on
+ * The location, the view settings, the tree's expanded folders, the search and the selection below
+ * can each be controlled, as MUI's props are: pass the value and change it in its `on…Change`
+ * callback, or leave it to the file manager, starting from its `default…` prop. Which one is decided on
  * mounting, and MUI warns in development about switching later. Controlled, the user's changes are
  * only asked for through the callback, and made once they're passed back.
  */
@@ -177,6 +179,29 @@ interface BaseProps extends RootAttributes {
     /** Told the folders expanded as the user expands or collapses one. */
     onExpandedFoldersChange?: (folders: SectionFolder[]) => void;
     /**
+     * The search field, for a consumer that keeps it: what it searches and what's typed, or null
+     * while it's closed. Every change the user makes is asked for through `onSearchChange`: opening
+     * it, typing, switching between the open folder and every section, and closing it. Opening any
+     * other folder ends the search, which is asked for as null, however the folder is opened,
+     * including by a `location` the consumer changes. A `"everywhere"` scope with no section whose
+     * adapter has `search` searches the open folder.
+     */
+    search?: FileManagerSearch | null;
+    /** The search at first, when the file manager keeps it; null (closed) when omitted. */
+    defaultSearch?: FileManagerSearch | null;
+    /** Told every change of the search as it's made, or asked for with `search`; null when it closes. */
+    onSearchChange?: (search: FileManagerSearch | null) => void;
+    /**
+     * Ids of the sections a search everywhere leaves out (the sections menu's unchecked ones), for a
+     * consumer that keeps them. Ids of sections that are gone or can't be searched don't count, and
+     * leaving out every section counts as leaving out none. A section added later is searched.
+     */
+    searchExcludedSections?: readonly string[];
+    /** The sections left out at first, when the file manager keeps them; none when omitted. */
+    defaultSearchExcludedSections?: readonly string[];
+    /** Told the sections left out as the user checks or unchecks one in the sections menu. */
+    onSearchExcludedSectionsChange?: (sectionIds: string[]) => void;
+    /**
      * Ids of the entries selected in the open folder's content, for a consumer that keeps them.
      * Every folder opens with nothing selected: going somewhere from inside the file manager asks
      * for an empty selection, while a `location` changed by the consumer leaves the selection to them,
@@ -220,7 +245,8 @@ interface BaseProps extends RootAttributes {
     locale?: string;
     /**
      * Takes the `FileManagerApi`, for going somewhere, listing folders again, showing an entry in
-     * its folder or moving the focus in, from outside.
+     * its folder, downloading, running the context menu's operations, searching or moving the focus
+     * in, from outside.
      */
     apiRef?: Ref<FileManagerApi>;
     /** The root element, which fills the box it's placed in. */
@@ -420,6 +446,12 @@ const FileManager = ({
     expandedFolders: expandedFoldersProp,
     defaultExpandedFolders,
     onExpandedFoldersChange,
+    search: searchProp,
+    defaultSearch = null,
+    onSearchChange,
+    searchExcludedSections: searchExcludedProp,
+    defaultSearchExcludedSections,
+    onSearchExcludedSectionsChange,
     selectedIds: selectedIdsProp,
     defaultSelectedIds,
     onSelectionChange,
@@ -593,10 +625,17 @@ const FileManager = ({
     }, [focusContent]);
 
     // What the search field in the path bar's place searches, the open folder or every section,
-    // or null while it isn't there, and what's typed in it. A folder search lists only the open
-    // folder's entries that match; a search everywhere asks the sections' adapters.
-    const [searchScope, setSearchScope] = useState<SearchScope | null>(null);
-    const [query, setQuery] = useState("");
+    // or null while it isn't there, and what's typed in it, which the consumer may control. A
+    // folder search lists only the open folder's entries that match; a search everywhere asks the
+    // sections' adapters.
+    const [search, setSearch] = useSetting<FileManagerSearch | null>({
+        name: "search",
+        value: searchProp,
+        defaultValue: defaultSearch,
+        onChange: onSearchChange,
+        equal: sameSearch,
+    });
+    const query = search?.query ?? "";
 
     // The sections a search everywhere can cover: those whose adapter has `search`, in the
     // sidebar's order, and their groups for the field's sections menu. Without any, there's no
@@ -626,7 +665,15 @@ const FileManager = ({
     // Sections a search everywhere leaves out, kept while the file manager is mounted, so a section
     // added later is searched. Ids of sections gone, or that can't be searched, don't count, and
     // leaving out every section left counts as leaving out none.
-    const [searchExcluded, setSearchExcluded] = useState<ReadonlySet<string>>(NO_IDS);
+    const [defaultExcluded] = useState<ReadonlySet<string>>(() => new Set(defaultSearchExcludedSections));
+    const excludedIds = useStableSet(searchExcludedProp);
+    const [searchExcluded, setSearchExcluded] = useSetting<ReadonlySet<string>>({
+        name: "searchExcludedSections",
+        value: excludedIds,
+        defaultValue: defaultExcluded,
+        onChange: onSearchExcludedSectionsChange && ((ids) => onSearchExcludedSectionsChange([...ids])),
+        equal: sameIds,
+    });
     const excludedSections = useMemo(() => {
         const left = new Set(
             searchTargets.filter((target) => searchExcluded.has(target.section.id)).map((target) => target.section.id),
@@ -644,9 +691,8 @@ const FileManager = ({
 
     // A search everywhere left with no section to search, as when the sections changed, searches
     // the open folder instead.
-    if (searchScope === "everywhere" && !canSearchEverywhere) {
-        setSearchScope("folder");
-    }
+    const searchScope: SearchScope | null =
+        search && (search.scope === "everywhere" && !canSearchEverywhere ? "folder" : search.scope);
 
     const searchedFor = query.trim();
     const showsResults = searchScope === "everywhere" && searchedFor !== "" && searchedTargets.length > 0;
@@ -666,16 +712,22 @@ const FileManager = ({
 
         setShownPlace(place);
 
-        // Another folder ends the search, as in GNOME Files, however it's opened.
-        if (!samePlace(shownPlace, place)) {
-            setSearchScope(null);
-            setQuery("");
-        }
-
         if (!(reveal && reveal.key === openKey)) {
             setReveal(left && openKey ? { key: openKey, id: left.id } : null);
         }
     }
+
+    // Another folder ends the search, as in GNOME Files, however it's opened. A layout effect, since
+    // a controlled search is only asked to close, which isn't done while rendering.
+    const searchedPlace = useRef(place);
+
+    useLayoutEffect(() => {
+        if (!samePlace(searchedPlace.current, place)) {
+            setSearch(null);
+        }
+
+        searchedPlace.current = place;
+    }, [place, setSearch]);
 
     // The consumer's selected ids, as a set that stays the same while they hold the same ids, so
     // passing a new array of them doesn't count as selecting them anew.
@@ -932,30 +984,57 @@ const FileManager = ({
         }
     }, []);
 
+    // Asks the field to take the focus once it's there, when what opens it is applied by a later render.
+    const focusSearchAsked = useRef(false);
+
+    useLayoutEffect(() => {
+        const input = searchInputRef.current;
+
+        if (focusSearchAsked.current) {
+            focusSearchAsked.current = false;
+            input?.focus();
+            input?.select();
+        }
+    });
+
     // Opens the search field with this scope and focuses it, or, open already, switches it to this
-    // scope, keeping what's typed, and focuses it with that selected.
+    // scope, keeping what's typed unless `typed` is given, and focuses it with that selected.
+    // Returns whether it could be opened.
     const openSearch = useCallback(
-        (scope: SearchScope) => {
-            if (!section) {
-                return;
+        (scope: SearchScope, typed?: string) => {
+            if (!section || (scope === "everywhere" && !canSearchEverywhere)) {
+                return false;
             }
 
             if (!searchScope) {
                 searchOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
             }
 
-            flushSync(() => setSearchScope(scope));
-            searchInputRef.current?.focus();
-            searchInputRef.current?.select();
+            focusSearchAsked.current = true;
+            setSearch((before) => ({ scope, query: typed ?? before?.query ?? "" }));
+
+            const input = searchInputRef.current;
+
+            if (input) {
+                focusSearchAsked.current = false;
+                input.focus();
+                input.select();
+            }
+
+            return true;
         },
-        [section, searchScope],
+        [section, canSearchEverywhere, searchScope, setSearch],
     );
 
     const stopSearching = useCallback(() => {
-        setSearchScope(null);
-        setQuery("");
+        setSearch(null);
         searchOpener.current = null;
-    }, []);
+    }, [setSearch]);
+
+    const changeQuery = useCallback(
+        (typed: string) => setSearch((before) => before && { ...before, query: typed }),
+        [setSearch],
+    );
 
     // Closing with the focus in the field, or on its own buttons, gives it back to what had it
     // before the search opened, or else to the content, as when that was a button the layout has
@@ -1747,12 +1826,60 @@ const FileManager = ({
         [adapter, place, sectionsById, askDownload],
     );
 
+    // `FileManagerApi.actionContext`: what the context menu's actions get, for entries of the open
+    // folder or the one at `target`, or with none, for that folder itself. A single file previews
+    // through the folder's files as the content orders them, once the folder is listed.
+    const actionContextAt = useCallback(
+        (entries: readonly FileEntry[] = [], target?: FileManagerLocation) => {
+            const at = target ?? place;
+            const atSection = sectionsById.get(at.sectionId);
+
+            if (!atSection) {
+                return null;
+            }
+
+            const listed = store.get(folderKey(atSection.id, folderOf(atSection, at.trail).id))?.entries;
+            const listing = listed
+                ?.filter((entry) => showHidden || !isHidden(entry))
+                .sort(entryComparator(sort, localeValue));
+
+            return contextFor({
+                target: entries.length > 0 ? "selection" : "folder",
+                section: atSection,
+                trail: at.trail,
+                entries: [...entries],
+                listing,
+            });
+        },
+        [place, sectionsById, store, showHidden, sort, localeValue, contextFor],
+    );
+
     // The API stays the same object while the file manager is mounted, so a consumer can keep it;
     // its methods go to what's current when they're called.
-    const api = useRef({ goTo, goBack, goForward, refresh, revealEntry, downloadFrom });
+    const api = useRef({
+        goTo,
+        goBack,
+        goForward,
+        refresh,
+        revealEntry,
+        downloadFrom,
+        actionContextAt,
+        openSearch,
+        closeSearch,
+    });
 
     useLayoutEffect(() => {
-        api.current = { goTo, goBack, goForward, refresh, revealEntry, downloadFrom };
+        api.current = {
+            goTo,
+            goBack,
+            goForward,
+            refresh,
+            revealEntry,
+            downloadFrom,
+            actionContextAt,
+            openSearch,
+            closeSearch,
+        };
     });
 
     useImperativeHandle(
@@ -1764,6 +1891,9 @@ const FileManager = ({
             refresh: (folderIds, options) => api.current.refresh(folderIds, options),
             reveal: (entryId, target) => api.current.revealEntry(entryId, target),
             download: (entries, target) => api.current.downloadFrom(entries, target),
+            actionContext: (entries, target) => api.current.actionContextAt(entries, target),
+            search: (scope, typed) => api.current.openSearch(scope, typed),
+            closeSearch: () => api.current.closeSearch(),
             focus: () => setFocusContent(true),
         }),
         [],
@@ -1851,7 +1981,7 @@ const FileManager = ({
                                                         groups={searchGroups}
                                                         excluded={excludedSections}
                                                         inputRef={searchInputRef}
-                                                        onQueryChange={setQuery}
+                                                        onQueryChange={changeQuery}
                                                         onExcludedChange={setSearchExcluded}
                                                         onClose={closeSearch}
                                                         onDismiss={stopSearching}

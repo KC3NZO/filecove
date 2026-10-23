@@ -17,6 +17,7 @@ import type {
     FileEntry,
     FileManagerApi,
     FileManagerLocation,
+    FileManagerSearch,
     SectionFolder,
     SelectionDetails,
     SortOrder,
@@ -114,6 +115,10 @@ const App = () => {
             .filter((shown) => shown.id === location.sectionId)
             .map((shown) => ({ sectionId: shown.id, folderId: shown.rootId })),
     );
+    // A search is passing, so it isn't kept across reloads; which sections a search everywhere leaves
+    // out is a choice, so it is.
+    const [search, setSearch] = useState<FileManagerSearch | null>(null);
+    const [searchExcluded, setSearchExcluded] = useStoredState<string[]>("searchExcludedSections", []);
     const [selection, setSelection] = useState(NOTHING_SELECTED);
 
     const handleSelectionChange = useCallback(
@@ -139,6 +144,26 @@ const App = () => {
         }
     };
 
+    // Makes a folder in the open folder, as a toolbar of an app's own would, through the same name
+    // dialog as the context menu's New folder.
+    const createFolder = () => {
+        const create = apiRef.current?.actionContext()?.createFolder;
+
+        if (create) {
+            create();
+        } else {
+            setNotice({ open: true, message: "No folder can be made here" });
+        }
+    };
+
+    // Opens a search everywhere, or the open folder's in a single section, as a search box of an app's
+    // own would, with a word typed in.
+    const searchFor = () => {
+        if (apiRef.current?.search(single ? "folder" : "everywhere", "record") === false) {
+            setNotice({ open: true, message: "Nothing here can be searched" });
+        }
+    };
+
     // Uncontrolled, what the playground keeps only sets where the file manager starts.
     const settings = uncontrolled
         ? {
@@ -148,6 +173,7 @@ const App = () => {
               defaultShowHidden: showHidden,
               defaultSidebarHidden: sidebarHidden,
               defaultExpandedFolders: expandedFolders,
+              defaultSearchExcludedSections: searchExcluded,
           }
         : {
               location,
@@ -162,6 +188,10 @@ const App = () => {
               onSidebarHiddenChange: setSidebarHidden,
               expandedFolders,
               onExpandedFoldersChange: setExpandedFolders,
+              search,
+              onSearchChange: setSearch,
+              searchExcludedSections: searchExcluded,
+              onSearchExcludedSectionsChange: setSearchExcluded,
               selectedIds: selection.ids,
           };
 
@@ -188,6 +218,12 @@ const App = () => {
                 </Typography>
                 <Button size="small" color="inherit" onClick={download}>
                     {selected ? "Download selection" : "Download folder"}
+                </Button>
+                <Button size="small" color="inherit" onClick={createFolder}>
+                    New folder
+                </Button>
+                <Button size="small" color="inherit" onClick={searchFor}>
+                    Search "record"
                 </Button>
                 <Button size="small" color="inherit" onClick={showFile}>
                     Show a file

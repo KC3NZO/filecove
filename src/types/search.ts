@@ -1,4 +1,4 @@
-// Internal to the package, not exported from the package entry.
+// `SearchScope` and `FileManagerSearch` are public; the rest is internal to the package.
 
 import type { FileAdapter, FileEntry } from "./adapter";
 import type { FolderRef, Section } from "./section";
@@ -9,6 +9,13 @@ import type { FolderRef, Section } from "./section";
  * top of the sidebar), as GNOME Files splits them.
  */
 export type SearchScope = "folder" | "everywhere";
+
+/** The search field while it's open: what it searches and what's typed in it. */
+export interface FileManagerSearch {
+    scope: SearchScope;
+    /** What's typed, as typed: not trimmed. */
+    query: string;
+}
 
 /** A section a search everywhere covers, with the adapter that searches it. */
 export interface SearchTarget {

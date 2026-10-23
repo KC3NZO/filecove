@@ -1,5 +1,7 @@
+import type { ActionContext } from "./action";
 import type { FileAdapter, FileEntry } from "./adapter";
 import type { FileManagerLocation } from "./navigation";
+import type { SearchScope } from "./search";
 
 export interface RefreshOptions {
     /**
@@ -51,6 +53,26 @@ export interface FileManagerApi {
      * (no `download`, and they aren't a single file it has `content` for).
      */
     download: (entries?: readonly FileEntry[], location?: FileManagerLocation) => boolean;
+    /**
+     * What the context menu's actions are given, for a toolbar of the consumer's own to do what the
+     * menu does: `createFolder`, `upload`, `paste`, `rename`, `delete`, `preview`, `copyTo` and the
+     * rest, each missing when the menu wouldn't offer it. For entries of the open folder, e.g. the
+     * selection's `entries` from `onSelectionChange`, or of the one at `location`, which isn't gone
+     * to; with none, for that folder itself (`target` "folder"). Built as of the call, so ask again
+     * once the selection, the clipboard or the location changes, e.g. as the toolbar renders. Null
+     * when `location`'s section is missing.
+     */
+    actionContext: (entries?: readonly FileEntry[], location?: FileManagerLocation) => ActionContext | null;
+    /**
+     * Opens the search field, as Ctrl+F (`"folder"`) or Ctrl+Shift+F (`"everywhere"`) does, and
+     * focuses it; open already, it switches to `scope`. `query` is put in it, or what's typed stays
+     * when omitted. Asked for through `onSearchChange` with a controlled `search`, and focused if
+     * the change is applied by the next render. Returns false when nothing was asked for: no
+     * section is shown, or `"everywhere"` with no section whose adapter has `search`.
+     */
+    search: (scope: SearchScope, query?: string) => boolean;
+    /** Closes the search field, as Escape does, which gives the focus back if it had it. */
+    closeSearch: () => void;
     /** Moves the focus to the content, as F6 does, e.g. once the file manager shows in a dialog. */
     focus: () => void;
 }

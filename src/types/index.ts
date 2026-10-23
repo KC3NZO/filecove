@@ -27,7 +27,7 @@ export type { DownloadLocaleText, FileManagerLocaleText, Locale, UploadLocaleTex
 export type { MenuPosition, MenuRequest, OpenMenu, RunShortcut } from "./menu";
 export type { FileManagerLocation, LocationChangeReason } from "./navigation";
 export type { PreviewContent, PreviewKind, TextExcerpt } from "./preview";
-export type { SearchHit, SearchScope, SearchTarget, SectionSearch } from "./search";
+export type { FileManagerSearch, SearchHit, SearchScope, SearchTarget, SectionSearch } from "./search";
 export type { FolderRef, Section, SectionFolder, SectionGroup, SectionImports } from "./section";
 export type { EntrySelection, SelectionDetails, SelectModifiers, TreeSelection, TreeTarget } from "./selection";
 export type { DroppedFiles, UploadItem, UploadStatus } from "./upload";
