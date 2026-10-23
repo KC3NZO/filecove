@@ -26,7 +26,7 @@ import { SORT_LABELS, toggleSortKey } from "../../../utils/sort";
 import Icon from "../../icons/icon";
 import ItemIcon from "./item-icon";
 
-import type { FileEntry, FileViewProps, SortKey, SortOrder } from "../../../types";
+import type { EntryOrigin, FileEntry, FileViewProps, SortKey, SortOrder } from "../../../types";
 
 interface ColumnHeaderProps {
     sortKey: SortKey;
@@ -38,6 +38,8 @@ interface ColumnHeaderProps {
 interface FileRowProps
     extends Pick<FileViewProps, "adapter" | "draggable" | "hasActions" | "onSelect" | "onOpen" | "onMenu"> {
     entry: FileEntry;
+    /** Where a search everywhere's result comes from, which the row shows in its Location column. */
+    origin?: EntryOrigin;
     /** Where the entry is listed, from 0. */
     index: number;
     /** How many entries the folder lists. */
@@ -54,7 +56,8 @@ interface FileRowProps
 }
 
 // `--columns` holds the tracks shared by the header and every row. It grows with the view:
-// name and menu button, then size and modified, then type as well.
+// name and menu button, then size and modified, then type as well. A search everywhere's results
+// have a Location column after the name, sharing its room.
 // Text can't be selected anywhere in the list, or Shift-click would select it across rows.
 const listSx: SxProps<Theme> = {
     "--columns": "minmax(0, 1fr) 2.5rem",
@@ -67,9 +70,11 @@ const listSx: SxProps<Theme> = {
         px: 3,
         // The sticky column header takes over the top spacing.
         pt: 0,
+        '&[data-located="true"]': { "--columns": "minmax(0, 3fr) minmax(0, 2fr) 6rem 9.5rem 2.5rem" },
     },
     [viewWide]: {
         "--columns": "minmax(0, 1fr) 6rem 6rem 9.5rem 2.5rem",
+        '&[data-located="true"]': { "--columns": "minmax(0, 3fr) minmax(0, 2fr) 6rem 6rem 9.5rem 2.5rem" },
     },
 };
 
@@ -184,6 +189,11 @@ const secondaryLineSx: SxProps<Theme> = {
     [viewMedium]: { display: "none" },
 };
 
+const locationCellSx: SxProps<Theme> = {
+    display: "none",
+    [viewMedium]: { display: "block" },
+};
+
 const sizeCellSx: SxProps<Theme> = {
     display: "none",
     [viewMedium]: { display: "block" },
@@ -247,6 +257,7 @@ const ColumnHeader = ({ sortKey, sort, sx, onSortChange }: ColumnHeaderProps) =>
 const FileRow = memo(
     ({
         entry,
+        origin,
         index,
         count,
         top,
@@ -298,16 +309,27 @@ const FileRow = memo(
                 }}
             >
                 <Box sx={nameCellSx}>
-                    <ItemIcon entry={entry} size={1.75} adapter={adapter} view="list" />
+                    <ItemIcon
+                        entry={origin?.entry ?? entry}
+                        size={1.75}
+                        adapter={origin?.adapter ?? adapter}
+                        view="list"
+                    />
                     <Box sx={nameTextSx}>
                         <Typography variant="body2" noWrap>
                             <bdi>{entry.name}</bdi>
                         </Typography>
+                        {/* A result says where it is here, rather than its size and date. */}
                         <Typography variant="caption" noWrap sx={secondaryLineSx}>
-                            {joinIsolated([describeSize(entry), describeDate(entry)])}
+                            {origin?.location ?? joinIsolated([describeSize(entry), describeDate(entry)])}
                         </Typography>
                     </Box>
                 </Box>
+                {origin && (
+                    <Typography variant="body2" color="text.secondary" noWrap sx={locationCellSx}>
+                        {origin.location}
+                    </Typography>
+                )}
                 <Typography variant="body2" color="text.secondary" noWrap sx={sizeCellSx}>
                     {describeSize(entry)}
                 </Typography>
@@ -349,6 +371,7 @@ const FileRow = memo(
  */
 const FileList = ({
     entries,
+    origins,
     lines,
     label,
     focusId,
@@ -368,9 +391,10 @@ const FileList = ({
     const { text } = useLocale();
 
     return (
-        <Box sx={listSx}>
+        <Box sx={listSx} data-located={!!origins}>
             <Box sx={headerRowSx} role="group" aria-label={text.sortBy}>
                 <ColumnHeader sortKey="name" sort={sort} sx={nameHeaderSx} onSortChange={onSortChange} />
+                {origins && <Box>{text.searchLocation}</Box>}
                 <ColumnHeader sortKey="size" sort={sort} onSortChange={onSortChange} />
                 <ColumnHeader sortKey="type" sort={sort} sx={typeCellSx} onSortChange={onSortChange} />
                 <ColumnHeader sortKey="modified" sort={sort} sx={modifiedHeaderSx} onSortChange={onSortChange} />
@@ -391,6 +415,7 @@ const FileList = ({
                         <FileRow
                             key={entry.id}
                             entry={entry}
+                            origin={origins?.[index]}
                             index={index}
                             count={entries.length}
                             top={index * lines.pitch}

@@ -37,6 +37,7 @@ import { DEFAULT_SORT, sameSort } from "../../utils/sort";
 import DownloadPanel from "../downloads/download-panel";
 import UploadPanel from "../uploads/upload-panel";
 import FolderView from "./content/folder-view";
+import SearchResults from "./content/search-results";
 import ContextMenu from "./context-menu/context-menu";
 import DeleteDialog from "./dialogs/delete-dialog";
 import NameDialog from "./dialogs/name-dialog";
@@ -70,6 +71,7 @@ import type {
     RefreshOptions,
     RunShortcut,
     SearchScope,
+    SearchTarget,
     Section,
     SectionFolder,
     SectionGroup,
@@ -590,18 +592,62 @@ const FileManager = ({
 
     // What the search field in the path bar's place searches, the open folder or every section,
     // or null while it isn't there, and what's typed in it. A folder search lists only the open
-    // folder's entries that match; a search everywhere searches nothing yet.
+    // folder's entries that match; a search everywhere asks the sections' adapters.
     const [searchScope, setSearchScope] = useState<SearchScope | null>(null);
     const [query, setQuery] = useState("");
+
+    // The sections a search everywhere can cover: those whose adapter has `search`, in the
+    // sidebar's order, and their groups for the field's sections menu. Without any, there's no
+    // search everywhere.
+    const searchTargets = useMemo(
+        () =>
+            sections.flatMap((group) =>
+                group.sections.flatMap((shown): SearchTarget[] => {
+                    const served = shown.adapter ?? adapter;
+
+                    return served.search ? [{ section: shown, adapter: served }] : [];
+                }),
+            ),
+        [sections, adapter],
+    );
+    const searchGroups = useMemo(() => {
+        const searchable = new Set(searchTargets.map((target) => target.section.id));
+
+        return sections.flatMap((group) => {
+            const shown = group.sections.filter((candidate) => searchable.has(candidate.id));
+
+            return shown.length > 0 ? [{ ...group, sections: shown }] : [];
+        });
+    }, [sections, searchTargets]);
+    const canSearchEverywhere = searchTargets.length > 0;
+
     // Sections a search everywhere leaves out, kept while the file manager is mounted, so a section
-    // added later is searched. Ids of sections gone don't count, and leaving out every section left
-    // counts as leaving out none.
+    // added later is searched. Ids of sections gone, or that can't be searched, don't count, and
+    // leaving out every section left counts as leaving out none.
     const [searchExcluded, setSearchExcluded] = useState<ReadonlySet<string>>(NO_IDS);
     const excludedSections = useMemo(() => {
-        const left = new Set([...searchExcluded].filter((id) => sectionsById.has(id)));
+        const left = new Set(
+            searchTargets.filter((target) => searchExcluded.has(target.section.id)).map((target) => target.section.id),
+        );
 
-        return left.size === 0 || left.size >= sectionsById.size ? NO_IDS : left;
-    }, [searchExcluded, sectionsById]);
+        return left.size === 0 || left.size >= searchTargets.length ? NO_IDS : left;
+    }, [searchExcluded, searchTargets]);
+    const searchedTargets = useMemo(
+        () => searchTargets.filter((target) => !excludedSections.has(target.section.id)),
+        [searchTargets, excludedSections],
+    );
+    // Counts the changes made through the file manager, which a search everywhere runs again for,
+    // so its results show them.
+    const [searchVersion, setSearchVersion] = useState(0);
+
+    // A search everywhere left with no section to search, as when the sections changed, searches
+    // the open folder instead.
+    if (searchScope === "everywhere" && !canSearchEverywhere) {
+        setSearchScope("folder");
+    }
+
+    const searchedFor = query.trim();
+    const showsResults = searchScope === "everywhere" && searchedFor !== "" && searchedTargets.length > 0;
     const searchInputRef = useRef<HTMLInputElement>(null);
     // What had the focus when the search opened, which gets it back as the search closes.
     const searchOpener = useRef<HTMLElement | null>(null);
@@ -1045,7 +1091,8 @@ const FileManager = ({
             pressesKey(event, "f") &&
             (event.ctrlKey || event.metaKey) &&
             !event.altKey &&
-            section
+            section &&
+            (!event.shiftKey || canSearchEverywhere)
         ) {
             openSearch(event.shiftKey ? "everywhere" : "folder");
         } else if (event.altKey && !others && event.key === (direction === "rtl" ? "ArrowRight" : "ArrowLeft")) {
@@ -1217,6 +1264,7 @@ const FileManager = ({
     const relist = useCallback(
         (served: FileAdapter, folderIds: string[]) => {
             sectionsOf(served).forEach((shown) => store.relist(shown.id, served, folderIds));
+            setSearchVersion((count) => count + 1);
         },
         [sectionsOf, store],
     );
@@ -1232,6 +1280,7 @@ const FileManager = ({
                     store.relist(shown.id, served, folderIds);
                 }
             });
+            setSearchVersion((count) => count + 1);
         },
         [adapter, sectionsById, store],
     );
@@ -1444,7 +1493,7 @@ const FileManager = ({
     );
 
     const contextFor = useCallback(
-        ({ target, section: menuSection, trail, entries, listing }: MenuRequest): ActionContext => {
+        ({ target, section: menuSection, trail, entries, listing, inResults }: MenuRequest): ActionContext => {
             const menuFolder = folderOf(menuSection, trail);
             const folderAdapter = menuSection.adapter ?? adapter;
             const base = { section: menuSection, adapter: folderAdapter, trail };
@@ -1495,6 +1544,7 @@ const FileManager = ({
                 section: menuSection,
                 refresh: () => {
                     store.load(folderKey(menuSection.id, menuFolder.id), folderAdapter, menuFolder.id, true);
+                    setSearchVersion((count) => count + 1);
                 },
                 openFolder: (entry) => {
                     goTo({ sectionId: menuSection.id, trail: [...trail, { id: entry.id, name: entry.name }] });
@@ -1538,6 +1588,25 @@ const FileManager = ({
                 preview,
             };
 
+            // A result of a search everywhere is shown in its folder, which ends the search, even when
+            // that's the open folder.
+            if (inResults && entries.length === 1) {
+                context.openLocation = () => {
+                    const location = { sectionId: menuSection.id, trail };
+
+                    setReveal({ key: folderKey(menuSection.id, menuFolder.id), id: only.id });
+                    stopSearching();
+
+                    if (samePlace(location, place)) {
+                        if (focusInContent()) {
+                            setFocusContent(true);
+                        }
+                    } else {
+                        goTo(location);
+                    }
+                };
+            }
+
             // Opened as double-clicking it does: a folder here, and a file as the consumer says, or
             // in the preview when they decline it. Without `onOpenFile`, opening a file is only
             // previewing it, which `preview` already offers.
@@ -1568,6 +1637,9 @@ const FileManager = ({
             sectionsById,
             clipboard,
             onOpenFile,
+            place,
+            stopSearching,
+            focusInContent,
         ],
     );
 
@@ -1752,6 +1824,7 @@ const FileManager = ({
                                         open={sidebarOpen}
                                         hidden={sidebarHidden}
                                         searchScope={searchScope}
+                                        canSearchEverywhere={canSearchEverywhere}
                                         onToggle={toggleExpanded}
                                         onRevealed={clearTreeReveal}
                                         onExpand={expand}
@@ -1769,7 +1842,7 @@ const FileManager = ({
                                                         scope={searchScope}
                                                         query={query}
                                                         folderName={folderOf(section, place.trail).name}
-                                                        groups={sections}
+                                                        groups={searchGroups}
                                                         excluded={excludedSections}
                                                         inputRef={searchInputRef}
                                                         onQueryChange={setQuery}
@@ -1797,6 +1870,7 @@ const FileManager = ({
                                             showHidden={showHidden}
                                             selecting={selecting}
                                             searchScope={searchScope}
+                                            canSearchEverywhere={canSearchEverywhere}
                                             sidebarHidden={sidebarHidden}
                                             sidebarDocked={sidebarDocked}
                                             onBack={goBack}
@@ -1811,8 +1885,29 @@ const FileManager = ({
                                             sidebarButtonRef={sidebarButtonRef}
                                         />
                                         <Box ref={panelRef} sx={panelSx}>
+                                            {/* A search everywhere's results show in the folder's place
+                                                while something is typed. The folder stays mounted
+                                                under them, hidden, so it comes back as it was, its
+                                                selection included. */}
+                                            {showsResults && (
+                                                <SearchResults
+                                                    targets={searchedTargets}
+                                                    query={searchedFor}
+                                                    version={searchVersion}
+                                                    view={view}
+                                                    sort={sort}
+                                                    showHidden={showHidden}
+                                                    hasActions={hasActions}
+                                                    takeFocus={focusContent}
+                                                    onSortChange={setSort}
+                                                    onNavigate={goTo}
+                                                    onOpenFile={openFile}
+                                                    onOpenMenu={openMenu}
+                                                    onShortcut={runShortcut}
+                                                />
+                                            )}
                                             {/* Keyed by folder, so each opens at the top with nothing selected. */}
-                                            <Box key={openKey ?? undefined} sx={viewSx}>
+                                            <Box key={openKey ?? undefined} sx={viewSx} hidden={showsResults}>
                                                 {section && (
                                                     <FolderView
                                                         section={section}
@@ -1824,7 +1919,7 @@ const FileManager = ({
                                                         hasActions={hasActions}
                                                         selecting={selecting}
                                                         busy={busy}
-                                                        takeFocus={focusContent}
+                                                        takeFocus={focusContent && !showsResults}
                                                         revealId={revealId}
                                                         selectedIds={selectionControlled ? selectedIdSet : undefined}
                                                         defaultSelectedIds={

@@ -27,6 +27,12 @@ export interface ActionContext {
      */
     open?: () => void;
     /**
+     * Opens `folder` and shows the one entry in it, selected, for an "Open item location" action on
+     * a search's results, which come from anywhere. Missing unless there's exactly one entry and it
+     * was found by a search everywhere.
+     */
+    openLocation?: () => void;
+    /**
      * Shows the files among `entries` in the file manager's preview, one at a time. A single file
      * steps through the files of the folder it's listed in, in the content's order. Missing when the
      * section's adapter has no `content`, or `entries` holds no files.

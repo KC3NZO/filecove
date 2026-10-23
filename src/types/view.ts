@@ -53,10 +53,31 @@ export interface VirtualLines {
     height: number;
 }
 
+/**
+ * Where an entry shown among the results of a search everywhere comes from, which the view's
+ * entry stands for under a key of its own. Internal.
+ */
+export interface EntryOrigin {
+    /** The entry as its adapter gave it, which is what's handed back to the adapter. */
+    entry: FileEntry;
+    adapter: FileAdapter;
+    /** Where it is, for the list's Location column: the section and the folders below its root. */
+    location: string;
+}
+
 /** Props shared by the list and grid views. Internal, not exported from the package entry. */
 export interface FileViewProps {
-    /** Every entry of the folder, in display order. */
+    /**
+     * Every entry of the folder, in display order. Among a search's results, each is a copy whose
+     * `id` is the result's key, and `origins` holds the entry itself.
+     */
     entries: FileEntry[];
+    /**
+     * For results from many folders, as a search everywhere's, where each of `entries` comes from,
+     * by index: its own entry and adapter, for its icon, and its location, which the list shows in
+     * a column of its own.
+     */
+    origins?: readonly EntryOrigin[];
     /** Which of them to render, and where. */
     lines: VirtualLines;
     /** Names the list of entries for screen readers: the folder's name. */

@@ -227,6 +227,16 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 onSelect: (context) => context.open?.(),
             },
             {
+                // Only on a search everywhere's results, which come from anywhere.
+                id: "open-location",
+                label: "Open item location",
+                icon: "folder",
+                target: "selection",
+                single: true,
+                visible: (context) => !!context.openLocation,
+                onSelect: (context) => context.openLocation?.(),
+            },
+            {
                 id: "preview",
                 label: "Preview",
                 icon: "preview",

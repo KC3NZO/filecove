@@ -5,6 +5,7 @@
  * shared by both.
  */
 
+import type { FolderRef } from "./section";
 import type { ViewMode } from "./view";
 
 /** A file or folder as the adapter reports it. */
@@ -54,6 +55,42 @@ export interface ListResult {
      * calls `list` again with it as `cursor`, until a page comes without one, and shows the entries
      * as they arrive. It's opaque to the file manager, e.g. a continuation token or an offset. Leave
      * it out on the last page, or for a folder listed in one go.
+     */
+    nextCursor?: string;
+}
+
+/** Passed to `search`. */
+export interface SearchOptions {
+    /** Aborted when the results are no longer wanted: something else was typed, or the search ended. */
+    signal: AbortSignal;
+    /** The `nextCursor` of the page before, when the results come in pages; missing for the first page. */
+    cursor?: string;
+    /**
+     * Whether the file manager shows hidden files, so a backend can leave out hidden entries, and
+     * what's in hidden folders, while the user isn't seeing them. Hidden entries that come anyway
+     * are left out of the results then.
+     */
+    showHidden: boolean;
+}
+
+/** One entry `search` found, and where it is. */
+export interface SearchMatch {
+    entry: FileEntry;
+    /**
+     * The folders from the root searched down to the one holding the entry, outermost first, not
+     * counting the root itself; empty for an entry right in the root. The file manager never
+     * parses ids, so this is how it shows where the entry is, opens its folder and acts on it there.
+     */
+    trail: FolderRef[];
+}
+
+/** An object rather than a bare array, so fields can be added later without a breaking change. */
+export interface SearchResult {
+    matches: SearchMatch[];
+    /**
+     * Where the next page of results starts, as `ListResult.nextCursor`: `search` is called again
+     * with it as `cursor` until a page comes without one, and the results show as they arrive.
+     * Leave it out on the last page, or to stop at as many results as the backend cares to give.
      */
     nextCursor?: string;
 }
@@ -253,4 +290,15 @@ export interface FileAdapter {
      * it rejects, the file's icon shows.
      */
     thumbnail?(entry: FileEntry, options: ThumbnailOptions): Promise<FileContent | null>;
+    /**
+     * Finds the entries anywhere below `rootId` that match `query`, for a search everywhere: what's
+     * typed in the search field, trimmed. It's called once for each section searched, with the
+     * section's `rootId`, so two sections sharing the adapter are searched apart, a moment after the
+     * typing stops, and again whenever the file manager changes something. How entries match is the
+     * backend's to say; the open folder's own search lists the names holding every word typed,
+     * anywhere and in any order, case and accents aside. Results come all at once or a page at a
+     * time (`nextCursor`). Without it, the sections it serves aren't searched everywhere. Reject
+     * with an `Error` to show its message beside the section's results.
+     */
+    search?(rootId: string, query: string, options: SearchOptions): Promise<SearchResult>;
 }

@@ -7,3 +7,11 @@ export const searchTerms = (query: string, fold: (text: string) => string) =>
 
 /** Whether a name, folded as the terms are, holds every one of them, anywhere in it and in any order. */
 export const holdsTerms = (name: string, terms: readonly string[]) => terms.every((term) => name.includes(term));
+
+/**
+ * The key of a search everywhere's result: its section and its id, since entries of different
+ * adapters may share ids, and one entry may be found in two sections sharing an adapter. Joined by
+ * a control character no id is likely to hold, which `CSS.escape` keeps findable in the page, as
+ * it wouldn't a NUL.
+ */
+export const resultKey = (sectionId: string, entryId: string) => `${sectionId}\u001f${entryId}`;

@@ -1,7 +1,16 @@
 import { sampleContent, shrink, thumbnailSource } from "./mock-content";
 import { zip } from "./mock-zip";
 
-import type { ConflictPolicy, FileAdapter, FileContent, FileEntry, ListResult } from "../../src";
+import type {
+    ConflictPolicy,
+    FileAdapter,
+    FileContent,
+    FileEntry,
+    FolderRef,
+    ListResult,
+    SearchMatch,
+    SearchResult,
+} from "../../src";
 import type { ZipItem } from "./mock-zip";
 
 /** A file or folder of the fake backend, written as nested literals. */
@@ -33,6 +42,9 @@ interface MockAdapterOptions {
      */
     downloadUrls?: Record<string, { url: string; delay?: number }>;
 }
+
+/** Results a search hands back a page, so a search matching much of `archive` comes in pages. */
+const SEARCH_PAGE = 200;
 
 /** Simulated upload speed, in bytes per second. */
 const UPLOAD_SPEED = 5_000_000;
@@ -70,6 +82,11 @@ const parentOf = (path: string) => {
 
     return cut > 0 ? path.slice(0, cut) : "/";
 };
+
+const MARKS = /\p{M}/gu;
+
+/** A name or what's typed with case and accents left out, as the file manager's own folder search folds them. */
+const fold = (text: string) => text.toLowerCase().normalize("NFKD").replace(MARKS, "");
 
 const clone = (node: MockNode): MockNode => ({ ...node, children: node.children?.map(clone) });
 
@@ -321,6 +338,47 @@ export const createMockAdapter = (
                 return {
                     entries: children.slice(start, end).map((child) => toEntry(folderId, child)),
                     nextCursor: end < children.length ? String(end) : undefined,
+                };
+            }),
+
+        // Every entry below the root whose name holds each word typed, anywhere and in any order,
+        // case and accents aside, as the folder search matches, found by walking the tree. Folders
+        // that can't be read aren't looked in, and dotfiles and what's in dot folders are left out
+        // while hidden files aren't shown. The whole tree is walked for each page, which a backend
+        // with an index wouldn't, with the offset of the next page as the cursor.
+        search: (rootId, query, { signal, cursor, showHidden }) =>
+            respond<SearchResult>(signal, () => {
+                const terms = fold(query).split(/\s+/u).filter(Boolean);
+                const matches: SearchMatch[] = [];
+
+                const walk = (path: string, node: MockNode, trail: FolderRef[]) => {
+                    node.children?.forEach((child) => {
+                        if (!showHidden && child.name.startsWith(".")) {
+                            return;
+                        }
+
+                        const name = fold(child.name);
+
+                        if (terms.length > 0 && terms.every((term) => name.includes(term))) {
+                            matches.push({ entry: toEntry(path, child), trail });
+                        }
+
+                        if (child.children && !child.fails) {
+                            const id = childId(path, child.name);
+
+                            walk(id, child, [...trail, { id, name: child.name }]);
+                        }
+                    });
+                };
+
+                walk(rootId, folderAt(rootId), []);
+
+                const start = cursor ? Number(cursor) : 0;
+                const end = start + SEARCH_PAGE;
+
+                return {
+                    matches: matches.slice(start, end),
+                    nextCursor: end < matches.length ? String(end) : undefined,
                 };
             }),
 

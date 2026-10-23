@@ -26,6 +26,8 @@ export interface MenuRequest {
      * file steps through. Only the content has one.
      */
     listing?: FileEntry[];
+    /** The entries are results of a search everywhere, whose folder isn't the open one. */
+    inResults?: boolean;
 }
 
 /** Opens the context menu. Returns false when no action applies, so the browser's own menu can show instead. */

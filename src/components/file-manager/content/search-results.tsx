@@ -1,0 +1,817 @@
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import type { DragEvent, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
+
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
+import LinearProgress from "@mui/material/LinearProgress";
+import Typography from "@mui/material/Typography";
+import type { SxProps, Theme } from "@mui/material/styles";
+
+import { CutContext } from "../../../contexts/cut-context";
+import { DragContext } from "../../../contexts/drag-context";
+import { useDropTarget } from "../../../hooks/use-drop-target";
+import { useLocale } from "../../../hooks/use-locale";
+import { useMarquee } from "../../../hooks/use-marquee";
+import { useSearch } from "../../../hooks/use-search";
+import { useSelection } from "../../../hooks/use-selection";
+import { useTypeAhead } from "../../../hooks/use-type-ahead";
+import { useVirtualLines } from "../../../hooks/use-virtual-lines";
+import { mirroredBarSx } from "../../../styles/direction";
+import { VIEW_CONTAINER } from "../../../styles/layout";
+import { focusOutline, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
+import { isolate, joinIsolated } from "../../../utils/bidi";
+import { focusLost, isRtl } from "../../../utils/dom";
+import { isHidden } from "../../../utils/hidden";
+import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
+import { belowElement } from "../../../utils/menu-position";
+import { folderOf } from "../../../utils/navigation";
+import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
+import { pressesKey } from "../../../utils/shortcut";
+import { resultKey } from "../../../utils/search";
+import { entryComparator } from "../../../utils/sort";
+import Icon from "../../icons/icon";
+import FileGrid from "./file-grid";
+import FileList from "./file-list";
+import SearchTabs, { tabId } from "./search-tabs";
+
+import type {
+    DropTarget,
+    EntryOrigin,
+    EntrySelection,
+    FileAdapter,
+    FileEntry,
+    FileManagerLocation,
+    MenuPosition,
+    MenuRequest,
+    OpenMenu,
+    RunShortcut,
+    SearchHit,
+    SearchTarget,
+    SelectModifiers,
+    SortOrder,
+    ViewMode,
+} from "../../../types";
+import type { ResultTab } from "./search-tabs";
+
+interface SearchResultsProps {
+    /** The sections searched, with their adapters, in the sidebar's order. */
+    targets: readonly SearchTarget[];
+    /** What's typed, trimmed; never empty. */
+    query: string;
+    /** Changes whenever the file manager changes something, which searches again. */
+    version: number;
+    view: ViewMode;
+    sort: SortOrder;
+    showHidden: boolean;
+    hasActions: boolean;
+    /** Takes the focus, or as soon as there's something to focus, as `FolderView`'s does. */
+    takeFocus: boolean;
+    onSortChange: (sort: SortOrder) => void;
+    onNavigate: (place: FileManagerLocation) => void;
+    /** Opens a file as the file manager says. Returns false when nothing can open it. */
+    onOpenFile: (request: MenuRequest) => boolean;
+    onOpenMenu: OpenMenu;
+    onShortcut: RunShortcut;
+}
+
+/** Where the view's focus is among the results: the result's key, and where it was listed. */
+interface ResultFocus {
+    id: string;
+    index: number;
+}
+
+/** A result to scroll to once it's rendered, and whether to focus it too. */
+interface ScrollRequest {
+    id: string;
+    focus: boolean;
+}
+
+const NO_HITS: SearchHit[] = [];
+
+/** The result an event happened on, by its `data-entry-id`, which is the result's key. */
+const keyAt = (target: EventTarget) =>
+    target instanceof Element ? target.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId : undefined;
+
+const resultElement = (surface: HTMLElement, key: string) =>
+    surface.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(key)}"]`);
+
+/** The key of the folder a result is in, to tell whether results share one. */
+const folderOfHit = (hit: SearchHit) => resultKey(hit.section.id, folderOf(hit.section, hit.trail).id);
+
+/** Whether results are all in one folder of one section, which is what an action can take. */
+const inOneFolder = (hits: readonly SearchHit[]) =>
+    hits.length > 0 && hits.every((hit) => folderOfHit(hit) === folderOfHit(hits[0]));
+
+// The content panel's scrolling view, as the folder view has it, with the container queries the
+// list's columns follow.
+const scrollSx: SxProps<Theme> = {
+    containerType: "inline-size",
+    containerName: VIEW_CONTAINER,
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+};
+
+// As the folder view's surface: it fills the panel, so its empty space takes clicks and marquee
+// drags, and it's positioned for the marquee.
+const surfaceSx: SxProps<Theme> = {
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    minHeight: "100%",
+    WebkitTouchCallout: "none",
+    WebkitTapHighlightColor: "transparent",
+    touchAction: "manipulation",
+    outline: "none",
+    "&:focus-visible": { ...focusOutline, borderRadius: 3 },
+};
+
+const marqueeSx: SxProps<Theme> = (theme) => ({
+    display: "none",
+    position: "absolute",
+    zIndex: 3,
+    border: "1px solid",
+    borderColor: "primary.main",
+    borderRadius: 0.5,
+    bgcolor: selectedBackground(theme),
+    pointerEvents: "none",
+    '&[data-active="true"]': { display: "block" },
+});
+
+const progressSx: SxProps<Theme> = [{ position: "sticky", top: 0, zIndex: 2, mb: "-4px" }, mirroredBarSx];
+
+const stateSx: SxProps<Theme> = {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 1,
+    p: 3,
+    textAlign: "center",
+    color: "text.secondary",
+};
+
+const stateIconSx: SxProps<Theme> = {
+    fontSize: "3rem",
+    opacity: 0.6,
+};
+
+const stateTitleSx: SxProps<Theme> = {
+    color: "text.primary",
+    fontWeight: 600,
+};
+
+/**
+ * A search everywhere's results, in the content panel in place of the open folder: every section's
+ * together, sorted as a folder is, with where each is in a Location column, and, with several
+ * sections searched, a tab for each above them. Results are selected as entries are, but only
+ * results of one folder are acted on together, since an action takes entries sharing a folder: a
+ * menu opened on a selection spanning folders acts on its result alone, selected first.
+ */
+const SearchResults = ({
+    targets,
+    query,
+    version,
+    view,
+    sort,
+    showHidden,
+    hasActions,
+    takeFocus,
+    onSortChange,
+    onNavigate,
+    onOpenFile,
+    onOpenMenu,
+    onShortcut,
+}: SearchResultsProps) => {
+    const { searches, retry } = useSearch(targets, query, showHidden, version);
+    const cut = useContext(CutContext);
+    const drag = useContext(DragContext);
+    const locale = useLocale();
+    const { text } = locale;
+    const idPrefix = useId();
+    const panelId = useId();
+    const stateId = useId();
+
+    // The open tab: a section's id, or null for every section's. A section no longer searched
+    // leaves its tab, and every section's shows.
+    const [tab, setTab] = useState<string | null>(null);
+    const tabbed = targets.length > 1;
+    const tabTarget = tabbed && tab !== null ? targets.find((target) => target.section.id === tab) : undefined;
+
+    if (tab !== null && !tabTarget) {
+        setTab(null);
+    }
+
+    const shownTargets = useMemo(() => (tabTarget ? [tabTarget] : targets), [tabTarget, targets]);
+
+    // Sorted as a folder is, hidden entries left out while they don't show, by what the adapter
+    // says of the entry itself; what's in a hidden folder is the adapter's to leave out.
+    const hits = useMemo(() => {
+        const found = shownTargets.flatMap((target) => searches.get(target.section.id)?.matches ?? NO_HITS);
+        const listed = showHidden ? found : found.filter((hit) => !isHidden(hit.entry));
+        const compare = entryComparator(sort, locale);
+
+        return listed.sort((a, b) => compare(a.entry, b.entry));
+    }, [shownTargets, searches, showHidden, sort, locale]);
+
+    // The views go by the results' keys, since entries of different sections may share ids, and
+    // show each result's own entry, adapter and location from `origins`. Inside a section's tab,
+    // the location leaves the section out.
+    const entries = useMemo(() => hits.map((hit) => ({ ...hit.entry, id: hit.key })), [hits]);
+
+    const origins = useMemo(
+        () =>
+            hits.map((hit): EntryOrigin => {
+                const folders = hit.trail.map((folder) => folder.name);
+                const parts = tabTarget && folders.length > 0 ? folders : [hit.section.label, ...folders];
+
+                return { entry: hit.entry, adapter: hit.adapter, location: joinIsolated(parts, " / ") };
+            }),
+        [hits, tabTarget],
+    );
+
+    const hitByKey = useMemo(() => new Map(hits.map((hit) => [hit.key, hit] as const)), [hits]);
+    const indexByKey = useMemo(() => new Map(hits.map((hit, index) => [hit.key, index] as const)), [hits]);
+
+    // Cut and dragged entries are marked by their adapter and id, as the views mark them by key.
+    const marked = useCallback(
+        (by: { adapter: FileAdapter; ids: ReadonlySet<string> } | null | undefined) =>
+            new Set(
+                by
+                    ? hits.filter((hit) => hit.adapter === by.adapter && by.ids.has(hit.entry.id)).map((hit) => hit.key)
+                    : [],
+            ),
+        [hits],
+    );
+    const cutKeys = useMemo(() => marked(cut), [marked, cut]);
+    const draggedKeys = useMemo(() => marked(drag?.dragged), [marked, drag?.dragged]);
+    const draggable = targets.some((target) => !!(target.adapter.move || target.adapter.copy));
+
+    const { selection, selectedIds, selected, select, replace, selectAll, clear } = useSelection(entries);
+    const selectedHits = useMemo(
+        () => selected.flatMap((entry) => hitByKey.get(entry.id) ?? []),
+        [selected, hitByKey],
+    );
+    // An action takes entries of one folder, so the selection is only acted on as a whole then.
+    const actOnSelection = inOneFolder(selectedHits);
+    const typeAhead = useTypeAhead();
+
+    // A menu, a shortcut or the preview acts on results of one folder, there, with that folder's
+    // results to step through.
+    const requestFor = useCallback(
+        (acted: SearchHit[]): MenuRequest => {
+            const [first] = acted;
+            const folder = folderOfHit(first);
+
+            return {
+                target: "selection",
+                section: first.section,
+                trail: first.trail,
+                entries: acted.map((hit) => hit.entry),
+                listing: hits.filter((hit) => folderOfHit(hit) === folder).map((hit) => hit.entry),
+                inResults: true,
+            };
+        },
+        [hits],
+    );
+
+    // The result with the view's Tab stop, as in the folder view.
+    const [focus, setFocus] = useState<ResultFocus | null>(null);
+    const focusIndex = focus ? (indexByKey.get(focus.id) ?? -1) : -1;
+
+    if (focus && focusIndex >= 0 && focusIndex !== focus.index) {
+        setFocus({ id: focus.id, index: focusIndex });
+    }
+
+    // Another search, or another tab, starts the results over, at the first of them and the top.
+    const shownFor = JSON.stringify([query, tabTarget?.section.id ?? null]);
+    const [focusedFor, setFocusedFor] = useState(shownFor);
+
+    if (focusedFor !== shownFor) {
+        setFocusedFor(shownFor);
+        setFocus(null);
+    }
+
+    let focusId: string | null = null;
+
+    if (entries.length > 0) {
+        if (focus && focusIndex >= 0) {
+            focusId = focus.id;
+        } else if (focus) {
+            focusId = entries[Math.min(focus.index, entries.length - 1)].id;
+        } else {
+            focusId = selected[0]?.id ?? entries[0].id;
+        }
+    }
+
+    const [grabbedId, setGrabbedId] = useState<string | null>(null);
+
+    const { lines, indexesIn, settled } = useVirtualLines(entries.length, [
+        focusId === null ? -1 : (indexByKey.get(focusId) ?? -1),
+        grabbedId !== null && draggedKeys.has(grabbedId) ? (indexByKey.get(grabbedId) ?? -1) : -1,
+    ]);
+
+    const focusWithin = useRef(false);
+    const pendingFocus = useRef(false);
+    const pendingScroll = useRef<ScrollRequest | null>(null);
+    const pointerType = useRef("mouse");
+
+    const marqueeBase = useRef<EntrySelection>(EMPTY_SELECTION);
+    const marquee = useMarquee({
+        enabled: entries.length > 0,
+        entriesIn: (box) => indexesIn(box).map((index) => entries[index].id),
+        onStart: () => {
+            marqueeBase.current = selection;
+        },
+        onChange: (ids, modifiers) => replace(marqueeSelection(marqueeBase.current, ids, modifiers)),
+    });
+
+    useEffect(() => {
+        if (takeFocus) {
+            pendingFocus.current = true;
+        }
+    }, [takeFocus]);
+
+    const scrolledFor = useRef(shownFor);
+
+    useEffect(() => {
+        if (scrolledFor.current !== shownFor) {
+            scrolledFor.current = shownFor;
+            marquee.surfaceRef.current?.parentElement?.scrollTo({ top: 0 });
+        }
+    }, [shownFor, marquee.surfaceRef]);
+
+    // Scrolls to the result asked for once it's rendered and the results are in their places.
+    useEffect(() => {
+        const surface = marquee.surfaceRef.current;
+        const request = pendingScroll.current;
+
+        if (!surface || !request || !settled()) {
+            return;
+        }
+
+        const element = resultElement(surface, request.id);
+
+        if (element || !indexByKey.has(request.id)) {
+            pendingScroll.current = null;
+
+            if (request.focus) {
+                element?.focus({ preventScroll: true });
+            }
+
+            element?.scrollIntoView({ block: "nearest" });
+        }
+    });
+
+    // Gives the focus to the focused result, or to the view while it lists none, when it's to take
+    // it, or when the focused result went, as the folder view does.
+    useEffect(() => {
+        const surface = marquee.surfaceRef.current;
+
+        if (!surface || !settled() || (!pendingFocus.current && !(focusWithin.current && focusLost()))) {
+            return;
+        }
+
+        const element = focusId === null ? null : resultElement(surface, focusId);
+
+        pendingFocus.current = false;
+        (element ?? surface).focus({ preventScroll: true });
+        element?.scrollIntoView({ block: "nearest" });
+    });
+
+    const hitAt = (event: DragEvent) => {
+        const key = keyAt(event.target);
+
+        return key === undefined ? undefined : hitByKey.get(key);
+    };
+
+    // A drag carries the selection when it starts on a selected result and the selection is in one
+    // folder; otherwise the result is selected and dragged alone.
+    const handleDragStart = (event: DragEvent) => {
+        drag?.start(event, () => {
+            const hit = hitAt(event);
+
+            if (!hit) {
+                return null;
+            }
+
+            setGrabbedId(hit.key);
+
+            const carried = selectedIds.has(hit.key) && actOnSelection ? selectedHits : [hit];
+
+            if (carried.length === 1) {
+                select(hit.key);
+            }
+
+            return { section: hit.section, trail: hit.trail, entries: carried.map((one) => one.entry), grabbed: hit.entry };
+        });
+    };
+
+    // Folders among the results take drops, by the same rules as pasting. Their empty space takes
+    // none, since the results are no folder.
+    const drop = useDropTarget({
+        targetsAt: (event) => {
+            const hit = hitAt(event);
+
+            if (hit?.entry.kind !== "folder") {
+                return [];
+            }
+
+            const target: DropTarget = {
+                key: hit.key,
+                section: hit.section,
+                trail: [...hit.trail, { id: hit.entry.id, name: hit.entry.name }],
+            };
+
+            return [target];
+        },
+    });
+
+    // Opens a folder, which ends the search, and a file as the file manager says, stepping through
+    // the results of its folder. Returns false when nothing can open the file.
+    const handleOpen = useCallback(
+        (entry: FileEntry) => {
+            const hit = hitByKey.get(entry.id);
+
+            if (!hit) {
+                return false;
+            }
+
+            if (hit.entry.kind === "folder") {
+                onNavigate({
+                    sectionId: hit.section.id,
+                    trail: [...hit.trail, { id: hit.entry.id, name: hit.entry.name }],
+                });
+
+                return true;
+            }
+
+            return onOpenFile(requestFor([hit]));
+        },
+        [hitByKey, onNavigate, onOpenFile, requestFor],
+    );
+
+    // A touch tap opens, as in a folder outside selection mode, which results don't have.
+    const handleSelect = useCallback(
+        (id: string, modifiers: SelectModifiers) => {
+            const entry = pointerType.current === "mouse" ? undefined : entries.find((item) => item.id === id);
+
+            if (!entry || !handleOpen(entry)) {
+                select(id, modifiers);
+            }
+        },
+        [entries, handleOpen, select],
+    );
+
+    // The menu of a selected result acts on the whole selection when it's in one folder. Any other
+    // result, or one of a selection spanning folders, is selected alone first.
+    const handleEntryMenu = useCallback(
+        (position: MenuPosition, entry: FileEntry) => {
+            const hit = hitByKey.get(entry.id);
+
+            if (!hit) {
+                return false;
+            }
+
+            const whole = selectedIds.has(entry.id) && actOnSelection;
+
+            if (!whole) {
+                select(entry.id);
+            }
+
+            return onOpenMenu(position, requestFor(whole ? selectedHits : [hit]));
+        },
+        [hitByKey, selectedIds, actOnSelection, selectedHits, select, onOpenMenu, requestFor],
+    );
+
+    const handleBackgroundClick = (event: MouseEvent) => {
+        const { toggle, range } = selectModifiers(event);
+
+        if (!toggle && !range) {
+            clear();
+        }
+    };
+
+    const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+        if (!event.currentTarget.contains(document.activeElement)) {
+            event.currentTarget.focus({ preventScroll: true });
+        }
+
+        marquee.onPointerDown(event);
+    };
+
+    const focusResult = (id: string, index: number) => {
+        setFocus({ id, index });
+        pendingScroll.current = { id, focus: true };
+    };
+
+    const moveFocus = (index: number, { toggle, range }: SelectModifiers) => {
+        const entry = entries[index];
+
+        if (!entry) {
+            return;
+        }
+
+        if (range) {
+            select(entry.id, { toggle, range: true }, focusId ?? entry.id);
+        } else if (!toggle) {
+            select(entry.id);
+        }
+
+        focusResult(entry.id, index);
+    };
+
+    // Shortcuts run for the selection when it's in one folder; results have no folder of their own
+    // for the rest. Then the view's keys, as in a folder, but for going up, which leads nowhere.
+    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        const key = keyAt(event.target);
+        const own = event.target === event.currentTarget || key !== undefined;
+
+        if (!own && (event.key === "Enter" || event.key === " ")) {
+            return;
+        }
+
+        if (own && isMenuKey(event)) {
+            const surface = event.currentTarget;
+            const entry = key === undefined ? undefined : entries.find((item) => item.id === key);
+            const element = entry && resultElement(surface, entry.id);
+
+            event.preventDefault();
+
+            if (entry && element) {
+                handleEntryMenu(belowElement(element.querySelector("[data-menu-button]") ?? element), entry);
+            }
+
+            return;
+        }
+
+        const typingSpace = event.key === " " && isTypingKey(event) && typeAhead.typing();
+
+        if (!typingSpace && actOnSelection && onShortcut(event, [requestFor(selectedHits)])) {
+            event.preventDefault();
+
+            return;
+        }
+
+        const toggle = event.ctrlKey || event.metaKey;
+        let handled = false;
+
+        if (event.key === "Escape" && selected.length > 0) {
+            clear();
+            handled = true;
+        } else if (toggle && !event.altKey && !event.shiftKey && pressesKey(event, "a")) {
+            selectAll();
+            handled = true;
+        } else if (own) {
+            handled = handleViewKey(event, key !== undefined);
+        }
+
+        if (handled) {
+            event.preventDefault();
+        }
+    };
+
+    // As the folder view's: the arrows, Home, End, PageUp and PageDown move, Space selects, Enter and
+    // Alt+Down open, and typing finds a result by name.
+    const handleViewKey = (event: KeyboardEvent<HTMLDivElement>, onEntry: boolean) => {
+        const toggle = event.ctrlKey || event.metaKey;
+        const index = focusId === null ? -1 : (indexByKey.get(focusId) ?? -1);
+        const current = index >= 0 ? entries[index] : undefined;
+
+        if (!current) {
+            return false;
+        }
+
+        if (event.altKey) {
+            return !toggle && !event.shiftKey && event.key === "ArrowDown" && handleOpen(current);
+        }
+
+        if (event.key === "Enter" && !toggle && !event.shiftKey) {
+            return handleOpen(current);
+        }
+
+        if (event.key === " " && !(isTypingKey(event) && typeAhead.typing())) {
+            if (event.shiftKey) {
+                select(current.id, { toggle, range: true }, current.id);
+            } else {
+                select(current.id, { toggle: true, range: false });
+            }
+
+            return true;
+        }
+
+        const surface = event.currentTarget;
+        const element = resultElement(surface, current.id);
+        const step = stepIndex(event.key, index, entries.length, {
+            columns: lines.columns,
+            horizontal: view === "grid",
+            page: element && surface.parentElement ? pageRows(surface.parentElement, element) : 1,
+            rtl: isRtl(surface),
+        });
+
+        if (step !== null) {
+            moveFocus(onEntry ? step : index, { toggle, range: event.shiftKey });
+
+            return true;
+        }
+
+        if (isTypingKey(event)) {
+            const match = matchName(
+                entries.map((entry) => entry.name),
+                index,
+                typeAhead.type(event.key),
+                locale.sameLetters,
+            );
+
+            if (match >= 0) {
+                moveFocus(match, NO_MODIFIERS);
+            }
+
+            return true;
+        }
+
+        return false;
+    };
+
+    const handleFocus = (event: FocusEvent) => {
+        const key = keyAt(event.target);
+        const index = key === undefined ? -1 : (indexByKey.get(key) ?? -1);
+
+        focusWithin.current = true;
+
+        if (key !== undefined && index >= 0 && (focus?.id !== key || focus.index !== index)) {
+            setFocus({ id: key, index });
+        }
+    };
+
+    const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
+        if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))) {
+            focusWithin.current = false;
+            pendingFocus.current = false;
+        }
+    };
+
+    // The tabs: every section's results, then each section's, with how its search stands.
+    const tabs = useMemo((): ResultTab[] => {
+        if (!tabbed) {
+            return [];
+        }
+
+        const states = targets.map((target) => searches.get(target.section.id));
+        const counted = (matches: SearchHit[]) =>
+            showHidden ? matches.length : matches.filter((hit) => !isHidden(hit.entry)).length;
+
+        return [
+            {
+                id: null,
+                label: text.searchAll,
+                status: states.some((state) => !state || state.status === "searching") ? "searching" : "ready",
+                count: states.reduce((sum, state) => sum + counted(state?.matches ?? NO_HITS), 0),
+            },
+            ...targets.map((target, index): ResultTab => {
+                const state = states[index];
+
+                return {
+                    id: target.section.id,
+                    label: target.section.label,
+                    status: state?.status ?? "searching",
+                    count: counted(state?.matches ?? NO_HITS),
+                };
+            }),
+        ];
+    }, [tabbed, targets, searches, showHidden, text.searchAll]);
+
+    const shownStates = shownTargets.map((target) => searches.get(target.section.id));
+    const searching = shownStates.some((state) => !state || state.status === "searching");
+    const failed = shownTargets.filter((target) => searches.get(target.section.id)?.status === "error");
+    const ContentView = view === "list" ? FileList : FileGrid;
+    const listed = entries.length > 0;
+    let content: ReactNode;
+
+    if (listed) {
+        content = (
+            <ContentView
+                entries={entries}
+                origins={origins}
+                lines={lines}
+                label={tabTarget?.section.label ?? text.searchResults}
+                focusId={focusId}
+                selectedIds={selectedIds}
+                cutIds={cutKeys}
+                adapter={undefined}
+                draggable={draggable}
+                draggedIds={draggedKeys}
+                dropTargetId={drop.dropKey}
+                hasActions={hasActions}
+                sort={sort}
+                onSelect={handleSelect}
+                onOpen={handleOpen}
+                onMenu={handleEntryMenu}
+                onSortChange={onSortChange}
+            />
+        );
+    } else if (searching) {
+        content = (
+            <Box id={stateId} sx={stateSx}>
+                <CircularProgress size={28} aria-label={text.loading} />
+            </Box>
+        );
+    } else if (failed.length > 0) {
+        // One section that failed says so, with the adapter's message; several, or some among
+        // others that found nothing, are summed up.
+        const [only] = failed;
+        const error = failed.length === 1 ? searches.get(only.section.id)?.error : undefined;
+
+        content = (
+            <Box id={stateId} sx={stateSx} role="alert">
+                <Icon name="info" sx={stateIconSx} />
+                <Typography sx={stateTitleSx}>
+                    {failed.length === 1 && shownTargets.length === 1
+                        ? text.searchFailed(isolate(only.section.label))
+                        : text.searchSomeFailed}
+                </Typography>
+                {error instanceof Error && (
+                    <Typography variant="body2">
+                        <bdi>{error.message}</bdi>
+                    </Typography>
+                )}
+                <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        retry(failed.map((target) => target.section.id));
+                    }}
+                >
+                    {text.tryAgain}
+                </Button>
+            </Box>
+        );
+    } else {
+        content = (
+            <Box id={stateId} sx={stateSx}>
+                <Icon name="search" sx={stateIconSx} />
+                <Typography sx={stateTitleSx}>{text.searchNoResults}</Typography>
+                <Typography variant="body2">{text.searchNoResultsHint}</Typography>
+            </Box>
+        );
+    }
+
+    const status = selected.length > 0 ? text.selectedCount(selected.length) : "";
+    const results = searching ? "" : text.searchResultCount(entries.length);
+    const openTab = tabs.findIndex((candidate) => candidate.id === (tabTarget?.section.id ?? null));
+
+    return (
+        <>
+            {tabbed && (
+                <SearchTabs
+                    tabs={tabs}
+                    value={tabTarget?.section.id ?? null}
+                    idPrefix={idPrefix}
+                    panelId={panelId}
+                    onChange={setTab}
+                />
+            )}
+            <Box
+                id={panelId}
+                sx={scrollSx}
+                role={tabbed ? "tabpanel" : undefined}
+                aria-labelledby={tabbed ? tabId(idPrefix, Math.max(openTab, 0)) : undefined}
+            >
+                <Box
+                    ref={marquee.surfaceRef}
+                    sx={surfaceSx}
+                    tabIndex={listed ? -1 : 0}
+                    role={listed ? undefined : "group"}
+                    aria-label={listed ? undefined : text.searchResults}
+                    aria-describedby={listed ? undefined : stateId}
+                    onPointerDownCapture={(event) => {
+                        pointerType.current = event.pointerType;
+                    }}
+                    onPointerDown={handlePointerDown}
+                    onClickCapture={marquee.onClickCapture}
+                    onClick={handleBackgroundClick}
+                    onFocus={handleFocus}
+                    onBlur={handleBlur}
+                    onKeyDown={handleKeyDown}
+                    onDragStart={handleDragStart}
+                    {...drop.handlers}
+                >
+                    {searching && listed && <LinearProgress sx={progressSx} aria-label={text.loading} />}
+                    {content}
+                    <Box ref={marquee.marqueeRef} sx={marqueeSx} />
+                    <Box sx={visuallyHiddenSx} role="status">
+                        {status}
+                    </Box>
+                    <Box sx={visuallyHiddenSx} role="status">
+                        {results}
+                    </Box>
+                </Box>
+            </Box>
+        </>
+    );
+};
+
+export default SearchResults;

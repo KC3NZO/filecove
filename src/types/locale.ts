@@ -176,12 +176,27 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     // Content
     folderEmpty: string;
     folderOpenFailed: string;
-    /** In place of the entries while a folder search matches none of them. */
+    /** In place of the entries while a search matches none of them. */
     searchNoResults: string;
     /** Below `searchNoResults`. */
     searchNoResultsHint: string;
-    /** Read to screen readers as a folder search's results change: "3 results", or none. */
+    /**
+     * Read to screen readers as a search's results change, "3 results" or none, and after a
+     * section's name on its tab of a search everywhere's results.
+     */
     searchResultCount: (count: number) => string;
+    /** Names the list of a search everywhere's results for screen readers. */
+    searchResults: string;
+    /** The tab of a search everywhere's results that shows every section's. */
+    searchAll: string;
+    /** Names the tabs of a search everywhere's results, one per section, for screen readers. */
+    searchTabs: string;
+    /** The list's column, among a search everywhere's results, saying which folder each is in. */
+    searchLocation: string;
+    /** In place of a section's results, or on its tab, when its adapter couldn't search it. */
+    searchFailed: (section: string) => string;
+    /** In place of every section's results when some couldn't be searched and the rest found nothing. */
+    searchSomeFailed: string;
     /** Read to screen readers as the selection changes. */
     selectedCount: (count: number) => string;
     /** The touch selection bar's title while nothing is selected. */

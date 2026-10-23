@@ -17,10 +17,12 @@ import { pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
 import ItemIcon from "./item-icon";
 
-import type { FileEntry, FileViewProps } from "../../../types";
+import type { EntryOrigin, FileEntry, FileViewProps } from "../../../types";
 
 interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "onSelect" | "onOpen" | "onMenu"> {
     entry: FileEntry;
+    /** Where a search everywhere's result comes from, whose own entry and adapter give its icon. */
+    origin?: EntryOrigin;
     /** Where the entry is listed, from 0. */
     index: number;
     /** How many entries the folder lists. */
@@ -102,6 +104,7 @@ const nameSx: SxProps<Theme> = {
 const FileTile = memo(
     ({
         entry,
+        origin,
         index,
         count,
         top,
@@ -147,7 +150,7 @@ const FileTile = memo(
                 }
             }}
         >
-            <ItemIcon entry={entry} size={3.5} adapter={adapter} view="grid" />
+            <ItemIcon entry={origin?.entry ?? entry} size={3.5} adapter={origin?.adapter ?? adapter} view="grid" />
             <Typography variant="body2" sx={nameSx}>
                 <bdi>{entry.name}</bdi>
             </Typography>
@@ -162,6 +165,7 @@ const FileTile = memo(
  */
 const FileGrid = ({
     entries,
+    origins,
     lines,
     label,
     focusId,
@@ -191,6 +195,7 @@ const FileGrid = ({
                     <FileTile
                         key={entry.id}
                         entry={entry}
+                        origin={origins?.[index]}
                         index={index}
                         count={entries.length}
                         top={Math.floor(index / lines.columns) * lines.pitch}

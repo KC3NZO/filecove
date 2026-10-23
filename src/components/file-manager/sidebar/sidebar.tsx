@@ -53,6 +53,8 @@ interface SidebarProps {
     hidden: boolean;
     /** What the open search searches, or null; the magnifier at the top is for searching everywhere. */
     searchScope: SearchScope | null;
+    /** Whether any section can be searched everywhere, without which the magnifier isn't there. */
+    canSearchEverywhere: boolean;
     /** Opens a search everywhere, switches to it, or closes it when it's the one open. */
     onSearchEverywhere: () => void;
     onToggle: (key: string) => void;
@@ -219,6 +221,7 @@ const Sidebar = ({
     open,
     hidden,
     searchScope,
+    canSearchEverywhere,
     onToggle,
     onRevealed,
     onExpand,
@@ -519,16 +522,18 @@ const Sidebar = ({
             <Box sx={headerSx}>
                 {/* Keeps the focus in an open search's field as it's pressed, which it closes or
                     switches to searching everywhere. */}
-                <IconButton
-                    aria-label={text.searchEverywhere}
-                    aria-pressed={searchScope === "everywhere"}
-                    aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
-                    sx={searchButtonSx}
-                    onMouseDown={(event) => searchScope && event.preventDefault()}
-                    onClick={onSearchEverywhere}
-                >
-                    <Icon name="search" fontSize="small" />
-                </IconButton>
+                {canSearchEverywhere && (
+                    <IconButton
+                        aria-label={text.searchEverywhere}
+                        aria-pressed={searchScope === "everywhere"}
+                        aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
+                        sx={searchButtonSx}
+                        onMouseDown={(event) => searchScope && event.preventDefault()}
+                        onClick={onSearchEverywhere}
+                    >
+                        <Icon name="search" fontSize="small" />
+                    </IconButton>
+                )}
                 <Typography component="span" noWrap sx={titleSx}>
                     {title}
                 </Typography>

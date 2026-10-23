@@ -23,6 +23,8 @@ interface HeaderBarProps {
     selecting: boolean;
     /** What the search field in the path bar's place searches, or null while it isn't there. */
     searchScope: SearchScope | null;
+    /** Whether any section can be searched everywhere, without which its button isn't there. */
+    canSearchEverywhere: boolean;
     /** Whether the docked sidebar is hidden. */
     sidebarHidden: boolean;
     /** Whether the sidebar docks at the moment, rather than collapsing, as container queries decide. */
@@ -135,6 +137,7 @@ const HeaderBar = ({
     showHidden,
     selecting,
     searchScope,
+    canSearchEverywhere,
     sidebarHidden,
     sidebarDocked,
     onBack,
@@ -194,16 +197,18 @@ const HeaderBar = ({
                     <Icon name="selectMode" fontSize="small" />
                 </IconButton>
                 {/* The sidebar's magnifier, while the sidebar isn't there to hold it. */}
-                <IconButton
-                    aria-label={text.searchEverywhere}
-                    aria-pressed={searchScope === "everywhere"}
-                    aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
-                    sx={sidebarHidden ? pressedSx : collapsedOnlyPressedSx}
-                    onMouseDown={(event) => searchScope && event.preventDefault()}
-                    onClick={() => onSearch("everywhere")}
-                >
-                    <Icon name="search" fontSize="small" />
-                </IconButton>
+                {canSearchEverywhere && (
+                    <IconButton
+                        aria-label={text.searchEverywhere}
+                        aria-pressed={searchScope === "everywhere"}
+                        aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
+                        sx={sidebarHidden ? pressedSx : collapsedOnlyPressedSx}
+                        onMouseDown={(event) => searchScope && event.preventDefault()}
+                        onClick={() => onSearch("everywhere")}
+                    >
+                        <Icon name="search" fontSize="small" />
+                    </IconButton>
+                )}
                 <IconButton aria-label={view === "list" ? text.gridView : text.listView} onClick={onToggleView}>
                     <Icon name={view === "list" ? "gridView" : "listView"} fontSize="small" />
                 </IconButton>
