@@ -62,7 +62,7 @@ Below `rootWide` the sidebar is an overlay, opened and closed with `sidebarOpen`
 
 ## Search
 
-Only the interface is built so far: nothing is filtered or fetched, and what's typed is kept for the open-folder filter and a later optional `adapter.search`. Searching is a passing state, not a dialog, so the results can show in the content view, where selection, the menus, dragging, opening and downloading already work.
+A folder search filters the open folder's listing as it's typed (see "Searching the open folder"). A search everywhere is only the interface so far: nothing is fetched, and what's typed is kept for a later optional `adapter.search`. Searching is a passing state, not a dialog, so the results show in the content view, where selection, the menus, dragging, opening and downloading already work.
 
 There are two scopes (`SearchScope`, `types/search.ts`, internal), as in GNOME Files 46:
 
@@ -82,6 +82,19 @@ There are two scopes (`SearchScope`, `types/search.ts`, internal), as in GNOME F
 - Typing in the content is still type-ahead and doesn't start a search.
 - The query runs as its own letters do (`unicode-bidi: plaintext`), and names in the placeholder are isolated (`isolate`).
 
+### Searching the open folder
+
+While the scope is `"folder"`, `file-manager.tsx` hands the query to `FolderView` (`query`, empty in the other scope), which lists only the entries whose names hold every word typed, anywhere and in any order. It's a filter of the listing the store already has, the open folder's own entries and not its subfolders', which wait for `adapter.search`.
+
+- Words are split on spaces, and names and words are folded alike by `Locale.foldLetters` (`utils/format.ts`): lowercased the `locale`'s way, then NFKD with the marks dropped, so case, accents and full-width forms don't count. Unlike `sameLetters`, it leaves out every language's accents, since collation can't find text within text (`searchTerms` and `holdsTerms`, `utils/search.ts`). Nothing but spaces is no search.
+- The folder view filters after hiding and sorting (`shown`, then `entries`), so it never sorts again per letter, and folds the names once per listing (`foldedNames`). As with hidden files, everything that goes by what's listed goes by the results: the arrow keys, type-ahead, Select all, the marquee, the selection bar's total, the preview's stepping, and actions and shortcuts, which act on the selected entries shown.
+- Selected entries the search leaves out stay in the selection's ids but don't count, as hidden ones do, so they come back selected once the search ends, and nothing is done to an entry that isn't shown.
+- Each change to the words typed starts the results over: the Tab stop goes back to the first match, or the first one selected, and the panel scrolls to the top. Ending the search, or clearing what's typed, shows the whole folder scrolled to the entry with the Tab stop, so a file found and picked stays in view.
+- While a folder is still coming in page by page, its matches show as they come, under the progress bar. With none shown yet it waits with the spinner, so "No results found" ("Try a different search", `searchNoResults` and `searchNoResultsHint`, with the search icon) shows only once all of it has come, as "Folder is empty" does.
+- Screen readers hear the number of results (`searchResultCount`) from a `status` region of its own as it changes, once all of the folder has come.
+- An entry to reveal (a folder made or renamed, `FileManagerApi.reveal`, the preview's stepping) that the search leaves out ends the search (`onRevealUnmatched`, which is `closeSearch`), and is then revealed in the whole folder, rather than given up on.
+- The open folder's empty space refuses entries it lists, shown or not (`listsDragged` reads the whole listing), so a tree folder hidden by the search can't be dropped into its own parent.
+
 ### Sections searched everywhere
 
 A search everywhere covers every section unless some are unchecked in the field's sections menu (`header-bar/search-sections-menu.tsx`), which is only there when the file manager has more than one section.
@@ -90,7 +103,7 @@ A search everywhere covers every section unless some are unchecked in the field'
 - The menu is built as the view menu is (`dense`, `menuitemcheckbox` items with a display-only `Checkbox`, unsticky subheaders, hanging from the button's end edge by its element direction): "All sections" first, checked when all are and mixed (`aria-checked="mixed"`, indeterminate) otherwise, then each `SectionGroup`'s `title` as a subheader, when it has one, and its sections with their icons and isolated labels. Picking "All sections" checks them all.
 - It stays open while sections are toggled, and gives the focus back to the field as it closes. The last checked section is disabled, so a search never covers nothing.
 - `file-manager.tsx` keeps the unchecked ids (`searchExcluded`) while it's mounted, across searches, so a section added later is checked. Ids of sections gone don't count, and every section left unchecked counts as none (`excludedSections`).
-- The open scope, the query and the sections are internal. They become props (`search`, `defaultSearch`, `onSearchChange`) with the results, since how the deeper search works decides their shape.
+- The open scope, the query and the sections are internal. They become props (`search`, `defaultSearch`, `onSearchChange`) with the results of a search everywhere, since how the deeper search works decides their shape.
 
 ## Context menu and actions
 

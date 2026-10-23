@@ -38,6 +38,7 @@ Adding a text means adding its key to the interface, with a comment when its use
 - `formatNumber` writes digits in the locale's script without grouping, for dimensions and counters; `formatPercent` the image viewer's zoom.
 - `describeSize`, `describeDate` and `describeType` describe an entry for the list and the preview. `describeType` takes "PDF", "JSON" and an uppercased extension as they are.
 - `compareNames` sorts names in natural order (`numeric`), and `sameLetters` matches type-ahead, both case and accents aside, both by the locale's collation, so a language that counts "å" as a letter of its own keeps it apart from "a".
+- `foldLetters` readies names and what's typed for a folder search: lowercased the locale's way, then with every accent dropped, "å" included, since collation can't find text within text (see "Searching the open folder" in `file-manager.md`).
 - Sorting goes through it: `entryComparator(sort, locale)` and `nameOrder(locale)` for the tree's and the picker's fixed order, the same function for as long as the locale is, so the tree's sorted folders are cached by locale and listing.
 - Outside a `FileManager`, the context's default is English in the browser's language (`DEFAULT_LOCALE`), so a shared part such as the upload panel works anywhere.
 
