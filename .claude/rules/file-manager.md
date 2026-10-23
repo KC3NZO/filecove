@@ -64,7 +64,7 @@ Below `rootWide` the sidebar is an overlay, opened and closed with `sidebarOpen`
 
 A folder search filters the open folder's listing as it's typed (see "Searching the open folder"). A search everywhere asks each section's adapter, through its optional `search`, and shows what they find in the content panel, with a tab per section (see "Searching everywhere"). Searching is a passing state, not a dialog, so the results show where the content does, and selection, the menus, dragging and opening work on them.
 
-There are two scopes (`SearchScope`, `types/search.ts`, internal), as in GNOME Files 46:
+There are two scopes (`SearchScope`, `types/search.ts`, public), as in GNOME Files 46:
 
 | | Folder search (`"folder"`) | Search everywhere (`"everywhere"`) |
 |---|---|---|
@@ -103,7 +103,7 @@ A search everywhere covers every section whose adapter has `search` (`searchTarg
 - The menu is built as the view menu is (`dense`, `menuitemcheckbox` items with a display-only `Checkbox`, unsticky subheaders, hanging from the button's end edge by its element direction): "All sections" first, checked when all are and mixed (`aria-checked="mixed"`, indeterminate) otherwise, then each `SectionGroup`'s `title` as a subheader, when it has one, and its sections with their icons and isolated labels. Picking "All sections" checks them all.
 - It stays open while sections are toggled, and gives the focus back to the field as it closes. The last checked section is disabled, so a search never covers nothing.
 - `file-manager.tsx` keeps the unchecked ids (`searchExcluded`) while it's mounted, across searches, so a section added later is checked. Ids of sections gone, or that can't be searched, don't count, and every section left unchecked counts as none (`excludedSections`).
-- The open scope, the query and the sections are internal. They could become props (`search`, `defaultSearch`, `onSearchChange`) now the results show.
+- The scope, the query and the sections left out are public state (`search`, `searchExcludedSections` and their `default…` and `on…Change`; see "Controlled or not" in `props.md`), as is opening and closing from `apiRef`.
 
 ### Searching everywhere
 
@@ -124,7 +124,7 @@ The adapter's optional `search(rootId, query, { signal, cursor, showHidden })` r
 - **Acting on results**: actions, adapter calls and drags take entries sharing a folder, so the selection is acted on as a whole only when every selected result is in one folder of one section (`inOneFolder`). A right-click, ⋮ or the Menu key on a selected result opens the menu for all of them then; otherwise, as on an unselected one, the result is selected alone first. Shortcuts run for such a selection only, and a drag carries it, or else the grabbed result alone. The `MenuRequest` is the results' folder's (`section`, `trail`), with that folder's results as the `listing` the preview steps through, and `inResults` set. The results have no folder of their own, so their empty space has no menu, takes no drop and runs no shortcut; folders among them take drops by the paste rules.
 - **Opening**: a folder result opens its folder, which ends the search; a file opens as in a folder (`openFile`). `ActionContext.openLocation()`, only for a single result, opens the folder it's in and reveals it there, selected, ending the search even when that's the open folder. The playground's "Open item location" shows only then.
 - The playground's mock `search` walks its tree below the root, matching as the folder search does, leaves dotfiles and dot folders out while hidden files don't show and doesn't look in folders that fail, and hands back 200 results a page, so "record" in API service comes in pages from `archive`'s 10,000.
-- Not yet: acting on a selection spanning folders as a whole (deleting results from two folders at once), the grid showing locations, ordering by relevance, and the search's public props.
+- Not yet: acting on a selection spanning folders as a whole (deleting results from two folders at once), the grid showing locations, and ordering by relevance.
 
 ## Context menu and actions
 
@@ -133,6 +133,7 @@ An `ActionContext` says whether `entries` ("selection") or a folder's empty spac
 - Actions apply to any number of selected entries (copy, move, delete, compress...). Only actions marked `single: true`, such as rename, hide while several entries are selected.
 - The menu opens on right-click (items, content background, sidebar rows), from the ⋮ buttons (list rows, path bar), and with the Menu key or Shift+F10 on a focused entry, tree row or the view (see `keyboard.md`).
 - When no action applies, the browser's own menu is left alone.
+- `FileManagerApi.actionContext(entries?, location?)` builds the same context through `contextFor`, for a consumer's own toolbar (see "The API" in `props.md`).
 - `context-menu/` renders the grouped menu from the groups that `utils/action-groups.ts` leaves visible.
 - An action's `shortcut` is also a key binding (`utils/shortcut.ts`; Ctrl matches ⌘ too), matched on any keyboard layout (see "Keyboard layouts" in `keyboard.md`). `folder-view.tsx` takes focus on any press and hands key presses to `runShortcut` in `file-manager.tsx`, which tries the selection first and then the open folder, through the same `contextFor` and visibility rules as the menu. Sidebar tree rows do the same with the row (or the tree's selection) and then the row's own folder, and a section row with its root. Shortcuts come before the component's own keys. Browsers keep some keys for themselves: Chrome never passes Shift+Ctrl+N (or Ctrl+N, Ctrl+T, Ctrl+W) to a page.
 

@@ -20,9 +20,20 @@ paths:
 
 Besides `adapter`, `sections` / `section` and `actions` (CLAUDE.md), `onOpenFile` (`preview.md`) and `localeText` / `locale` (`locale.md`), `FileManager` takes the props below. Their comments in `file-manager.tsx` are the consumer's documentation, so they say what each does from the outside.
 
+## Checklist for a new feature
+
+Every feature added or changed is checked against this before it's called done. Search shipped without it and its public props came a day later.
+
+- **State the user changes** (a mode, a query, a filter, a panel shown or hidden, a choice kept across uses): is it one of the nine below? If not, give it the trio `x` / `defaultX` / `onXChange` through `useSetting`, with the user's ways of changing it in the table. Leaving it internal is allowed only for a passing state, with the reason added to "Internal by choice".
+- **Anything a consumer's own toolbar or code could ask for** (open, close, go to, start, refresh): an `apiRef` method in `types/api.ts`, listed under "The API", and a button for it in the playground's footer when it's visible there.
+- **Anything done as the user acts** (an open, a pick, a result): a callback or an addition to one (`SelectionDetails`), told from the event handler that made it, never while rendering.
+- **Controlled**: a change the user makes is only asked for, so nothing in a render or an effect may assume it happened; derive what's shown from the prop instead.
+- **The playground** controls it by default and passes `default…` for `?uncontrolled`.
+- **Docs**: the prop's comment in `file-manager.tsx` says what it does from the outside, and the rule of the feature says what isn't public yet, under "Not yet".
+
 ## Controlled or not
 
-Seven pieces of state can each be controlled, as MUI's are: pass the value and change it in its callback, or leave it to the file manager, starting from its `default…` prop.
+Nine pieces of state can each be controlled, as MUI's are: pass the value and change it in its callback, or leave it to the file manager, starting from its `default…` prop.
 
 | State | Controlled | Uncontrolled start | Told through | The user changes it with |
 |---|---|---|---|---|
@@ -32,6 +43,8 @@ Seven pieces of state can each be controlled, as MUI's are: pass the value and c
 | Hidden files | `showHidden` | `defaultShowHidden`, false | `onShowHiddenChange` | Ctrl+H, the view menu |
 | Docked sidebar hidden | `sidebarHidden` | `defaultSidebarHidden`, false | `onSidebarHiddenChange` | F9, the view menu, the header's "Show sidebar" |
 | Tree folders expanded | `expandedFolders` | `defaultExpandedFolders`, else the section opened in | `onExpandedFoldersChange` | the chevrons, Right and Left on a row, a drag resting on a row |
+| Search | `search` (null is closed) | `defaultSearch`, closed | `onSearchChange(search \| null)` | Ctrl+F, Ctrl+Shift+F, the search buttons, typing, the scope buttons, Escape, ✕, opening another folder |
+| Sections a search everywhere leaves out | `searchExcludedSections` | `defaultSearchExcludedSections`, none | `onSearchExcludedSectionsChange` | the field's sections menu |
 | Content selection | `selectedIds` | `defaultSelectedIds`, none | `onSelectionChange(ids, { entries, location })` | clicks, keys, the marquee, touch selection mode |
 
 - Which one is decided on mounting. MUI's `useControlled` warns in development about switching later, and about a `default…` changing after mounting. The view settings and the expanded folders go through `useSetting` (`hooks/use-setting.ts`), which is `useControlled` plus the callback, set to a value or with a function of the value as of the latest render; the location and the selection have hooks of their own, so `useControlled` is called for them for its warnings alone.
@@ -39,6 +52,7 @@ Seven pieces of state can each be controlled, as MUI's are: pass the value and c
 - The consumer's arrays of ids, `selectedIds` and `expandedFolders`, are turned into sets that stay the same while they hold the same ids (`useStableSet`), so a new array each render doesn't count as a change.
 - Controlled, a change the user makes is only asked for: the callback is told, and nothing changes until the prop comes back with it. A change the consumer refuses never happens. The callbacks are called from the event handler that made the change, so a consumer's `setState` there renders together with the file manager's own.
 - Setting a value to what it is tells nothing (`sameSort` compares orders by key and direction).
+- The search is a `FileManagerSearch` (`types/search.ts`, public): `scope` ("folder" or "everywhere") and `query`, as typed. Closed, it's null, so a closed search has no query; the sections left out are their own state, kept while closed. Opening it, switching scope, each keystroke and closing are each told. Another folder ending it is a layout effect over the place (`searchedPlace`), not part of the render, so a controlled search is asked for null, the consumer's `location` changes included; a consumer opening a folder with a search must pass it back. A `"everywhere"` scope with no section to search is shown as "folder" (`searchScope` is derived, never written), and shows "everywhere" again if the sections come back. The excluded ids are a set (`useStableSet`) like the expanded folders.
 - The overlay sidebar's open state isn't a prop: it's a passing state of a narrow file manager, closed by most things done in it.
 
 ## Location
@@ -75,8 +89,22 @@ The content's selection is the folder view's (`selection.md`), and is what `sele
 - `navigate(location)`, `back()` and `forward()` do what the user going there does (`goTo`, `goBack`, `goForward`), asked for when the location is controlled. A section the file manager doesn't have is ignored.
 - `refresh(folderIds?, { adapter }?)` lists folders again, in every section or only those `adapter` serves: those with the ids and every listing holding one of them, as `relist` does, or every listing a section has cached without ids (`store.relist` with no ids). Folders not listed yet need nothing.
 - `reveal(entryId, location?)` selects one entry alone and scrolls to it, through the same `Reveal` that selects a created or renamed entry, keyed by the folder it's meant for. With a location it navigates there, and the reveal waits for that folder to open: a reveal is only dropped when another folder opens. `FolderView` only gets `revealId` while its folder is the reveal's, and gives one up (`revealLost`) once its whole listing has come without the entry, or while it's hidden. One a folder search leaves out ends the search instead, and is revealed in the whole folder.
+- `actionContext(entries?, location?)` returns what the context menu's actions get (`contextFor`), for entries of the open folder or the one at `location`, or with none, the folder itself (`target` "folder"), so a toolbar of the consumer's own can make a folder, upload, paste, rename, delete or preview as the menu does. The preview steps through the folder's cached listing, hidden entries left out unless shown, in the content's order; the open folder's search filter isn't applied. It's built as of the call, so the consumer asks again as their toolbar renders, after the selection or the location changes. Null when the section is missing.
+- `search(scope, query?)` opens the search field as Ctrl+F or Ctrl+Shift+F does (`openSearch`), putting `query` in it when given, and returns false when no section is shown or `"everywhere"` has no section to search. The field takes the focus: at once when it's there, or in the layout effect after the render that opens it (`focusSearchAsked`), so a controlled search the consumer applies later is still focused, and one they refuse isn't. `closeSearch()` does what Escape does (`closeSearch`, focus handed back).
 - `focus()` asks the content to take the focus, as F6 does (`focusContent`).
 - `download(entries?, location?)` downloads entries as the context menu's `download` does, through the same queue and panel, or with none, the folder itself, and returns whether it asked for anything (see "From outside" in `download.md`).
+
+## Internal by choice
+
+What the checklist leaves internal, and why. Anything not listed here or above is a gap.
+
+- **The overlay sidebar's open state, the context menu, every dialog (name, delete, transfer, paste, upload check, preview) and the view menu**: passing states, opened and closed within one task. Their operations are reached from outside through `actionContext`.
+- **Touch selection mode**: tied to the open folder and to touch, and ends as another folder opens.
+- **The sidebar tree's selection**: a passing selection for acting on folders there (see "Selection").
+- **A search everywhere's selection and open tab**: the results come from many folders, and `SelectionDetails` has one location (see "Selection").
+- **The cut or copied entries**: kept while mounted, and `actionContext`'s `paste` says whether there's anything to paste. A toolbar learns of a change only as it asks again; a callback for it can be added when a consumer needs one.
+- **The upload and download queues and their panels' collapsed state**: the queues report what the adapter is doing, which the consumer's adapter already knows.
+- **Focus, scroll and the entry grabbed for a drag**: `focus()` and `reveal` move the first two from outside.
 
 ## The root element
 
@@ -94,4 +122,4 @@ The content's selection is the folder view's (`selection.md`), and is what `sele
 
 ## The playground
 
-By default the playground controls everything, as an app would: the location in the URL's hash (`hooks/use-hash-location.ts`), so a reload, a link or the browser's back button follows it, the four view settings and the expanded folders in local storage (`hooks/use-stored-state.ts`), and the selection in its own state, shown in a footer. The file manager shares the page with the footer through `sx`. The footer's "Show a file" calls `reveal` for a file far down `archive`'s 10,000 (in a single section, one in Website's `src/components`), "Reload all" calls `refresh()`, and "Download selection" ("Download folder" with nothing selected) calls `download`. `?uncontrolled` (`options.ts`) passes what it keeps as the `default…` props instead, so the file manager keeps everything itself, and only the footer's selection is told.
+By default the playground controls everything, as an app would: the location in the URL's hash (`hooks/use-hash-location.ts`), so a reload, a link or the browser's back button follows it, the four view settings and the expanded folders in local storage (`hooks/use-stored-state.ts`), and the selection in its own state, shown in a footer. The file manager shares the page with the footer through `sx`. The footer's "Show a file" calls `reveal` for a file far down `archive`'s 10,000 (in a single section, one in Website's `src/components`), "Reload all" calls `refresh()`, and "Download selection" ("Download folder" with nothing selected) calls `download`, and "New folder" calls `actionContext().createFolder`, "Search "record"" calls `search` (everywhere, the open folder in a single section). The search is the playground's state, not kept across reloads; the sections left out are in local storage. `?uncontrolled` (`options.ts`) passes what it keeps as the `default…` props instead, so the file manager keeps everything itself, and only the footer's selection is told.
