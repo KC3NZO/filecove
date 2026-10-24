@@ -43,6 +43,16 @@ interface MockAdapterOptions {
     downloadUrls?: Record<string, { url: string; delay?: number }>;
 }
 
+/** How each mock adapter adds a file behind the file manager's back (`addElsewhere`). */
+const backDoors = new WeakMap<FileAdapter, (folderId: string) => string | null>();
+
+/**
+ * Adds a file to one of a mock adapter's folders without the file manager being told, as another
+ * user or another tab would, to see the folder listed again as it opens. Returns the file's name,
+ * or null when the folder can't take one.
+ */
+export const addElsewhere = (adapter: FileAdapter, folderId: string) => backDoors.get(adapter)?.(folderId) ?? null;
+
 /** Results a search hands back a page, so a search matching much of `archive` comes in pages. */
 const SEARCH_PAGE = 200;
 
@@ -328,7 +338,7 @@ export const createMockAdapter = (
 
     const clashes = (target: MockNode, node: MockNode) => !!target.children?.some((child) => child.name === node.name);
 
-    return {
+    const adapter: FileAdapter = {
         list: (folderId, { signal, cursor }) =>
             respond<ListResult>(signal, () => {
                 const children = folderAt(folderId).children ?? [];
@@ -578,4 +588,21 @@ export const createMockAdapter = (
                 .then((source) => source && shrink(source, size))
                 .then((thumbnail) => thumbnail && { blob: thumbnail }),
     };
+
+    backDoors.set(adapter, (folderId) => {
+        const target = folders.get(folderId);
+
+        if (!target || target.fails) {
+            return null;
+        }
+
+        const node = file("Added elsewhere.txt", 1_240, new Date().toISOString(), "text/plain");
+
+        node.name = freeName(target, node);
+        target.children = [...(target.children ?? []), node];
+
+        return node.name;
+    });
+
+    return adapter;
 };

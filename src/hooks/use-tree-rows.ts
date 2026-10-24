@@ -266,8 +266,8 @@ const flatten = (
  * The sidebar tree as a flat list of the rows it shows: the sections of `groups` with the folders
  * below the expanded ones, or `single`'s folders. Reading every listing it shows from the store,
  * it's flattened again whenever any listing changes. A folder is listed once the tree comes to
- * show its folders, as it's expanded or one above it is. Hidden folders are left out unless
- * `showHidden`.
+ * show its folders, as it's expanded or one above it is, and listed again in the background then
+ * once its listing is `relistAfter` old. Hidden folders are left out unless `showHidden`.
  */
 export const useTreeRows = (
     groups: SectionGroup[],
@@ -275,7 +275,7 @@ export const useTreeRows = (
     expanded: ReadonlySet<string>,
     showHidden: boolean,
 ): FlatTree => {
-    const { store, adapter } = useData();
+    const { store, adapter, relistAfter } = useData();
     const locale = useLocale();
     const version = useSyncExternalStore(store.subscribe, store.version);
 
@@ -288,10 +288,18 @@ export const useTreeRows = (
         [groups, single, expanded, showHidden, locale, store, version],
     );
 
-    // Only folders the tree has just come to show are listed, so a folder whose listing failed is
+    // The listings the tree shows are kept while it does.
+    useEffect(() => {
+        const hides = tree.shown.map(({ key }) => store.show(key));
+
+        return () => hides.forEach((hide) => hide());
+    }, [tree.shown, store]);
+
+    // Only folders the tree has just come to show are opened, so a folder whose listing failed is
     // tried again from its Retry, or once it's shown again, rather than on every change. So are
     // folders shown already whose section another adapter now serves, whose listings the file
-    // manager drops (`forgetSection`).
+    // manager drops (`forgetSection`), and a folder whose listing is dropped while it's shown, as
+    // after a change that may have made its id another folder's, is listed afresh.
     const requested = useRef<ReadonlyMap<string, FileAdapter>>(new Map());
 
     useEffect(() => {
@@ -303,12 +311,14 @@ export const useTreeRows = (
             served.set(key, folderAdapter);
 
             if (requested.current.get(key) !== folderAdapter) {
+                store.open(key, folderAdapter, folderId, relistAfter);
+            } else if (!store.get(key)) {
                 store.load(key, folderAdapter, folderId);
             }
         });
 
         requested.current = served;
-    }, [tree.shown, store, adapter]);
+    }, [tree.shown, store, adapter, relistAfter]);
 
     return tree;
 };

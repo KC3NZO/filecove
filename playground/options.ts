@@ -41,3 +41,19 @@ export const locale = params.get("locale") || undefined;
  * for a click. They need the network.
  */
 export const downloadUrls = params.has("downloadUrls");
+
+/**
+ * `?relistAfter=30000`: the file manager's `relistAfter`, how old a folder's listing may be, in ms,
+ * before opening the folder lists it again; `?relistAfter=Infinity` never does. Every time when
+ * left out. The footer's "Change elsewhere" adds a file the file manager isn't told of, to see it.
+ */
+const relistParam = params.get("relistAfter");
+
+export const relistAfter =
+    relistParam !== null && !Number.isNaN(Number(relistParam)) ? Number(relistParam) : undefined;
+
+/**
+ * `?lateSections`: the sections come 3 s after the page opens, as an app getting them from its
+ * server would, to see the file manager with none meanwhile. Not with `?single`, which has its one.
+ */
+export const lateSections = params.has("lateSections");

@@ -1,8 +1,9 @@
 /*
  * The contract between the file manager and a backend. An adapter is written once per backend
- * (a REST API, S3, WebDAV...) and the file manager calls it lazily: a folder is listed only
- * when it is first opened in the content view or expanded in the sidebar, and the listing is
- * shared by both.
+ * (a REST API, S3, WebDAV...) and the file manager calls it lazily: a folder is listed when it is
+ * opened in the content view or expanded in the sidebar, and the listing is shared by both and
+ * saved, so opening the folder again shows it at once while it's listed again in the background
+ * (`FileManager`'s `relistAfter` sets how often).
  */
 
 import type { FolderRef } from "./section";
@@ -219,7 +220,9 @@ export interface ThumbnailOptions {
 export interface FileAdapter {
     /**
      * Lists the direct children of a folder, all at once or a page at a time (`nextCursor`). Reject
-     * to show the folder as failed to load.
+     * to show the folder as failed to load. It's called again, in the background, for a folder
+     * opened again, so changes made elsewhere show. Entries that come back with the same fields
+     * are kept as they were, so nothing showing them renders again.
      */
     list(folderId: string, options: ListOptions): Promise<ListResult>;
     /**

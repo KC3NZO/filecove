@@ -16,6 +16,8 @@ interface HeaderBarProps {
     pathBar: ReactNode;
     canGoBack: boolean;
     canGoForward: boolean;
+    /** Whether a folder is open, which the folder search and selection mode need. */
+    hasFolder: boolean;
     view: ViewMode;
     sort: SortOrder;
     showHidden: boolean;
@@ -132,6 +134,7 @@ const HeaderBar = ({
     pathBar,
     canGoBack,
     canGoForward,
+    hasFolder,
     view,
     sort,
     showHidden,
@@ -180,6 +183,7 @@ const HeaderBar = ({
                     aria-label={text.searchFolder}
                     aria-pressed={searchScope === "folder"}
                     aria-keyshortcuts="Control+F Meta+F"
+                    disabled={!hasFolder}
                     sx={pressedSx}
                     onMouseDown={(event) => searchScope && event.preventDefault()}
                     onClick={() => onSearch("folder")}
@@ -191,6 +195,7 @@ const HeaderBar = ({
                 <IconButton
                     aria-label={selecting ? text.doneSelecting : text.select}
                     aria-pressed={selecting}
+                    disabled={!hasFolder}
                     sx={selectButtonSx}
                     onClick={onToggleSelecting}
                 >

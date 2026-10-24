@@ -38,6 +38,7 @@ import { DEFAULT_SORT, entryComparator, sameSort } from "../../utils/sort";
 import DownloadPanel from "../downloads/download-panel";
 import UploadPanel from "../uploads/upload-panel";
 import FolderView from "./content/folder-view";
+import NoSections from "./content/no-sections";
 import SearchResults from "./content/search-results";
 import ContextMenu from "./context-menu/context-menu";
 import DeleteDialog from "./dialogs/delete-dialog";
@@ -117,6 +118,16 @@ interface BaseProps extends RootAttributes {
     mainMenu?: MainMenuGroup[];
     /** Shown at the top of the sidebar; `localeText.sidebarTitle`, "Files" in English, when omitted. */
     title?: string;
+    /**
+     * How old, in ms, a folder's listing may be before opening the folder lists it again. Listings
+     * are saved, so a folder opened again, in the content, the sidebar tree or the "Move to…" and
+     * "Copy to…" picker, shows at once, and is listed again in the background meanwhile, so what
+     * changed elsewhere, by another user or in another tab, shows without a refresh. A listing that
+     * comes back as it was changes nothing on screen. 0, the default, lists a folder again every
+     * time it opens; `Infinity` never does, for a backend where listing costs, leaving changes made
+     * elsewhere to `apiRef.refresh`. Changes made through the file manager show either way.
+     */
+    relistAfter?: number;
     /**
      * Where the file manager is, for a consumer that keeps it, e.g. in the URL. Every change, the
      * user's and the file manager's own, is asked for through `onLocationChange`. A location in a
@@ -439,6 +450,7 @@ const FileManager = ({
     actions = NO_ACTIONS,
     mainMenu = NO_MAIN_MENU,
     title,
+    relistAfter = 0,
     location: locationProp,
     defaultLocation,
     onLocationChange,
@@ -483,7 +495,7 @@ const FileManager = ({
     const localeValue = useLocaleValue(localeText, locale);
     const [store] = useState(createFolderStore);
     const [thumbnails] = useState(createThumbnailCache);
-    const data = useMemo(() => ({ store, adapter, thumbnails }), [store, adapter, thumbnails]);
+    const data = useMemo(() => ({ store, adapter, thumbnails, relistAfter }), [store, adapter, thumbnails, relistAfter]);
 
     useEffect(() => () => store.abortAll(), [store]);
     useEffect(() => () => thumbnails.clear(), [thumbnails]);
@@ -566,6 +578,22 @@ const FileManager = ({
         onChange: onExpandedFoldersChange && ((keys) => onExpandedFoldersChange([...keys].map(keyFolder))),
         equal: sameIds,
     });
+
+    // With no section to open in at first, as while an app is still getting them, the one the file
+    // manager first opens in starts expanded as it comes, when it keeps the expanded folders itself.
+    const expandsFirst = useRef(!defaultExpandedFolders && expandedFoldersProp === undefined && !section);
+
+    useLayoutEffect(() => {
+        if (!expandsFirst.current || !section) {
+            return;
+        }
+
+        expandsFirst.current = false;
+
+        if (section.showFolders !== false) {
+            setExpanded((prev) => new Set([...prev, folderKey(section.id, section.rootId)]));
+        }
+    }, [section, setExpanded]);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     // Whether the docked sidebar is hidden, with F9 or the view menu. Collapsed, it shows as an
     // overlay instead, while `sidebarOpen`.
@@ -1458,15 +1486,26 @@ const FileManager = ({
     );
 
     // With path ids, a change can leave an id naming another folder: a deleted or moved folder's id
-    // is free for a new one, as is a renamed folder's old id, and a new or renamed folder's id may
-    // have named one before. So can the ids below them, so the listings cached for them, and for
-    // every folder any section has cached below them, are dropped in every section the adapter
-    // serves. A section rooted in one of them can't follow it, since its root is the consumer's:
-    // its places go back to the root, which is listed again, as nothing would list it on its own,
-    // to show what the adapter now has there. Returns the dropped ids, for the places inside them.
+    // is free for a new one, as is a renamed folder's old id or a folder a Replace put another in the
+    // place of, and a new or renamed folder's id may have named one before. So can the ids below
+    // them, so the listings cached for them, and for every folder any section has cached below them,
+    // are dropped in every section the adapter serves, and what still shows one lists it afresh. A
+    // section rooted in one of them can't follow it, since its root is the consumer's: its places go
+    // back to the root, to show what the adapter now has there. Returns the dropped ids, for the
+    // places inside them.
+    //
+    // Of those, the folders that are `gone` from where they were (all but a new folder, and a renamed
+    // folder's new id) can also take with them a section rooted further below, which nothing cached
+    // ties to them, since ids are never parsed. So a section that doesn't list one of them, and so may
+    // be rooted below it, lists what it shows again at once, quietly, and every listing of every
+    // section the adapter serves is listed again as it opens, whatever `relistAfter` says.
     const dropFolders = useCallback(
-        (served: FileAdapter, folderIds: string[]) => {
+        (served: FileAdapter, folderIds: string[], goneIds: readonly string[] = folderIds) => {
             const showing = sectionsOf(served);
+            const gone = new Set(goneIds);
+            const holding = new Set(
+                gone.size > 0 ? showing.filter((shown) => store.lists(shown.id, gone)).map((shown) => shown.id) : [],
+            );
             const dropped = new Set([
                 ...folderIds,
                 ...showing.flatMap((shown) => folderIds.flatMap((id) => store.cachedTree(shown.id, id))),
@@ -1474,13 +1513,16 @@ const FileManager = ({
             const lostRoots = new Set(showing.filter((shown) => dropped.has(shown.rootId)).map((shown) => shown.id));
 
             showing.forEach((shown) => {
-                const rootKey = folderKey(shown.id, shown.rootId);
-                const relistRoot = lostRoots.has(shown.id) && !!store.get(rootKey);
-
                 store.forget(shown.id, dropped);
 
-                if (relistRoot) {
-                    store.load(rootKey, served, shown.rootId, true);
+                if (gone.size === 0) {
+                    return;
+                }
+
+                if (lostRoots.has(shown.id) || holding.has(shown.id)) {
+                    store.stale(shown.id);
+                } else {
+                    store.recheck(shown.id, served);
                 }
             });
 
@@ -1493,6 +1535,19 @@ const FileManager = ({
             return dropped;
         },
         [revise, sectionsOf, store],
+    );
+
+    // A copy's or move's `onChanged`: as `relist`, and the folders a Replace put entries in the place
+    // of go through `dropFolders`, since their ids now name those, as path ids do.
+    const relistTransferred = useCallback(
+        (served: FileAdapter, folderIds: string[], replacedIds: string[] = []) => {
+            relist(served, folderIds);
+
+            if (replacedIds.length > 0) {
+                dropFolders(served, replacedIds);
+            }
+        },
+        [relist, dropFolders],
     );
 
     // Moved folders go from the cache (`dropFolders`). The open place, in whichever section shows
@@ -1539,7 +1594,7 @@ const FileManager = ({
     // made from the menu may (`handleNamed`). The picker opens it itself.
     const handleFolderCreated = useCallback(
         (served: FileAdapter, entry: FileEntry, parentId: string) => {
-            dropFolders(served, [entry.id]);
+            dropFolders(served, [entry.id], []);
             revealInTree(served, parentId, entry);
         },
         [dropFolders, revealInTree],
@@ -1616,7 +1671,7 @@ const FileManager = ({
             }
 
             if (entry.id !== before?.id) {
-                dropFolders(served, before ? [entry.id, before.id] : [entry.id]);
+                dropFolders(served, before ? [entry.id, before.id] : [entry.id], before ? [before.id] : []);
             }
 
             if (!before) {
@@ -2085,6 +2140,7 @@ const FileManager = ({
                                             }
                                             canGoBack={canGoBack}
                                             canGoForward={canGoForward}
+                                            hasFolder={!!section}
                                             view={view}
                                             sort={sort}
                                             showHidden={showHidden}
@@ -2128,6 +2184,7 @@ const FileManager = ({
                                             )}
                                             {/* Keyed by folder, so each opens at the top with nothing selected. */}
                                             <Box key={openKey ?? undefined} sx={viewSx} hidden={showsResults}>
+                                                {!section && <NoSections />}
                                                 {section && (
                                                     <FolderView
                                                         section={section}
@@ -2203,7 +2260,7 @@ const FileManager = ({
                                         request={transfer.request}
                                         showHidden={showHidden}
                                         onClose={closeTransfer}
-                                        onChanged={relist}
+                                        onChanged={relistTransferred}
                                         onDone={handleTransferred}
                                         onFolderCreated={handleFolderCreated}
                                     />
@@ -2224,7 +2281,7 @@ const FileManager = ({
                                         open={pasting.open}
                                         request={pasting.request}
                                         onClose={closePaste}
-                                        onChanged={relist}
+                                        onChanged={relistTransferred}
                                         onDone={handlePasted}
                                     />
                                 )}

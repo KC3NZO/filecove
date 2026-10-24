@@ -208,7 +208,10 @@ const FolderView = ({
     onRevealUnmatched,
 }: FolderViewProps) => {
     const folder = folderOf(section, trail);
-    const { state, reload } = useFolder(section, folder.id, true);
+    const { state, reload } = useFolder(section, folder.id, true, true);
+    // All of the folder has come, or listing it failed: not still coming in pages, nor being checked
+    // again in the background, which may bring entries the listing saved doesn't have yet.
+    const listingSettled = state?.status === "error" || (state?.status === "ready" && !state.checking);
     const cutIds = useCutIds(section);
     const draggedIds = useDraggedIds(section);
     const data = useContext(DataContext);
@@ -407,7 +410,7 @@ const FolderView = ({
     }
 
     useEffect(() => {
-        if (!revealSelected || (state?.status !== "ready" && state?.status !== "error")) {
+        if (!revealSelected || !listingSettled) {
             return;
         }
 
@@ -421,14 +424,17 @@ const FolderView = ({
             pendingScroll.current = { id: first.id, focus: pendingFocus.current || focusWithin.current };
             pendingFocus.current = false;
         }
-    }, [revealSelected, state?.status, selected, indexById]);
+    }, [revealSelected, listingSettled, selected, indexById]);
 
     // Ids the folder doesn't list drop out of the selection, such as entries deleted or moved away,
     // once all of the folder has come, so a selection passed in isn't cut short by a listing still
-    // coming. Hidden entries are listed, so they stay selected while they're hidden.
+    // coming, or by the listing saved from before while it's checked again. Hidden entries are
+    // listed, so they stay selected while they're hidden.
     const listedIds = useMemo(
         () =>
-            state?.status === "ready" && state.entries ? new Set(state.entries.map((entry) => entry.id)) : undefined,
+            state?.status === "ready" && !state.checking && state.entries
+                ? new Set(state.entries.map((entry) => entry.id))
+                : undefined,
         [state],
     );
 
@@ -444,7 +450,8 @@ const FolderView = ({
     }, [reportSelection, selectedIds, selected]);
 
     // An entry to reveal that is hidden is never listed, so it's given up on, and so is one the
-    // whole folder has come without, such as one asked for from outside that isn't there.
+    // whole folder has come without, such as one asked for from outside that isn't there, once
+    // it's been checked again.
     const revealLost = useMemo(() => {
         if (revealId === undefined || !state?.entries) {
             return false;
@@ -452,7 +459,7 @@ const FolderView = ({
 
         const entry = state.entries.find((candidate) => candidate.id === revealId);
 
-        return entry ? !showHidden && isHidden(entry) : state.status === "ready";
+        return entry ? !showHidden && isHidden(entry) : state.status === "ready" && !state.checking;
     }, [revealId, showHidden, state]);
 
     useEffect(() => {

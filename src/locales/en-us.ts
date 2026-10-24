@@ -72,6 +72,7 @@ export const enUS: FileManagerLocaleText = {
     folderLoadFailed: "Couldn't load",
     retry: "Retry",
 
+    noSections: "No sections to show",
     folderEmpty: "Folder is empty",
     folderOpenFailed: "Couldn't open this folder",
     searchNoResults: "No results found",

@@ -39,14 +39,27 @@ export const clashingNames = (entries: readonly { name: string }[], listing: Fil
 };
 
 /**
+ * Ids of the folders in a folder's listing that a transfer of `entries` into it put others in the
+ * place of, as replacing clashing names does, so their ids may now name those.
+ */
+export const replacedFolders = (entries: readonly { name: string }[], listing: FileEntry[] | undefined) => {
+    const names = new Set(entries.map((entry) => entry.name));
+
+    return (listing ?? []).filter((entry) => entry.kind === "folder" && names.has(entry.name)).map((entry) => entry.id);
+};
+
+/**
  * Has the adapter copy or move entries, for the dialogs that do. `cancel` and unmounting abort the
  * call. The adapter can't undo a change it has made, so `refresh` runs however a run that reached
- * it ends, cancelled included; it should list the destination again, and the source after a move.
+ * it ends, cancelled included, with the run's `conflict`; it should list the destination again, and
+ * the source after a move, and after a "replace", drop the folders replaced (`replacedFolders`).
  */
-export const useTransfer = (job: TransferJob, refresh: () => void) => {
+export const useTransfer = (job: TransferJob, refresh: (conflict: ConflictPolicy) => void) => {
     const [pending, setPending] = useState<ConflictPolicy | null>(null);
     const [failure, setFailure] = useState<string | null>(null);
     const controller = useRef<AbortController | null>(null);
+    // The running call's conflict policy, for `cancel`'s refresh.
+    const running = useRef<ConflictPolicy>("keepBoth");
     const { text } = useLocale();
 
     useEffect(() => () => controller.current?.abort(), []);
@@ -55,6 +68,7 @@ export const useTransfer = (job: TransferJob, refresh: () => void) => {
         const current = new AbortController();
 
         controller.current = current;
+        running.current = conflict;
         setPending(conflict);
         setFailure(null);
 
@@ -73,7 +87,7 @@ export const useTransfer = (job: TransferJob, refresh: () => void) => {
                     }
 
                     controller.current = null;
-                    refresh();
+                    refresh(conflict);
 
                     return "done";
                 },
@@ -83,7 +97,7 @@ export const useTransfer = (job: TransferJob, refresh: () => void) => {
                     }
 
                     controller.current = null;
-                    refresh();
+                    refresh(conflict);
                     setPending(null);
                     setFailure(
                         error instanceof Error && error.message
@@ -100,7 +114,7 @@ export const useTransfer = (job: TransferJob, refresh: () => void) => {
         if (controller.current) {
             controller.current.abort();
             controller.current = null;
-            refresh();
+            refresh(running.current);
         }
     };
 

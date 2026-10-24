@@ -12,5 +12,11 @@ export interface FolderState {
      * names that clash, waits until it's gone.
      */
     partial?: boolean;
+    /**
+     * Set while a ready listing is listed again in the background, as its folder opens, and may yet
+     * bring entries it doesn't have. It shows as it is meanwhile, but whatever gives up on an entry
+     * the listing lacks, or drops it from the selection, waits until it's gone.
+     */
+    checking?: boolean;
     error?: unknown;
 }

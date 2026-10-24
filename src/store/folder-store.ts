@@ -6,6 +6,12 @@ import type { FileAdapter, FileEntry, FolderState } from "../types";
  */
 const PAGE_INTERVAL = 500;
 
+/**
+ * How many entries are kept in the listings nothing shows, those shown longest ago going first. Each
+ * listing counts as one more than its entries, so empty folders count too.
+ */
+const MAX_KEPT = 20_000;
+
 /** Cache key of a folder. Sections are independent roots, so one id in two sections is two folders. */
 export const folderKey = (sectionId: string, folderId: string) => `${sectionId}\u0000${folderId}`;
 
@@ -16,14 +22,86 @@ export const keyFolder = (key: string) => {
     return { sectionId: key.slice(0, cut), folderId: key.slice(cut + 1) };
 };
 
+// Plain objects and arrays, such as an entry's `meta`, which every listing brings anew.
+const isPlain = (value: unknown): value is Record<string, unknown> => {
+    if (typeof value !== "object" || value === null) {
+        return false;
+    }
+
+    const prototype: unknown = Object.getPrototypeOf(value);
+
+    return prototype === Object.prototype || prototype === Array.prototype || prototype === null;
+};
+
+// Dates are the same by their time, and plain objects and arrays by their own fields, while `depth` lasts.
+const sameValue = (a: unknown, b: unknown, depth: number): boolean =>
+    Object.is(a, b) ||
+    (a instanceof Date && b instanceof Date && a.getTime() === b.getTime()) ||
+    (depth > 0 && isPlain(a) && isPlain(b) && Array.isArray(a) === Array.isArray(b) && sameFields(a, b, depth - 1));
+
+const sameFields = (a: object, b: object, depth: number) => {
+    const left = a as Record<string, unknown>;
+    const right = b as Record<string, unknown>;
+    const keys = Object.keys(left);
+
+    return (
+        keys.length === Object.keys(right).length &&
+        keys.every((key) => Object.hasOwn(right, key) && sameValue(left[key], right[key], depth))
+    );
+};
+
+// An entry a new listing brings as it was: every field the same, `meta`'s one level down.
+const sameEntry = (a: FileEntry, b: FileEntry) =>
+    a === b || (Object.getPrototypeOf(a) === Object.getPrototypeOf(b) && sameFields(a, b, 1));
+
 /**
- * Folder listings shared by the sidebar tree and the content view, so a folder is requested
- * once however many places show it. Each state object is replaced, never mutated, so
+ * A folder's new listing, keeping the entries of the one before that haven't changed, and the whole
+ * listing before when nothing has, so what shows it renders only what changed, and a selection of
+ * unchanged entries isn't told again.
+ */
+const withUnchanged = (before: FileEntry[] | undefined, listed: FileEntry[]) => {
+    if (!before) {
+        return listed;
+    }
+
+    const byId = new Map(before.map((entry) => [entry.id, entry] as const));
+    let changed = before.length !== listed.length;
+
+    const entries = listed.map((entry, index) => {
+        const kept = byId.get(entry.id);
+
+        if (kept && sameEntry(kept, entry)) {
+            changed ||= before[index] !== kept;
+
+            return kept;
+        }
+
+        changed = true;
+
+        return entry;
+    });
+
+    return changed ? entries : before;
+};
+
+/**
+ * Folder listings shared by the sidebar tree, the content view and the dialogs, so a folder is
+ * requested once however many places show it. Each state object is replaced, never mutated, so
  * `useSyncExternalStore` can compare a single folder's state by identity.
+ *
+ * Listings are kept once listed, so a folder opened again shows at once, and `open` lists it again
+ * in the background. Those nothing shows are dropped beyond `MAX_KEPT` entries.
  */
 export const createFolderStore = () => {
     const states = new Map<string, FolderState>();
     const requests = new Map<string, AbortController>();
+    // When each ready listing was asked for. One missing here may be out of date (`stale`), and is
+    // listed again as it opens, whatever its age.
+    const checkedAt = new Map<string, number>();
+    // How many parts show each listing; one shown is never dropped to make room.
+    const shown = new Map<string, number>();
+    // Listed listings, by when they were last shown or listed, longest ago first.
+    const recent = new Set<string>();
     const listeners = new Set<() => void>();
     // Counts the changes, for a view that reads many listings at once.
     let version = 0;
@@ -31,6 +109,21 @@ export const createFolderStore = () => {
     const notify = () => {
         version += 1;
         listeners.forEach((listener) => listener());
+    };
+
+    const touch = (key: string) => {
+        recent.delete(key);
+        recent.add(key);
+    };
+
+    // Forgets a listing and cancels its request. Returns whether there was one.
+    const drop = (key: string) => {
+        requests.get(key)?.abort();
+        requests.delete(key);
+        checkedAt.delete(key);
+        recent.delete(key);
+
+        return states.delete(key);
     };
 
     /**
@@ -62,24 +155,78 @@ export const createFolderStore = () => {
     };
 
     /**
-     * Lists a folder unless it is loaded or already loading. `force` lists it again either way,
-     * replacing a request in flight, whose result could predate a change just made.
-     *
-     * A folder the adapter lists in pages is asked for page after page, as long as each hands back
-     * a cursor. Listed for the first time, it shows what has come so far as it goes (`partial`);
-     * listed again, the listing it had stays until the new one is complete.
+     * Drops the listings nothing shows beyond `MAX_KEPT` entries, those shown longest ago first.
+     * A listing only goes once no listing kept is found below it, through the folders it lists, so
+     * `cachedTree` still finds every listing below a folder that changes.
      */
-    const load = (key: string, adapter: FileAdapter, folderId: string, force = false) => {
-        const current = states.get(key);
+    const evict = () => {
+        const weight = (key: string) => (states.get(key)?.entries?.length ?? 0) + 1;
+        let kept = 0;
 
-        if (!force && (requests.has(key) || current?.status === "ready")) {
+        recent.forEach((key) => {
+            if (!shown.has(key)) {
+                kept += weight(key);
+            }
+        });
+
+        if (kept <= MAX_KEPT) {
             return;
         }
+
+        // How many cached listings each listing has right below it, and the listings each one is in.
+        const below = new Map<string, number>();
+        const above = new Map<string, string[]>();
+
+        states.forEach((state, key) => {
+            const { sectionId } = keyFolder(key);
+
+            state.entries?.forEach((entry) => {
+                const child = entry.kind === "folder" ? folderKey(sectionId, entry.id) : key;
+
+                if (child !== key && states.has(child)) {
+                    below.set(key, (below.get(key) ?? 0) + 1);
+                    above.set(child, [...(above.get(child) ?? []), key]);
+                }
+            });
+        });
+
+        let going = true;
+
+        // Dropping a listing can leave the one it's in with nothing kept below it, so it's gone
+        // through again until enough has gone or nothing more can.
+        while (kept > MAX_KEPT && going) {
+            going = false;
+
+            for (const key of recent) {
+                if (kept <= MAX_KEPT) {
+                    break;
+                }
+
+                if (!shown.has(key) && !requests.has(key) && !below.get(key)) {
+                    kept -= weight(key);
+                    above.get(key)?.forEach((parent) => below.set(parent, (below.get(parent) ?? 1) - 1));
+                    drop(key);
+                    going = true;
+                }
+            }
+        }
+    };
+
+    /**
+     * Asks the adapter for a folder's listing, replacing a request in flight. A folder the adapter
+     * lists in pages is asked for page after page, as long as each hands back a cursor. Listed for
+     * the first time, it shows what has come so far as it goes (`partial`); listed again, the
+     * listing it had stays until the new one is complete, shown loading, or `quiet`ly, as ready
+     * but `checking`. The new listing keeps the entries that came back as they were.
+     */
+    const request = (key: string, adapter: FileAdapter, folderId: string, quiet: boolean) => {
+        const current = states.get(key);
 
         requests.get(key)?.abort();
 
         const controller = new AbortController();
         const { signal } = controller;
+        const askedAt = performance.now();
         // A request that was aborted or replaced no longer owns the folder.
         const owns = () => requests.get(key) === controller;
 
@@ -89,7 +236,16 @@ export const createFolderStore = () => {
             }
 
             requests.delete(key);
+            touch(key);
+
+            if (state.status === "ready") {
+                checkedAt.set(key, askedAt);
+            } else {
+                checkedAt.delete(key);
+            }
+
             states.set(key, state);
+            evict();
             notify();
         };
 
@@ -116,7 +272,7 @@ export const createFolderStore = () => {
                     });
 
                     if (!nextCursor) {
-                        settle({ status: "ready", entries });
+                        settle({ status: "ready", entries: withUnchanged(states.get(key)?.entries, entries) });
 
                         return;
                     }
@@ -136,10 +292,57 @@ export const createFolderStore = () => {
                 });
 
         requests.set(key, controller);
-        states.set(key, { status: "loading", entries: current?.entries, partial: current?.partial });
+        // Listed again quietly, the folder stays ready, so nothing shows it loading or waits for all
+        // of it, but it's `checking`.
+        states.set(
+            key,
+            quiet
+                ? { status: "ready", entries: current?.entries, checking: true }
+                : { status: "loading", entries: current?.entries, partial: current?.partial },
+        );
         notify();
 
         listPage().catch((error: unknown) => settle({ status: "error", error }));
+    };
+
+    /**
+     * Lists a folder unless it is loaded or already loading. `force` lists it again either way,
+     * replacing a request in flight, whose result could predate a change just made.
+     */
+    const load = (key: string, adapter: FileAdapter, folderId: string, force = false) => {
+        if (force || !(requests.has(key) || states.get(key)?.status === "ready")) {
+            request(key, adapter, folderId, false);
+        }
+    };
+
+    /**
+     * Lists a folder being opened, in the content, the sidebar tree or the picker: as `load` does
+     * when it hasn't been listed or listing it failed, or else again in the background once its
+     * listing was asked for `maxAge` ms ago or more, or may be out of date (`stale`). Meanwhile the
+     * listing shows as it is, ready but `checking`.
+     */
+    const open = (key: string, adapter: FileAdapter, folderId: string, maxAge: number) => {
+        const at = checkedAt.get(key);
+
+        if (states.get(key)?.status !== "ready" || requests.has(key)) {
+            load(key, adapter, folderId);
+        } else if (at === undefined || performance.now() - at >= maxAge) {
+            request(key, adapter, folderId, true);
+        }
+    };
+
+    /**
+     * Marks a section's listings as maybe out of date, after a change the file manager can't tie to
+     * every folder it touched, so each is listed again as it opens, whatever its age.
+     */
+    const stale = (sectionId: string) => {
+        const prefix = folderKey(sectionId, "");
+
+        [...checkedAt.keys()].forEach((key) => {
+            if (key.startsWith(prefix)) {
+                checkedAt.delete(key);
+            }
+        });
     };
 
     return {
@@ -157,6 +360,42 @@ export const createFolderStore = () => {
         },
 
         load,
+
+        open,
+
+        /**
+         * Tells the store a folder's listing is shown, so it isn't dropped to make room while it
+         * is, and `recheck` lists it again. Returns the function to call once it isn't.
+         */
+        show(key: string) {
+            let hidden = false;
+
+            shown.set(key, (shown.get(key) ?? 0) + 1);
+
+            if (recent.has(key)) {
+                touch(key);
+            }
+
+            return () => {
+                if (hidden) {
+                    return;
+                }
+
+                const count = (shown.get(key) ?? 1) - 1;
+
+                hidden = true;
+
+                if (count > 0) {
+                    shown.set(key, count);
+                } else {
+                    shown.delete(key);
+                }
+
+                if (recent.has(key)) {
+                    touch(key);
+                }
+            };
+        },
 
         /**
          * Lists again, through `adapter`, a section's cached listings of the folders, and every
@@ -181,11 +420,41 @@ export const createFolderStore = () => {
             });
         },
 
+        stale,
+
+        /**
+         * As `stale`, and lists again at once, through `adapter`, the section's listings that are
+         * shown: quietly those that are ready, and those still loading afresh, since their result
+         * could predate the change. One that failed stays as it is.
+         */
+        recheck(sectionId: string, adapter: FileAdapter) {
+            const prefix = folderKey(sectionId, "");
+
+            stale(sectionId);
+            shown.forEach((_, key) => {
+                const status = states.get(key)?.status;
+
+                if (key.startsWith(prefix) && status !== undefined && status !== "error") {
+                    request(key, adapter, keyFolder(key).folderId, status === "ready");
+                }
+            });
+        },
+
+        /** Whether one of a section's listings lists one of the entries, so the section has it below its root. */
+        lists(sectionId: string, entryIds: ReadonlySet<string>) {
+            const prefix = folderKey(sectionId, "");
+
+            return [...states].some(
+                ([key, state]) => key.startsWith(prefix) && !!state.entries?.some((entry) => entryIds.has(entry.id)),
+            );
+        },
+
         cachedTree,
 
         /**
          * Drops the listings a section has cached for folders and for every folder below them, and
-         * cancels their requests, e.g. when the folders were deleted, or their ids may now name others.
+         * cancels their requests, e.g. when the folders were deleted, or their ids may now name
+         * others. What still shows one lists it afresh (`useFolder`, `useTreeRows`).
          */
         forget(sectionId: string, folderIds: Iterable<string>) {
             let dropped = false;
@@ -193,11 +462,7 @@ export const createFolderStore = () => {
             [...folderIds]
                 .flatMap((folderId) => cachedTree(sectionId, folderId))
                 .forEach((id) => {
-                    const key = folderKey(sectionId, id);
-
-                    requests.get(key)?.abort();
-                    requests.delete(key);
-                    dropped = states.delete(key) || dropped;
+                    dropped = drop(folderKey(sectionId, id)) || dropped;
                 });
 
             if (dropped) {
@@ -215,9 +480,7 @@ export const createFolderStore = () => {
 
             [...states.keys(), ...requests.keys()].forEach((key) => {
                 if (key.startsWith(prefix)) {
-                    requests.get(key)?.abort();
-                    requests.delete(key);
-                    dropped = states.delete(key) || dropped;
+                    dropped = drop(key) || dropped;
                 }
             });
 
@@ -228,18 +491,21 @@ export const createFolderStore = () => {
 
         /**
          * Cancels every request in flight, e.g. on unmount, and forgets their loading state. A
-         * listing being replaced is kept; one only partly listed is dropped, to be listed again.
+         * listing being listed again is kept, as maybe out of date; one only partly listed is
+         * dropped, to be listed again.
          */
         abortAll() {
             requests.forEach((controller, key) => {
-                controller.abort();
-
                 const state = states.get(key);
+
+                controller.abort();
+                checkedAt.delete(key);
 
                 if (state?.entries && !state.partial) {
                     states.set(key, { status: "ready", entries: state.entries });
                 } else {
                     states.delete(key);
+                    recent.delete(key);
                 }
             });
 

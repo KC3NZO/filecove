@@ -12,7 +12,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
-import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
+import { clashingNames, replacedFolders, useTransfer } from "../../../hooks/use-transfer";
 import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
@@ -44,9 +44,10 @@ interface PasteDialogProps {
     onClose: () => void;
     /**
      * Called whenever the adapter may have changed folders, done, failed or cancelled, with their
-     * ids, to list them again wherever they're shown.
+     * ids, to list them again wherever they're shown, and after a "replace", the ids of the folders
+     * entries were put in the place of, which may now name those.
      */
-    onChanged: (adapter: FileAdapter, folderIds: string[]) => void;
+    onChanged: (adapter: FileAdapter, folderIds: string[], replacedIds?: string[]) => void;
     /** Called once the adapter has moved or copied the entries. */
     onDone: (request: PasteRequest) => void;
 }
@@ -88,8 +89,14 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
     const [conflicts, setConflicts] = useState<string[] | null>(null);
 
     // The adapter can't undo a change it has made, so however it ended, the target is listed again,
-    // and so is the source after a move.
-    const refresh = () => onChanged(clipboard.adapter, kind === "move" ? [target.id, sourceId] : [target.id]);
+    // and so is the source after a move, and folders a Replace may have put entries in the place of
+    // are dropped.
+    const refresh = (conflict: ConflictPolicy) =>
+        onChanged(
+            clipboard.adapter,
+            kind === "move" ? [target.id, sourceId] : [target.id],
+            conflict === "replace" ? replacedFolders(entries, state?.entries) : undefined,
+        );
 
     const { pending, failure, run, cancel } = useTransfer({ kind, adapter: clipboard.adapter, entries }, refresh);
 

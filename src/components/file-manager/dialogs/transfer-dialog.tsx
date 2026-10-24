@@ -20,7 +20,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
-import { clashingNames, useTransfer } from "../../../hooks/use-transfer";
+import { clashingNames, replacedFolders, useTransfer } from "../../../hooks/use-transfer";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { dialogActionsSx } from "../../../styles/direction";
@@ -79,9 +79,10 @@ interface TransferDialogProps {
     onClose: () => void;
     /**
      * Called whenever the adapter may have changed folders, done, failed or cancelled, with their
-     * ids, to list them again wherever they're shown.
+     * ids, to list them again wherever they're shown, and after a "replace", the ids of the folders
+     * entries were put in the place of, which may now name those.
      */
-    onChanged: (adapter: FileAdapter, folderIds: string[]) => void;
+    onChanged: (adapter: FileAdapter, folderIds: string[], replacedIds?: string[]) => void;
     /** Called once the adapter has copied or moved the entries into `destination`. */
     onDone: (request: TransferRequest, destination: FileManagerLocation) => void;
     /**
@@ -238,7 +239,7 @@ const TransferDialog = ({
 
     const target = destinations.find((candidate) => candidate.id === place?.sectionId) ?? section;
     const targetFolder = folderOf(target, place?.trail ?? []);
-    const { state } = useFolder(target, targetFolder.id, place !== null);
+    const { state } = useFolder(target, targetFolder.id, place !== null, true);
 
     const folders = useMemo(
         () =>
@@ -256,8 +257,14 @@ const TransferDialog = ({
     const sameFolder = place !== null && targetFolder.id === sourceId;
     const title = (kind === "copy" ? text.copyToTitle : text.moveToTitle)(entries.length, isolate(entries[0].name));
 
-    // The adapter can't undo a change it has made, so both folders are listed again however it ended.
-    const refresh = () => onChanged(adapter, kind === "move" ? [targetFolder.id, sourceId] : [targetFolder.id]);
+    // The adapter can't undo a change it has made, so both folders are listed again however it
+    // ended, and folders a Replace may have put entries in the place of are dropped.
+    const refresh = (conflict: ConflictPolicy) =>
+        onChanged(
+            adapter,
+            kind === "move" ? [targetFolder.id, sourceId] : [targetFolder.id],
+            conflict === "replace" ? replacedFolders(entries, state?.entries) : undefined,
+        );
 
     const { pending, failure, run: start, cancel, clearFailure } = useTransfer(request, refresh);
 

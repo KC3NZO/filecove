@@ -16,19 +16,31 @@ export const useData = () => {
     return value;
 };
 
-/** A folder's listing. It is requested the first time `enabled` is true, then served from the store. */
-export const useFolder = (section: Section, folderId: string, enabled: boolean) => {
-    const { store, adapter: defaultAdapter } = useData();
+/**
+ * A folder's listing. It is requested the first time `enabled` is true, then served from the store,
+ * which keeps it while it's shown. Opened (`open`), as the content and the picker open folders, a
+ * listing saved from before shows at once and is listed again in the background once it's
+ * `relistAfter` old. One dropped while it's shown, as after a change that may have made its id
+ * another folder's, is listed afresh.
+ */
+export const useFolder = (section: Section, folderId: string, enabled: boolean, open = false) => {
+    const { store, adapter: defaultAdapter, relistAfter } = useData();
     const adapter = section.adapter ?? defaultAdapter;
     const key = folderKey(section.id, folderId);
 
     const state = useSyncExternalStore(store.subscribe, () => store.get(key));
+    const dropped = state === undefined;
 
+    useEffect(() => (enabled ? store.show(key) : undefined), [enabled, store, key]);
+
+    // `dropped` lists it again once the store drops it.
     useEffect(() => {
-        if (enabled) {
+        if (enabled && open) {
+            store.open(key, adapter, folderId, relistAfter);
+        } else if (enabled) {
             store.load(key, adapter, folderId);
         }
-    }, [enabled, store, key, adapter, folderId]);
+    }, [enabled, open, store, key, adapter, folderId, relistAfter, dropped]);
 
     const reload = useCallback(() => store.load(key, adapter, folderId, true), [store, key, adapter, folderId]);
 

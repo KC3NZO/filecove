@@ -560,7 +560,8 @@ const Sidebar = ({
                     role="tree"
                     aria-label={tree ? tree.label : text.sections}
                     aria-multiselectable
-                    tabIndex={focusInside ? -1 : 0}
+                    // With no section, there's nothing in it to tab to.
+                    tabIndex={focusInside || !rows.some(isItem) ? -1 : 0}
                     sx={treeSx}
                     style={{ height }}
                     onFocus={handleTreeFocus}

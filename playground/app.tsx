@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -9,9 +9,9 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { FileManager } from "../src";
 import { useHashLocation } from "./hooks/use-hash-location";
 import { useStoredState } from "./hooks/use-stored-state";
-import { childId } from "./mocks/mock-adapter";
+import { addElsewhere, childId } from "./mocks/mock-adapter";
 import { createDemoActions, createDemoMainMenu, sections, serverAdapter } from "./mocks/mock-data";
-import { locale, single, uncontrolled } from "./options";
+import { lateSections, locale, relistAfter, single, uncontrolled } from "./options";
 
 import type {
     FileEntry,
@@ -19,6 +19,7 @@ import type {
     FileManagerLocation,
     FileManagerSearch,
     SectionFolder,
+    SectionGroup,
     SelectionDetails,
     SortOrder,
     ViewMode,
@@ -121,6 +122,18 @@ const App = () => {
     const [search, setSearch] = useState<FileManagerSearch | null>(null);
     const [searchExcluded, setSearchExcluded] = useStoredState<string[]>("searchExcludedSections", []);
     const [selection, setSelection] = useState(NOTHING_SELECTED);
+    // `?lateSections`: none until they come, as from an app's server.
+    const [shownGroups, setShownGroups] = useState<SectionGroup[]>(() => (lateSections ? [] : sections));
+
+    useEffect(() => {
+        if (!lateSections) {
+            return;
+        }
+
+        const timer = setTimeout(() => setShownGroups(sections), 3000);
+
+        return () => clearTimeout(timer);
+    }, []);
 
     const handleSelectionChange = useCallback(
         (ids: string[], { entries, location: at }: SelectionDetails) => setSelection({ ids, entries, location: at }),
@@ -165,6 +178,18 @@ const App = () => {
         }
     };
 
+    // Adds a file to the open folder behind the file manager's back, as another user would, which
+    // shows once the folder is opened again, as it's listed again then (`?relistAfter=` sets how often).
+    const changeElsewhere = () => {
+        const here = apiRef.current?.actionContext();
+        const name = here ? addElsewhere(here.section.adapter ?? serverAdapter, here.folder.id) : null;
+
+        setNotice({
+            open: true,
+            message: name ? `"${name}" was added elsewhere. Open the folder again to see it` : "Nothing can be added here",
+        });
+    };
+
     // Uncontrolled, what the playground keeps only sets where the file manager starts.
     const settings = uncontrolled
         ? {
@@ -201,6 +226,7 @@ const App = () => {
         actions,
         mainMenu,
         locale,
+        relistAfter,
         apiRef,
         sx: fileManagerSx,
         onSelectionChange: handleSelectionChange,
@@ -212,7 +238,7 @@ const App = () => {
             {single ? (
                 <FileManager {...shared} section={singleSection} />
             ) : (
-                <FileManager {...shared} sections={sections} />
+                <FileManager {...shared} sections={shownGroups} />
             )}
             <Box component="footer" sx={footerSx}>
                 <Typography variant="body2" noWrap sx={summarySx}>
@@ -229,6 +255,9 @@ const App = () => {
                 </Button>
                 <Button size="small" color="inherit" onClick={showFile}>
                     Show a file
+                </Button>
+                <Button size="small" color="inherit" onClick={changeElsewhere}>
+                    Change elsewhere
                 </Button>
                 <Button size="small" color="inherit" onClick={() => apiRef.current?.refresh()}>
                     Reload all

@@ -174,6 +174,8 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     retry: string;
 
     // Content
+    /** In place of the content while the file manager has no section, as while an app is still getting them. */
+    noSections: string;
     folderEmpty: string;
     folderOpenFailed: string;
     /** In place of the entries while a search matches none of them. */
