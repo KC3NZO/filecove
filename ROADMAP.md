@@ -86,7 +86,7 @@ What's left in the features already built, what packaging needs before a release
 - [ ] `onClipboardChange`, deliberately left until someone needs it.
 
 ### Interface polish
-- [ ] **new:** No tooltips anywhere. Icon-only buttons (back, search, view, menus, zoom) only have screen-reader labels.
+- [x] **new:** No tooltips anywhere. Icon-only buttons (back, search, view, menus, zoom) only have screen-reader labels. *Done 2026-10-23: every icon-only button is a `TooltipIconButton` showing its label, but the list rows' ⋮, which is hidden from screen readers.*
 - [ ] **new:** Nothing handles Windows High Contrast mode (`forced-colors`). Selection, hover, cut and drop markers are background colours, which that mode removes, so selected files look like all the others.
 - [ ] **new:** Back and forward have no history list (GNOME shows one on right-click).
 

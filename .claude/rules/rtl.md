@@ -31,7 +31,7 @@ The file manager runs right to left when the page, or an element above it, has `
 
 That takes more than logical properties in our own styles, because MUI's components inside the file manager still use physical left and right and rely on the plugin to flip them. Where we use such a component, we override the physical style (see "MUI's own left and right").
 
-A `dir` on an element around the file manager alone is enough too, in either direction. What it portals to `<body>`, the menus, the dialogs and the drag image, takes the file manager's direction as its own `dir`: `useTextDirection` (`hooks/use-text-direction.ts`) reads it from the root before it's painted, and again whenever a `dir` anywhere in the page changes (a `MutationObserver`), and `DirectionContext` hands it to them. Outside a `FileManager` the context is undefined, and they follow the page.
+A `dir` on an element around the file manager alone is enough too, in either direction. What it portals to `<body>`, the menus, the dialogs, the tooltips and the drag image, takes the file manager's direction as its own `dir`: `useTextDirection` (`hooks/use-text-direction.ts`) reads it from the root before it's painted, and again whenever a `dir` anywhere in the page changes (a `MutationObserver`), and `DirectionContext` hands it to them. Outside a `FileManager` the context is undefined, and they follow the page.
 
 ## Styles
 

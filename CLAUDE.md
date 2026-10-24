@@ -30,6 +30,7 @@ There is no test runner configured.
 - `index.ts` is the public entry. It exports `FileManager`, `IconProvider`, `enUS` (the English text) and the public types, and nothing else is public.
 - `components/file-manager/` is the frame and its parts (`sidebar/`, `header-bar/`, `content/`, `context-menu/`, `dialogs/`).
 - `components/uploads/` and `components/downloads/` have the upload and download panels, kept free of file manager imports so the planned media manager can reuse them (see `uploads.md` and `download.md`).
+- `components/buttons/` has `TooltipIconButton`, the icon-only button with a tooltip, shared by the file manager and the panels.
 - `components/icons/` has `Icon`, `IconProvider`, and `FileTypeIcon` / `FolderTypeIcon`, the only way to render `@react-symbols/icons`.
 - `types/` holds shared and exported types, one file per domain, re-exported from `types/index.ts`. Files marked internal stay out of `src/index.ts`.
 - `locales/` has the component's text, in English only (`enUS`).
