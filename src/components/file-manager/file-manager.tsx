@@ -1253,6 +1253,54 @@ const FileManager = ({
         }
     }, []);
 
+    // The sidebar docking, or no longer, as the file manager's width changes. Docking closes the
+    // overlay, so it doesn't open again as the width shrinks back. A sidebar that goes with the
+    // change, the overlay docking while the docked sidebar is hidden, or the docked sidebar
+    // collapsing, hands the focus it had to the content.
+    const handleSidebarDocking = (docked: boolean) => {
+        const shownBefore = docked ? sidebarOpen : !sidebarHidden;
+        const shownNow = docked ? !sidebarHidden : sidebarOpen;
+
+        if (docked) {
+            setSidebarOpen(false);
+            sidebarOpener.current = null;
+        }
+
+        if (shownBefore && !shownNow && sidebarRef.current?.contains(document.activeElement)) {
+            setFocusContent(true);
+        }
+    };
+    const handleSidebarDockingRef = useRef(handleSidebarDocking);
+
+    useLayoutEffect(() => {
+        handleSidebarDockingRef.current = handleSidebarDocking;
+    });
+
+    // Whether the sidebar docks, read from its style whenever the frame changes size, as the
+    // properties' pane reads its own.
+    useLayoutEffect(() => {
+        const sidebar = sidebarRef.current;
+        const frame = sidebar?.parentElement;
+
+        if (!sidebar || !frame) {
+            return;
+        }
+
+        let wasDocked = !overlays(sidebar);
+        const observer = new ResizeObserver(() => {
+            const docked = !overlays(sidebar);
+
+            if (docked !== wasDocked) {
+                wasDocked = docked;
+                handleSidebarDockingRef.current(docked);
+            }
+        });
+
+        observer.observe(frame);
+
+        return () => observer.disconnect();
+    }, []);
+
     // Asks the field to take the focus once it's there, when what opens it is applied by a later render.
     const focusSearchAsked = useRef(false);
 
