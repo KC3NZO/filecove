@@ -109,6 +109,7 @@ Below `rootWide` the sidebar is collapsed, and two keys open it besides the "Sho
 
 - `openSidebar` keeps what had the focus (`sidebarOpener`), and `closeSidebar` gives the focus back to it, or to the "Show sidebar" button when it's gone, if the focus was in the overlay. Escape and F9 close it so.
 - Focus moving on to the rest of the file manager, by Tab or F6 for instance, closes it as a click behind it does, and leaves the focus where it went. Focus going to a menu or dialog, outside the file manager, keeps it open.
+- Docking, as the file manager widens, closes it too, so it doesn't show again as the width shrinks back. The sidebar that goes as the width changes, the overlay docking while the docked sidebar is hidden, or the docked sidebar collapsing, hands the focus it had to the content, as the properties do.
 - Docked, F9 hides and shows the sidebar (`showDocked`; see "Hiding the docked sidebar" in `file-manager.md`). Hidden with the focus in it, it hands the focus to the content. Shown from the "Show sidebar" button, which only shows while the sidebar is hidden and so goes, the tree takes the focus; shown with F9 from anywhere else, the focus stays where it is. F6 passes a hidden sidebar by, to the content.
 - `overlays()` in `file-manager.tsx` tells the two modes apart from the sidebar's computed `position`, as container queries decide it, even while the docked sidebar is hidden.
 

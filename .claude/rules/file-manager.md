@@ -77,7 +77,7 @@ Below `rootWide` the sidebar is an overlay, opened and closed with `sidebarOpen`
 - F9 hides and shows it (see `keyboard.md`), as does "Show sidebar" in the header's view menu, with F9 beside it. The menu portals out of the file manager, where its container queries don't reach, so it reads whether the sidebar docks as it opens (`sidebarDocked`, from the sidebar's computed `position`), and only offers the item then.
 - While it's hidden, the header shows the "Show sidebar" button and search, as it does while the sidebar is collapsed.
 - The sidebar takes `display: none` through `data-hidden`, only from `rootWide`, so a narrower root still has its overlay. The frame's `data-sidebar-hidden` gives the content and upload panels back their margin on its side (`besideSidebar`).
-- The state outlives the root's width changing: hidden, then narrowed and widened again, it's still hidden.
+- The state outlives the root's width changing: hidden, then narrowed and widened again, it's still hidden. The overlay's doesn't: docking closes it (`handleSidebarDocking`, from a `ResizeObserver` on the frame), so narrowing again doesn't bring it back, as it would have, unseen while docked.
 
 ## Search
 
