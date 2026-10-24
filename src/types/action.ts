@@ -96,6 +96,16 @@ export interface ActionContext {
      */
     upload?: (files?: File[]) => void;
     /**
+     * Asks for a folder with the browser's folder picker, as `upload` asks for files, and uploads it
+     * into `folder` with everything in it, its folders made with the adapter's `createFolder`. A
+     * name `folder` already has is asked about first, with Merge in place of Replace for a folder
+     * there, and files of types the section doesn't take are left out. The picker leaves out
+     * folders with no file below them, and the browser may ask the user first whether to upload
+     * that many files. Missing when `upload` is, when the adapter has no `createFolder`, or when the
+     * browser's picker can't pick folders.
+     */
+    uploadFolder?: () => void;
+    /**
      * Moves or copies what was cut or copied into `folder`. Missing when there is nothing to paste
      * here: the clipboard is empty, its entries came from another adapter, `folder` is one of them
      * or inside one, cut entries are already in `folder`, or a paste is still running. An action

@@ -13,6 +13,7 @@ import DeleteSharp from "@mui/icons-material/DeleteSharp";
 import DesktopWindowsSharp from "@mui/icons-material/DesktopWindowsSharp";
 import DescriptionSharp from "@mui/icons-material/DescriptionSharp";
 import DownloadSharp from "@mui/icons-material/DownloadSharp";
+import DriveFolderUploadSharp from "@mui/icons-material/DriveFolderUploadSharp";
 import StorageSharp from "@mui/icons-material/StorageSharp";
 import EditSharp from "@mui/icons-material/EditSharp";
 import ExpandMoreSharp from "@mui/icons-material/ExpandMoreSharp";
@@ -102,6 +103,7 @@ const sharp: IconSet = {
     star: StarSharp,
     starBorder: StarBorderSharp,
     upload: UploadSharp,
+    uploadFolder: DriveFolderUploadSharp,
     videos: MovieSharp,
     zoomFit: FitScreenSharp,
     zoomIn: ZoomInSharp,

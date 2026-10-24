@@ -9,12 +9,10 @@ import type { FolderRef } from "./section";
  */
 export type UploadStatus = "queued" | "uploading" | "done" | "failed" | "cancelled";
 
-/** A file in the upload queue. Replaced, never mutated, as it moves along. */
-export interface UploadItem {
+interface UploadBase {
     /** Unique within its queue. */
     id: number;
-    file: File;
-    /** Already known to take uploads. */
+    /** Already known to take uploads, and for a folder to make folders. */
     adapter: FileAdapter;
     /** The folder it goes into. */
     folder: FolderRef;
@@ -26,11 +24,62 @@ export interface UploadItem {
     error?: string;
 }
 
+/** A file in the upload queue. Replaced, never mutated, as it moves along. */
+export interface FileUploadItem extends UploadBase {
+    kind: "file";
+    file: File;
+}
+
 /**
- * What was dropped from outside, or picked with the browser's file picker. Folders can't be
- * uploaded yet, so only their names are kept, to say they were left out.
+ * A folder in the upload queue, with everything in it: its folders made with the adapter's
+ * `createFolder`, and its files sent one call each, as files on their own are. Replaced, never
+ * mutated, as it moves along. `error` is the first thing in it that failed.
  */
+export interface FolderUploadItem extends UploadBase {
+    kind: "folder";
+    /** Its name in the folder it goes into. */
+    name: string;
+    /** How many files it holds, once it's been read; undefined meanwhile. */
+    files?: number;
+    /** Their size together, in bytes. */
+    size: number;
+    /** How many of its files are uploaded. */
+    done: number;
+    /** How many of its files couldn't be, those in folders that couldn't be made included. */
+    failed: number;
+    /** How many of its files were left out for their type. */
+    skipped: number;
+}
+
+export type UploadItem = FileUploadItem | FolderUploadItem;
+
+/** A folder to upload, with everything in it. */
+export interface FolderContents {
+    name: string;
+    files: File[];
+    folders: FolderContents[];
+}
+
+/**
+ * A folder dropped, pasted or picked: its name at once, and what's in it only once read, since a
+ * large one takes a while, so it's read as its upload starts.
+ */
+export interface FolderSource {
+    name: string;
+    read: () => Promise<FolderContents>;
+}
+
+/** What was dropped from outside, pasted, or picked with the browser's file or folder picker. */
 export interface DroppedFiles {
     files: File[];
-    folders: string[];
+    folders: FolderSource[];
+}
+
+/** A folder to upload, as the check before queueing settled it. */
+export interface FolderUpload {
+    source: FolderSource;
+    /** The name it's made under: the source's, or a free one to keep both. */
+    name: string;
+    /** The id of a folder of that name already there, to upload into instead, merging the two. */
+    mergeInto?: string;
 }

@@ -93,6 +93,7 @@ export const enUS: FileManagerLocaleText = {
 
     newFolder: "New folder",
     untitledFolder: (number) => (number === 1 ? "New folder" : `New folder (${number})`),
+    keptBothName: (name, number) => `${name} (${number})`,
     renameTitle: (kind) => `Rename ${kind}`,
     nameLabel: (kind) => (kind === "folder" ? "Folder name" : "File name"),
     create: "Create",
@@ -144,14 +145,24 @@ export const enUS: FileManagerLocaleText = {
     skip: "Skip",
     keepBoth: "Keep both",
     replace: "Replace",
+    merge: "Merge",
 
     upload: "Upload",
-    uploadTitle: (count, name, folderName) =>
-        `Upload ${count === 1 ? `“${name}”` : `${count} files`} to “${folderName}”`,
+    uploadTitle: (count, name, folderName) => `Upload ${entries(count, name)} to “${folderName}”`,
+    uploadMergeHint: (count) =>
+        count === 1
+            ? "Merge what's in it into the folder already there, replacing files with the same names, keep both " +
+              "with a new name, or skip it."
+            : "Merge what's in them into the folders already there, replacing files with the same names, keep " +
+              "both with new names, or skip them.",
+    uploadReplaceMerges: (count) =>
+        count === 1
+            ? "Replacing a folder merges what's in it into the one already there."
+            : "Replacing folders merges what's in them into the ones already there.",
     uploadFoldersFailedTitle: (count, name) => `Couldn't upload ${count === 1 ? `“${name}”` : `${count} folders`}`,
-    uploadFoldersOnly: "Folders can't be uploaded yet, only files.",
+    uploadFoldersOnly: "Folders can't be uploaded here, only files.",
     uploadFoldersLeftOut: (count, name) =>
-        `Folders can't be uploaded yet, so ${count === 1 ? `“${name}” is` : `${count} folders are`} left out.`,
+        `Folders can't be uploaded here, so ${count === 1 ? `“${name}” is` : `${count} folders are`} left out.`,
     uploadFailedTitle: (count, name) => `Couldn't upload ${count === 1 ? `“${name}”` : `${count} items`}`,
     uploadTypesOnly: (sectionName, types) => `“${sectionName}” only takes these types of files: ${types}.`,
     uploadTypesLeftOut: (count, name, sectionName, types) =>
@@ -228,6 +239,7 @@ export const enUS: FileManagerLocaleText = {
     uploadsFailed: (count) => `Couldn't upload ${files(count)}`,
     uploadsDone: (count) => `Uploaded ${files(count)}`,
     uploadsCancelled: "Uploads cancelled",
+    uploadsPreparing: "Preparing to upload",
     uploadsDoneCount: (count) => `${count} uploaded`,
     uploadsCancelledCount: (count) => `${count} cancelled`,
     uploadProgress: (sent, total) => `${sent} of ${total}`,
@@ -242,6 +254,11 @@ export const enUS: FileManagerLocaleText = {
     uploadDone: "Uploaded",
     uploadCancel: (fileName) => `Cancel uploading ${fileName}`,
     uploadRetry: (fileName) => `Upload ${fileName} again`,
+    uploadPreparing: "Preparing",
+    uploadFolderProgress: (done, total) => `${done} of ${files(total)}`,
+    uploadFolderDone: (count) => files(count),
+    uploadFolderFailed: (count, total) => `Couldn't upload ${count} of ${files(total)}`,
+    uploadFolderSkipped: (count) => `${files(count)} of other types left out`,
 
     downloads: "Downloads",
     downloadsPreparing: (count) => `Preparing ${downloads(count)}`,

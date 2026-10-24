@@ -294,6 +294,14 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 visible: (context) => !!context.upload,
                 onSelect: (context) => context.upload?.(),
             },
+            {
+                id: "upload-folder",
+                label: "Upload folder…",
+                icon: "uploadFolder",
+                target: "folder",
+                visible: (context) => !!context.uploadFolder,
+                onSelect: (context) => context.uploadFolder?.(),
+            },
         ],
     },
     {

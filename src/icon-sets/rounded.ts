@@ -13,6 +13,7 @@ import DeleteRounded from "@mui/icons-material/DeleteRounded";
 import DesktopWindowsRounded from "@mui/icons-material/DesktopWindowsRounded";
 import DescriptionRounded from "@mui/icons-material/DescriptionRounded";
 import DownloadRounded from "@mui/icons-material/DownloadRounded";
+import DriveFolderUploadRounded from "@mui/icons-material/DriveFolderUploadRounded";
 import StorageRounded from "@mui/icons-material/StorageRounded";
 import EditRounded from "@mui/icons-material/EditRounded";
 import ExpandMoreRounded from "@mui/icons-material/ExpandMoreRounded";
@@ -102,6 +103,7 @@ const rounded: IconSet = {
     star: StarRounded,
     starBorder: StarBorderRounded,
     upload: UploadRounded,
+    uploadFolder: DriveFolderUploadRounded,
     videos: MovieRounded,
     zoomFit: FitScreenRounded,
     zoomIn: ZoomInRounded,

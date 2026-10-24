@@ -22,10 +22,10 @@ import {
 } from "../../styles/panel";
 import { isolate, joinIsolated } from "../../utils/bidi";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
-import { FileTypeIcon } from "../icons/file-icon";
+import { FileTypeIcon, FolderTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 
-import type { Locale, UploadItem, UploadStatus } from "../../types";
+import type { FileUploadItem, FolderUploadItem, Locale, UploadItem } from "../../types";
 
 interface UploadPanelProps {
     items: UploadItem[];
@@ -55,27 +55,77 @@ const doneSx: SxProps<Theme> = {
 
 const isActive = (item: UploadItem) => item.status === "queued" || item.status === "uploading";
 
-/** How many uploads are at each status, and how much of those waiting or under way has been sent. */
+/**
+ * How many files are waiting or uploading, uploaded, failed and cancelled, a folder's files counted
+ * one by one, and how much of the uploads waiting or under way has been sent. A folder that failed
+ * or was cancelled with none of its files left counts as one, being a folder that couldn't be made.
+ */
 const summarize = (items: UploadItem[]) => {
-    const count: Record<UploadStatus, number> = { queued: 0, uploading: 0, done: 0, failed: 0, cancelled: 0 };
+    const count = { active: 0, done: 0, failed: 0, cancelled: 0 };
     let size = 0;
     let sent = 0;
     let measured = false;
 
     items.forEach((item) => {
-        count[item.status] += 1;
+        const total = item.kind === "file" ? item.file.size : item.size;
+
+        if (item.kind === "file") {
+            if (item.status === "queued" || item.status === "uploading") {
+                count.active += 1;
+            } else {
+                count[item.status] += 1;
+            }
+        } else {
+            const left = (item.files ?? 0) - item.done - item.failed;
+
+            count.done += item.done;
+            count.failed += item.status === "failed" ? Math.max(item.failed, 1) : item.failed;
+
+            if (isActive(item)) {
+                count.active += left;
+            } else if (item.status === "cancelled") {
+                count.cancelled += Math.max(left, 1);
+            }
+        }
 
         if (isActive(item)) {
-            size += item.file.size;
-            sent += item.file.size * (item.progress ?? 0);
+            size += total;
+            sent += total * (item.progress ?? 0);
             measured ||= item.progress !== undefined;
         }
     });
 
-    return { count, active: count.queued + count.uploading, size, sent, measured };
+    return { count, busy: items.some(isActive), size, sent, measured };
 };
 
-const describeRow = ({ file, folder, status, progress, error }: UploadItem, { text, formatSize }: Locale) => {
+const describeFolder = (item: FolderUploadItem, { text }: Locale) => {
+    const { folder, status, files = 0, done, failed, skipped, error } = item;
+    const skippedText = skipped > 0 && text.uploadFolderSkipped(skipped);
+    const parts = (list: (string | false | undefined)[]) =>
+        joinIsolated(list.filter((part): part is string => !!part));
+
+    switch (status) {
+        case "queued":
+            return parts([text.uploadQueued, folder.name]);
+        case "uploading":
+            return parts([
+                item.files === undefined ? text.uploadPreparing : text.uploadFolderProgress(done, files),
+                folder.name,
+            ]);
+        case "done":
+            return parts([text.uploadFolderDone(files), skippedText, folder.name]);
+        case "cancelled":
+            return parts([
+                text.uploadCancelled,
+                item.files !== undefined && text.uploadFolderProgress(done, files),
+                folder.name,
+            ]);
+        case "failed":
+            return parts([failed > 0 && text.uploadFolderFailed(failed, files), error]) || text.uploadFailed;
+    }
+};
+
+const describeFile = ({ file, folder, status, progress, error }: FileUploadItem, { text, formatSize }: Locale) => {
     switch (status) {
         case "queued":
             return joinIsolated([text.uploadQueued, folder.name]);
@@ -98,7 +148,8 @@ const describeRow = ({ file, folder, status, progress, error }: UploadItem, { te
 };
 
 const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
-    const { id, file, status, progress } = item;
+    const { id, status, progress } = item;
+    const name = item.kind === "file" ? item.file.name : item.name;
     const locale = useLocale();
     const { text } = locale;
 
@@ -106,7 +157,7 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
 
     if (isActive(item)) {
         action = (
-            <TooltipIconButton size="small" label={text.uploadCancel(isolate(file.name))} onClick={() => onCancel(id)}>
+            <TooltipIconButton size="small" label={text.uploadCancel(isolate(name))} onClick={() => onCancel(id)}>
                 <Icon name="close" fontSize="small" />
             </TooltipIconButton>
         );
@@ -118,7 +169,7 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
         );
     } else {
         action = (
-            <TooltipIconButton size="small" label={text.uploadRetry(isolate(file.name))} onClick={() => onRetry(id)}>
+            <TooltipIconButton size="small" label={text.uploadRetry(isolate(name))} onClick={() => onRetry(id)}>
                 <Icon name="refresh" fontSize="small" />
             </TooltipIconButton>
         );
@@ -127,11 +178,11 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
     return (
         <Box component="li" sx={panelRowSx}>
             <Box sx={panelSlotSx}>
-                <FileTypeIcon fileName={file.name} />
+                {item.kind === "file" ? <FileTypeIcon fileName={name} /> : <FolderTypeIcon folderName={name} />}
             </Box>
             <Box sx={panelTextSx}>
                 <Typography variant="body2" noWrap>
-                    <bdi>{file.name}</bdi>
+                    <bdi>{name}</bdi>
                 </Typography>
                 {status === "uploading" && (
                     <LinearProgress
@@ -141,7 +192,7 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
                     />
                 )}
                 <Typography variant="caption" color={status === "failed" ? "error" : "text.secondary"} noWrap>
-                    {describeRow(item, locale)}
+                    {item.kind === "file" ? describeFile(item, locale) : describeFolder(item, locale)}
                 </Typography>
             </Box>
             {action}
@@ -150,7 +201,7 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
 };
 
 /**
- * The upload queue at a glance: a summary that can fold the list of files away, and a row per file
+ * The upload queue at a glance: a summary that can fold the list away, and a row per file or folder
  * with its progress or how it ended, to cancel it or try it again. It knows nothing of where it's
  * shown, so it can sit under any view of files. The close button cancels whatever is still
  * uploading, which stays listed to try again, and once nothing is, forgets the list.
@@ -158,13 +209,14 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
 const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadPanelProps) => {
     const [expanded, setExpanded] = useState(true);
     const { text, formatSize } = useLocale();
-    const { count, active, size, sent, measured } = summarize(items);
+    const { count, busy, size, sent, measured } = summarize(items);
 
     let title: string;
     let status: ReactNode;
 
-    if (active > 0) {
-        title = text.uploadsActive(active);
+    // With no file waiting or uploading yet, folders are being read, or empty ones made.
+    if (busy) {
+        title = count.active > 0 ? text.uploadsActive(count.active) : text.uploadsPreparing;
         status = (
             <CircularProgress
                 size={20}
@@ -183,18 +235,19 @@ const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadP
         status = <Icon name="upload" color="disabled" />;
     }
 
-    // What the title leaves out.
-    const detail =
-        active > 0
-            ? text.uploadProgress(isolate(formatSize(Math.round(sent))), isolate(formatSize(size)))
-            : joinIsolated(
-                  [
-                      count.failed > 0 && count.done > 0 && text.uploadsDoneCount(count.done),
-                      count.cancelled > 0 &&
-                          count.failed + count.done > 0 &&
-                          text.uploadsCancelledCount(count.cancelled),
-                  ].filter((part): part is string => !!part),
-              );
+    // What the title leaves out; nothing while only folders are being read.
+    let detail: string;
+
+    if (busy) {
+        detail = size > 0 ? text.uploadProgress(isolate(formatSize(Math.round(sent))), isolate(formatSize(size))) : "";
+    } else {
+        detail = joinIsolated(
+            [
+                count.failed > 0 && count.done > 0 && text.uploadsDoneCount(count.done),
+                count.cancelled > 0 && count.failed + count.done > 0 && text.uploadsCancelledCount(count.cancelled),
+            ].filter((part): part is string => !!part),
+        );
+    }
 
     return (
         <Box component="section" sx={panelSx} aria-label={text.uploads}>
@@ -218,8 +271,8 @@ const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadP
                     <Icon name="expand" fontSize="small" sx={panelToggleIconSx} />
                 </TooltipIconButton>
                 <TooltipIconButton
-                    label={active > 0 ? text.uploadsCancelAll : text.uploadsClose}
-                    onClick={active > 0 ? onCancelAll : onClear}
+                    label={busy ? text.uploadsCancelAll : text.uploadsClose}
+                    onClick={busy ? onCancelAll : onClear}
                 >
                     <Icon name="close" fontSize="small" />
                 </TooltipIconButton>

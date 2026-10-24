@@ -1,12 +1,45 @@
-import type { DroppedFiles, Section } from "../types";
+import type { DroppedFiles, FolderContents, FolderSource, Section } from "../types";
+
+// What a folder dropped or pasted holds, read a batch at a time, as a browser hands over at most
+// 100 entries per call.
+const entriesOf = async (folder: FileSystemDirectoryEntry) => {
+    const reader = folder.createReader();
+    const entries: FileSystemEntry[] = [];
+
+    for (;;) {
+        const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => reader.readEntries(resolve, reject));
+
+        if (batch.length === 0) {
+            return entries;
+        }
+
+        entries.push(...batch);
+    }
+};
+
+const fileOf = (entry: FileSystemFileEntry) => new Promise<File>((resolve, reject) => entry.file(resolve, reject));
+
+/** Everything in a folder dropped or pasted, folders and all. */
+const readFolder = async (folder: FileSystemDirectoryEntry): Promise<FolderContents> => {
+    const entries = await entriesOf(folder);
+    const [files, folders] = await Promise.all([
+        Promise.all(entries.filter((entry) => entry.isFile).map((entry) => fileOf(entry as FileSystemFileEntry))),
+        Promise.all(
+            entries.filter((entry) => entry.isDirectory).map((entry) => readFolder(entry as FileSystemDirectoryEntry)),
+        ),
+    ]);
+
+    return { name: folder.name, files, folders };
+};
 
 /**
- * The files a drop or a paste carries, read while its event lasts. Folders show up among the files
- * too, as empty ones, so they're told apart by their entry and only named.
+ * The files and folders a drop or a paste carries, taken while its event lasts. Folders show up
+ * among the files too, as empty ones, so they're told apart by their entry, which can still be read
+ * once the event is over, as their uploads start.
  */
 export const filesIn = (data: DataTransfer): DroppedFiles => {
     const files: File[] = [];
-    const folders: string[] = [];
+    const folders: FolderSource[] = [];
 
     Array.from(data.items).forEach((item) => {
         if (item.kind !== "file") {
@@ -17,13 +50,55 @@ export const filesIn = (data: DataTransfer): DroppedFiles => {
         const file = item.getAsFile();
 
         if (entry?.isDirectory) {
-            folders.push(entry.name);
+            const folder = entry as FileSystemDirectoryEntry;
+
+            folders.push({ name: folder.name, read: () => readFolder(folder) });
         } else if (file) {
             files.push(file);
         }
     });
 
     return { files, folders };
+};
+
+/** Whether the browser's file picker can pick a folder (`webkitdirectory`). */
+export const picksFolders = () =>
+    typeof HTMLInputElement !== "undefined" && "webkitdirectory" in HTMLInputElement.prototype;
+
+/**
+ * The folder the browser's folder picker handed over, put together from its files' paths
+ * (`webkitRelativePath`, "photos/2024/a.jpg"). The picker leaves out folders with no file below
+ * them, so there's none when the folder picked holds no file.
+ */
+export const pickedFolder = (files: File[]): FolderSource | undefined => {
+    const top: FolderContents = { name: "", files: [], folders: [] };
+    const byPath = new Map<string, FolderContents>([["", top]]);
+
+    files.forEach((file) => {
+        const names = file.webkitRelativePath.split("/").slice(0, -1);
+        let folder = top;
+        let path = "";
+
+        names.forEach((name) => {
+            path += `/${name}`;
+
+            let child = byPath.get(path);
+
+            if (!child) {
+                child = { name, files: [], folders: [] };
+                byPath.set(path, child);
+                folder.folders.push(child);
+            }
+
+            folder = child;
+        });
+
+        folder.files.push(file);
+    });
+
+    const [picked] = top.folders;
+
+    return picked && { name: picked.name, read: () => Promise.resolve(picked) };
 };
 
 /** Whether a section takes uploads at all; an `acceptUploads` string limits which files. */

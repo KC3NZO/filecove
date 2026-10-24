@@ -13,6 +13,7 @@ import Delete from "@mui/icons-material/Delete";
 import DesktopWindows from "@mui/icons-material/DesktopWindows";
 import Description from "@mui/icons-material/Description";
 import Download from "@mui/icons-material/Download";
+import DriveFolderUpload from "@mui/icons-material/DriveFolderUpload";
 import Storage from "@mui/icons-material/Storage";
 import Edit from "@mui/icons-material/Edit";
 import ExpandMore from "@mui/icons-material/ExpandMore";
@@ -102,6 +103,7 @@ const filled: IconSet = {
     star: Star,
     starBorder: StarBorder,
     upload: Upload,
+    uploadFolder: DriveFolderUpload,
     videos: Movie,
     zoomFit: FitScreen,
     zoomIn: ZoomIn,

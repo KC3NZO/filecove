@@ -48,3 +48,14 @@ export const newFolderName = (siblings: FileEntry[] | undefined, text: FileManag
 
     return text.untitledFolder(number);
 };
+
+/** A name none of `taken` is, to keep both: in English "photos (2)", then "photos (3)" and so on. */
+export const freeName = (name: string, taken: ReadonlySet<string>, text: FileManagerLocaleText) => {
+    let number = 2;
+
+    while (taken.has(text.keptBothName(name, number))) {
+        number += 1;
+    }
+
+    return text.keptBothName(name, number);
+};

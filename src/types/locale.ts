@@ -17,6 +17,8 @@ export interface UploadLocaleText {
     uploadsDone: (count: number) => string;
     /** The panel's title once every file was cancelled. */
     uploadsCancelled: string;
+    /** The panel's title while folders are read, with no file waiting or uploading yet. */
+    uploadsPreparing: string;
     /** Under the title, how many uploaded, when some failed too. */
     uploadsDoneCount: (count: number) => string;
     /** Under the title, how many were cancelled, when others ended otherwise. */
@@ -36,8 +38,19 @@ export interface UploadLocaleText {
     uploadFailed: string;
     /** Read for an uploaded file's check mark. */
     uploadDone: string;
+    /** `fileName` is the file's name, or the folder's for a folder. */
     uploadCancel: (fileName: string) => string;
     uploadRetry: (fileName: string) => string;
+    /** A folder's status while what's in it is read, before its files are known. */
+    uploadPreparing: string;
+    /** A folder's status while it uploads: how many of its files are uploaded so far. */
+    uploadFolderProgress: (done: number, total: number) => string;
+    /** A folder's status once it's uploaded: how many files it took. */
+    uploadFolderDone: (count: number) => string;
+    /** A folder's status once it failed: how many of its files couldn't be uploaded. */
+    uploadFolderFailed: (count: number, total: number) => string;
+    /** Beside a folder's status, how many files in it were left out for their type. */
+    uploadFolderSkipped: (count: number) => string;
 }
 
 /**
@@ -214,6 +227,12 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     newFolder: string;
     /** The name a new folder is offered: the first free one, counting from 1. */
     untitledFolder: (number: number) => string;
+    /**
+     * The name a folder uploaded is made under to keep both, when the folder uploaded into has its
+     * name: the first free one, counting from 2. `name` comes as it is, not isolated, since this is
+     * a name.
+     */
+    keptBothName: (name: string, number: number) => string;
     renameTitle: (kind: EntryKind) => string;
     nameLabel: (kind: EntryKind) => string;
     create: string;
@@ -276,11 +295,23 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     skip: string;
     keepBoth: string;
     replace: string;
+    /** In place of Replace, when every name an upload clashes with is a folder's, uploading a folder. */
+    merge: string;
 
     // Uploading
     upload: string;
-    /** `name` is the file's name, meant for when `count` is 1. */
+    /** `count` is the files and folders together; `name` is the one's name, meant for when `count` is 1. */
     uploadTitle: (count: number, name: string, folderName: string) => string;
+    /**
+     * In place of `conflictHint`, when every name an upload clashes with is a folder's, uploading a
+     * folder: Merge, Keep both or Skip. `count` is the folders.
+     */
+    uploadMergeHint: (count: number) => string;
+    /**
+     * Beside `conflictHint`, when files clash too: what Replace does to a folder. `count` is the
+     * folders.
+     */
+    uploadReplaceMerges: (count: number) => string;
     /** When only folders were dropped. `name` is the folder's name, meant for when `count` is 1. */
     uploadFoldersFailedTitle: (count: number, name: string) => string;
     uploadFoldersOnly: string;

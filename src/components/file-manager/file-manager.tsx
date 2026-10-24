@@ -30,7 +30,15 @@ import { visibleActionGroups } from "../../utils/action-groups";
 import { isolate } from "../../utils/bidi";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { canDownload, downloadedEntries } from "../../utils/download";
-import { filesIn, mayAccept, takesUploads, uploadPatterns } from "../../utils/files";
+import {
+    acceptsFile,
+    filesIn,
+    mayAccept,
+    pickedFolder,
+    picksFolders,
+    takesUploads,
+    uploadPatterns,
+} from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
 import { importsFrom } from "../../utils/sections";
@@ -73,6 +81,7 @@ import type {
     FileManagerLocation,
     FileManagerSearch,
     FolderRef,
+    FolderUpload,
     LocationChangeReason,
     MainMenuGroup,
     MenuRequest,
@@ -1475,25 +1484,31 @@ const FileManager = ({
 
     // Only opens from a click or key press, which an action's `onSelect` runs in. It offers the
     // types the section takes (`acceptUploads`), though most pickers let the user pick any, so the
-    // upload check leaves out the rest.
-    const pickFiles = useCallback((into: (dropped: DroppedFiles) => void, accept: string) => {
+    // upload check leaves out the rest. Picking a folder, it hands over the files in it, each with
+    // its path inside it, and the browser may ask first whether to upload that many.
+    const pickFiles = useCallback((into: (dropped: DroppedFiles) => void, accept: string, folder = false) => {
         pickedInto.current = into;
 
         if (pickerRef.current) {
-            pickerRef.current.accept = accept;
+            pickerRef.current.accept = folder ? "" : accept;
+            pickerRef.current.webkitdirectory = folder;
             pickerRef.current.click();
         }
     }, []);
 
     const handlePicked = (event: ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(event.currentTarget.files ?? []);
+        const picker = event.currentTarget;
+        const files = Array.from(picker.files ?? []);
+        const folder = picker.webkitdirectory ? pickedFolder(files) : undefined;
         const into = pickedInto.current;
 
         // Emptied, so picking the same files again still counts as a change.
-        event.currentTarget.value = "";
+        picker.value = "";
         pickedInto.current = null;
 
-        if (into && files.length > 0) {
+        if (into && folder) {
+            into({ files: [], folders: [folder] });
+        } else if (into && !picker.webkitdirectory && files.length > 0) {
             into({ files, folders: [] });
         }
     };
@@ -1538,10 +1553,26 @@ const FileManager = ({
     // in are listed again like any other change.
     const uploads = useUploadQueue(relist);
 
+    // Files in the folders of types the section doesn't take are left out as the folders are read.
     const startUpload = useCallback(
-        ({ section: target, adapter: served, trail }: UploadRequest, files: File[], conflict: ConflictPolicy) => {
+        (
+            { section: target, adapter: served, trail }: UploadRequest,
+            files: File[],
+            folders: FolderUpload[],
+            conflict: ConflictPolicy,
+        ) => {
+            const into = folderOf(target, trail);
+            const patterns = uploadPatterns(target);
+
             closeUploadCheck();
-            uploads.queue.add(served, folderOf(target, trail), files, conflict);
+            uploads.queue.addFolders(
+                served,
+                into,
+                folders,
+                conflict,
+                patterns ? (file) => acceptsFile(patterns, file) : undefined,
+            );
+            uploads.queue.add(served, into, files, conflict);
         },
         [closeUploadCheck, uploads.queue],
     );
@@ -1906,6 +1937,10 @@ const FileManager = ({
                         files
                             ? uploadHere({ files, folders: [] })
                             : pickFiles(uploadHere, uploadPatterns(menuSection)?.join(",") ?? "")),
+                uploadFolder:
+                    uploadHere && folderAdapter.createFolder && picksFolders()
+                        ? () => pickFiles(uploadHere, "", true)
+                        : undefined,
                 paste: pasteTo(trail),
                 pasteInto:
                     entries.length === 1 && only.kind === "folder"

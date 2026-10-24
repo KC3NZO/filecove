@@ -31,7 +31,16 @@ export type { PreviewContent, PreviewKind, TextExcerpt } from "./preview";
 export type { FileManagerSearch, SearchHit, SearchScope, SearchTarget, SectionSearch } from "./search";
 export type { FolderRef, Section, SectionFolder, SectionGroup, SectionImports } from "./section";
 export type { EntrySelection, SelectionDetails, SelectModifiers, TreeSelection, TreeTarget } from "./selection";
-export type { DroppedFiles, UploadItem, UploadStatus } from "./upload";
+export type {
+    DroppedFiles,
+    FileUploadItem,
+    FolderContents,
+    FolderSource,
+    FolderUpload,
+    FolderUploadItem,
+    UploadItem,
+    UploadStatus,
+} from "./upload";
 export type {
     CaptionRow,
     DividerRow,

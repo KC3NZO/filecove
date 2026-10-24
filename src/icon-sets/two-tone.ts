@@ -13,6 +13,7 @@ import DeleteTwoTone from "@mui/icons-material/DeleteTwoTone";
 import DesktopWindowsTwoTone from "@mui/icons-material/DesktopWindowsTwoTone";
 import DescriptionTwoTone from "@mui/icons-material/DescriptionTwoTone";
 import DownloadTwoTone from "@mui/icons-material/DownloadTwoTone";
+import DriveFolderUploadTwoTone from "@mui/icons-material/DriveFolderUploadTwoTone";
 import StorageTwoTone from "@mui/icons-material/StorageTwoTone";
 import EditTwoTone from "@mui/icons-material/EditTwoTone";
 import ExpandMoreTwoTone from "@mui/icons-material/ExpandMoreTwoTone";
@@ -102,6 +103,7 @@ const twoTone: IconSet = {
     star: StarTwoTone,
     starBorder: StarBorderTwoTone,
     upload: UploadTwoTone,
+    uploadFolder: DriveFolderUploadTwoTone,
     videos: MovieTwoTone,
     zoomFit: FitScreenTwoTone,
     zoomIn: ZoomInTwoTone,

@@ -13,6 +13,7 @@ import DeleteOutlined from "@mui/icons-material/DeleteOutlined";
 import DesktopWindowsOutlined from "@mui/icons-material/DesktopWindowsOutlined";
 import DescriptionOutlined from "@mui/icons-material/DescriptionOutlined";
 import DownloadOutlined from "@mui/icons-material/DownloadOutlined";
+import DriveFolderUploadOutlined from "@mui/icons-material/DriveFolderUploadOutlined";
 import StorageOutlined from "@mui/icons-material/StorageOutlined";
 import EditOutlined from "@mui/icons-material/EditOutlined";
 import ExpandMoreOutlined from "@mui/icons-material/ExpandMoreOutlined";
@@ -102,6 +103,7 @@ const outlined: IconSet = {
     star: StarOutlined,
     starBorder: StarBorderOutlined,
     upload: UploadOutlined,
+    uploadFolder: DriveFolderUploadOutlined,
     videos: MovieOutlined,
     zoomFit: FitScreenOutlined,
     zoomIn: ZoomInOutlined,

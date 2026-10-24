@@ -55,6 +55,7 @@ export type IconName =
     | "star"
     | "starBorder"
     | "upload"
+    | "uploadFolder"
     | "videos"
     | "zoomFit"
     | "zoomIn"
