@@ -30,6 +30,7 @@ Every feature added or changed is checked against this before it's called done. 
 - **Controlled**: a change the user makes is only asked for, so nothing in a render or an effect may assume it happened; derive what's shown from the prop instead.
 - **The playground** controls it by default and passes `default…` for `?uncontrolled`.
 - **Keys**: a key added or changed is listed in the keyboard shortcuts window (see `keyboard.md`).
+- **Announcements**: an action that finishes with nothing spoken about it (focus doesn't move to the result, no dialog opens, nothing changes where the user is) is announced politely, in text from a `FileManagerLocaleText` key. One already spoken isn't announced again: opening a folder, or a rename that leaves focus on the renamed entry. A panel with its own live region (uploads, downloads) already counts.
 - **Docs**: the prop's comment in `file-manager.tsx` says what it does from the outside, and the rule of the feature says what isn't public yet, under "Not yet".
 
 ## Controlled or not
