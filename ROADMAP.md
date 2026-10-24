@@ -24,7 +24,7 @@ What's left in the features already built, what packaging needs before a release
 - [ ] `importFrom` only controls what comes into a section. Nothing stops entries from leaving one.
 - [ ] **new:** There are no per-entry permissions. `FileEntry` has no read-only field, so a read-only folder still accepts drops and pastes. An app can hide its actions with `visible`, but it can't refuse drop or paste targets.
 - [ ] Name-clash dialog: Merge for a folder clashing with a folder, no Replace when a file clashes with a folder, and Replace no longer the highlighted main button.
-- [ ] **new:** Screen readers hear nothing when an operation finishes (deleted, moved, pasted, created). Only the upload and download panels announce anything.
+- [x] **new:** Screen readers hear nothing when an operation finishes (deleted, moved, pasted, created). Only the upload and download panels announce anything. *Done 2026-10-23: deletes, copies, moves, pastes, drops, cut and copy, and creating and renaming are announced from one polite live region, a created or renamed entry only when it doesn't take the focus, and the checklist in `props.md` asks it of every new feature.*
 - [ ] **new (minor):** Names are only checked for ".", ".." and "/". There's no hook for a backend's own rules (for example Windows' `\:*?"<>|`), so the user only finds out after pressing the button.
 - [ ] Copied entries inside a folder that was then renamed keep their old ids, so pasting them fails with the adapter's error.
 

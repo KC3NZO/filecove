@@ -1,6 +1,8 @@
 ---
 paths:
   - "src/components/file-manager/file-manager.tsx"
+  - "src/components/file-manager/announcer.tsx"
+  - "src/hooks/use-announcer.ts"
   - "src/components/file-manager/content/**"
   - "src/components/file-manager/sidebar/**"
   - "src/components/file-manager/header-bar/header-bar.tsx"
@@ -126,6 +128,16 @@ The transfer picker's folder list (`dialogs/transfer-dialog.tsx`) is one tab sto
 - A key the consumer's shortcuts bind does what theirs does in the content and the tree, so it's left out of the sections where they come first (`yields`: General, Navigation, Selection, Sidebar), compared by `comboId` (`utils/shortcut.ts`); a row left with no key goes. The playground's Preview takes Space, so "Select or deselect" shows only Ctrl+Space there. The search field and the preview aren't affected, since shortcuts don't run there.
 - Key names come from the text (`keyCtrl`, `keyEnter`... through `keyLabel`), the arrows show as arrows, and four arrows in one cap stand for any of them (read as `keyArrows`). Back and forward, and expand and collapse, swap right to left, as the keys do. The keys' cell is `dir="auto"`, so Latin key names run left to right on a right-to-left page, as "Ctrl+F" is written there.
 - The list takes the focus once the dialog has faded in (`onEntered`), so the arrows and PageDown scroll it. Escape, its ✕ or Ctrl+? again closes it. It gives the focus back itself (`disableRestoreFocus`, then `handleShortcutsClosed` once it has faded out): to the element `showShortcuts` was given, the main menu's button when opened from it, since that menu only hands the focus back to its button as it closes, after the dialog has noted what had it, or else to what had the focus when it opened, or to the content when that's gone.
+
+## Announcements
+
+An action that finishes with nothing spoken about it is read out politely from one live region, `announcer.tsx` (a visually hidden `status` in the root), through `announce` from `useAnnouncer` (`hooks/use-announcer.ts`), called in `file-manager.tsx` as each operation ends. The checklist for a new feature in `props.md` asks whether it needs one.
+
+- Announced, from the text's keys: a delete (`deleteDone`); a copy or move, by a paste, a drop or the picker (`copyDone`, `moveDone`), counting only the entries not skipped for names the folder had (the dialogs' `onDone` hands the skipped names over), and saying nothing when every one was; cutting or copying to the clipboard (`clipboardCut`, `clipboardCopied`); and creating a folder or renaming (`createDone`, `renameDone`). Names are isolated (`isolate`).
+- Not announced, as something else says it: opening a folder (the focus and the view), a folder made in the transfer picker (the picker opens it, with the focus in its list), and a created or renamed entry that takes the focus as it's revealed. So a `Reveal` carries its message, and `FolderView`'s `onRevealed(focused)` says whether the entry took the focus; one that didn't, one given up on (hidden, or not listed) and one the open folder stops waiting for as another opens are announced. Made or renamed outside the open folder, it's announced at once.
+- Uploads and downloads aren't announced here: their panels have live titles of their own (see `uploads.md` and `download.md`). A failure isn't either, since its dialog stays open to show it.
+- A modal dialog hides the rest of the page from screen readers (MUI's `aria-hidden` on `<body>`'s other children) until it has faded out, and a live region in a hidden part goes unheard. So a message waits, watching `aria-hidden` with a `MutationObserver`, until the region has no hidden ancestor.
+- Each message goes in a node of its own, keyed by a count, so the same message twice is heard twice, and it's cleared after 7 s so browse mode doesn't come across old ones. A message announced before the last one was said replaces it.
 
 ## Context menu
 
