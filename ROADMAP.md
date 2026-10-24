@@ -7,7 +7,8 @@ What's left in the features already built, what packaging needs before a release
 1. ~~Re-list a folder in the background when it opens, showing the cached listing meanwhile, with a prop to turn it off (A, "Folder data and cache").~~ Done 2026-10-23.
 2. ~~Tooltips on icon-only buttons, selection that shows in Windows High Contrast mode, and screen-reader announcements when operations finish (A, "Interface polish" and "Operations").~~ Done 2026-10-23.
 3. ~~Properties, then folder upload (C).~~ Folder upload and properties done 2026-10-24.
-4. Packaging, in one pass before a release (B).
+4. The media manager (C.4), its contract designed on paper first.
+5. Packaging, in one pass before a release (B), as the last step.
 
 ## A. Gaps in features already built
 
