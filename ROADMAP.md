@@ -37,7 +37,7 @@ What's left in the features already built, what packaging needs before a release
 ### Uploads
 - [ ] Uploading folders.
 - [ ] Pasting files from the system clipboard.
-- [ ] A way for a section to refuse uploads.
+- [x] A way for a section to refuse uploads. *Done 2026-10-23: `Section.acceptUploads: false` takes no uploads, by the picker or by dropping, in any of the section's folders. Per folder waits for per-entry permissions.*
 - [ ] Selecting the files once they're uploaded.
 - [ ] Resuming an upload after a reload.
 - [ ] **new:** The file picker has no `accept` setting, so an app can't limit file types.

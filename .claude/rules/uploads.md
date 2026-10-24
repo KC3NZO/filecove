@@ -35,9 +35,17 @@ Keep it that way: `FileManager` imports the shared parts, never the other way ro
 
 Every route ends in `askUpload` in `file-manager.tsx`, with a `DroppedFiles` (`files`, plus the names of dropped `folders`):
 
-- **`ActionContext.upload(files?)`** uploads into the context's `folder`. Without `files` it opens the browser's file picker, a hidden `<input type="file" multiple>` in the root, which only opens from a click or key press (an action's `onSelect` runs in one). It's missing when the adapter has no `upload`, or while another upload is being checked. The consumer places and labels the action, as with every other one.
+- **`ActionContext.upload(files?)`** uploads into the context's `folder`. Without `files` it opens the browser's file picker, a hidden `<input type="file" multiple>` in the root, which only opens from a click or key press (an action's `onSelect` runs in one). It's missing when the adapter has no `upload`, the section refuses uploads (see "Sections refusing uploads"), or while another upload is being checked. The consumer places and labels the action, as with every other one.
 - **Dropping files from the desktop** onto the same targets that take dragged entries: a folder in the content, the open folder's empty space or a file in it, a tree folder, or a section row. `use-drop-target.ts` handles both kinds of drag. Dragged files show only as `"Files"` in `dataTransfer.types` until the drop, so they're offered by adapter alone (`DragContext.uploadInto`) and read on drop (`droppedFiles`). The highlight, the panel outline and the 700 ms hold to expand all work as they do for entries. A drag from outside never says how it ended, so a target unmarks itself on `dragleave` and `drop`.
 - Files dropped anywhere the views don't take them are refused on the root (`refuseFiles`, dropEffect "none"), or the browser would open them in place of the page.
+
+## Sections refusing uploads
+
+A section's optional `acceptUploads` (`types/section.ts`, public, default `true`) set to `false` takes no uploads into any of its folders, though its adapter has `upload`, for a section the user may browse but not add files to. Unlike `importFrom`, it's about files from the desktop, not entries from other sections, and the two are independent.
+
+- `offerUpload` in `file-manager.tsx` checks it, the one place every route asks: so `ActionContext.upload` is missing in its folders (the playground's "Upload files…" hides), and its drop targets don't take files dragged from the desktop, showing the no-drop cursor, with the root refusing the drop so the browser doesn't open them.
+- It goes by the section, not the folder, so the same folder shown in another section that takes uploads takes them there. Refusing per folder waits for per-entry permissions.
+- The playground's Design assets refuses uploads, as it refuses entries from other sections.
 
 ## The check before queueing
 
@@ -57,4 +65,4 @@ Every route ends in `askUpload` in `file-manager.tsx`, with a `DroppedFiles` (`f
 
 ## Not yet
 
-Uploading folders (would need `createFolder` and walking `webkitGetAsEntry`), pasting files from the system clipboard, a way for a section to refuse uploads (`importFrom` only covers other sections' entries), selecting the uploaded files, and resuming an upload after a reload.
+Uploading folders (would need `createFolder` and walking `webkitGetAsEntry`), pasting files from the system clipboard, refusing uploads per folder rather than per section, selecting the uploaded files, and resuming an upload after a reload.
