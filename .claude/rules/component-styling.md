@@ -32,7 +32,7 @@ Colors come only from palette tokens:
 - `background.paper` for the content panel.
 - `primary` for selection, `text.primary` for hover and the zebra stripe, at strengths built on the `action` opacities.
 
-Shared color helpers are in `src/styles/mixins.ts`: `hoverBackground`, `selectedBackground`, `selectedHoverBackground`, `stripeBackground`, `focusRing`, `focusVisibleRing`, `focusOutline`, `cutMarker`, `dragMarkers` and `dialogPaperSx`, with `visuallyHiddenSx` for text only screen readers read. They read `theme.vars` when present, so they work with or without CSS variables. Write new helpers the same way.
+Shared color helpers are in `src/styles/mixins.ts`: `hoverBackground`, `selectedBackground`, `selectedHoverBackground`, `stripeBackground`, `focusRing`, `focusVisibleRing`, `focusOutline`, `cutMarker`, `dragMarkers`, `dialogPaperSx` and `menuPaperSx`, the forced colors helpers below, and `visuallyHiddenSx` for text only screen readers read. They read `theme.vars` when present, so they work with or without CSS variables. Write new helpers the same way.
 
 - Rows, tiles and tree rows take their hover and selection from these helpers, never from `action.hover` or `action.selected`. MUI's opacities (hover 0.04 and selected 0.08 in light mode) are tuned for menus, and over a striped white list a hovered row looked like a stripe. The helpers add a fixed boost to the theme's opacities (written as `"a + b"`, which `theme.alpha` sums with or without CSS variables), so a theme that changes them still moves them. A selected item under the pointer gets a step stronger.
 - Cut entries take `cutMarker`, keyed off `data-cut`: their contents fade to 0.45 and a dashed `text.secondary` outline traces them. Only the children fade, so hover and selection backgrounds stay as strong.
@@ -42,3 +42,15 @@ Shared color helpers are in `src/styles/mixins.ts`: `hoverBackground`, `selected
 - Dialogs use `dialogPaperSx`: the window's `background.default` with a `divider` outline, and no `backgroundImage`. MUI's elevated Paper lays a white overlay over it in dark mode that turns any dark background grey. A view inside a dialog, like the transfer picker's folder list, sits on `background.paper`, so a dialog is laid out like the window: chrome on default, view on paper.
 - Dialog buttons other than the main action are `color="inherit"`, so only the one that does the work is accented.
 - Menus still use MUI's Paper as it comes, overlay included.
+
+## Forced colors (Windows High Contrast)
+
+Windows' High Contrast themes, and any forced colors mode, drop background colours and box shadows and put the user's colours in place of text, border and outline colours, but keep system colours an author sets. So outlines and borders still show (focus rings, the cut and drop outlines, the marquee's border, dialogs' edges), but anything a background or shadow alone shows would vanish. Those take system colours under `forcedColors` (`@media (forced-colors: active)`, `styles/mixins.ts`), a key that goes last in an `sx` object, after the rules it overrides:
+
+- Selected list rows, grid tiles and tree rows take `Highlight` with `HighlightText` (`forcedSelected`), as a native list shows a selection; the text inside inherits it. The tree's open folder takes `Highlight` text, under the selection.
+- Pressed toggle buttons, the search buttons and Select, take `Highlight` (`forcedPressed`), and so does the open search tab's underline.
+- `LinearProgress` fills take `Highlight` (`forcedBarSx`, in the content's, the search results' and the panels' bars).
+- Menus (`menuPaperSx`, shared by the four menus) and tooltips get a 1px `CanvasText` outline (`forcedEdge`), where their shadow and background set them apart.
+- Hover shows nothing for now. Chrome's DevTools emulate it (Rendering, "Emulate CSS media feature forced-colors").
+
+A new state shown by a background or a shadow alone needs its own rule under `forcedColors`.

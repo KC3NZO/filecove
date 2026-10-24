@@ -5,7 +5,7 @@ What's left in the features already built, what packaging needs before a release
 ## Order
 
 1. ~~Re-list a folder in the background when it opens, showing the cached listing meanwhile, with a prop to turn it off (A, "Folder data and cache").~~ Done 2026-10-23.
-2. Tooltips on icon-only buttons, selection that shows in Windows High Contrast mode, and screen-reader announcements when operations finish (A, "Interface polish" and "Operations").
+2. ~~Tooltips on icon-only buttons, selection that shows in Windows High Contrast mode, and screen-reader announcements when operations finish (A, "Interface polish" and "Operations").~~ Done 2026-10-23.
 3. Properties, then folder upload (C).
 4. Packaging, in one pass before a release (B).
 
@@ -87,7 +87,7 @@ What's left in the features already built, what packaging needs before a release
 
 ### Interface polish
 - [x] **new:** No tooltips anywhere. Icon-only buttons (back, search, view, menus, zoom) only have screen-reader labels. *Done 2026-10-23: every icon-only button is a `TooltipIconButton` showing its label, but the list rows' ⋮, which is hidden from screen readers.*
-- [ ] **new:** Nothing handles Windows High Contrast mode (`forced-colors`). Selection, hover, cut and drop markers are background colours, which that mode removes, so selected files look like all the others.
+- [x] **new:** Nothing handles Windows High Contrast mode (`forced-colors`). Selection, hover, cut and drop markers are background colours, which that mode removes, so selected files look like all the others. *Done 2026-10-23: selections show in the system's `Highlight`, as do pressed buttons, the open search tab and progress bars, menus and tooltips get an edge, and the cut and drop markers already had outlines. Hover shows nothing for now.*
 - [ ] **new:** Back and forward have no history list (GNOME shows one on right-click).
 
 ## B. Packaging (before any release)
