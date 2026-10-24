@@ -102,6 +102,8 @@ export const enUS: FileManagerLocaleText = {
     nameTaken: (kind) => `A ${kind} with that name already exists.`,
     createFailed: "Couldn't create the folder.",
     renameFailed: (kind) => `Couldn't rename the ${kind}.`,
+    createDone: (name) => `Created folder “${name}”`,
+    renameDone: (name, newName) => `Renamed “${name}” to “${newName}”`,
 
     delete: "Delete",
     deleteTitle: (count, name) => `Delete ${entries(count, name)}?`,
@@ -115,6 +117,7 @@ export const enUS: FileManagerLocaleText = {
             : "Folders are deleted with everything in them. This can't be undone.";
     },
     deleteFailed: (count) => `Couldn't delete ${itOrThem(count)}.`,
+    deleteDone: (count, name) => `Deleted ${entries(count, name)}`,
 
     copyToTitle: (count, name) => `Copy ${entries(count, name)} to…`,
     moveToTitle: (count, name) => `Move ${entries(count, name)} to…`,
@@ -128,6 +131,10 @@ export const enUS: FileManagerLocaleText = {
     moveFailedTitle: (count, name) => `Couldn't move ${entries(count, name)}`,
     copyFailed: (count) => `Couldn't copy ${itOrThem(count)}.`,
     moveFailed: (count) => `Couldn't move ${itOrThem(count)}.`,
+    copyDone: (count, name, folderName) => `Copied ${entries(count, name)} to “${folderName}”`,
+    moveDone: (count, name, folderName) => `Moved ${entries(count, name)} to “${folderName}”`,
+    clipboardCut: (count, name) => `Cut ${entries(count, name)}, ready to paste`,
+    clipboardCopied: (count, name) => `Copied ${entries(count, name)}, ready to paste`,
 
     conflictMessage: (count, name, folderName) =>
         count === 1

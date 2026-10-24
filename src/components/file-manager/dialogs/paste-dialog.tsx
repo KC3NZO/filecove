@@ -48,8 +48,11 @@ interface PasteDialogProps {
      * entries were put in the place of, which may now name those.
      */
     onChanged: (adapter: FileAdapter, folderIds: string[], replacedIds?: string[]) => void;
-    /** Called once the adapter has moved or copied the entries. */
-    onDone: (request: PasteRequest) => void;
+    /**
+     * Called once the adapter has moved or copied the entries, with the names of those it was told
+     * to skip, as the folder had them.
+     */
+    onDone: (request: PasteRequest, skipped: string[]) => void;
 }
 
 const slotProps = {
@@ -103,7 +106,7 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
     const paste = (conflict: ConflictPolicy) => {
         run(target.id, conflict).then((outcome) => {
             if (outcome === "done") {
-                onDone(request);
+                onDone(request, conflict === "skip" ? (conflicts ?? []) : []);
             } else if (outcome === "failed") {
                 setConflicts(null);
             }

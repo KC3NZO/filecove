@@ -227,6 +227,10 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     createFailed: string;
     /** Why renaming failed, when the adapter didn't say. */
     renameFailed: (kind: EntryKind) => string;
+    /** Read to screen readers once a folder is made, unless the focus goes to it. */
+    createDone: (name: string) => string;
+    /** Read to screen readers once an entry is renamed, unless the focus goes to it. */
+    renameDone: (name: string, newName: string) => string;
 
     // Deleting
     delete: string;
@@ -235,6 +239,8 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     deleteWarning: (count: number, hasFolders: boolean) => string;
     /** Why deleting failed, when the adapter didn't say. */
     deleteFailed: (count: number) => string;
+    /** Read to screen readers once the entries are deleted. */
+    deleteDone: (count: number, name: string) => string;
 
     // Copying and moving
     copyToTitle: (count: number, name: string) => string;
@@ -254,6 +260,14 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     copyFailed: (count: number) => string;
     /** Why moving failed, when the adapter didn't say. */
     moveFailed: (count: number) => string;
+    /** Read to screen readers once entries are copied, by a paste, a drop or "Copy to…". */
+    copyDone: (count: number, name: string, folderName: string) => string;
+    /** Read to screen readers once entries are moved, by a paste, a drop or "Move to…". */
+    moveDone: (count: number, name: string, folderName: string) => string;
+    /** Read to screen readers as entries are cut, to be moved where they're pasted. */
+    clipboardCut: (count: number, name: string) => string;
+    /** Read to screen readers as entries are copied, to be copied where they're pasted. */
+    clipboardCopied: (count: number, name: string) => string;
 
     // Names a folder already has, when copying, moving or uploading into it
     /** `name` is the one clashing name, meant for when `count` is 1. */

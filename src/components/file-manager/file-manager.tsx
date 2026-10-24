@@ -12,6 +12,7 @@ import { DataContext } from "../../contexts/data-context";
 import { DirectionContext } from "../../contexts/direction-context";
 import { DragContext } from "../../contexts/drag-context";
 import { LocaleContext } from "../../contexts/locale-context";
+import { useAnnouncer } from "../../hooks/use-announcer";
 import { carriesFiles } from "../../hooks/use-drop-target";
 import { useDownloadQueue } from "../../hooks/use-download-queue";
 import { useEntryDrag } from "../../hooks/use-entry-drag";
@@ -26,6 +27,7 @@ import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
 import { withSx } from "../../styles/sx";
 import { visibleActionGroups } from "../../utils/action-groups";
+import { isolate } from "../../utils/bidi";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { canDownload, downloadedEntries } from "../../utils/download";
 import { isHidden } from "../../utils/hidden";
@@ -37,6 +39,7 @@ import { matchesShortcut, pressedKeys, pressesKey, showsShortcuts, typesInField 
 import { DEFAULT_SORT, entryComparator, sameSort } from "../../utils/sort";
 import DownloadPanel from "../downloads/download-panel";
 import UploadPanel from "../uploads/upload-panel";
+import Announcer from "./announcer";
 import FolderView from "./content/folder-view";
 import NoSections from "./content/no-sections";
 import SearchResults from "./content/search-results";
@@ -307,6 +310,8 @@ interface Reveal {
     /** `folderKey` of the folder it was meant for. */
     key: string;
     id: string;
+    /** Said once the entry is revealed, unless it takes the focus, which says its name. */
+    announce?: string;
 }
 
 /** `defaultSelectedIds`, for the folder the file manager opened in, until another opens. */
@@ -636,6 +641,7 @@ const FileManager = ({
     // What gets the focus back as the keyboard shortcuts close.
     const shortcutsOpener = useRef<HTMLElement | null>(null);
     const [reveal, setReveal] = useState<Reveal | null>(null);
+    const { announcement, announce } = useAnnouncer();
     // A folder just created, which the sidebar tree scrolls to once it shows its row.
     const [treeReveal, setTreeReveal] = useState<TreeReveal | null>(null);
     // The browser's file picker, and where the files picked with it go.
@@ -760,6 +766,11 @@ const FileManager = ({
         setShownPlace(place);
 
         if (!(reveal && reveal.key === openKey)) {
+            // A created or renamed entry the open folder no longer waits for is announced now.
+            if (reveal?.announce) {
+                announce(reveal.announce);
+            }
+
             setReveal(left && openKey ? { key: openKey, id: left.id } : null);
         }
     }
@@ -1301,7 +1312,16 @@ const FileManager = ({
     const closeMenu = useCallback(() => setMenu((prev) => prev && { ...prev, open: false }), []);
     const setSelecting = useCallback((on: boolean) => setSelectingKey(on ? openKey : null), [openKey]);
     const toggleSelecting = useCallback(() => setSelecting(!selecting), [setSelecting, selecting]);
-    const clearReveal = useCallback(() => setReveal(null), []);
+    const handleRevealed = useCallback(
+        (focused: boolean) => {
+            if (reveal?.announce && !focused) {
+                announce(reveal.announce);
+            }
+
+            setReveal(null);
+        },
+        [reveal, announce],
+    );
     const clearTreeReveal = useCallback(() => setTreeReveal(null), []);
 
     const askName = useCallback((request: NameRequest) => {
@@ -1600,28 +1620,60 @@ const FileManager = ({
         [dropFolders, revealInTree],
     );
 
+    // Says what a copy or move did, leaving out the entries skipped for names the folder had.
+    const announceTransfer = useCallback(
+        (kind: TransferRequest["kind"], entries: FileEntry[], skipped: readonly string[], folder: FolderRef) => {
+            const skippedNames = new Set(skipped);
+            const done = entries.filter((entry) => !skippedNames.has(entry.name));
+
+            if (done.length > 0) {
+                announce(
+                    (kind === "copy" ? localeValue.text.copyDone : localeValue.text.moveDone)(
+                        done.length,
+                        isolate(done[0].name),
+                        isolate(folder.name),
+                    ),
+                );
+            }
+        },
+        [announce, localeValue],
+    );
+
     const handleTransferred = useCallback(
-        (request: TransferRequest, destination: FileManagerLocation) => {
+        (request: TransferRequest, destination: FileManagerLocation, skipped: string[]) => {
+            const target = sectionsById.get(destination.sectionId);
+
             closeTransfer();
 
             if (request.kind === "move") {
                 handleMoved(request.adapter, request.entries, destination);
             }
+
+            if (target) {
+                announceTransfer(request.kind, request.entries, skipped, folderOf(target, destination.trail));
+            }
         },
-        [closeTransfer, handleMoved],
+        [closeTransfer, handleMoved, announceTransfer, sectionsById],
     );
 
     // A cut is pasted once, so its entries leave the clipboard, as do entries moved by a drop; a
     // copy can be pasted again.
     const handlePasted = useCallback(
-        ({ clipboard: pasted, section: target, trail }: PasteRequest) => {
+        ({ clipboard: pasted, section: target, trail }: PasteRequest, skipped: string[]) => {
             closePaste();
 
             if (pasted.kind === "cut") {
                 handleMoved(pasted.adapter, pasted.entries, { sectionId: target.id, trail });
             }
+
+            announceTransfer(
+                pasted.kind === "cut" ? "move" : "copy",
+                pasted.entries,
+                skipped,
+                folderOf(target, trail),
+            );
         },
-        [closePaste, handleMoved],
+        [closePaste, handleMoved, announceTransfer],
     );
 
     // Deleted folders go from the cache (`dropFolders`), and places inside one, in the history too,
@@ -1637,8 +1689,9 @@ const FileManager = ({
 
             revise((visited) => (showing.has(visited.sectionId) ? outsideDeleted(visited, dropped) : visited));
             setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, deletedIds));
+            announce(localeValue.text.deleteDone(entries.length, isolate(entries[0].name)));
         },
-        [closeDelete, dropFolders, revise, sectionsOf],
+        [closeDelete, dropFolders, revise, sectionsOf, announce, localeValue],
     );
 
     // The new or renamed entry is selected if its folder is open, in whichever section shows it. A
@@ -1651,10 +1704,18 @@ const FileManager = ({
             const before = request.kind === "rename" ? request.entry : undefined;
             const showing = sectionsOf(served);
 
+            const message = before
+                ? localeValue.text.renameDone(isolate(before.name), isolate(entry.name))
+                : localeValue.text.createDone(isolate(entry.name));
+
             closeNaming();
 
+            // Shown in the open folder, the entry is announced once it's revealed there, unless it
+            // takes the focus.
             if (openKey && showing.some((shown) => folderKey(shown.id, parentId) === openKey)) {
-                setReveal({ key: openKey, id: entry.id });
+                setReveal({ key: openKey, id: entry.id, announce: message });
+            } else {
+                announce(message);
             }
 
             // A renamed entry on the clipboard is pasted as it is now.
@@ -1704,7 +1765,7 @@ const FileManager = ({
                 });
             }
         },
-        [closeNaming, openKey, sectionsOf, dropFolders, revealInTree, revise],
+        [closeNaming, openKey, sectionsOf, dropFolders, revealInTree, revise, announce, localeValue],
     );
 
     const contextFor = useCallback(
@@ -1782,11 +1843,17 @@ const FileManager = ({
                 moveTo: folderAdapter.move && entries.length > 0 ? transferTo("move") : undefined,
                 cut:
                     folderAdapter.move && entries.length > 0
-                        ? () => setClipboard({ ...base, kind: "cut", entries })
+                        ? () => {
+                              setClipboard({ ...base, kind: "cut", entries });
+                              announce(localeValue.text.clipboardCut(entries.length, isolate(only.name)));
+                          }
                         : undefined,
                 copy:
                     folderAdapter.copy && entries.length > 0
-                        ? () => setClipboard({ ...base, kind: "copy", entries })
+                        ? () => {
+                              setClipboard({ ...base, kind: "copy", entries });
+                              announce(localeValue.text.clipboardCopied(entries.length, isolate(only.name)));
+                          }
                         : undefined,
                 delete: folderAdapter.delete && entries.length > 0 ? () => askDelete({ ...base, entries }) : undefined,
                 download: canDownload(folderAdapter, downloaded)
@@ -1855,6 +1922,8 @@ const FileManager = ({
             place,
             stopSearching,
             focusInContent,
+            announce,
+            localeValue,
         ],
     );
 
@@ -2211,7 +2280,7 @@ const FileManager = ({
                                                         onOpenFile={openFile}
                                                         onOpenMenu={openMenu}
                                                         onShortcut={runShortcut}
-                                                        onRevealed={clearReveal}
+                                                        onRevealed={handleRevealed}
                                                         onRevealUnmatched={closeSearch}
                                                     />
                                                 )}
@@ -2242,6 +2311,7 @@ const FileManager = ({
                                         )}
                                     </Box>
                                 </Box>
+                                <Announcer announcement={announcement} />
                                 <ContextMenu menu={menu} onClose={closeMenu} />
                                 {naming && (
                                     <NameDialog

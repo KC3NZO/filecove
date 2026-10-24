@@ -83,8 +83,11 @@ interface TransferDialogProps {
      * entries were put in the place of, which may now name those.
      */
     onChanged: (adapter: FileAdapter, folderIds: string[], replacedIds?: string[]) => void;
-    /** Called once the adapter has copied or moved the entries into `destination`. */
-    onDone: (request: TransferRequest, destination: FileManagerLocation) => void;
+    /**
+     * Called once the adapter has copied or moved the entries into `destination`, with the names of
+     * those it was told to skip, as the folder had them.
+     */
+    onDone: (request: TransferRequest, destination: FileManagerLocation, skipped: string[]) => void;
     /**
      * Called with a folder made with the picker's New folder button, as the adapter returned it,
      * and the id of the folder it was made in.
@@ -504,7 +507,7 @@ const TransferDialog = ({
 
         start(targetFolder.id, conflict).then((outcome) => {
             if (outcome === "done") {
-                onDone(request, destination);
+                onDone(request, destination, conflict === "skip" ? (conflicts ?? []) : []);
             } else if (outcome === "failed") {
                 setConflicts(null);
             }

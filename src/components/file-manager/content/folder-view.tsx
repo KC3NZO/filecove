@@ -94,8 +94,11 @@ interface FolderViewProps {
     onOpenFile: (request: MenuRequest) => boolean;
     onOpenMenu: OpenMenu;
     onShortcut: RunShortcut;
-    /** Called once `revealId` has been selected. */
-    onRevealed: () => void;
+    /**
+     * Called once `revealId` has been selected, saying whether it takes the focus, or given up on,
+     * with `false`.
+     */
+    onRevealed: (focused: boolean) => void;
     /** Called while `revealId` is listed but left out by `query`, so ending the search shows it. */
     onRevealUnmatched: () => void;
 }
@@ -390,9 +393,11 @@ const FolderView = ({
 
         replace({ ids: new Set([revealId]), anchor: revealId });
         setFocus({ id: revealId, index: revealIndex });
-        pendingScroll.current = { id: revealId, focus: pendingFocus.current || focusWithin.current };
+        const focused = pendingFocus.current || focusWithin.current;
+
+        pendingScroll.current = { id: revealId, focus: focused };
         pendingFocus.current = false;
-        onRevealed();
+        onRevealed(focused);
     }, [revealId, revealIndex, replace, onRevealed]);
 
     // A selection set from outside, which the consumer's `selectedIds` (other than what the view
@@ -464,7 +469,7 @@ const FolderView = ({
 
     useEffect(() => {
         if (revealLost) {
-            onRevealed();
+            onRevealed(false);
         }
     }, [revealLost, onRevealed]);
 
