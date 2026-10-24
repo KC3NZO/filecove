@@ -5,7 +5,7 @@ import type { CountTarget, EntryProperties, EntryTotals, PropertiesItem, Request
 
 const LOADING = { status: "loading" } as const;
 
-// Numbers objects by identity, so folders are told apart by their entry objects in a key.
+// Numbers adapters by identity, so folders are told apart by their adapters in a key.
 const identities = new WeakMap<object, number>();
 let nextIdentity = 1;
 
@@ -22,7 +22,10 @@ const identityOf = (value: object) => {
 
 interface UsePropertiesOptions {
     cache: PropertiesCache;
-    /** The host's count of its changes, which counts what's in folders again as it goes up. */
+    /**
+     * The host's count of its changes, which counts what's in folders again once it has stopped
+     * going up for a moment, keeping the totals counted before meanwhile.
+     */
     changes: number;
     showHidden: boolean;
 }
@@ -58,10 +61,10 @@ export const useProperties = (
         [items],
     );
     const measurable = targets.length > 0 && targets.every((target) => !!target.adapter.measure);
-    // The same folders, as the same entry objects, make the same key, however often the items are
-    // made anew, so a count under way carries on.
+    // The same folders, by their ids and adapters, make the same key, however often the items are
+    // made anew and the folders listed anew, so a count under way carries on.
     const countKey = measurable
-        ? targets.map((target) => `${identityOf(target.adapter)}:${identityOf(target.entry)}`).join(",")
+        ? JSON.stringify(targets.map((target) => [identityOf(target.adapter), target.entry.id]))
         : "";
 
     useEffect(
@@ -70,22 +73,21 @@ export const useProperties = (
         [cache, countKey, changes, showHidden, countAttempt],
     );
 
-    const details: Requested<EntryProperties> | undefined = detailsEntry
-        ? (cache.details(detailsEntry) ?? LOADING)
-        : undefined;
+    const details: Requested<EntryProperties> | undefined =
+        detailsEntry && detailsAdapter ? (cache.details(detailsEntry, detailsAdapter) ?? LOADING) : undefined;
     const totals: Requested<EntryTotals> | undefined = measurable
         ? (cache.count(targets, changes, showHidden) ?? LOADING)
         : undefined;
 
     const retryDetails = () => {
-        if (detailsEntry) {
-            cache.forgetDetails(detailsEntry);
+        if (detailsEntry && detailsAdapter) {
+            cache.forgetDetails(detailsEntry, detailsAdapter);
             setDetailsAttempt((count) => count + 1);
         }
     };
 
     const retryTotals = () => {
-        cache.forgetCount(targets, changes, showHidden);
+        cache.forgetCount(targets, showHidden);
         setCountAttempt((count) => count + 1);
     };
 

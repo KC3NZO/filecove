@@ -25,7 +25,7 @@ import type { EntryTotals, FileEntry, Locale, PropertiesItem, PropertyField, Req
 interface PropertiesPanelProps {
     /** What it shows: one entry, several, or none, which asks for something to be selected. */
     items: readonly PropertiesItem[];
-    /** The host's count of its changes, which counts what's in folders again as it goes up. */
+    /** The host's count of its changes, which counts what's in folders again once it settles. */
     changes: number;
     /** Whether the host shows hidden files, which `measure` is told. */
     showHidden: boolean;
@@ -381,12 +381,22 @@ const PropertiesPanel = ({ items, changes, showHidden, cache: given, takeFocus, 
 
     const [only] = items;
     const single = items.length === 1 ? only : undefined;
-    const fuller = details?.status === "ready" ? details.value.entry : undefined;
+    // What `properties` handed over, or while a changed entry is asked about again, what it handed
+    // over before.
+    const handed =
+        details?.status === "ready" ? details.value : details?.status === "loading" ? details.progress : undefined;
+    const fuller = handed?.entry;
+    const fresh = details?.status === "ready";
     // The fuller entry `properties` hands over, over the listed one, for what the listing left out.
-    const entry = useMemo(
-        () => (single && fuller ? { ...single.entry, ...fuller } : single?.entry),
-        [single, fuller],
-    );
+    // One handed over before the entry changed only fills in what the listing leaves out, so its
+    // new size and date show at once.
+    const entry = useMemo(() => {
+        if (!single || !fuller) {
+            return single?.entry;
+        }
+
+        return fresh ? { ...single.entry, ...fuller } : { ...fuller, ...single.entry };
+    }, [single, fuller, fresh]);
 
     let body: ReactNode;
 
@@ -512,7 +522,7 @@ const PropertiesPanel = ({ items, changes, showHidden, cache: given, takeFocus, 
 
         let backendGroups: ReactNode = null;
 
-        if (details?.status === "loading") {
+        if (details?.status === "loading" && !handed) {
             backendGroups = (
                 <Box sx={stateSx}>
                     <Spinner label={text.propertiesLoading} />
@@ -527,8 +537,8 @@ const PropertiesPanel = ({ items, changes, showHidden, cache: given, takeFocus, 
                     </Button>
                 </Box>
             );
-        } else if (details?.status === "ready") {
-            backendGroups = details.value.groups?.map(
+        } else if (handed) {
+            backendGroups = handed.groups?.map(
                 (group) =>
                     group.fields.length > 0 && (
                         <Box key={group.id} sx={groupSx}>
