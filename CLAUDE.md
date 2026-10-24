@@ -86,6 +86,10 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 
 When a feature is added or changed, check it against the checklist in `props.md` (public props, `apiRef`, callbacks, playground) before it's done, and document it in the matching rule (or a new one), not here. This file stays for things every session needs.
 
+## Roadmap
+
+`ROADMAP.md` is the one list of what's left: gaps in features already built, packaging before a release, and new features, with the order to work in. When asked what's left or what to do next, read it rather than auditing from scratch. When something on it is done, tick it off, and add new gaps there, not here.
+
 ## Repo settings
 
 `.claude/settings.json` denies `git push` and requires confirmation for `git commit` and `rm`. Commits are made with the `/commit` skill (`.claude/skills/commit/`), which holds the commit message style.
