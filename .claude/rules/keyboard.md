@@ -8,6 +8,7 @@ paths:
   - "src/components/file-manager/header-bar/search-sections-menu.tsx"
   - "src/components/file-manager/context-menu/**"
   - "src/components/file-manager/dialogs/transfer-dialog.tsx"
+  - "src/components/file-manager/dialogs/shortcuts-dialog.tsx"
   - "src/utils/keyboard.ts"
   - "src/utils/shortcut.ts"
   - "src/hooks/use-type-ahead.ts"
@@ -23,17 +24,21 @@ A key press goes to the consumer's shortcuts before the component's own keys, so
 
 | Where | Keys |
 |---|---|
-| Anywhere in the file manager (`file-manager.tsx`) | F6 between the sidebar tree and the content, F9 to show and hide the sidebar, Ctrl+H to show and hide hidden files (Ctrl only, not ⌘), Ctrl+F or ⌘F to search the open folder and Ctrl+Shift+F or ⌘⇧F every section, Alt+Left and Alt+Right for back and forward (swapped right to left) |
+| Anywhere in the file manager (`file-manager.tsx`) | the main menu items' shortcuts first (see "The main menu" in `file-manager.md`), then F6 between the sidebar tree and the content, F9 to show and hide the sidebar, Ctrl+? for the keyboard shortcuts (Ctrl only, not ⌘), Ctrl+H to show and hide hidden files (Ctrl only, not ⌘), Ctrl+F or ⌘F to search the open folder and Ctrl+Shift+F or ⌘⇧F every section, Alt+Left and Alt+Right for back and forward (swapped right to left) |
 | Content (`content/folder-view.tsx`) | arrows, Home, End, PageUp, PageDown, Space, Shift+Space, Enter, Alt+Down, Backspace, Alt+Up, Ctrl+A, Escape, typing, Menu or Shift+F10 |
 | Sidebar tree (`sidebar/sidebar.tsx`, `TreeItem` in `sidebar/location-item.tsx`) | Up, Down, Home, End, Right, Left, Enter, Space, Shift+Space, typing, Menu or Shift+F10, Escape (closes the overlay) |
 | The search field (`header-bar/search-field.tsx`) | Escape to close, Down or Enter on to the content, Alt+Down for the sections menu (see "Search" in `file-manager.md`) |
 | A search everywhere's results (`content/search-results.tsx`) | the content's keys but Backspace and Alt+Up, which lead nowhere; on its tabs (`content/search-tabs.tsx`), Left, Right, Home and End (see "Search results" below) |
 | "Move to…" and "Copy to…" (`dialogs/transfer-dialog.tsx`) | Up, Down, Home, End, PageUp, PageDown, typing, Enter or Space to open, Backspace or Alt+Up to go up |
 | The preview (`dialogs/preview-dialog.tsx`) | Left and Right to step through the files, Space or Escape to close, +, -, 0 and 1 to zoom an image (`dialogs/image-viewer.tsx`) and the arrows to pan it zoomed in (see `preview.md`) |
+| The keyboard shortcuts (`dialogs/shortcuts-dialog.tsx`) | Escape or Ctrl+? to close, and the arrows, PageUp and PageDown to scroll |
+
+Every key in this table that a user would look for is listed in the keyboard shortcuts window (see "The keyboard shortcuts window"), so **a key added or changed here is added or changed there too**.
 
 - "Anywhere" means wherever the focus is inside the root, since key presses start from the focused element. The root and the sidebar are `tabIndex={-1}` with no outline, so a press on empty space that holds nothing focusable (the header's, the sidebar's below its rows) focuses the nearest of them rather than dropping the focus to the page, out of the root's reach. In the sidebar, F6 then goes on to the content, and the overlay stays open, as the focus hasn't left it. A consumer's own `tabIndex` on the root replaces it.
 - The root's handler ignores presses from the menus and dialogs, which portal out of it but still bubble through React's tree, by checking that the DOM holds the target.
-- Browsers keep some keys. Chrome never passes Ctrl+N, Ctrl+T or Ctrl+W to a page, and F6, F9 or Alt+Left may be taken by the browser before the page sees them. Ctrl+H, the browser's history elsewhere, and Ctrl+F or ⌘F and Ctrl+Shift+F, its find, reach the page and are kept from the browser while the focus is in the file manager.
+- Browsers keep some keys. Chrome never passes Ctrl+N, Ctrl+T or Ctrl+W to a page, and F6, F9 or Alt+Left may be taken by the browser before the page sees them. Ctrl+H, the browser's history elsewhere, and Ctrl+F or ⌘F and Ctrl+Shift+F, its find, reach the page and are kept from the browser while the focus is in the file manager. ⌘? opens the browser's Help menu on macOS, so the shortcuts are Ctrl+? there too, as hidden files are Ctrl+H.
+- A main menu item's shortcut runs before the file manager's own keys, as the actions' do in the content and the tree, but not for a key that types into the search field (no Ctrl, ⌘ or Alt, and not an F-key: `typesInField` in `utils/shortcut.ts`).
 - A consumer action bound to one of these keys runs instead in the content and the tree, where shortcuts run, since they come first and the root's handler skips a press already handled.
 - Letters and digits are matched on any keyboard layout (see "Keyboard layouts").
 - Left and Right swap when the view or tree computes as `direction: rtl` (`isRtl` in `utils/dom.ts`), and Alt+Left and Alt+Right swap when the file manager does (`useTextDirection`), as the back and forward arrows are mirrored (see `rtl.md`).
@@ -45,7 +50,7 @@ A shortcut's letter or digit is the key printed with it, whatever layout is on, 
 - The key the layout types, lowercased, when it's a Latin letter or digit, or a named key (F2, Delete, the arrows, Space), which is the same on every layout. So Ctrl+Z is the key marked Z on QWERTY, AZERTY, QWERTZ and Dvorak alike.
 - Otherwise that, then the Latin letter or digit at the key's place, from `code` ("KeyH", "Digit1"), since non-Latin keyboards print the US letters beside their own. It also covers what Shift, AltGr or Option make of a key: AZERTY's digit row types "&", "é" and so on without Shift, and Option+H types "˙" on macOS.
 
-Everything that binds a letter, a digit or a symbol goes through it: the consumer's shortcuts (`matchesShortcut`, tried with each key the press stands for in turn, across the selection and the folder, so the key typed wins over the one at its place), Ctrl+A, Ctrl+H, Ctrl+F and Ctrl+Shift+F, and the preview's zoom keys. Symbols such as + and - are matched only as typed, wherever the layout has them. Type-ahead goes by the character typed, as it should.
+Everything that binds a letter, a digit or a symbol goes through it: the consumer's shortcuts (`matchesShortcut`, tried with each key the press stands for in turn, across the selection and the folder, so the key typed wins over the one at its place), the main menu items' shortcuts likewise, Ctrl+A, Ctrl+H, Ctrl+F and Ctrl+Shift+F, Ctrl+?, and the preview's zoom keys. Symbols such as + and - are matched only as typed, wherever the layout has them. Ctrl+? is "?" as typed, with or without Shift, wherever the layout has it, or the Arabic and Persian "؟", which theirs type in its place (`showsShortcuts`). Type-ahead goes by the character typed, as it should.
 
 Limits: a non-Latin layout on a keyboard whose Latin letters aren't laid out as on a US one (a Russian layout on a French keyboard) gets the US place; so does Option+letter on a non-QWERTY macOS layout. Reading the layout itself (`navigator.keyboard.getLayoutMap()`) would fix both, but only Chromium has it.
 
@@ -111,6 +116,16 @@ The transfer picker's folder list (`dialogs/transfer-dialog.tsx`) is one tab sto
 - Opening a folder or going up from the list keeps the focus in it (`pendingFocus`, settled after each render from the row with `tabindex="0"`): on the first row, or going up, on the folder left through (`folderLeft`), or the section left when going back to the list of sections. While a folder loads, or when it has no folders, the box in the list's place holds the focus, still taking Backspace, and is a `group` named by the folder. The conflict step's Back gives the focus back to the list.
 - Going up with the path bar or the Back button leaves the focus there, but the folder left through still gets the list's Tab stop and is scrolled to (`pendingScroll`, which `settleFocus` settles without focusing).
 - A folder made with the toolbar's New folder button is opened, and the list takes the focus (`pendingFocus`) from the button the name dialog gave it back to, so Backspace goes straight back up to it.
+
+## The keyboard shortcuts window
+
+`dialogs/shortcuts-dialog.tsx` lists the keys, as GNOME's shortcuts window does. Ctrl+?, the main menu's "Keyboard shortcuts" and `FileManagerApi.showShortcuts()` open it (`showShortcuts` in `file-manager.tsx`). It's a modal like the other dialogs (portalled, `dialogPaperSx`), `md` wide, its sections in as many columns as fit (CSS `columns`, each section kept whole), each a heading over a `dl` on `background.paper`: what a key does, then its keys as `<kbd>` caps, `+` between keys pressed together and `/` between alternatives.
+
+- The sections are General, Navigation, Selection, Sidebar, Search and Preview (`ownSections`), then Actions: the consumer's actions and main menu items that have a `shortcut`, each label and key once, in their order (`consumerRows`).
+- Search everywhere's key shows only when a section can be searched (`canSearchEverywhere`), Alt+Down only when the field has its sections menu (more than one), and the Preview section only when a section's adapter has `content`.
+- A key the consumer's shortcuts bind does what theirs does in the content and the tree, so it's left out of the sections where they come first (`yields`: General, Navigation, Selection, Sidebar), compared by `comboId` (`utils/shortcut.ts`); a row left with no key goes. The playground's Preview takes Space, so "Select or deselect" shows only Ctrl+Space there. The search field and the preview aren't affected, since shortcuts don't run there.
+- Key names come from the text (`keyCtrl`, `keyEnter`... through `keyLabel`), the arrows show as arrows, and four arrows in one cap stand for any of them (read as `keyArrows`). Back and forward, and expand and collapse, swap right to left, as the keys do. The keys' cell is `dir="auto"`, so Latin key names run left to right on a right-to-left page, as "Ctrl+F" is written there.
+- The list takes the focus once the dialog has faded in (`onEntered`), so the arrows and PageDown scroll it. Escape, its ✕ or Ctrl+? again closes it. It gives the focus back itself (`disableRestoreFocus`, then `handleShortcutsClosed` once it has faded out): to the element `showShortcuts` was given, the main menu's button when opened from it, since that menu only hands the focus back to its button as it closes, after the dialog has noted what had it, or else to what had the focus when it opened, or to the content when that's gone.
 
 ## Context menu
 

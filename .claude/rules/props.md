@@ -18,7 +18,7 @@ paths:
 
 # Public props
 
-Besides `adapter`, `sections` / `section` and `actions` (CLAUDE.md), `onOpenFile` (`preview.md`) and `localeText` / `locale` (`locale.md`), `FileManager` takes the props below. Their comments in `file-manager.tsx` are the consumer's documentation, so they say what each does from the outside.
+Besides `adapter`, `sections` / `section` and `actions` (CLAUDE.md), `mainMenu` (`file-manager.md`), `onOpenFile` (`preview.md`) and `localeText` / `locale` (`locale.md`), `FileManager` takes the props below. Their comments in `file-manager.tsx` are the consumer's documentation, so they say what each does from the outside.
 
 ## Checklist for a new feature
 
@@ -29,6 +29,7 @@ Every feature added or changed is checked against this before it's called done. 
 - **Anything done as the user acts** (an open, a pick, a result): a callback or an addition to one (`SelectionDetails`), told from the event handler that made it, never while rendering.
 - **Controlled**: a change the user makes is only asked for, so nothing in a render or an effect may assume it happened; derive what's shown from the prop instead.
 - **The playground** controls it by default and passes `default…` for `?uncontrolled`.
+- **Keys**: a key added or changed is listed in the keyboard shortcuts window (see `keyboard.md`).
 - **Docs**: the prop's comment in `file-manager.tsx` says what it does from the outside, and the rule of the feature says what isn't public yet, under "Not yet".
 
 ## Controlled or not
@@ -93,12 +94,13 @@ The content's selection is the folder view's (`selection.md`), and is what `sele
 - `search(scope, query?)` opens the search field as Ctrl+F or Ctrl+Shift+F does (`openSearch`), putting `query` in it when given, and returns false when no section is shown or `"everywhere"` has no section to search. The field takes the focus: at once when it's there, or in the layout effect after the render that opens it (`focusSearchAsked`), so a controlled search the consumer applies later is still focused, and one they refuse isn't. `closeSearch()` does what Escape does (`closeSearch`, focus handed back).
 - `focus()` asks the content to take the focus, as F6 does (`focusContent`).
 - `download(entries?, location?)` downloads entries as the context menu's `download` does, through the same queue and panel, or with none, the folder itself, and returns whether it asked for anything (see "From outside" in `download.md`).
+- `showShortcuts()` opens the keyboard shortcuts window as Ctrl+? does (`showShortcuts`), which gives the focus back to what had it when it closes (see "The keyboard shortcuts window" in `keyboard.md`).
 
 ## Internal by choice
 
 What the checklist leaves internal, and why. Anything not listed here or above is a gap.
 
-- **The overlay sidebar's open state, the context menu, every dialog (name, delete, transfer, paste, upload check, preview) and the view menu**: passing states, opened and closed within one task. Their operations are reached from outside through `actionContext`.
+- **The overlay sidebar's open state, the context menu, every dialog (name, delete, transfer, paste, upload check, preview, keyboard shortcuts), the view menu and the main menu**: passing states, opened and closed within one task. Their operations are reached from outside through `actionContext`, the shortcuts through `showShortcuts`, and the main menu's items are the consumer's own.
 - **Touch selection mode**: tied to the open folder and to touch, and ends as another folder opens.
 - **The sidebar tree's selection**: a passing selection for acting on folders there (see "Selection").
 - **A search everywhere's selection and open tab**: the results come from many folders, and `SelectionDetails` has one location (see "Selection").
@@ -122,4 +124,4 @@ What the checklist leaves internal, and why. Anything not listed here or above i
 
 ## The playground
 
-By default the playground controls everything, as an app would: the location in the URL's hash (`hooks/use-hash-location.ts`), so a reload, a link or the browser's back button follows it, the four view settings and the expanded folders in local storage (`hooks/use-stored-state.ts`), and the selection in its own state, shown in a footer. The file manager shares the page with the footer through `sx`. The footer's "Show a file" calls `reveal` for a file far down `archive`'s 10,000 (in a single section, one in Website's `src/components`), "Reload all" calls `refresh()`, and "Download selection" ("Download folder" with nothing selected) calls `download`, and "New folder" calls `actionContext().createFolder`, "Search "record"" calls `search` (everywhere, the open folder in a single section). The search is the playground's state, not kept across reloads; the sections left out are in local storage. `?uncontrolled` (`options.ts`) passes what it keeps as the `default…` props instead, so the file manager keeps everything itself, and only the footer's selection is told.
+By default the playground controls everything, as an app would: the location in the URL's hash (`hooks/use-hash-location.ts`), so a reload, a link or the browser's back button follows it, the four view settings and the expanded folders in local storage (`hooks/use-stored-state.ts`), and the selection in its own state, shown in a footer. The file manager shares the page with the footer through `sx`. The footer's "Show a file" calls `reveal` for a file far down `archive`'s 10,000 (in a single section, one in Website's `src/components`), "Reload all" calls `refresh()`, and "Download selection" ("Download folder" with nothing selected) calls `download`, and "New folder" calls `actionContext().createFolder`, "Search "record"" calls `search` (everywhere, the open folder in a single section), and "Shortcuts" calls `showShortcuts`. Its `mainMenu` has Preferences (Ctrl+,) and About Files. The search is the playground's state, not kept across reloads; the sections left out are in local storage. `?uncontrolled` (`options.ts`) passes what it keeps as the `default…` props instead, so the file manager keeps everything itself, and only the footer's selection is told.

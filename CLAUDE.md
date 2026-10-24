@@ -49,7 +49,7 @@ Opening a file goes to the optional `onOpenFile(entry, context)`, or to the buil
 
 The optional `localeText` and `locale` set the component's own text, and the language numbers, sizes, dates and the order of names follow (see `locale.md`).
 
-The rest are optional, and MUI-like (see `props.md`): the location, the view, the order, hidden files, the hidden sidebar, the tree's expanded folders, the content's selection and the search can each be controlled (`location` / `defaultLocation` / `onLocationChange`, and so on), `apiRef` takes a `FileManagerApi` (navigate, back, forward, refresh, reveal, focus, download, actionContext, search, closeSearch), and the root takes `sx`, `ref` and the `div`'s own attributes. Props may change after mounting, `sections` and `adapter` included.
+The rest are optional, and MUI-like (see `props.md`): the location, the view, the order, hidden files, the hidden sidebar, the tree's expanded folders, the content's selection and the search can each be controlled (`location` / `defaultLocation` / `onLocationChange`, and so on), `apiRef` takes a `FileManagerApi` (navigate, back, forward, refresh, reveal, focus, download, actionContext, search, closeSearch, showShortcuts), `mainMenu` fills the sidebar's ☰ menu above its own "Keyboard shortcuts" (see `file-manager.md`), and the root takes `sx`, `ref` and the `div`'s own attributes. Props may change after mounting, `sections` and `adapter` included.
 
 ## Conventions
 
@@ -75,7 +75,7 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `download.md` | `ActionContext.download`, the adapter's `content` for a download and its `download`, saving blobs and URLs, the download queue and panel, the mock's zips | the download panel, store and hook, the preview dialog, `utils/download.ts`, `styles/panel.ts`, download, adapter and action types, the mock adapter and zip |
 | `uploads.md` | the upload queue and panel, dropping files from the desktop, what's shared with the media manager | upload store, hook, panel, dialog and types, `use-drop-target.ts`, `types/adapter.ts` |
 | `selection.md` | content and sidebar selection, marquee, touch selection mode | selection components, hooks and utils |
-| `keyboard.md` | keyboard navigation, focus, ARIA roles of the content and the tree | the frame, content, sidebar, context menu, transfer dialog, keyboard utils |
+| `keyboard.md` | keyboard navigation, focus, ARIA roles of the content and the tree, the keyboard shortcuts window | the frame, content, sidebar, context menu, transfer and shortcuts dialogs, keyboard utils |
 | `virtualization.md` | rendering only the entries, tree rows and picker folders in or near view, the flattened sidebar tree, and what stays rendered | the content, the sidebar, the transfer dialog, the virtualization and tree-rows hooks, `use-marquee.ts`, `utils/dom.ts`, view and tree types |
 | `icons.md` | icon packs, variants, `IconProvider`, adding an icon | `components/icons/`, `icon-sets/`, icon types |
 | `preview.md` | opening files, `onOpenFile`, the adapter's `content`, the preview dialog and what it shows, loading ahead, swiping, zooming images | the preview dialog and its image viewer, the preview contents and swipe hooks, `utils/preview.ts`, preview, adapter and action types, the mock contents |

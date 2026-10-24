@@ -126,6 +126,16 @@ The adapter's optional `search(rootId, query, { signal, cursor, showHidden })` r
 - The playground's mock `search` walks its tree below the root, matching as the folder search does, leaves dotfiles and dot folders out while hidden files don't show and doesn't look in folders that fail, and hands back 200 results a page, so "record" in API service comes in pages from `archive`'s 10,000.
 - Not yet: acting on a selection spanning folders as a whole (deleting results from two folders at once), the grid showing locations, and ordering by relevance.
 
+## The main menu
+
+The ☰ button at the sidebar header's end (`sidebar/main-menu.tsx`) opens the main menu: the consumer's `mainMenu` (`MainMenuGroup[]` of `MainMenuItem`s, `types/main-menu.ts`, public), for what belongs to the app rather than to entries, such as preferences, help or about, then a rule and the file manager's own "Keyboard shortcuts" (Ctrl+?, see "The keyboard shortcuts window" in `keyboard.md`). It's built as the context menu is: dense, a rule between groups, labels inset when others have icons, shortcuts beside them in `<bdi>` with `aria-keyshortcuts`. It hangs from the button's end edge by its element direction, as the view menu does.
+
+- An item has `id`, `label`, an optional `icon`, `shortcut` and `disabled`, and `onSelect()`, with no context, since it's about no entry. Empty groups are left out. Picking an item closes the menu first.
+- An item's `shortcut` works anywhere in the file manager (see `keyboard.md`), and shows in the keyboard shortcuts window with the actions'.
+- The sidebar's Escape, which closes the overlay, only counts from inside the sidebar, since the menu portals out but its key presses still bubble through the sidebar.
+- The menu is reached from the sidebar only: while the docked sidebar is hidden, or the collapsed one closed, its items run by their shortcuts, and the shortcuts by Ctrl+?.
+- The playground has Preferences (Ctrl+,) and About Files, which report that they ran.
+
 ## Context menu and actions
 
 An `ActionContext` says whether `entries` ("selection") or a folder's empty space ("folder") was targeted, and offers `refresh()` and `openFolder()`. It also offers `open()`, `preview()`, `download()`, `createFolder()`, `createFolderInto()`, `rename()`, `copyTo()`, `moveTo()`, `cut()`, `copy()`, `delete()`, `upload()`, `paste()` and `pasteInto()`, which are left out when the section's adapter lacks the matching method (`preview` lacking `content`, also when the entries hold no file; `download` lacking `download`, unless the entries are a single file and there's `content`, and downloading the folder itself when there are no entries; `open` unless there's exactly one entry, and for a file nothing can open; `rename` also when there isn't exactly one entry, `copyTo`, `moveTo`, `cut`, `copy` and `delete` when there are none, `upload` while another upload is being checked, `paste` and `pasteInto` when there's nothing to paste there, `pasteInto` and `createFolderInto` also unless the entries are a single folder), so actions hide with `visible: (context) => !!context.rename`, or grey out with `disabled`. The consumer still places, labels and gates these actions; the file manager adds nothing to the menu itself.
@@ -254,7 +264,7 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 The playground shows this mode with `?single` in the URL.
 - `header-bar/` holds back/forward, the path bar, the search field that takes its place while searching (see "Search") and the view buttons. Below `rootMedium` the path bar gets a full-width row under the buttons; from `rootMedium` up, it sits centred between them.
 - `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`file-list.tsx`, a `--columns` grid template) or the grid view (`file-grid.tsx`), which render only the entries in or near view (see `virtualization.md`).
-- `dialogs/` holds the modals, which portal to `<body>` like the context menu: `name-dialog.tsx`, `transfer-dialog.tsx`, `paste-dialog.tsx`, `delete-dialog.tsx`, `upload-dialog.tsx` and `preview-dialog.tsx`, with `conflict-step.tsx` shared by the transfer, paste and upload dialogs, and `image-viewer.tsx`, the preview's zoomable image.
+- `dialogs/` holds the modals, which portal to `<body>` like the context menu: `name-dialog.tsx`, `transfer-dialog.tsx`, `paste-dialog.tsx`, `delete-dialog.tsx`, `upload-dialog.tsx`, `preview-dialog.tsx` and `shortcuts-dialog.tsx`, with `conflict-step.tsx` shared by the transfer, paste and upload dialogs, and `image-viewer.tsx`, the preview's zoomable image.
 - The upload and download panels under the content are `components/uploads/upload-panel.tsx` and `components/downloads/download-panel.tsx`, outside `file-manager/` since they're meant to be shared (see `uploads.md` and `download.md`). Their look is `styles/panel.ts`.
 - `icon-slot.tsx` fits consumer-supplied icons to the same 1.25rem box as the built-in ones.
 - `utils/format.ts` builds the `Locale`: the text, and the formats for sizes, dates and type labels in the `locale` prop's language (see `locale.md`).
