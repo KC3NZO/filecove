@@ -47,4 +47,4 @@ The mock adapter's `thumbnail` makes thumbnails from the same made-up pictures a
 
 ## Not yet
 
-Thumbnails in the sidebar tree, the transfer picker or the preview (as a placeholder while the file loads), a bigger icon size for a grid of pictures, cropping to a square, and a frame around pictures, which would need telling transparent ones, such as logos, apart.
+A thumbnail in the preview as a placeholder while the file loads, a bigger icon size for a grid of pictures (grid zoom levels, an optional idea in the roadmap), cropping to a square, and a frame around pictures, which would need telling transparent ones, such as logos, apart.

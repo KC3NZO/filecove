@@ -44,7 +44,7 @@ Every route ends in `askUpload` in `file-manager.tsx`, with a `DroppedFiles` (`f
 A section's optional `acceptUploads` (`types/section.ts`, public, default `true`) set to `false` takes no uploads into any of its folders, though its adapter has `upload`, for a section the user may browse but not add files to. Unlike `importFrom`, it's about files from the desktop, not entries from other sections, and the two are independent.
 
 - `offerUpload` in `file-manager.tsx` checks it, the one place every route asks: so `ActionContext.upload` is missing in its folders (the playground's "Upload files…" hides), and its drop targets don't take files dragged from the desktop, showing the no-drop cursor, with the root refusing the drop so the browser doesn't open them.
-- It goes by the section, not the folder, so the same folder shown in another section that takes uploads takes them there. Refusing per folder waits for per-entry permissions.
+- It goes by the section, not the folder, so the same folder shown in another section that takes uploads takes them there, as with `importFrom`, since sections are independent.
 - The playground's Design assets refuses uploads, as it refuses entries from other sections.
 
 ## The check before queueing
@@ -65,4 +65,4 @@ A section's optional `acceptUploads` (`types/section.ts`, public, default `true`
 
 ## Not yet
 
-Uploading folders (would need `createFolder` and walking `webkitGetAsEntry`), pasting files from the system clipboard, refusing uploads per folder rather than per section, selecting the uploaded files, and resuming an upload after a reload.
+Uploading folders (would need `createFolder` and walking `webkitGetAsEntry`), pasting files from the system clipboard, and showing which files just arrived ("Show in folder" on a finished row, and a brief highlight in the open folder, never changing the selection, since an upload can finish while the user is acting on other files). Resuming an upload after a reload is left out by choice: the browser no longer has the files, and resuming partway is the adapter's upload protocol.

@@ -21,8 +21,7 @@ What's left in the features already built, what packaging needs before a release
 ### Operations (create, rename, copy, move, delete, paste)
 - [ ] A non-modal panel for long copies and moves.
 - [ ] Copying between different adapters.
-- [ ] `importFrom` only controls what comes into a section. Nothing stops entries from leaving one.
-- [ ] **new:** There are no per-entry permissions. `FileEntry` has no read-only field, so a read-only folder still accepts drops and pastes. An app can hide its actions with `visible`, but it can't refuse drop or paste targets.
+- [ ] **new:** There are no per-entry permissions. `FileEntry` has no read-only field, so a read-only folder still accepts drops and pastes. An app can hide its actions with `visible`, but it can't refuse drop or paste targets, nor stop entries from being moved out of a read-only folder or section (`importFrom` only controls what comes in; copying out is only reading).
 - [ ] Name-clash dialog: Merge for a folder clashing with a folder, no Replace when a file clashes with a folder, and Replace no longer the highlighted main button.
 - [x] **new:** Screen readers hear nothing when an operation finishes (deleted, moved, pasted, created). Only the upload and download panels announce anything. *Done 2026-10-23: deletes, copies, moves, pastes, drops, cut and copy, and creating and renaming are announced from one polite live region, a created or renamed entry only when it doesn't take the focus, and the checklist in `props.md` asks it of every new feature.*
 - [ ] **new (minor):** Names are only checked for ".", ".." and "/". There's no hook for a backend's own rules (for example Windows' `\:*?"<>|`), so the user only finds out after pressing the button.
@@ -35,11 +34,10 @@ What's left in the features already built, what packaging needs before a release
 - [ ] Touch dragging.
 
 ### Uploads
-- [ ] Uploading folders.
+- [ ] Uploading folders (planned, C.2).
 - [ ] Pasting files from the system clipboard.
-- [x] A way for a section to refuse uploads. *Done 2026-10-23: `Section.acceptUploads: false` takes no uploads, by the picker or by dropping, in any of the section's folders. Per folder waits for per-entry permissions.*
-- [ ] Selecting the files once they're uploaded.
-- [ ] Resuming an upload after a reload.
+- [x] A way for a section to refuse uploads. *Done 2026-10-23: `Section.acceptUploads: false` takes no uploads, by the picker or by dropping, in any of the section's folders. It goes by the section, as `importFrom` does.*
+- [ ] Showing which files just arrived: "Show in folder" on a finished upload in the panel, and a brief highlight in the open folder, never a change to the selection.
 - [ ] **new:** The file picker has no `accept` setting, so an app can't limit file types.
 
 ### Preview
@@ -49,12 +47,11 @@ What's left in the features already built, what packaging needs before a release
 - [ ] Safari's touchpad pinch (it sends `gesturechange`).
 - [ ] Momentum when panning by touch, and animated zoom steps.
 - [ ] Rotating images and full screen.
-- [ ] Highlighted code or rendered Markdown.
-- [ ] Fonts, office documents and archive contents.
+- [ ] Fonts.
+- [ ] A way for the app to plug in its own previewer per file type (highlighted code, rendered Markdown, office documents, archive contents), rather than building those in, which would add heavy dependencies to the package.
 
 ### Thumbnails
-- [ ] Thumbnails in the sidebar tree, the Move/Copy picker, and the preview while a file loads.
-- [ ] A larger icon size for a grid of pictures.
+- [ ] A thumbnail in the preview while the file loads. (The sidebar tree and the Move/Copy picker show only folders, so they have no thumbnails to show.)
 - [ ] Square cropping, and a frame around pictures.
 
 ### Search
@@ -79,11 +76,7 @@ What's left in the features already built, what packaging needs before a release
 
 ### Locale
 - [ ] No translations ship with the package.
-- [ ] `localeText` can't be set from the theme.
 - [ ] The playground has no page in another language.
-
-### Public API
-- [ ] `onClipboardChange`, deliberately left until someone needs it.
 
 ### Interface polish
 - [x] **new:** No tooltips anywhere. Icon-only buttons (back, search, view, menus, zoom) only have screen-reader labels. *Done 2026-10-23: every icon-only button is a `TooltipIconButton` showing its label, but the list rows' ⋮, which is hidden from screen readers.*
@@ -97,7 +90,7 @@ What's left in the features already built, what packaging needs before a release
 - [ ] The size of `@react-symbols/icons` hasn't been checked.
 - [ ] **new:** There's no `"use client"` directive, which Next.js App Router needs.
 - [ ] The README is still Vite's template, there's no LICENSE or CHANGELOG, `index.html` still has the repo name as its title, and the repo name mentions Pigment.
-- [ ] **new:** The MUI-style ways to customise are missing: stable class names, theme `defaultProps` and `styleOverrides`, and `slots`/`slotProps` (for example to replace the empty state or add header buttons).
+- [ ] **new:** The MUI-style ways to customise are missing: stable class names, theme `defaultProps` (`localeText` included, as MUI's own components take it) and `styleOverrides`, and `slots`/`slotProps` (for example to replace the empty state or add header buttons).
 - [ ] **new:** Fixed numbers an app can't change: 3 uploads and 3 downloads at once, 6 thumbnails at once, the search delay, and the 20,000 entries of listings kept that nothing shows.
 
 ## C. New features
@@ -112,8 +105,7 @@ What's left in the features already built, what packaging needs before a release
 
 ### Optional ideas
 - [ ] Live updates: an adapter `watch`, or re-checking the open folder when the page is shown again (re-checking a folder as it opens is done, `relistAfter`).
-- [ ] A per-entry permissions field.
-- [ ] Grid zoom levels (Ctrl+plus and Ctrl+minus, as in GNOME).
+- [ ] Grid zoom levels (Ctrl+plus and Ctrl+minus, as in GNOME), which also give a grid of pictures larger thumbnails.
 - [ ] Choosing and resizing list columns.
 - [ ] Progress and errors for the app's own long actions (compress, extract) through the planned job panel.
 - [ ] "New file" with the name dialog.
@@ -124,4 +116,4 @@ What's left in the features already built, what packaging needs before a release
 
 ## Left out by choice
 
-Not gaps: tests, a built-in editor, keyboard drag and drop, renaming in place, a built-in trash (an app builds one from `move` and a section of its own), and modal dialogs for background work.
+Not gaps: tests, a built-in editor, keyboard drag and drop, renaming in place, a built-in trash (an app builds one from `move` and a section of its own), modal dialogs for background work, resuming an upload after a reload (the browser no longer has the files, and resuming partway is the backend's upload protocol), and `onClipboardChange` until a consumer needs it (see "Internal by choice" in `props.md`).

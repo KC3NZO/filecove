@@ -92,4 +92,4 @@ A single file steps through the files of the view it's listed in, in the content
 
 ## Not yet
 
-The consumer's actions in the preview's header, sliding between files on the buttons and the keys, swiping on past a zoomed image's edge, Safari's touchpad pinch (it sends `gesturechange`, not Ctrl+wheel), momentum when panning by touch, animating zoom steps, rotating images, full screen, highlighted code or rendered Markdown, and fonts, office documents or archives' contents.
+The consumer's actions in the preview's header, sliding between files on the buttons and the keys, swiping on past a zoomed image's edge, Safari's touchpad pinch (it sends `gesturechange`, not Ctrl+wheel), momentum when panning by touch, animating zoom steps, rotating images, full screen, fonts, and a way for the consumer to plug in its own previewer per file type (highlighted code, rendered Markdown, office documents, archives' contents), rather than building those in, which would add heavy dependencies to the package.

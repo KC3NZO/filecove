@@ -49,4 +49,4 @@ Text direction is not the locale's: it comes from the page's `dir`, as in MUI (s
 
 ## Not yet
 
-Translations shipped with the package, taking `localeText` from the theme as MUI's own components do, and a playground page in another language (`?locale=` only sets the formats).
+Translations shipped with the package, taking `localeText` from the theme as MUI's own components do (part of theme `defaultProps`, under packaging in the roadmap), and a playground page in another language (`?locale=` only sets the formats).

@@ -210,7 +210,7 @@ Entries only ever move or copy between sections served by the same adapter objec
 
 - `importsFrom(target, source)` in `utils/sections.ts` decides it, by section id. The source is the section the entries were listed in when they were cut, copied, dragged or picked for "Move to…" / "Copy to…", even when the same folders show in other sections too.
 - It's checked wherever entries go into a section: in `canPaste`, so pasting and drag and drop, where a refused target shows the no-drop cursor, and in the destinations `contextFor` hands the transfer picker.
-- It only covers entries coming in. Nothing yet stops a section's entries from leaving.
+- It only covers entries coming in. Stopping entries from being moved out belongs with per-entry permissions, not built yet; copying them out is only reading.
 - The playground shows each kind on the server sections: Website takes only from API service, API service from anything but Design assets, and Design assets from nothing else, nor takes uploads (`acceptUploads`, see `uploads.md`).
 
 ## Cut, copy and paste
