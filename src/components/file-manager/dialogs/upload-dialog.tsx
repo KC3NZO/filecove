@@ -12,7 +12,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
-import { clashingNames } from "../../../hooks/use-transfer";
+import { findClashes } from "../../../hooks/use-transfer";
 import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
@@ -22,6 +22,7 @@ import { folderOf } from "../../../utils/navigation";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 
 import type {
+    Clash,
     ConflictPolicy,
     DroppedFiles,
     FileAdapter,
@@ -74,9 +75,9 @@ const spacerSx: SxProps<Theme> = {
 /**
  * Checks files and folders about to be uploaded into a folder before they're queued. Most uploads
  * need nothing from the user, so this runs unseen, and the dialog only shows to ask about names the
- * folder already has (replace, or merge for folders, keep both or skip), or to say that folders,
- * where the adapter can't make any, or files of types the section doesn't take (`acceptUploads`),
- * were left out. What's inside the folders is only read once they're queued.
+ * folder already has (replace or merge, keep both, or skip), or to say that folders, where the
+ * adapter can't make any, or files of types the section doesn't take (`acceptUploads`), were left
+ * out. What's inside the folders is only read once they're queued.
  */
 const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) => {
     const { section, adapter, trail, dropped } = request;
@@ -104,21 +105,17 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
     // any re-render, and state set by the first run wouldn't be seen by the second, which would
     // queue the files again.
     const checked = useRef(false);
-    const [conflicts, setConflicts] = useState<string[] | null>(null);
-
-    // Clashing folders a folder of the same name is there for, which Replace merges into.
-    const merging = (conflicts ?? []).filter(
-        (name) => byName.get(name)?.kind === "folder" && folders.some((folder) => folder.name === name),
-    );
-    const onlyMerging = merging.length > 0 && merging.length === conflicts?.length;
+    const [conflicts, setConflicts] = useState<Clash[] | null>(null);
 
     // Files to skip are left out here rather than sent for the adapter to skip, since sending them
     // could take a long time for nothing. "skip" still goes along for clashes the cache missed. A
     // folder is merged into the one of its name with Replace, and otherwise, or where a file has its
-    // name, made under a free name, since `createFolder` can't replace or keep both.
+    // name, made under a free name, one neither there nor uploaded beside it, since `createFolder`
+    // can't replace or keep both. With Replace, a file whose name a folder has is kept beside it
+    // (`startUpload` in `file-manager.tsx`).
     const upload = (conflict: ConflictPolicy, clashes = conflicts ?? []) => {
-        const skipped = new Set(conflict === "skip" ? clashes : []);
-        const taken = new Set(byName.keys());
+        const skipped = new Set(conflict === "skip" ? clashes.map((clash) => clash.name) : []);
+        const taken = new Set([...byName.keys(), ...files.map(({ name }) => name), ...folders.map(({ name }) => name)]);
         const planned = folders.flatMap((source): FolderUpload[] => {
             const there = byName.get(source.name);
 
@@ -156,7 +153,13 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
             return;
         }
 
-        const clashes = clashingNames([...files, ...folders], state?.entries);
+        const clashes = findClashes(
+            [
+                ...files.map(({ name }) => ({ name, kind: "file" as const })),
+                ...folders.map(({ name }) => ({ name, kind: "folder" as const })),
+            ],
+            state?.entries,
+        );
 
         checked.current = true;
 
@@ -216,16 +219,7 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
             </DialogTitle>
             <DialogContent sx={contentSx}>
                 {conflicts && conflicts.length > 0 && (
-                    <ConflictMessage
-                        names={conflicts}
-                        folderName={target.name}
-                        hint={onlyMerging ? text.uploadMergeHint(merging.length) : undefined}
-                    />
-                )}
-                {merging.length > 0 && !onlyMerging && (
-                    <Typography variant="body2" color="text.secondary">
-                        {text.uploadReplaceMerges(merging.length)}
-                    </Typography>
+                    <ConflictMessage clashes={conflicts} folderName={target.name} />
                 )}
                 {leftOut.length > 0 && (
                     <Typography variant="body2" color="text.secondary">
@@ -250,11 +244,7 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                 {conflicts && conflicts.length > 0 ? (
                     <>
                         <Box sx={spacerSx} />
-                        <ConflictChoices
-                            pending={null}
-                            onChoose={upload}
-                            replaceLabel={onlyMerging ? text.merge : undefined}
-                        />
+                        <ConflictChoices clashes={conflicts} pending={null} onChoose={upload} />
                     </>
                 ) : (
                     <Button variant="contained" onClick={() => upload("keepBoth")}>

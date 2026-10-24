@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { isolate } from "../utils/bidi";
 import { useLocale } from "./use-locale";
 
-import type { ConflictPolicy, FileAdapter, FileEntry, TransferOptions } from "../types";
+import type { Clash, ConflictPolicy, FileAdapter, FileEntry, TransferOptions } from "../types";
 
 /** A copy or move for the adapter to carry out. */
 export interface TransferJob {
@@ -29,21 +29,28 @@ const start = ({ kind, adapter, entries }: TransferJob, targetId: string, option
 };
 
 /**
- * Names of `entries`, or of files being uploaded, that a folder's listing already has, which a
- * transfer or upload into it would clash with.
+ * The names of `entries`, or of files and folders being uploaded, that a folder's listing already
+ * has, which a transfer or upload into it would clash with, with what has each there.
  */
-export const clashingNames = (entries: readonly { name: string }[], listing: FileEntry[] | undefined) => {
-    const taken = new Set(listing?.map((entry) => entry.name));
+export const findClashes = (
+    entries: readonly Pick<FileEntry, "name" | "kind">[],
+    listing: FileEntry[] | undefined,
+): Clash[] => {
+    const byName = new Map(listing?.map((entry): [string, FileEntry["kind"]] => [entry.name, entry.kind]));
 
-    return entries.filter((entry) => taken.has(entry.name)).map((entry) => entry.name);
+    return entries.flatMap(({ name, kind }) => {
+        const there = byName.get(name);
+
+        return there ? [{ name, kind, there }] : [];
+    });
 };
 
 /**
- * Ids of the folders in a folder's listing that a transfer of `entries` into it put others in the
- * place of, as replacing clashing names does, so their ids may now name those.
+ * Ids of the folders in a folder's listing that a transfer of `entries` into it with "replace"
+ * merged folders of their names into, so what's in them may have changed all the way down.
  */
-export const replacedFolders = (entries: readonly { name: string }[], listing: FileEntry[] | undefined) => {
-    const names = new Set(entries.map((entry) => entry.name));
+export const mergedFolders = (entries: readonly FileEntry[], listing: FileEntry[] | undefined) => {
+    const names = new Set(entries.filter((entry) => entry.kind === "folder").map((entry) => entry.name));
 
     return (listing ?? []).filter((entry) => entry.kind === "folder" && names.has(entry.name)).map((entry) => entry.id);
 };
@@ -52,7 +59,7 @@ export const replacedFolders = (entries: readonly { name: string }[], listing: F
  * Has the adapter copy or move entries, for the dialogs that do. `cancel` and unmounting abort the
  * call. The adapter can't undo a change it has made, so `refresh` runs however a run that reached
  * it ends, cancelled included, with the run's `conflict`; it should list the destination again, and
- * the source after a move, and after a "replace", drop the folders replaced (`replacedFolders`).
+ * the source after a move, and after a "replace", the folders merged into (`mergedFolders`).
  */
 export const useTransfer = (job: TransferJob, refresh: (conflict: ConflictPolicy) => void) => {
     const [pending, setPending] = useState<ConflictPolicy | null>(null);

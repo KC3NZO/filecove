@@ -1,6 +1,6 @@
 import { isolate } from "./bidi";
 
-import type { FileEntry, FileManagerLocaleText } from "../types";
+import type { FileEntry, FileManagerLocaleText, UploadLocaleText } from "../types";
 
 type EntryKind = FileEntry["kind"];
 
@@ -50,7 +50,7 @@ export const newFolderName = (siblings: FileEntry[] | undefined, text: FileManag
 };
 
 /** A name none of `taken` is, to keep both: in English "photos (2)", then "photos (3)" and so on. */
-export const freeName = (name: string, taken: ReadonlySet<string>, text: FileManagerLocaleText) => {
+export const freeName = (name: string, taken: ReadonlySet<string>, text: Pick<UploadLocaleText, "keptBothName">) => {
     let number = 2;
 
     while (taken.has(text.keptBothName(name, number))) {

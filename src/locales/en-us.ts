@@ -104,7 +104,6 @@ export const enUS: FileManagerLocaleText = {
 
     newFolder: "New folder",
     untitledFolder: (number) => (number === 1 ? "New folder" : `New folder (${number})`),
-    keptBothName: (name, number) => `${name} (${number})`,
     renameTitle: (kind) => `Rename ${kind}`,
     nameLabel: (kind) => (kind === "folder" ? "Folder name" : "File name"),
     create: "Create",
@@ -153,6 +152,25 @@ export const enUS: FileManagerLocaleText = {
             ? `“${name}” already exists in “${folderName}”.`
             : `${count} items already exist in “${folderName}”.`,
     conflictHint: (count) => `Replace what is there, keep both with new names, or skip ${itOrThem(count)}.`,
+    conflictMergeHint: (count) =>
+        count === 1
+            ? "Merge what's in it into the folder already there, replacing files with the same names, keep both " +
+              "with a new name, or skip it."
+            : "Merge the folders into the ones already there, replacing files with the same names, keep both " +
+              "with new names, or skip them.",
+    conflictKindHint: (count, kind) =>
+        count === 1
+            ? `A ${kind === "folder" ? "file can't replace a folder" : "folder can't replace a file"}. Keep both ` +
+              "with a new name, or skip it."
+            : "A file and a folder can't replace each other. Keep both with new names, or skip them.",
+    conflictReplaceMerges: (count) =>
+        count === 1
+            ? "Replacing a folder merges what's in it into the one already there."
+            : "Replacing folders merges what's in them into the ones already there.",
+    conflictKindKept: (count, name) =>
+        `A file and a folder can't replace each other, so ${
+            count === 1 ? `“${name}” would get a new name` : `${count} items would get new names`
+        }.`,
     skip: "Skip",
     keepBoth: "Keep both",
     replace: "Replace",
@@ -160,16 +178,6 @@ export const enUS: FileManagerLocaleText = {
 
     upload: "Upload",
     uploadTitle: (count, name, folderName) => `Upload ${entries(count, name)} to “${folderName}”`,
-    uploadMergeHint: (count) =>
-        count === 1
-            ? "Merge what's in it into the folder already there, replacing files with the same names, keep both " +
-              "with a new name, or skip it."
-            : "Merge what's in them into the folders already there, replacing files with the same names, keep " +
-              "both with new names, or skip them.",
-    uploadReplaceMerges: (count) =>
-        count === 1
-            ? "Replacing a folder merges what's in it into the one already there."
-            : "Replacing folders merges what's in them into the ones already there.",
     uploadFoldersFailedTitle: (count, name) => `Couldn't upload ${count === 1 ? `“${name}”` : `${count} folders`}`,
     uploadFoldersOnly: "Folders can't be uploaded here, only files.",
     uploadFoldersLeftOut: (count, name) =>
@@ -283,6 +291,7 @@ export const enUS: FileManagerLocaleText = {
     uploadFailedFolder: (count) =>
         count === 0 ? "Couldn't upload this folder" : `Couldn't upload this folder or the ${files(count)} in it`,
     uploadFailuresMore: (count) => `And ${count} more`,
+    keptBothName: (name, number) => `${name} (${number})`,
 
     downloads: "Downloads",
     downloadsPreparing: (count) => `Preparing ${downloads(count)}`,

@@ -20,3 +20,15 @@ export interface FolderState {
     checking?: boolean;
     error?: unknown;
 }
+
+/**
+ * A name that what's copied, moved or uploaded into a folder clashes with: what comes in, and what
+ * the folder's listing already has under that name, by kind.
+ */
+export interface Clash {
+    name: string;
+    /** What comes in. */
+    kind: FileEntry["kind"];
+    /** What the folder already has under the name. */
+    there: FileEntry["kind"];
+}

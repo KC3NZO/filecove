@@ -124,8 +124,17 @@ export interface OperationOptions {
 }
 
 /**
- * What to do with an entry whose name the destination folder already has: replace what is there,
- * keep both by giving the incoming entry a free name, or leave that entry out.
+ * What to do with an entry whose name the destination folder already has:
+ *
+ * - "replace": a file takes the place of the file there, and a folder is merged into the folder
+ *   there, what's in it going in the same way, all the way down, so files with the same names are
+ *   replaced, folders with the same names merged, and the rest added. A file never takes the place
+ *   of a folder, nor a folder of a file: such an entry is kept beside it, as with "keepBoth".
+ * - "keepBoth": the incoming entry is given a free name, such as "notes (2).txt".
+ * - "skip": the entry is left out.
+ *
+ * The user sees "replace" as Merge when only folders clash, and isn't offered it when every clash
+ * is between a file and a folder.
  */
 export type ConflictPolicy = "replace" | "keepBoth" | "skip";
 
@@ -133,7 +142,9 @@ export type ConflictPolicy = "replace" | "keepBoth" | "skip";
 export interface TransferOptions extends OperationOptions {
     /**
      * Chosen by the user when the destination's cached listing showed a clash, and "keepBoth"
-     * otherwise, so a clash the cache missed never overwrites anything.
+     * otherwise, so a clash the cache missed never overwrites anything. One choice covers every
+     * entry, so with "replace", an entry whose name an entry of the other kind has there is kept
+     * beside it (see `ConflictPolicy`).
      */
     conflict: ConflictPolicy;
 }
@@ -143,7 +154,9 @@ export interface UploadOptions extends OperationOptions {
     /**
      * Chosen by the user when the folder's cached listing showed a clash, and "keepBoth" otherwise,
      * so a clash the cache missed never overwrites anything. Files the user chose to skip are never
-     * sent, so "skip" only reaches clashes the cache missed.
+     * sent, so "skip" only reaches clashes the cache missed, and a file whose name the listing showed
+     * a folder has is sent with "keepBoth", so "replace" only meets a folder the cache missed, which
+     * the file is kept beside (see `ConflictPolicy`).
      */
     conflict: ConflictPolicy;
     /**

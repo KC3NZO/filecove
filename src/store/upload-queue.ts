@@ -1,3 +1,5 @@
+import { freeName } from "../utils/names";
+
 import type {
     ConflictPolicy,
     FileAdapter,
@@ -45,7 +47,8 @@ interface FileStep {
 
 /**
  * A folder of a folder upload, made with `createFolder`, or, when it's merged into a folder already
- * there, listed instead, so the folders in it that are there too are merged as well.
+ * there, listed instead, so the folders in it that are there too are merged as well, and names a
+ * file and a folder share are kept both.
  */
 interface FolderStep {
     kind: "folder";
@@ -60,7 +63,7 @@ interface FolderStep {
      * cut short by a cancel after the backend had made it.
      */
     tried: boolean;
-    /** What a folder merged into already holds, by name, once listed. */
+    /** What a folder merged into already holds, by name, once listed, when anything goes in it. */
     holds?: Map<string, FileEntry>;
     files: FileStep[];
     folders: FolderStep[];
@@ -207,9 +210,13 @@ const statusOf = (job: Job): UploadStatus => {
  *
  * `onChanged` is told the folders that calls reaching the adapter ended in, done, failed or
  * cancelled, to list them again. It's called at most once every `REPORT_INTERVAL`, so a folder
- * taking many small files isn't listed again for each one.
+ * taking many small files isn't listed again for each one. `keptBothName` words the name a folder
+ * is made under beside a file of its name in a folder merged into, as `UploadLocaleText`'s does.
  */
-export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: string[]) => void) => {
+export const createUploadQueue = (
+    onChanged: (adapter: FileAdapter, folderIds: string[]) => void,
+    keptBothName: (name: string, number: number) => string,
+) => {
     let items: UploadItem[] = [];
     let nextId = 1;
     let active = 0;
@@ -308,14 +315,25 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
     };
 
     // Once a folder is made, or listed to merge into, what goes in it can start, its folders first,
-    // as they're quick to make, and those a folder merged into has are merged too.
+    // as they're quick to make. Those a folder merged into has are merged too, and those whose name
+    // a file has there are made under a free name, one neither there nor going in beside them,
+    // since a folder never takes a file's place and `createFolder` can't keep both.
     const opened = (job: Job, folder: FolderStep) => {
+        const taken = new Set([
+            ...(folder.holds?.keys() ?? []),
+            ...folder.folders.map((child) => child.name),
+            ...folder.files.map((step) => step.file.name),
+        ]);
+
         folder.folders.forEach((child) => {
             const there = folder.holds?.get(child.name);
 
             if (there?.kind === "folder") {
                 child.id = there.id;
                 child.merge = true;
+            } else if (there) {
+                child.name = freeName(child.name, taken, { keptBothName });
+                taken.add(child.name);
             }
 
             job.ready.push(child);
@@ -426,9 +444,10 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
             .then(async () => {
                 signal.throwIfAborted();
 
-                // Only the folders in a folder merged into are looked for, to merge them too.
+                // A folder merged into is listed when anything goes in it, for the folders in it to
+                // merge, and for the names a file and a folder share, which are kept both.
                 if (step.kind === "folder" && step.merge) {
-                    if (step.folders.length > 0) {
+                    if (step.folders.length + step.files.length > 0) {
                         step.holds = await listAll(adapter, step.id as string, signal);
                     }
 
@@ -444,7 +463,7 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                         step.id = there.id;
                         step.merge = true;
 
-                        if (step.folders.length > 0) {
+                        if (step.folders.length + step.files.length > 0) {
                             step.holds = await listAll(adapter, there.id, signal);
                         }
 
@@ -471,10 +490,17 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                 }
 
                 // A folder made for the upload has nothing to clash with but the file's own earlier
-                // try, which it replaces, and one merged into takes the upload's choice, which
-                // merged it.
+                // try, which it replaces. One merged into takes the upload's choice, which merged it,
+                // but a file whose name a folder has there is kept beside it, never put in its place.
                 const ownFolder = step.into && !step.into.merge;
-                const conflict = ownFolder ? (step.tried ? "replace" : "keepBoth") : job.item.conflict;
+                const besideFolder = step.into?.holds?.get(step.file.name)?.kind === "folder";
+                let conflict = job.item.conflict;
+
+                if (ownFolder) {
+                    conflict = step.tried ? "replace" : "keepBoth";
+                } else if (besideFolder && conflict === "replace") {
+                    conflict = "keepBoth";
+                }
 
                 step.tried = true;
 
@@ -651,7 +677,8 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
          * Queues folders to be uploaded into `folder` through `adapter`, which takes uploads and
          * makes folders, each with everything in it, read first. Files `accepts` refuses are left
          * out, and so are folders that held nothing else. With "replace", a folder merged into
-         * gets the files with names it has already in their place. Returns the ids of their
+         * gets the files with names it has already in their place, and folders merged into theirs,
+         * while a file and a folder sharing a name are kept both. Returns the ids of their
          * uploads, in the order of `folders`.
          */
         addFolders(

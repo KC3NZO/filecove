@@ -3,8 +3,8 @@ import type { FileEntry } from "./adapter";
 type EntryKind = FileEntry["kind"];
 
 /**
- * What the upload panel says. Kept apart from the rest, since the panel is meant to be shared with
- * the media manager to come.
+ * What the upload panel says, and the name the upload queue gives a folder to keep both. Kept apart
+ * from the rest, since the panel and the queue are meant to be shared with the media manager to come.
  */
 export interface UploadLocaleText {
     /** The panel's name for screen readers. */
@@ -62,6 +62,12 @@ export interface UploadLocaleText {
     uploadFailedFolder: (count: number) => string;
     /** Under what failed in a folder uploaded, how many more did than are listed. */
     uploadFailuresMore: (count: number) => string;
+    /**
+     * The name a folder uploaded is made under to keep both, when a file or folder where it goes
+     * has its name, as the folder uploaded or as a folder in it going into a folder merged into:
+     * the first free one, counting from 2. `name` comes as it is, not isolated, since this is a name.
+     */
+    keptBothName: (name: string, number: number) => string;
 }
 
 /**
@@ -291,12 +297,6 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     newFolder: string;
     /** The name a new folder is offered: the first free one, counting from 1. */
     untitledFolder: (number: number) => string;
-    /**
-     * The name a folder uploaded is made under to keep both, when the folder uploaded into has its
-     * name: the first free one, counting from 2. `name` comes as it is, not isolated, since this is
-     * a name.
-     */
-    keptBothName: (name: string, number: number) => string;
     renameTitle: (kind: EntryKind) => string;
     nameLabel: (kind: EntryKind) => string;
     create: string;
@@ -355,27 +355,36 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     // Names a folder already has, when copying, moving or uploading into it
     /** `name` is the one clashing name, meant for when `count` is 1. */
     conflictMessage: (count: number, name: string, folderName: string) => string;
+    /** When a file clashes with a file: Replace, Keep both or Skip. `count` is every name that clashes. */
     conflictHint: (count: number) => string;
+    /**
+     * In place of `conflictHint`, when no file clashes with a file but a folder does with a folder:
+     * Merge, Keep both or Skip. `count` is every name that clashes.
+     */
+    conflictMergeHint: (count: number) => string;
+    /**
+     * In place of `conflictHint`, when every name clashes with one of the other kind, a file with a
+     * folder or a folder with a file, which can't replace each other: Keep both or Skip. `kind` is
+     * what has the name there, meant for when `count` is 1.
+     */
+    conflictKindHint: (count: number, kind: EntryKind) => string;
+    /** Beside `conflictHint`, when folders clash with folders too: what Replace does to them. */
+    conflictReplaceMerges: (count: number) => string;
+    /**
+     * Beside `conflictHint` or `conflictMergeHint`, when some names clash with one of the other kind:
+     * what Replace or Merge does to those. `name` is the one's, meant for when `count` is 1.
+     */
+    conflictKindKept: (count: number, name: string) => string;
     skip: string;
     keepBoth: string;
     replace: string;
-    /** In place of Replace, when every name an upload clashes with is a folder's, uploading a folder. */
+    /** In place of Replace, when no file clashes with a file but a folder does with a folder. */
     merge: string;
 
     // Uploading
     upload: string;
     /** `count` is the files and folders together; `name` is the one's name, meant for when `count` is 1. */
     uploadTitle: (count: number, name: string, folderName: string) => string;
-    /**
-     * In place of `conflictHint`, when every name an upload clashes with is a folder's, uploading a
-     * folder: Merge, Keep both or Skip. `count` is the folders.
-     */
-    uploadMergeHint: (count: number) => string;
-    /**
-     * Beside `conflictHint`, when files clash too: what Replace does to a folder. `count` is the
-     * folders.
-     */
-    uploadReplaceMerges: (count: number) => string;
     /** When only folders were dropped. `name` is the folder's name, meant for when `count` is 1. */
     uploadFoldersFailedTitle: (count: number, name: string) => string;
     uploadFoldersOnly: string;

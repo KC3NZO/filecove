@@ -394,11 +394,27 @@ export const createMockAdapter = (
         return name;
     };
 
-    /** Puts a node into a folder, settling a name clash by `conflict`. */
+    /**
+     * Puts a node into a folder, settling a name clash by `conflict`. "replace" puts a file in the
+     * place of a file, and merges a folder into a folder, what's in it going in the same way; a file
+     * and a folder never take each other's place, and are kept both.
+     */
     const insert = (target: MockNode, targetId: string, node: MockNode, conflict: ConflictPolicy) => {
         const existing = target.children?.find((child) => child.name === node.name);
 
-        if (existing && conflict === "replace") {
+        if (existing?.children && node.children && conflict === "replace") {
+            if (existing.fails) {
+                throw new Error("Permission denied");
+            }
+
+            const existingId = childId(targetId, existing.name);
+
+            node.children.forEach((child) => insert(existing, existingId, child, "replace"));
+
+            return;
+        }
+
+        if (existing && conflict === "replace" && !existing.children === !node.children) {
             detach(target, targetId, existing);
         } else if (existing) {
             node.name = freeName(target, node);

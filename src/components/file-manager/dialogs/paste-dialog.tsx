@@ -12,14 +12,14 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
-import { clashingNames, replacedFolders, useTransfer } from "../../../hooks/use-transfer";
+import { findClashes, mergedFolders, useTransfer } from "../../../hooks/use-transfer";
 import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { folderOf } from "../../../utils/navigation";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 
-import type { Clipboard, ConflictPolicy, FileAdapter, FolderRef, Section } from "../../../types";
+import type { Clash, Clipboard, ConflictPolicy, FileAdapter, FolderRef, Section } from "../../../types";
 
 export interface PasteRequest {
     /** What is pasted, as it was when the paste began: the clipboard, or entries dropped onto a folder. */
@@ -45,9 +45,9 @@ interface PasteDialogProps {
     /**
      * Called whenever the adapter may have changed folders, done, failed or cancelled, with their
      * ids, to list them again wherever they're shown, and after a "replace", the ids of the folders
-     * entries were put in the place of, which may now name those.
+     * entries were merged into, which may have changed all the way down.
      */
-    onChanged: (adapter: FileAdapter, folderIds: string[], replacedIds?: string[]) => void;
+    onChanged: (adapter: FileAdapter, folderIds: string[], mergedIds?: string[]) => void;
     /**
      * Called once the adapter has moved or copied the entries, with the names of those it was told
      * to skip, as the folder had them.
@@ -72,7 +72,8 @@ const spacerSx: SxProps<Theme> = {
 /**
  * Pastes what was cut or copied, or dropped onto a folder: the adapter moves or copies it into the
  * folder. Most pastes need nothing from the user, so they run unseen and the dialog only shows to
- * ask about names the folder already has (replace, keep both or skip) or to report the adapter's error.
+ * ask about names the folder already has (replace or merge, keep both, or skip) or to report the
+ * adapter's error.
  */
 const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogProps) => {
     const { clipboard, section, trail } = request;
@@ -89,16 +90,16 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
     const listed = (!!state?.entries && !state.partial) || state?.status === "error";
 
     const [checked, setChecked] = useState(false);
-    const [conflicts, setConflicts] = useState<string[] | null>(null);
+    const [conflicts, setConflicts] = useState<Clash[] | null>(null);
 
     // The adapter can't undo a change it has made, so however it ended, the target is listed again,
-    // and so is the source after a move, and folders a Replace may have put entries in the place of
-    // are dropped.
+    // and so is the source after a move, and folders a Replace or Merge may have merged others into
+    // are listed again all the way down.
     const refresh = (conflict: ConflictPolicy) =>
         onChanged(
             clipboard.adapter,
             kind === "move" ? [target.id, sourceId] : [target.id],
-            conflict === "replace" ? replacedFolders(entries, state?.entries) : undefined,
+            conflict === "replace" ? mergedFolders(entries, state?.entries) : undefined,
         );
 
     const { pending, failure, run, cancel } = useTransfer({ kind, adapter: clipboard.adapter, entries }, refresh);
@@ -106,7 +107,7 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
     const paste = (conflict: ConflictPolicy) => {
         run(target.id, conflict).then((outcome) => {
             if (outcome === "done") {
-                onDone(request, conflict === "skip" ? (conflicts ?? []) : []);
+                onDone(request, conflict === "skip" ? (conflicts ?? []).map((clash) => clash.name) : []);
             } else if (outcome === "failed") {
                 setConflicts(null);
             }
@@ -122,7 +123,7 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
             return;
         }
 
-        const clashes = target.id === sourceId ? [] : clashingNames(entries, state?.entries);
+        const clashes = target.id === sourceId ? [] : findClashes(entries, state?.entries);
 
         setChecked(true);
 
@@ -158,7 +159,7 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
                         {failure}
                     </Typography>
                 ) : (
-                    conflicts && <ConflictMessage names={conflicts} folderName={target.name} />
+                    conflicts && <ConflictMessage clashes={conflicts} folderName={target.name} />
                 )}
             </DialogContent>
             {failure ? (
@@ -173,7 +174,7 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
                         {text.cancel}
                     </Button>
                     <Box sx={spacerSx} />
-                    <ConflictChoices pending={pending} onChoose={paste} />
+                    {conflicts && <ConflictChoices clashes={conflicts} pending={pending} onChoose={paste} />}
                 </DialogActions>
             )}
         </Dialog>

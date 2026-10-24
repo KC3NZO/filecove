@@ -1941,8 +1941,9 @@ const FileManager = ({
     );
 
     // Uploads run in the background, a few at a time, while the user browses; the folders they end
-    // in are listed again like any other change.
-    const uploads = useUploadQueue(relist);
+    // in are listed again like any other change. The file manager provides its locale rather than
+    // reading it, so the queue is handed its text for a folder kept beside a file.
+    const uploads = useUploadQueue(relist, localeValue.text.keptBothName);
 
     // What uploads just put in folders, for the folder view to highlight once it shows them.
     const [arrivals, setArrivals] = useState(NO_ARRIVALS);
@@ -1977,7 +1978,8 @@ const FileManager = ({
     }, [uploads.items, arrive]);
 
     // Files in the folders of types the section doesn't take are left out as the folders are read.
-    // A file kept beside one of its name may be given another, which only the adapter knows.
+    // A file never takes a folder's place, so with Replace, one whose name a folder has is kept
+    // beside it. A file kept beside one of its name may be given another, which only the adapter knows.
     const startUpload = useCallback(
         (
             { section: target, adapter: served, trail }: UploadRequest,
@@ -1989,18 +1991,23 @@ const FileManager = ({
             const location = { sectionId: target.id, trail };
             const patterns = uploadPatterns(target);
             const accepts = patterns ? (file: File) => acceptsFile(patterns, file) : undefined;
-            const listed = store.get(folderKey(target.id, into.id))?.entries;
-            const taken = new Set(conflict === "keepBoth" ? listed?.map((entry) => entry.name) : []);
+            const listed = store.get(folderKey(target.id, into.id))?.entries ?? [];
+            const folderNames = new Set(listed.filter((entry) => entry.kind === "folder").map((entry) => entry.name));
+            const kept = conflict === "replace" ? files.filter((file) => folderNames.has(file.name)) : [];
+            const taken = new Set(conflict === "keepBoth" ? listed.map((entry) => entry.name) : folderNames);
+            const queueFiles = (queued: File[], policy: ConflictPolicy) =>
+                uploads.queue.add(served, into, queued, policy).forEach((id, index) => {
+                    const { name } = queued[index];
+
+                    uploadPlaces.current.set(id, { location, name: taken.has(name) ? undefined : name });
+                });
 
             closeUploadCheck();
             uploads.queue.addFolders(served, into, folders, conflict, accepts).forEach((id, index) => {
                 uploadPlaces.current.set(id, { location, name: folders[index].name });
             });
-            uploads.queue.add(served, into, files, conflict).forEach((id, index) => {
-                const { name } = files[index];
-
-                uploadPlaces.current.set(id, { location, name: taken.has(name) ? undefined : name });
-            });
+            queueFiles(files.filter((file) => !kept.includes(file)), conflict);
+            queueFiles(kept, "keepBoth");
         },
         [closeUploadCheck, uploads.queue, store],
     );
@@ -2055,8 +2062,8 @@ const FileManager = ({
     );
 
     // With path ids, a change can leave an id naming another folder: a deleted or moved folder's id
-    // is free for a new one, as is a renamed folder's old id or a folder a Replace put another in the
-    // place of, and a new or renamed folder's id may have named one before. So can the ids below
+    // is free for a new one, as is a renamed folder's old id, and a new or renamed folder's id may
+    // have named one before. So can the ids below
     // them, so the listings cached for them, and for every folder any section has cached below them,
     // are dropped in every section the adapter serves, and what still shows one lists it afresh. A
     // section rooted in one of them can't follow it, since its root is the consumer's: its places go
@@ -2106,17 +2113,29 @@ const FileManager = ({
         [revise, sectionsOf, store],
     );
 
-    // A copy's or move's `onChanged`: as `relist`, and the folders a Replace put entries in the place
-    // of go through `dropFolders`, since their ids now name those, as path ids do.
+    // A copy's or move's `onChanged`: as `relist`, and the folders a Replace or Merge merged others
+    // into are listed again all the way down, wherever they're cached, since what's in them may have
+    // changed at any depth. Their ids still name them. A section that doesn't list one may be rooted
+    // below it, which nothing cached ties to it, so what it shows is listed again at once.
     const relistTransferred = useCallback(
-        (served: FileAdapter, folderIds: string[], replacedIds: string[] = []) => {
+        (served: FileAdapter, folderIds: string[], mergedIds: string[] = []) => {
+            const merged = new Set(mergedIds);
+
             relist(served, folderIds);
 
-            if (replacedIds.length > 0) {
-                dropFolders(served, replacedIds);
+            if (merged.size === 0) {
+                return;
             }
+
+            sectionsOf(served).forEach((shown) => {
+                if (store.lists(shown.id, merged)) {
+                    store.relist(shown.id, served, mergedIds.flatMap((id) => store.cachedTree(shown.id, id)));
+                } else {
+                    store.recheck(shown.id, served);
+                }
+            });
         },
-        [relist, dropFolders],
+        [relist, sectionsOf, store],
     );
 
     // Moved folders go from the cache (`dropFolders`). The open place, in whichever section shows
