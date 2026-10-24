@@ -89,9 +89,10 @@ export interface ActionContext {
     delete?: () => void;
     /**
      * Uploads `files` into `folder`, or, without them, asks for some with the browser's file picker,
-     * which only opens from a click or key press. Names `folder` already has are asked about first.
-     * Missing when the section's adapter has no `upload`, its `acceptUploads` is false, or while
-     * another upload is being checked.
+     * which only opens from a click or key press and offers the types the section's `acceptUploads`
+     * takes. Names `folder` already has are asked about first, and files of other types are left
+     * out. Missing when the section's adapter has no `upload`, its `acceptUploads` is false, or
+     * while another upload is being checked.
      */
     upload?: (files?: File[]) => void;
     /**

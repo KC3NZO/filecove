@@ -22,9 +22,10 @@ export interface DragContextValue {
     dropInto: (target: DropTarget, copy: boolean) => (() => void) | undefined;
     /**
      * What dropping files from outside, such as from the desktop, into `target` does, to be called
-     * on drop with what was dropped, or undefined when it doesn't take uploads.
+     * on drop with what was dropped, or undefined when it doesn't take uploads, or can't take any of
+     * the files dragged (`items`, whose types a drag tells before the drop).
      */
-    uploadInto: (target: DropTarget) => ((dropped: DroppedFiles) => void) | undefined;
+    uploadInto: (target: DropTarget, items: DataTransferItemList) => ((dropped: DroppedFiles) => void) | undefined;
 }
 
 /** The drag of entries under way, shared by the content and the sidebar tree. */

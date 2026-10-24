@@ -152,6 +152,11 @@ export const enUS: FileManagerLocaleText = {
     uploadFoldersOnly: "Folders can't be uploaded yet, only files.",
     uploadFoldersLeftOut: (count, name) =>
         `Folders can't be uploaded yet, so ${count === 1 ? `“${name}” is` : `${count} folders are`} left out.`,
+    uploadFailedTitle: (count, name) => `Couldn't upload ${count === 1 ? `“${name}”` : `${count} items`}`,
+    uploadTypesOnly: (sectionName, types) => `“${sectionName}” only takes these types of files: ${types}.`,
+    uploadTypesLeftOut: (count, name, sectionName, types) =>
+        `${count === 1 ? `“${name}” is` : `${count} files are`} left out, since “${sectionName}” only takes ` +
+        `these types of files: ${types}.`,
 
     download: "Download",
 

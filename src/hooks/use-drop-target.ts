@@ -79,7 +79,7 @@ export const useDropTarget = ({ targetsAt, onHold }: DropTargetOptions) => {
                     return { key: target.key, run };
                 }
             } else {
-                const upload = drag?.uploadInto(target);
+                const upload = drag?.uploadInto(target, event.dataTransfer.items);
 
                 if (upload) {
                     return { key: target.key, run: () => upload(filesIn(event.dataTransfer)) };

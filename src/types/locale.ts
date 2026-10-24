@@ -286,6 +286,18 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     uploadFoldersOnly: string;
     /** When folders were dropped with files. `name` is the folder's name, meant for when `count` is 1. */
     uploadFoldersLeftOut: (count: number, name: string) => string;
+    /**
+     * When nothing dropped, picked or pasted can be uploaded, with files of types the section doesn't
+     * take among them. `count` is every file and folder; `name` is the one's name, for when it's 1.
+     */
+    uploadFailedTitle: (count: number, name: string) => string;
+    /**
+     * Why: the section, by its label, takes only `types`, already listed the locale's way from the
+     * type labels ("Image, Video, and PDF").
+     */
+    uploadTypesOnly: (sectionName: string, types: string) => string;
+    /** When files of types the section doesn't take were given with others. `name` is for when `count` is 1. */
+    uploadTypesLeftOut: (count: number, name: string, sectionName: string, types: string) => string;
 
     // Downloading
     /** The preview's Download button. */
@@ -399,6 +411,11 @@ export interface Locale {
     describeDate: (entry: FileEntry) => string;
     /** A short type label from the MIME type, falling back to the extension. */
     describeType: (entry: FileEntry) => string;
+    /**
+     * The types a section's `acceptUploads` patterns take, as `describeType`'s labels, listed the
+     * locale's way: "Image, Video, and PDF".
+     */
+    describeAccepted: (patterns: readonly string[]) => string;
     /** Names in natural order, so "file2" comes before "file10", case and accents aside. */
     compareNames: (a: string, b: string) => number;
     /** Whether two strings have the same letters, case and accents aside, for type-ahead. */

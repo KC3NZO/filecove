@@ -16,6 +16,7 @@ import { clashingNames } from "../../../hooks/use-transfer";
 import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
+import { acceptsFile, uploadPatterns } from "../../../utils/files";
 import { folderOf } from "../../../utils/navigation";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 
@@ -64,13 +65,18 @@ const spacerSx: SxProps<Theme> = {
 /**
  * Checks files about to be uploaded into a folder before they're queued. Most uploads need nothing
  * from the user, so this runs unseen, and the dialog only shows to ask about names the folder
- * already has (replace, keep both or skip), or to say that dropped folders were left out.
+ * already has (replace, keep both or skip), or to say that dropped folders, or files of types the
+ * section doesn't take (`acceptUploads`), were left out.
  */
 const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) => {
     const { section, trail, dropped } = request;
-    const { files, folders } = dropped;
+    const { folders } = dropped;
     const target = folderOf(section, trail);
-    const { text } = useLocale();
+    const { text, describeAccepted } = useLocale();
+    const patterns = uploadPatterns(section);
+    const files = dropped.files.filter((file) => acceptsFile(patterns, file));
+    const refused = dropped.files.filter((file) => !acceptsFile(patterns, file));
+    const types = patterns ? describeAccepted(patterns) : "";
     const dir = useContext(DirectionContext);
 
     // The folder is listed first when it isn't cached, as a folder dropped onto may never have been
@@ -107,14 +113,14 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
 
         checked.current = true;
 
-        if (clashes.length > 0 || folders.length > 0) {
+        if (clashes.length > 0 || folders.length > 0 || refused.length > 0) {
             setConflicts(clashes);
         } else {
             upload("keepBoth", clashes);
         }
     }, [listed]);
 
-    // Only folders were dropped, so there's nothing to upload.
+    // Only folders, or files of types the section doesn't take, so there's nothing to upload.
     if (files.length === 0) {
         return (
             <Dialog
@@ -125,11 +131,22 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                 slotProps={slotProps}
                 onClose={onClose}
             >
-                <DialogTitle>{text.uploadFoldersFailedTitle(folders.length, isolate(folders[0]))}</DialogTitle>
+                <DialogTitle>
+                    {refused.length > 0
+                        ? text.uploadFailedTitle(refused.length + folders.length, isolate(refused[0].name))
+                        : text.uploadFoldersFailedTitle(folders.length, isolate(folders[0]))}
+                </DialogTitle>
                 <DialogContent sx={contentSx}>
-                    <Typography variant="body2" color="text.secondary">
-                        {text.uploadFoldersOnly}
-                    </Typography>
+                    {folders.length > 0 && (
+                        <Typography variant="body2" color="text.secondary">
+                            {text.uploadFoldersOnly}
+                        </Typography>
+                    )}
+                    {refused.length > 0 && (
+                        <Typography variant="body2" color="text.secondary">
+                            {text.uploadTypesOnly(isolate(section.label), types)}
+                        </Typography>
+                    )}
                 </DialogContent>
                 <DialogActions sx={dialogActionsSx}>
                     <Button variant="contained" onClick={onClose}>
@@ -148,6 +165,16 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                 {folders.length > 0 && (
                     <Typography variant="body2" color="text.secondary">
                         {text.uploadFoldersLeftOut(folders.length, isolate(folders[0]))}
+                    </Typography>
+                )}
+                {refused.length > 0 && (
+                    <Typography variant="body2" color="text.secondary">
+                        {text.uploadTypesLeftOut(
+                            refused.length,
+                            isolate(refused[0].name),
+                            isolate(section.label),
+                            types,
+                        )}
                     </Typography>
                 )}
             </DialogContent>

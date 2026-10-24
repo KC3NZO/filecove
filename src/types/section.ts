@@ -42,11 +42,15 @@ export interface Section {
      */
     importFrom?: SectionImports;
     /**
-     * Whether files can be uploaded into the section's folders, by the file picker or by dropping
-     * them from the desktop. Uploading also needs the section's adapter to have `upload`.
+     * Which files can be uploaded into the section's folders, by the file picker, by dropping them
+     * from the desktop or by pasting them: any (`true`), none (`false`), or those matching a string
+     * in the file input's `accept` syntax, extensions, MIME types and their wildcards, such as
+     * `"image/*,.pdf"`. The picker offers only those, and files of other types picked anyway,
+     * dropped or pasted are left out, saying which types the section takes. Uploading also needs
+     * the section's adapter to have `upload`, which still has the final say.
      * @default true
      */
-    acceptUploads?: boolean;
+    acceptUploads?: boolean | string;
 }
 
 /** Sections shown together in the sidebar, divided from the next group by a rule. */

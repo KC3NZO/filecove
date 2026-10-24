@@ -193,7 +193,15 @@ export const sections: SectionGroup[] = [
                 importFrom: false,
                 acceptUploads: false,
             },
-            { id: "media", label: "Media bucket", icon: <CloudOutlined />, rootId: "/", adapter: mediaAdapter },
+            // Takes only pictures, videos and sound, to show a section limiting the files uploaded.
+            {
+                id: "media",
+                label: "Media bucket",
+                icon: <CloudOutlined />,
+                rootId: "/",
+                adapter: mediaAdapter,
+                acceptUploads: "image/*,video/*,audio/*",
+            },
         ],
     },
     // A bookmark rooted inside Website, so the same folders show in two sections, under the same ids.

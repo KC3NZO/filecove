@@ -30,7 +30,7 @@ import { visibleActionGroups } from "../../utils/action-groups";
 import { isolate } from "../../utils/bidi";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { canDownload, downloadedEntries } from "../../utils/download";
-import { filesIn } from "../../utils/files";
+import { filesIn, mayAccept, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
 import { importsFrom } from "../../utils/sections";
@@ -720,7 +720,7 @@ const FileManager = ({
     const canUpload = useMemo(
         () =>
             sections.some((group) =>
-                group.sections.some((shown) => !!(shown.adapter ?? adapter).upload && (shown.acceptUploads ?? true)),
+                group.sections.some((shown) => !!(shown.adapter ?? adapter).upload && takesUploads(shown)),
             ),
         [sections, adapter],
     );
@@ -1436,15 +1436,17 @@ const FileManager = ({
         (target: Section, trail: FolderRef[]) => {
             const served = target.adapter ?? adapter;
 
-            return served.upload && (target.acceptUploads ?? true) && !uploadCheck?.open
+            return served.upload && takesUploads(target) && !uploadCheck?.open
                 ? (dropped: DroppedFiles) => askUpload({ section: target, adapter: served, trail, dropped })
                 : undefined;
         },
         [adapter, uploadCheck?.open, askUpload],
     );
 
+    // A drag of files none of which the section can take (`acceptUploads`) shows the no-drop cursor.
     const uploadInto = useCallback(
-        (target: DropTarget) => offerUpload(target.section, target.trail),
+        (target: DropTarget, items: DataTransferItemList) =>
+            mayAccept(uploadPatterns(target.section), items) ? offerUpload(target.section, target.trail) : undefined,
         [offerUpload],
     );
 
@@ -1454,23 +1456,33 @@ const FileManager = ({
     // Shift+Insert always does.
     const pasteFiles = useCallback<PasteFiles>(
         (event, target, trail) => {
-            const served = target.adapter ?? adapter;
-            const ownFirst = clipboard && canPaste(clipboard, served, target, trail);
-            const upload =
-                event.clipboardData.types.includes("Files") && !ownFirst ? offerUpload(target, trail) : undefined;
+            const ownFirst = clipboard && canPaste(clipboard, target.adapter ?? adapter, target, trail);
+            const upload = ownFirst ? undefined : offerUpload(target, trail);
 
-            if (upload) {
+            if (!upload || !event.clipboardData.types.includes("Files")) {
+                return;
+            }
+
+            const pasted = filesIn(event.clipboardData);
+
+            if (pasted.files.length > 0 || pasted.folders.length > 0) {
                 event.preventDefault();
-                upload(filesIn(event.clipboardData));
+                upload(pasted);
             }
         },
         [adapter, clipboard, offerUpload],
     );
 
-    // Only opens from a click or key press, which an action's `onSelect` runs in.
-    const pickFiles = useCallback((into: (dropped: DroppedFiles) => void) => {
+    // Only opens from a click or key press, which an action's `onSelect` runs in. It offers the
+    // types the section takes (`acceptUploads`), though most pickers let the user pick any, so the
+    // upload check leaves out the rest.
+    const pickFiles = useCallback((into: (dropped: DroppedFiles) => void, accept: string) => {
         pickedInto.current = into;
-        pickerRef.current?.click();
+
+        if (pickerRef.current) {
+            pickerRef.current.accept = accept;
+            pickerRef.current.click();
+        }
     }, []);
 
     const handlePicked = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1890,7 +1902,10 @@ const FileManager = ({
                     : undefined,
                 upload:
                     uploadHere &&
-                    ((files?: File[]) => (files ? uploadHere({ files, folders: [] }) : pickFiles(uploadHere))),
+                    ((files?: File[]) =>
+                        files
+                            ? uploadHere({ files, folders: [] })
+                            : pickFiles(uploadHere, uploadPatterns(menuSection)?.join(",") ?? "")),
                 paste: pasteTo(trail),
                 pasteInto:
                     entries.length === 1 && only.kind === "folder"

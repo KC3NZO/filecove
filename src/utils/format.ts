@@ -1,4 +1,5 @@
 import { enUS } from "../locales/en-us";
+import { isolate } from "./bidi";
 
 import type { FileEntry, FileManagerLocaleText, Locale } from "../types";
 
@@ -42,6 +43,7 @@ export const createLocale = (
     const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "short" });
     const nameCollator = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
     const letterCollator = new Intl.Collator(locale, { sensitivity: "base" });
+    const listFormat = new Intl.ListFormat(locale, { type: "conjunction" });
 
     const formatSize = (bytes: number) => {
         if (bytes < 1000) {
@@ -84,6 +86,22 @@ export const createLocale = (
         return dot > 0 ? entry.name.slice(dot + 1).toUpperCase() : text.typeFile;
     };
 
+    // The type labels the list shows, for a section's `acceptUploads` patterns: an extension as
+    // `describeType` gives it, a MIME type or wildcard by its label, or as written when it has none.
+    const describeAccepted = (patterns: readonly string[]) => {
+        const labels = patterns.map((pattern) => {
+            if (pattern.startsWith(".")) {
+                return pattern.slice(1).toUpperCase();
+            }
+
+            const match = MIME_LABELS.find(([prefix]) => pattern.startsWith(prefix));
+
+            return match ? match[1](text) : pattern;
+        });
+
+        return listFormat.format([...new Set(labels)].map(isolate));
+    };
+
     return {
         text,
         formatNumber: (value) => numberFormat.format(value),
@@ -92,6 +110,7 @@ export const createLocale = (
         describeSize,
         describeDate: (entry) => (entry.modifiedAt ? dateFormat.format(entry.modifiedAt) : "—"),
         describeType,
+        describeAccepted,
         compareNames: (a, b) => nameCollator.compare(a, b),
         sameLetters: (a, b) => letterCollator.compare(a, b) === 0,
         // Lowercased the locale's way (a Turkish "I" is "ı"), then split into letters and marks,
