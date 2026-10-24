@@ -30,6 +30,17 @@ export interface FileUploadItem extends UploadBase {
     file: File;
 }
 
+/** Something in a folder uploaded that failed: a file, or a folder with everything in it. */
+export interface UploadFailure {
+    kind: "file" | "folder";
+    /** The names from the folder uploaded down to it, or that folder's own name for itself. */
+    path: string[];
+    /** A folder's files, none of which were uploaded. */
+    files: number;
+    /** Why, as the adapter said. */
+    error?: string;
+}
+
 /**
  * A folder in the upload queue, with everything in it: its folders made with the adapter's
  * `createFolder`, and its files sent one call each, as files on their own are. Replaced, never
@@ -49,6 +60,9 @@ export interface FolderUploadItem extends UploadBase {
     failed: number;
     /** How many of its files were left out for their type. */
     skipped: number;
+    /** The first things in it that failed, in the order they did, and how many more did. */
+    failures: UploadFailure[];
+    moreFailures: number;
 }
 
 export type UploadItem = FileUploadItem | FolderUploadItem;

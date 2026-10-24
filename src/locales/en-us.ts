@@ -259,6 +259,12 @@ export const enUS: FileManagerLocaleText = {
     uploadFolderDone: (count) => files(count),
     uploadFolderFailed: (count, total) => `Couldn't upload ${count} of ${files(total)}`,
     uploadFolderSkipped: (count) => `${files(count)} of other types left out`,
+    uploadFailuresShow: (name) => `Show what failed in ${name}`,
+    uploadFailuresHide: (name) => `Hide what failed in ${name}`,
+    uploadFailures: (name) => `What failed in ${name}`,
+    uploadFailedFolder: (count) =>
+        count === 0 ? "Couldn't upload this folder" : `Couldn't upload this folder or the ${files(count)} in it`,
+    uploadFailuresMore: (count) => `And ${count} more`,
 
     downloads: "Downloads",
     downloadsPreparing: (count) => `Preparing ${downloads(count)}`,

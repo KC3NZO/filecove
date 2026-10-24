@@ -5,6 +5,7 @@ import type {
     FolderContents,
     FolderRef,
     FolderUpload,
+    UploadFailure,
     UploadItem,
     UploadStatus,
 } from "../types";
@@ -14,6 +15,12 @@ const MAX_ACTIVE = 3;
 
 /** How often, at most, the folders uploads ended in are reported, in ms. */
 const REPORT_INTERVAL = 1000;
+
+/**
+ * How many of the things that failed in a folder uploaded are listed, the rest only counted, so a
+ * backend failing every file of a large folder doesn't have the list copied for each one.
+ */
+const LISTED_FAILURES = 100;
 
 const isActive = (item: UploadItem) => item.status === "queued" || item.status === "uploading";
 
@@ -30,6 +37,8 @@ interface FileStep {
     state: StepState;
     /** How much has been sent, from 0 to 1, once the adapter has reported any. */
     progress?: number;
+    /** Whether sending it was tried before, so it may be there, from a call cut short by a cancel. */
+    tried?: boolean;
 }
 
 /**
@@ -44,6 +53,11 @@ interface FolderStep {
     /** Its id, once made, or from the start for a folder merged into. */
     id?: string;
     merge: boolean;
+    /**
+     * Whether making it was tried before, so it may have been made, by a call that failed or was
+     * cut short by a cancel after the backend had made it.
+     */
+    tried: boolean;
     /** What a folder merged into already holds, by name, once listed. */
     holds?: Map<string, FileEntry>;
     files: FileStep[];
@@ -80,6 +94,9 @@ interface Job {
     size: number;
     skipped: number;
     error?: string;
+    /** What failed, the first `LISTED_FAILURES`, and how many more did. */
+    listed: UploadFailure[];
+    unlisted: number;
 }
 
 const messageOf = (error: unknown) => (error instanceof Error && error.message ? error.message : undefined);
@@ -104,6 +121,7 @@ const toSteps = (
         name: contents.name,
         parent,
         merge: false,
+        tried: false,
         files: [],
         folders: [],
         state: "waiting",
@@ -145,6 +163,21 @@ const listAll = async (adapter: FileAdapter, folderId: string, signal: AbortSign
     } while (cursor !== undefined);
 
     return holds;
+};
+
+// The names from the folder uploaded down to a step in it, or that folder's own name for itself.
+const pathOf = (step: Step) => {
+    const names: string[] = [];
+
+    for (let at: Step | undefined = step; at; at = at.kind === "file" ? at.into : at.parent) {
+        if (at.kind === "file" || at.parent) {
+            names.unshift(at.kind === "file" ? at.file.name : at.name);
+        } else if (names.length === 0) {
+            names.push(at.name);
+        }
+    }
+
+    return names;
 };
 
 const statusOf = (job: Job): UploadStatus => {
@@ -247,6 +280,8 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                 done: job.doneFiles,
                 failed: job.failedFiles,
                 skipped: job.skipped,
+                failures: job.listed,
+                moreFailures: job.unlisted,
                 progress: job.size > 0 ? sent / job.size : undefined,
             };
         } else {
@@ -348,9 +383,22 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
             step.state = failed ? "failed" : "done";
 
             if (failed) {
+                const files = step.kind === "file" ? 1 : countFiles(step);
+                const failure: UploadFailure = { kind: step.kind, path: pathOf(step), files, error: messageOf(error) };
+
                 job.failures += 1;
-                job.failedFiles += step.kind === "file" ? 1 : countFiles(step);
-                job.error ??= messageOf(error);
+                job.failedFiles += files;
+                job.error ??= failure.error;
+
+                // Only what's inside a folder upload is listed: a file's row shows its own error, and
+                // so does a folder's, for the folder itself.
+                const inside = job.upload && (step.kind === "file" || step.parent);
+
+                if (inside && job.listed.length < LISTED_FAILURES) {
+                    job.listed = [...job.listed, failure];
+                } else if (inside) {
+                    job.unlisted += 1;
+                }
             } else if (step.kind === "file") {
                 step.progress = 1;
                 job.doneFiles += 1;
@@ -359,7 +407,7 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                 opened(job, step);
             }
 
-            // Listing a folder to merge into changes nothing.
+            // Listing a folder to merge into, or finding one made already, changes nothing.
             if (step.kind === "file" || !step.merge) {
                 changed(adapter, [targetOf(job, step), step.kind === "folder" ? step.id : undefined]);
             }
@@ -383,10 +431,29 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                     return;
                 }
 
+                // Made already by an earlier try, it's taken as it is, merged into in case anything
+                // went in since, rather than failing as its name is taken.
+                if (step.kind === "folder" && step.tried) {
+                    const there = (await listAll(adapter, targetOf(job, step) as string, signal)).get(step.name);
+
+                    if (there?.kind === "folder") {
+                        step.id = there.id;
+                        step.merge = true;
+
+                        if (step.folders.length > 0) {
+                            step.holds = await listAll(adapter, there.id, signal);
+                        }
+
+                        return;
+                    }
+                }
+
                 if (step.kind === "folder") {
                     if (!adapter.createFolder) {
                         throw new Error("Not supported here.");
                     }
+
+                    step.tried = true;
 
                     const made = await adapter.createFolder(targetOf(job, step) as string, step.name, { signal });
 
@@ -399,11 +466,16 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                     throw new Error("Not supported here.");
                 }
 
-                // A folder made for the upload has nothing to clash with, and one merged into
-                // takes the upload's choice, which merged it.
+                // A folder made for the upload has nothing to clash with but the file's own earlier
+                // try, which it replaces, and one merged into takes the upload's choice, which
+                // merged it.
+                const ownFolder = step.into && !step.into.merge;
+                const conflict = ownFolder ? (step.tried ? "replace" : "keepBoth") : job.item.conflict;
+
+                step.tried = true;
                 await adapter.upload(step.file, targetOf(job, step) as string, {
                     signal,
-                    conflict: step.into && !step.into.merge ? "keepBoth" : job.item.conflict,
+                    conflict,
                     onProgress: (loaded, total) => {
                         if (owns() && total > 0) {
                             step.progress = Math.min(Math.max(loaded / total, 0), 1);
@@ -503,6 +575,8 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
         doneBytes: 0,
         size: 0,
         skipped: 0,
+        listed: [],
+        unlisted: 0,
     });
 
     // An upload that reached the adapter may have made the file or folder by the time it's aborted,
@@ -591,6 +665,8 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                         done: 0,
                         failed: 0,
                         skipped: 0,
+                        failures: [],
+                        moreFailures: 0,
                     },
                 );
 
@@ -637,6 +713,8 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
             job.failures = 0;
             job.failedFiles = 0;
             job.error = undefined;
+            job.listed = [];
+            job.unlisted = 0;
 
             if (job.upload && !job.root) {
                 // Still being read, once cancelled, or it failed to be.

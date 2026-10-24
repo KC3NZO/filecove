@@ -464,10 +464,17 @@ export const createMockAdapter = (
             }),
 
         // The file itself is kept, for the preview. A folder that refuses files does so before
-        // anything is sent.
+        // anything is sent, and so does a file with "fail" in its name, to show a file failing
+        // inside a folder uploaded.
         upload: (file, folderId, { signal, conflict, onProgress }) =>
             Promise.resolve()
-                .then(() => folderAt(folderId))
+                .then(() => {
+                    folderAt(folderId);
+
+                    if (/fail/i.test(file.name)) {
+                        throw new Error(`The server refused "${file.name}".`);
+                    }
+                })
                 .then(() =>
                     transfer(signal, file.size, clamp((file.size / UPLOAD_SPEED) * 1000, UPLOAD_TIME), onProgress),
                 )

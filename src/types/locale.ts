@@ -51,6 +51,15 @@ export interface UploadLocaleText {
     uploadFolderFailed: (count: number, total: number) => string;
     /** Beside a folder's status, how many files in it were left out for their type. */
     uploadFolderSkipped: (count: number) => string;
+    /** The button unfolding what failed in a folder uploaded, and folding it away; `name` is the folder's. */
+    uploadFailuresShow: (name: string) => string;
+    uploadFailuresHide: (name: string) => string;
+    /** The list of what failed in a folder uploaded, for screen readers. */
+    uploadFailures: (name: string) => string;
+    /** Why a folder in a folder uploaded failed, when it was its own call that did. `count` is its files. */
+    uploadFailedFolder: (count: number) => string;
+    /** Under what failed in a folder uploaded, how many more did than are listed. */
+    uploadFailuresMore: (count: number) => string;
 }
 
 /**

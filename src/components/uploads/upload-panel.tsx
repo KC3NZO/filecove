@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReactNode } from "react";
 
 import Box from "@mui/material/Box";
@@ -25,7 +25,14 @@ import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon, FolderTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 
-import type { FileUploadItem, FolderUploadItem, Locale, UploadItem } from "../../types";
+import type {
+    FileUploadItem,
+    FolderUploadItem,
+    Locale,
+    UploadFailure,
+    UploadItem,
+    UploadLocaleText,
+} from "../../types";
 
 interface UploadPanelProps {
     items: UploadItem[];
@@ -51,6 +58,41 @@ const doneSx: SxProps<Theme> = {
     flexShrink: 0,
     width: 30,
     color: "primary.main",
+};
+
+// Points down while what failed is folded away, to unfold it, and up while it shows.
+const failuresToggleIconSx: SxProps<Theme> = {
+    transition: "transform 150ms",
+    '[aria-expanded="true"] > &': { transform: "rotate(180deg)" },
+};
+
+// Laid out as a row is, with an empty slot for the icon, so the list lines up with the row's name.
+const failureAreaSx: SxProps<Theme> = {
+    display: "flex",
+    gap: 1.5,
+    paddingInlineStart: 2,
+    paddingInlineEnd: 2,
+    paddingBlockEnd: 1,
+};
+
+const failureListSx: SxProps<Theme> = {
+    flex: 1,
+    minWidth: 0,
+    m: 0,
+    p: 0,
+    listStyle: "none",
+};
+
+const failureSx: SxProps<Theme> = {
+    display: "flex",
+    alignItems: "center",
+    gap: 1,
+    py: 0.25,
+};
+
+const failureIconSx: SxProps<Theme> = {
+    display: "flex",
+    flexShrink: 0,
 };
 
 const isActive = (item: UploadItem) => item.status === "queued" || item.status === "uploading";
@@ -125,6 +167,58 @@ const describeFolder = (item: FolderUploadItem, { text }: Locale) => {
     }
 };
 
+const describeFailure = ({ kind, files, error }: UploadFailure, text: UploadLocaleText) => {
+    if (kind === "folder") {
+        return joinIsolated([text.uploadFailedFolder(files), ...(error === undefined ? [] : [error])]);
+    }
+
+    return error === undefined ? text.uploadFailed : isolate(error);
+};
+
+/** What failed in a folder uploaded, each by its path inside the folder, with why. */
+const FailureList = ({ item, id }: { item: FolderUploadItem; id: string }) => {
+    const { text } = useLocale();
+
+    return (
+        <Box sx={failureAreaSx}>
+            <Box sx={panelSlotSx} />
+            <Box component="ul" id={id} aria-label={text.uploadFailures(isolate(item.name))} sx={failureListSx}>
+                {item.failures.map((failure, index) => {
+                    const name = failure.path[failure.path.length - 1];
+
+                    return (
+                        // Only ever added to, and emptied as the folder is tried again.
+                        <Box component="li" key={index} sx={failureSx}>
+                            <Box sx={failureIconSx}>
+                                {failure.kind === "file" ? (
+                                    <FileTypeIcon fileName={name} size="1rem" />
+                                ) : (
+                                    <FolderTypeIcon folderName={name} size="1rem" />
+                                )}
+                            </Box>
+                            <Box sx={panelTextSx}>
+                                <Typography variant="body2" noWrap>
+                                    <bdi>{joinIsolated(failure.path, " / ")}</bdi>
+                                </Typography>
+                                <Typography variant="caption" color="error" noWrap>
+                                    {describeFailure(failure, text)}
+                                </Typography>
+                            </Box>
+                        </Box>
+                    );
+                })}
+                {item.moreFailures > 0 && (
+                    <Box component="li" sx={failureSx}>
+                        <Typography variant="caption" color="text.secondary">
+                            {text.uploadFailuresMore(item.moreFailures)}
+                        </Typography>
+                    </Box>
+                )}
+            </Box>
+        </Box>
+    );
+};
+
 const describeFile = ({ file, folder, status, progress, error }: FileUploadItem, { text, formatSize }: Locale) => {
     switch (status) {
         case "queued":
@@ -150,8 +244,11 @@ const describeFile = ({ file, folder, status, progress, error }: FileUploadItem,
 const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
     const { id, status, progress } = item;
     const name = item.kind === "file" ? item.file.name : item.name;
+    const failures = item.kind === "folder" ? item.failures : [];
     const locale = useLocale();
     const { text } = locale;
+    const [showFailures, setShowFailures] = useState(false);
+    const failuresId = useId();
 
     let action: ReactNode;
 
@@ -176,26 +273,48 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
     }
 
     return (
-        <Box component="li" sx={panelRowSx}>
-            <Box sx={panelSlotSx}>
-                {item.kind === "file" ? <FileTypeIcon fileName={name} /> : <FolderTypeIcon folderName={name} />}
-            </Box>
-            <Box sx={panelTextSx}>
-                <Typography variant="body2" noWrap>
-                    <bdi>{name}</bdi>
-                </Typography>
-                {status === "uploading" && (
-                    <LinearProgress
-                        variant={progress === undefined ? "indeterminate" : "determinate"}
-                        value={(progress ?? 0) * 100}
-                        sx={panelBarSx}
-                    />
+        <Box component="li">
+            <Box sx={panelRowSx}>
+                <Box sx={panelSlotSx}>
+                    {item.kind === "file" ? <FileTypeIcon fileName={name} /> : <FolderTypeIcon folderName={name} />}
+                </Box>
+                <Box sx={panelTextSx}>
+                    <Typography variant="body2" noWrap>
+                        <bdi>{name}</bdi>
+                    </Typography>
+                    {status === "uploading" && (
+                        <LinearProgress
+                            variant={progress === undefined ? "indeterminate" : "determinate"}
+                            value={(progress ?? 0) * 100}
+                            sx={panelBarSx}
+                        />
+                    )}
+                    <Typography variant="caption" color={status === "failed" ? "error" : "text.secondary"} noWrap>
+                        {item.kind === "file" ? describeFile(item, locale) : describeFolder(item, locale)}
+                    </Typography>
+                </Box>
+                {failures.length > 0 && (
+                    <TooltipIconButton
+                        size="small"
+                        label={
+                            showFailures
+                                ? text.uploadFailuresHide(isolate(name))
+                                : text.uploadFailuresShow(isolate(name))
+                        }
+                        aria-expanded={showFailures}
+                        aria-controls={failuresId}
+                        onClick={() => setShowFailures((prev) => !prev)}
+                    >
+                        <Icon name="expand" fontSize="small" sx={failuresToggleIconSx} />
+                    </TooltipIconButton>
                 )}
-                <Typography variant="caption" color={status === "failed" ? "error" : "text.secondary"} noWrap>
-                    {item.kind === "file" ? describeFile(item, locale) : describeFolder(item, locale)}
-                </Typography>
+                {action}
             </Box>
-            {action}
+            {item.kind === "folder" && (
+                <Collapse in={showFailures && failures.length > 0}>
+                    <FailureList item={item} id={failuresId} />
+                </Collapse>
+            )}
         </Box>
     );
 };

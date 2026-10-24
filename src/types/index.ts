@@ -38,6 +38,7 @@ export type {
     FolderSource,
     FolderUpload,
     FolderUploadItem,
+    UploadFailure,
     UploadItem,
     UploadStatus,
 } from "./upload";
