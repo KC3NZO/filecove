@@ -20,9 +20,11 @@ import { focusLost, isRtl, scrollParent } from "../../../utils/dom";
 import { focusTreeItem, isTypingKey, matchName } from "../../../utils/keyboard";
 import Icon from "../../icons/icon";
 import TreeRowItem, { GuideLine } from "./location-item";
+import MainMenu from "./main-menu";
 
 import type {
     FileManagerLocation,
+    MainMenuGroup,
     OpenMenu,
     RunShortcut,
     SearchScope,
@@ -57,6 +59,10 @@ interface SidebarProps {
     canSearchEverywhere: boolean;
     /** Opens a search everywhere, switches to it, or closes it when it's the one open. */
     onSearchEverywhere: () => void;
+    /** The consumer's main menu items, above the file manager's own. */
+    mainMenu: MainMenuGroup[];
+    /** Opens the keyboard shortcuts from the main menu, giving the focus back to `opener` after. */
+    onShowShortcuts: (opener: HTMLElement | null) => void;
     onToggle: (key: string) => void;
     /** Called once `reveal` has been scrolled to, or given up on. */
     onRevealed: () => void;
@@ -231,6 +237,8 @@ const Sidebar = ({
     onShortcut,
     onClose,
     onSearchEverywhere,
+    mainMenu,
+    onShowShortcuts,
 }: SidebarProps) => {
     // The sidebar's own selection; the content's lives in its folder view, and neither sees the other.
     const { selection, select, selectSection, reset } = useTreeSelection(openKey);
@@ -380,8 +388,10 @@ const Sidebar = ({
         [reset, onNavigate, onClose],
     );
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === "Escape") {
+    // Escape in the main menu, which portals out of the sidebar but still bubbles here through
+    // React's tree, only closes the menu.
+    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Escape" && event.target instanceof Node && event.currentTarget.contains(event.target)) {
             onClose();
         }
     };
@@ -542,9 +552,7 @@ const Sidebar = ({
                 <Typography component="span" noWrap sx={titleSx}>
                     {title}
                 </Typography>
-                <IconButton aria-label={text.mainMenu}>
-                    <Icon name="menu" fontSize="small" />
-                </IconButton>
+                <MainMenu groups={mainMenu} onShowShortcuts={onShowShortcuts} />
             </Box>
             <Box component="nav" aria-label={text.sidebar} sx={navSx}>
                 <Box

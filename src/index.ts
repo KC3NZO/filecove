@@ -27,6 +27,8 @@ export type {
     ListOptions,
     ListResult,
     LocationChangeReason,
+    MainMenuGroup,
+    MainMenuItem,
     OperationOptions,
     RefreshOptions,
     SearchMatch,

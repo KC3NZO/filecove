@@ -296,6 +296,69 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     zoomIn: string;
     zoomOut: string;
     zoomFit: string;
+
+    // Keyboard shortcuts, in the main menu and the window listing them. Rows reuse texts shown
+    // elsewhere too, such as `back`, `selectAll`, `searchFolder` or `zoomIn`.
+    /** The main menu's item, and the title of the window listing the keys. */
+    keyboardShortcuts: string;
+    shortcutsGeneral: string;
+    shortcutsNavigation: string;
+    shortcutsSelection: string;
+    shortcutsSearch: string;
+    shortcutsSidebar: string;
+    shortcutsPreview: string;
+    /** The section listing the consumer's actions and main menu items that have a shortcut. */
+    shortcutsActions: string;
+    shortcutContextMenu: string;
+    shortcutToggleHidden: string;
+    shortcutToggleSidebar: string;
+    /** F6, between the sidebar tree and the content. */
+    shortcutSwitchPane: string;
+    shortcutExpand: string;
+    shortcutCollapse: string;
+    shortcutOpen: string;
+    shortcutGoUp: string;
+    shortcutMove: string;
+    shortcutFirstLast: string;
+    shortcutPage: string;
+    /** Type-ahead, which goes to the next item whose name starts with what's typed. */
+    shortcutTypeAhead: string;
+    /** In place of keys beside `shortcutTypeAhead`. */
+    shortcutTypeAheadKeys: string;
+    shortcutToggleSelected: string;
+    /** Shift with the arrows. */
+    shortcutExtend: string;
+    /** Shift+Space, from the anchor to the focused item. */
+    shortcutSelectRange: string;
+    /** Ctrl with the arrows, which move the focus and leave the selection be. */
+    shortcutMoveOnly: string;
+    /** Down or Enter in the search field. */
+    shortcutSearchResults: string;
+    shortcutPreviewStep: string;
+    /** The key 1, which shows an image at its own size. */
+    shortcutZoomOriginal: string;
+    /** The arrows panning an image zoomed in. */
+    shortcutPan: string;
+
+    // Keys as the language's keyboards name them ("Strg" in German). Arrows show as arrows,
+    // and letters, digits and F-keys as they are.
+    keyCtrl: string;
+    keyShift: string;
+    keyAlt: string;
+    keyEnter: string;
+    keyEscape: string;
+    keySpace: string;
+    keyBackspace: string;
+    keyDelete: string;
+    keyTab: string;
+    keyHome: string;
+    keyEnd: string;
+    keyPageUp: string;
+    keyPageDown: string;
+    /** The Menu key, which opens the context menu. */
+    keyMenu: string;
+    /** Read to screen readers for the four arrows standing for any arrow key. */
+    keyArrows: string;
 }
 
 /**

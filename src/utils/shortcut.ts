@@ -1,5 +1,7 @@
 import type { KeyboardEvent } from "react";
 
+import type { FileManagerLocaleText } from "../types";
+
 const LATIN = /^[a-z0-9]$/;
 
 // The letter or digit at a key's place, as `code` names it after the US layout: "KeyH", "Digit1".
@@ -43,6 +45,80 @@ export const matchesShortcut = (event: KeyboardEvent, shortcut: string, key: str
         event.altKey === parts.includes("alt")
     );
 };
+
+/**
+ * Ctrl+?, which shows the keyboard shortcuts, as in GNOME: "?" wherever the layout has it, Shift
+ * or not, or the Arabic and Persian "؟" on theirs. Ctrl only, not ⌘, since ⌘? opens the browser's
+ * Help menu on macOS before the page sees it.
+ */
+export const showsShortcuts = (event: KeyboardEvent) =>
+    event.ctrlKey && !event.metaKey && !event.altKey && (pressesKey(event, "?") || pressesKey(event, "؟"));
+
+/**
+ * Whether a key press comes from a field the user types in, where a shortcut without Ctrl or Alt,
+ * a letter, Space or Delete, edits what's typed. F-keys type nothing, so they still count.
+ */
+export const typesInField = (event: KeyboardEvent) =>
+    event.target instanceof HTMLElement &&
+    (event.target.isContentEditable || event.target.matches("input, textarea, select")) &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !/^F\d+$/.test(event.key);
+
+/** A shortcut written as menus show it, as the keys pressed together: "Shift+Ctrl+N" as Shift, Ctrl and N. */
+export const shortcutKeys = (shortcut: string): readonly string[] => shortcut.split("+");
+
+/**
+ * The same text for every way of writing the same keys, however they're cased or ordered, to tell
+ * whether two shortcuts are one.
+ */
+export const comboId = (keys: readonly string[]) => {
+    const lower = keys.map((key) => key.toLowerCase());
+
+    return [...lower.slice(0, -1).sort(), lower.at(-1)].join("+");
+};
+
+const ARROWS: Record<string, string> = {
+    arrowup: "↑",
+    arrowdown: "↓",
+    arrowleft: "←",
+    arrowright: "→",
+};
+
+/**
+ * A key as the keyboards of the file manager's language name it: "Ctrl" as `keyCtrl` ("Strg" in
+ * German), the arrows as arrows, and letters uppercased. A key the text has no name for, such as
+ * F2 or ",", is shown as written.
+ */
+export const keyLabel = (key: string, text: FileManagerLocaleText) => {
+    const lower = key.toLowerCase();
+    const named: Record<string, string> = {
+        ctrl: text.keyCtrl,
+        control: text.keyCtrl,
+        shift: text.keyShift,
+        alt: text.keyAlt,
+        enter: text.keyEnter,
+        escape: text.keyEscape,
+        esc: text.keyEscape,
+        space: text.keySpace,
+        backspace: text.keyBackspace,
+        delete: text.keyDelete,
+        tab: text.keyTab,
+        home: text.keyHome,
+        end: text.keyEnd,
+        pageup: text.keyPageUp,
+        pagedown: text.keyPageDown,
+        contextmenu: text.keyMenu,
+        ...ARROWS,
+    };
+
+    return named[lower] ?? ([...key].length === 1 ? key.toUpperCase() : key);
+};
+
+/** Keys pressed together as one line, "Ctrl+?" or "Strg+?", for a menu. */
+export const formatShortcut = (keys: readonly string[], text: FileManagerLocaleText) =>
+    keys.map((key) => keyLabel(key, text)).join("+");
 
 /**
  * A shortcut as `aria-keyshortcuts` names it, e.g. "Shift+Control+N Shift+Meta+N" for

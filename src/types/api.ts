@@ -75,4 +75,10 @@ export interface FileManagerApi {
     closeSearch: () => void;
     /** Moves the focus to the content, as F6 does, e.g. once the file manager shows in a dialog. */
     focus: () => void;
+    /**
+     * Opens the window listing the keyboard shortcuts, as Ctrl+? and the main menu's "Keyboard
+     * shortcuts" do, e.g. from a help menu of the consumer's own. It gives the focus back to what
+     * had it as it closes.
+     */
+    showShortcuts: () => void;
 }

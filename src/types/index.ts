@@ -24,6 +24,7 @@ export type { DraggedEntries, DragSource, DropInto, DropTarget } from "./drag";
 export type { FolderState } from "./folder";
 export type { IconComponent, IconName, IconOverrides, IconSet, IconSource, IconVariant } from "./icon";
 export type { DownloadLocaleText, FileManagerLocaleText, Locale, UploadLocaleText } from "./locale";
+export type { MainMenuGroup, MainMenuItem } from "./main-menu";
 export type { MenuPosition, MenuRequest, OpenMenu, RunShortcut } from "./menu";
 export type { FileManagerLocation, LocationChangeReason } from "./navigation";
 export type { PreviewContent, PreviewKind, TextExcerpt } from "./preview";

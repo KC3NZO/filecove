@@ -6,7 +6,7 @@ import LanguageOutlined from "@mui/icons-material/LanguageOutlined";
 import { downloadUrls } from "../options";
 import { createMockAdapter, file, folder } from "./mock-adapter";
 
-import type { ActionContext, ActionGroup, SectionGroup } from "../../src";
+import type { ActionContext, ActionGroup, MainMenuGroup, SectionGroup } from "../../src";
 import type { MockNode } from "./mock-adapter";
 
 // Placeholder backends and configuration for the dev host.
@@ -410,6 +410,26 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 label: "Properties",
                 icon: "info",
                 onSelect: (context) => notify(`Properties of ${names(context)}`),
+            },
+        ],
+    },
+];
+
+/** Demo items for the sidebar's main menu, an app's own, which only report that they ran. */
+export const createDemoMainMenu = (notify: (message: string) => void): MainMenuGroup[] => [
+    {
+        id: "app",
+        items: [
+            {
+                id: "preferences",
+                label: "Preferences",
+                shortcut: "Ctrl+,",
+                onSelect: () => notify("Preferences"),
+            },
+            {
+                id: "about",
+                label: "About Files",
+                onSelect: () => notify("File manager playground"),
             },
         ],
     },

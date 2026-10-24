@@ -10,7 +10,7 @@ import { FileManager } from "../src";
 import { useHashLocation } from "./hooks/use-hash-location";
 import { useStoredState } from "./hooks/use-stored-state";
 import { childId } from "./mocks/mock-adapter";
-import { createDemoActions, sections, serverAdapter } from "./mocks/mock-data";
+import { createDemoActions, createDemoMainMenu, sections, serverAdapter } from "./mocks/mock-data";
 import { locale, single, uncontrolled } from "./options";
 
 import type {
@@ -103,6 +103,7 @@ const describe = ({ ids, entries }: Selection) => {
 const App = () => {
     const [notice, setNotice] = useState({ open: false, message: "" });
     const [actions] = useState(() => createDemoActions((message) => setNotice({ open: true, message })));
+    const [mainMenu] = useState(() => createDemoMainMenu((message) => setNotice({ open: true, message })));
     const apiRef = useRef<FileManagerApi>(null);
     const [location, setLocation] = useHashLocation(shownSections);
     const [view, setView] = useStoredState<ViewMode>("view", "list");
@@ -198,6 +199,7 @@ const App = () => {
     const shared = {
         adapter: serverAdapter,
         actions,
+        mainMenu,
         locale,
         apiRef,
         sx: fileManagerSx,
@@ -230,6 +232,9 @@ const App = () => {
                 </Button>
                 <Button size="small" color="inherit" onClick={() => apiRef.current?.refresh()}>
                     Reload all
+                </Button>
+                <Button size="small" color="inherit" onClick={() => apiRef.current?.showShortcuts()}>
+                    Shortcuts
                 </Button>
             </Box>
             <Snackbar

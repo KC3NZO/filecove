@@ -33,7 +33,7 @@ import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "
 import { importsFrom } from "../../utils/sections";
 import { sameSearch } from "../../utils/search";
 import { sameIds } from "../../utils/sets";
-import { matchesShortcut, pressedKeys, pressesKey } from "../../utils/shortcut";
+import { matchesShortcut, pressedKeys, pressesKey, showsShortcuts, typesInField } from "../../utils/shortcut";
 import { DEFAULT_SORT, entryComparator, sameSort } from "../../utils/sort";
 import DownloadPanel from "../downloads/download-panel";
 import UploadPanel from "../uploads/upload-panel";
@@ -44,6 +44,7 @@ import DeleteDialog from "./dialogs/delete-dialog";
 import NameDialog from "./dialogs/name-dialog";
 import PasteDialog from "./dialogs/paste-dialog";
 import PreviewDialog from "./dialogs/preview-dialog";
+import ShortcutsDialog from "./dialogs/shortcuts-dialog";
 import TransferDialog from "./dialogs/transfer-dialog";
 import UploadDialog from "./dialogs/upload-dialog";
 import DragPreview from "./drag-preview";
@@ -68,6 +69,7 @@ import type {
     FileManagerSearch,
     FolderRef,
     LocationChangeReason,
+    MainMenuGroup,
     MenuRequest,
     OpenMenu,
     RefreshOptions,
@@ -106,6 +108,13 @@ interface BaseProps extends RootAttributes {
     adapter: FileAdapter;
     /** Context menu actions, in groups. */
     actions?: ActionGroup[];
+    /**
+     * The sidebar's main menu, in groups, for what belongs to the app rather than to entries, such
+     * as preferences, help or about. The file manager adds "Keyboard shortcuts" after them. An
+     * item's `shortcut` works anywhere in the file manager, and shows in the keyboard shortcuts
+     * window with the actions' shortcuts.
+     */
+    mainMenu?: MainMenuGroup[];
     /** Shown at the top of the sidebar; `localeText.sidebarTitle`, "Files" in English, when omitted. */
     title?: string;
     /**
@@ -308,6 +317,7 @@ interface ToldSelection {
 }
 
 const NO_ACTIONS: ActionGroup[] = [];
+const NO_MAIN_MENU: MainMenuGroup[] = [];
 const NO_TRAIL: FolderRef[] = [];
 const NO_IDS: ReadonlySet<string> = new Set();
 const NO_ENTRIES: FileEntry[] = [];
@@ -427,6 +437,7 @@ const FileManager = ({
     sections: groups,
     section: singleSection,
     actions = NO_ACTIONS,
+    mainMenu = NO_MAIN_MENU,
     title,
     location: locationProp,
     defaultLocation,
@@ -593,6 +604,9 @@ const FileManager = ({
     const [pasting, setPasting] = useState<PasteDialogState | null>(null);
     const [uploadCheck, setUploadCheck] = useState<UploadDialogState | null>(null);
     const [previewing, setPreviewing] = useState<PreviewDialogState | null>(null);
+    const [shortcutsOpen, setShortcutsOpen] = useState(false);
+    // What gets the focus back as the keyboard shortcuts close.
+    const shortcutsOpener = useRef<HTMLElement | null>(null);
     const [reveal, setReveal] = useState<Reveal | null>(null);
     // A folder just created, which the sidebar tree scrolls to once it shows its row.
     const [treeReveal, setTreeReveal] = useState<TreeReveal | null>(null);
@@ -661,6 +675,11 @@ const FileManager = ({
         });
     }, [sections, searchTargets]);
     const canSearchEverywhere = searchTargets.length > 0;
+    // Whether anything can be previewed, for the keyboard shortcuts to list the preview's keys.
+    const canPreview = useMemo(
+        () => sections.some((group) => group.sections.some((shown) => !!(shown.adapter ?? adapter).content)),
+        [sections, adapter],
+    );
 
     // Sections a search everywhere leaves out, kept while the file manager is mounted, so a section
     // added later is searched. Ids of sections gone, or that can't be searched, don't count, and
@@ -1134,9 +1153,61 @@ const FileManager = ({
         }
     };
 
-    // Keys that work anywhere in the file manager: F6, F9, Ctrl+H, Ctrl+F, Ctrl+Shift+F, and Alt+Left
-    // and Alt+Right for back and forward, the other way round right to left, as the arrows on the
-    // buttons are.
+    // Opens the window listing the keys. It gives the focus back itself as it closes, to `opener`
+    // or to what has it now, since the main menu it may be opened from hands the focus back to its
+    // button only as it closes, after the window has taken note of what had it.
+    const showShortcuts = useCallback((opener?: HTMLElement | null) => {
+        shortcutsOpener.current =
+            opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+        setShortcutsOpen(true);
+    }, []);
+
+    const closeShortcuts = useCallback(() => setShortcutsOpen(false), []);
+
+    // Once it has faded out, the focus goes back where it was, or to the content when that's gone.
+    const handleShortcutsClosed = useCallback(() => {
+        const opener = shortcutsOpener.current;
+
+        shortcutsOpener.current = null;
+
+        if (opener && opener !== document.body && opener.isConnected) {
+            opener.focus();
+        }
+
+        if (!opener || document.activeElement !== opener) {
+            setFocusContent(true);
+        }
+    }, []);
+
+    // A main menu item's shortcut works anywhere in the file manager, before the file manager's own
+    // keys, as the actions' come first in the content and the tree. Returns whether one ran.
+    const runMenuShortcut = (event: KeyboardEvent) => {
+        if (typesInField(event)) {
+            return false;
+        }
+
+        // Each key the press stands for in turn, so the key typed wins over the one at its place.
+        for (const key of pressedKeys(event)) {
+            for (const group of mainMenu) {
+                const item = group.items.find(
+                    (candidate) =>
+                        candidate.shortcut && !candidate.disabled && matchesShortcut(event, candidate.shortcut, key),
+                );
+
+                if (item) {
+                    item.onSelect();
+
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    };
+
+    // Keys that work anywhere in the file manager: the main menu's shortcuts, F6, F9, Ctrl+?, Ctrl+H,
+    // Ctrl+F, Ctrl+Shift+F, and Alt+Left and Alt+Right for back and forward, the other way round
+    // right to left, as the arrows on the buttons are.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         // Menus and dialogs portal out of the file manager, but their key presses still bubble here
         // through React's tree; they aren't the file manager's.
@@ -1148,6 +1219,12 @@ const FileManager = ({
             return;
         }
 
+        if (runMenuShortcut(event)) {
+            event.preventDefault();
+
+            return;
+        }
+
         const others = event.ctrlKey || event.metaKey || event.shiftKey;
         const plain = !others && !event.altKey;
         let handled = true;
@@ -1156,6 +1233,8 @@ const FileManager = ({
             switchPane();
         } else if (event.key === "F9" && plain) {
             toggleSidebar();
+        } else if (showsShortcuts(event)) {
+            showShortcuts();
         } else if (
             // Ctrl+H shows and hides hidden files, as in GNOME Files. Not ⌘H, which hides the
             // browser on macOS before the page sees it.
@@ -1866,6 +1945,7 @@ const FileManager = ({
         actionContextAt,
         openSearch,
         closeSearch,
+        showShortcuts,
     });
 
     useLayoutEffect(() => {
@@ -1879,6 +1959,7 @@ const FileManager = ({
             actionContextAt,
             openSearch,
             closeSearch,
+            showShortcuts,
         };
     });
 
@@ -1895,6 +1976,7 @@ const FileManager = ({
             search: (scope, typed) => api.current.openSearch(scope, typed),
             closeSearch: () => api.current.closeSearch(),
             focus: () => setFocusContent(true),
+            showShortcuts: () => api.current.showShortcuts(),
         }),
         [],
     );
@@ -1969,6 +2051,8 @@ const FileManager = ({
                                         onShortcut={runShortcut}
                                         onClose={closeSidebar}
                                         onSearchEverywhere={searchEverywhere}
+                                        mainMenu={mainMenu}
+                                        onShowShortcuts={showShortcuts}
                                     />
                                     <Box sx={mainSx}>
                                         <HeaderBar
@@ -2165,6 +2249,16 @@ const FileManager = ({
                                         onDownload={handlePreviewDownload}
                                     />
                                 )}
+                                <ShortcutsDialog
+                                    open={shortcutsOpen}
+                                    actions={actions}
+                                    mainMenu={mainMenu}
+                                    canSearchEverywhere={canSearchEverywhere}
+                                    choosesSections={searchTargets.length > 1}
+                                    canPreview={canPreview}
+                                    onClose={closeShortcuts}
+                                    onClosed={handleShortcutsClosed}
+                                />
                                 <input
                                     ref={pickerRef}
                                     type="file"
