@@ -40,7 +40,7 @@ import { folderOf } from "../../../utils/navigation";
 import { selectModifiers } from "../../../utils/selection";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
-import IconSlot from "../icon-slot";
+import IconSlot from "../../icons/icon-slot";
 
 import type {
     ErrorRow,

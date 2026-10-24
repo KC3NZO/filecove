@@ -29,7 +29,7 @@ import { createPropertiesCache } from "../../store/properties-cache";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootExtraWide, rootWide } from "../../styles/layout";
 import { withSx } from "../../styles/sx";
-import { visibleActionGroups } from "../../utils/action-groups";
+import { toolbarGroups, visibleActionGroups } from "../../utils/action-groups";
 import { isolate } from "../../utils/bidi";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { canDownload, downloadedEntries } from "../../utils/download";
@@ -48,6 +48,7 @@ import { importsFrom } from "../../utils/sections";
 import { sameSearch } from "../../utils/search";
 import { sameIds } from "../../utils/sets";
 import { matchesShortcut, pastes, pressedKeys, pressesKey, showsShortcuts, typesInField } from "../../utils/shortcut";
+import { previewable } from "../../utils/preview";
 import { DEFAULT_SORT, entryComparator, sameSort } from "../../utils/sort";
 import DownloadPanel from "../downloads/download-panel";
 import UploadPanel from "../uploads/upload-panel";
@@ -85,6 +86,7 @@ import type {
     FileManagerLocaleText,
     FileManagerLocation,
     FileManagerSearch,
+    FilePreviewer,
     FolderRef,
     FolderUpload,
     LocationChangeReason,
@@ -103,6 +105,7 @@ import type {
     SectionGroup,
     SelectionDetails,
     SortOrder,
+    ToolbarGroup,
     TreeReveal,
     UploadItem,
     ViewMode,
@@ -131,6 +134,31 @@ interface BaseProps extends RootAttributes {
     adapter: FileAdapter;
     /** Context menu actions, in groups. */
     actions?: ActionGroup[];
+    /**
+     * Actions in the preview's header, in groups, for the file it shows: as an `ActionContext` for
+     * that one file, in its folder, with `closePreview` for an action taking the user elsewhere,
+     * such as an editor of the app's own. Those with an icon show as buttons, four at most, while
+     * the header has room, and the rest in its "More actions" menu, as do all of them on a narrow
+     * screen. A `shortcut` works while the preview is open, after its own keys. The same action
+     * objects can be in `actions` too. Opening a dialog from one, to rename or delete the file,
+     * opens it over the preview, which follows what it did.
+     */
+    previewActions?: ActionGroup[];
+    /**
+     * Actions in the properties panel's header, in groups, for what it shows: its entries, as in
+     * the context menu, or with none, the folder it shows (`target` "folder"). Shown as the
+     * preview's are, two as buttons at most. None show for a search's results from several folders.
+     * A `shortcut` works while the focus is in the panel.
+     */
+    propertiesActions?: ActionGroup[];
+    /**
+     * Previewers of the app's own, for the kinds of files the preview doesn't show by itself, or
+     * shows otherwise: highlighted code, rendered Markdown, office documents, what's in an archive,
+     * formats the browser can't draw. Each says which files it takes, and is asked in order before
+     * the file manager's own previews. The file manager builds none in, so an app only carries the
+     * libraries it chooses.
+     */
+    previewers?: FilePreviewer[];
     /**
      * The sidebar's main menu, in groups, for what belongs to the app rather than to entries, such
      * as preferences, help or about. The file manager adds "Keyboard shortcuts" after them. An
@@ -282,8 +310,9 @@ interface BaseProps extends RootAttributes {
      * What opening a file does, by double-clicking, tapping or pressing Enter on it, or with
      * `ActionContext.open`, e.g. opening it in an editor of the consumer's. Return false to leave a
      * file to the preview, e.g. one of a type there's no editor for. Without it, a file opens in the
-     * preview, when the adapter has `content`, and `ActionContext.open` is missing for files, since
-     * it would only do what `preview` does.
+     * preview, when the adapter has `content` or a previewer reading nothing takes it, and
+     * `ActionContext.open` is missing for files, since it would only do what `preview` does. From
+     * the preview's header, `open` closes the preview unless this returns false.
      */
     onOpenFile?: (entry: FileEntry, context: ActionContext) => boolean | void;
     /**
@@ -383,6 +412,8 @@ interface ShownSelection {
 }
 
 const NO_ACTIONS: ActionGroup[] = [];
+const NO_PREVIEWERS: FilePreviewer[] = [];
+const NO_TOOLBAR: ToolbarGroup[] = [];
 const NO_MAIN_MENU: MainMenuGroup[] = [];
 const NO_TRAIL: FolderRef[] = [];
 const NO_IDS: ReadonlySet<string> = new Set();
@@ -560,6 +591,9 @@ const FileManager = ({
     sections: groups,
     section: singleSection,
     actions = NO_ACTIONS,
+    previewActions = NO_ACTIONS,
+    propertiesActions = NO_ACTIONS,
+    previewers = NO_PREVIEWERS,
     mainMenu = NO_MAIN_MENU,
     title,
     relistAfter = 0,
@@ -790,7 +824,8 @@ const FileManager = ({
     // What gets the focus back as the keyboard shortcuts close.
     const shortcutsOpener = useRef<HTMLElement | null>(null);
     const [reveal, setReveal] = useState<Reveal | null>(null);
-    const { announcement, announce } = useAnnouncer();
+    // Said from inside the preview while it's open, as it hides the rest from screen readers.
+    const { announcement, announce } = useAnnouncer(() => (previewing?.open ? "preview" : "root"));
     // A folder just created, which the sidebar tree scrolls to once it shows its row.
     const [treeReveal, setTreeReveal] = useState<TreeReveal | null>(null);
     // The browser's file picker, and where the files picked with it go.
@@ -872,8 +907,10 @@ const FileManager = ({
     const canSearchEverywhere = searchTargets.length > 0;
     // Whether anything can be previewed, for the keyboard shortcuts to list the preview's keys.
     const canPreview = useMemo(
-        () => sections.some((group) => group.sections.some((shown) => !!(shown.adapter ?? adapter).content)),
-        [sections, adapter],
+        () =>
+            previewers.length > 0 ||
+            sections.some((group) => group.sections.some((shown) => !!(shown.adapter ?? adapter).content)),
+        [sections, adapter, previewers],
     );
 
     const canUpload = useMemo(
@@ -1809,12 +1846,37 @@ const FileManager = ({
     );
 
     // Once the preview has faded out, the content takes the focus back if the preview was opened
-    // from there, on the file shown last when the selection followed it.
+    // from there, on the file shown last when the selection followed it, unless it closed for
+    // something else that took the focus, as the properties do.
     const handlePreviewClosed = useCallback(() => {
-        if (previewing?.fromContent) {
+        if (previewing?.fromContent && !previewing.handedOff) {
             setFocusContent(true);
         }
-    }, [previewing?.fromContent]);
+    }, [previewing?.fromContent, previewing?.handedOff]);
+
+    // The files the preview steps through as a change made through the file manager leaves them:
+    // `change` gives an entry of the adapter's as it now is, or null once it's gone from there. The
+    // preview shows the file now in the place of one that went, and closes once none is left.
+    const changePreview = useCallback(
+        (served: FileAdapter, change: (entry: FileEntry) => FileEntry | null) =>
+            setPreviewing((prev) => {
+                if (!prev || prev.request.adapter !== served) {
+                    return prev;
+                }
+
+                const entries = prev.request.entries.flatMap((entry) => {
+                    const now = change(entry);
+
+                    return now ? [now] : [];
+                });
+
+                return entries.length === prev.request.entries.length &&
+                    entries.every((entry, index) => entry === prev.request.entries[index])
+                    ? prev
+                    : { ...prev, request: { ...prev.request, entries } };
+            }),
+        [],
+    );
 
     // A single file steps through its folder, and the content's selection follows the file shown,
     // as it does in GNOME's and macOS's previewers.
@@ -2239,8 +2301,9 @@ const FileManager = ({
             setClipboard(
                 (prev) => prev && withoutEntries(prev, fromAdapter, movedIds, dropped, mayBeBelow(prev.section.id)),
             );
+            changePreview(fromAdapter, (entry) => (movedIds.has(entry.id) ? null : entry));
         },
-        [adapter, section, place, dropFolders, mayBeRootedBelow, goTo],
+        [adapter, section, place, dropFolders, mayBeRootedBelow, goTo, changePreview],
     );
 
     // The sidebar tree scrolls to a folder just created, in whichever section shows it, once the
@@ -2345,9 +2408,10 @@ const FileManager = ({
             setClipboard(
                 (prev) => prev && withoutEntries(prev, fromAdapter, deletedIds, dropped, mayBeBelow(prev.section.id)),
             );
+            changePreview(fromAdapter, (entry) => (deletedIds.has(entry.id) ? null : entry));
             announce(localeValue.text.deleteDone(entries.length, isolate(entries[0].name)));
         },
-        [closeDelete, dropFolders, mayBeRootedBelow, revise, sectionsOf, announce, localeValue],
+        [closeDelete, dropFolders, mayBeRootedBelow, revise, sectionsOf, changePreview, announce, localeValue],
     );
 
     // The new or renamed entry is selected if its folder is open, in whichever section shows it. A
@@ -2384,11 +2448,13 @@ const FileManager = ({
                     : NO_IDS;
 
             // A renamed entry on the clipboard is pasted as it is now, entries below a renamed folder
-            // are followed, and those that may be below it otherwise are looked for again.
+            // are followed, and those that may be below it otherwise are looked for again. The
+            // preview shows a renamed file by its new name, under its new id.
             if (before) {
                 setClipboard(
                     (prev) => prev && withRenamed(prev, served, before, entry, dropped, mayBeBelow(prev.section.id)),
                 );
+                changePreview(served, (shown) => (shown.id === before.id ? entry : shown));
             }
 
             if (entry.kind !== "folder") {
@@ -2427,7 +2493,18 @@ const FileManager = ({
                 });
             }
         },
-        [closeNaming, openKey, sectionsOf, dropFolders, mayBeRootedBelow, revealInTree, revise, announce, localeValue],
+        [
+            closeNaming,
+            openKey,
+            sectionsOf,
+            dropFolders,
+            mayBeRootedBelow,
+            revealInTree,
+            revise,
+            changePreview,
+            announce,
+            localeValue,
+        ],
     );
 
     const contextFor = useCallback(
@@ -2454,24 +2531,25 @@ const FileManager = ({
             const uploadHere = offerUpload(menuSection, trail);
 
             const [only] = entries;
-            const files = entries.filter((entry) => entry.kind === "file");
             // A folder's own menu, its empty space, the path bar's or a section row's, downloads the
             // folder itself.
             const downloaded = downloadedEntries(entries, menuFolder);
 
             // A single file steps through the files of the view it's listed in, in its order, and
-            // the selection follows; several files step through themselves.
+            // the selection follows; several files step through themselves. Without the adapter's
+            // `content`, only those a previewer reading nothing takes.
+            const shows = (entry: FileEntry) => entry.kind === "file" && previewable(entry, folderAdapter, previewers);
+            const previewed = entries.filter(shows);
             const preview =
-                folderAdapter.content && files.length > 0
+                previewed.length > 0
                     ? () => {
-                          const siblings =
-                              entries.length === 1 && listing ? listing.filter((entry) => entry.kind === "file") : [];
+                          const siblings = entries.length === 1 && listing ? listing.filter(shows) : [];
                           const index = siblings.findIndex((entry) => entry.id === only.id);
 
                           askPreview(
                               index >= 0
-                                  ? { ...base, entries: siblings, index, follow: true }
-                                  : { ...base, entries: files, index: 0, follow: false },
+                                  ? { ...base, entries: siblings, index, follow: true, inResults }
+                                  : { ...base, entries: previewed, index: 0, follow: false, inResults },
                           );
                       }
                     : undefined;
@@ -2591,12 +2669,52 @@ const FileManager = ({
             sectionsById,
             clipboard,
             onOpenFile,
+            previewers,
             place,
             stopSearching,
             focusInContent,
             announce,
             localeValue,
         ],
+    );
+
+    // What the app's actions in the preview's header get: the context menu's for the one file shown,
+    // in its folder, with what takes the user elsewhere closing the preview first. It isn't
+    // previewed again from there.
+    const previewActionsFor = useCallback(
+        ({ section: shown, trail, inResults }: PreviewRequest, entry: FileEntry): ToolbarGroup[] => {
+            if (previewActions.length === 0) {
+                return NO_TOOLBAR;
+            }
+
+            const context = contextFor({ target: "selection", section: shown, trail, entries: [entry], inResults });
+            const inPreview: ActionContext = {
+                ...context,
+                preview: undefined,
+                closePreview,
+                open: onOpenFile
+                    ? () => {
+                          if (onOpenFile(entry, inPreview) !== false) {
+                              closePreview();
+                          }
+                      }
+                    : undefined,
+                openLocation:
+                    context.openLocation &&
+                    (() => {
+                        closePreview();
+                        context.openLocation?.();
+                    }),
+                // The properties take the focus, which the preview leaves them as it closes.
+                properties: () => {
+                    setPreviewing((prev) => prev && { ...prev, open: false, handedOff: true });
+                    context.properties();
+                },
+            };
+
+            return toolbarGroups(previewActions, inPreview);
+        },
+        [previewActions, contextFor, closePreview, onOpenFile],
     );
 
     // Opens a file as double-clicking it does, with `onOpenFile`, or in the preview when there's
@@ -3075,6 +3193,7 @@ const FileManager = ({
                                                 showHidden={showHidden}
                                                 cache={propertiesCache}
                                                 takeFocus={focusProperties}
+                                                actions={propertiesActions}
                                                 contextFor={contextFor}
                                                 onClose={closeProperties}
                                                 onEscape={handlePropertiesEscape}
@@ -3084,7 +3203,7 @@ const FileManager = ({
                                         </Box>
                                     </Box>
                                 </Box>
-                                <Announcer announcement={announcement} />
+                                <Announcer announcement={announcement?.region === "root" ? announcement : null} />
                                 <ContextMenu menu={menu} onClose={closeMenu} />
                                 {naming && (
                                     <NameDialog
@@ -3143,6 +3262,9 @@ const FileManager = ({
                                         open={previewing.open}
                                         request={previewing.request}
                                         disableRestoreFocus={previewing.fromContent}
+                                        previewers={previewers}
+                                        actionsFor={previewActionsFor}
+                                        announcement={announcement?.region === "preview" ? announcement : null}
                                         onClose={closePreview}
                                         onClosed={handlePreviewClosed}
                                         onStep={handlePreviewStep}
@@ -3152,6 +3274,8 @@ const FileManager = ({
                                 <ShortcutsDialog
                                     open={shortcutsOpen}
                                     actions={actions}
+                                    previewActions={previewActions}
+                                    propertiesActions={propertiesActions}
                                     mainMenu={mainMenu}
                                     canSearchEverywhere={canSearchEverywhere}
                                     choosesSections={searchTargets.length > 1}

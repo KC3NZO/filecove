@@ -21,6 +21,8 @@ import InsertDriveFileSharp from "@mui/icons-material/InsertDriveFileSharp";
 import FilterListSharp from "@mui/icons-material/FilterListSharp";
 import FolderSharp from "@mui/icons-material/FolderSharp";
 import FolderOpenSharp from "@mui/icons-material/FolderOpenSharp";
+import FullscreenSharp from "@mui/icons-material/FullscreenSharp";
+import FullscreenExitSharp from "@mui/icons-material/FullscreenExitSharp";
 import GridViewSharp from "@mui/icons-material/GridViewSharp";
 import HomeSharp from "@mui/icons-material/HomeSharp";
 import InfoSharp from "@mui/icons-material/InfoSharp";
@@ -37,6 +39,8 @@ import VisibilitySharp from "@mui/icons-material/VisibilitySharp";
 import HistorySharp from "@mui/icons-material/HistorySharp";
 import RefreshSharp from "@mui/icons-material/RefreshSharp";
 import DriveFileRenameOutlineSharp from "@mui/icons-material/DriveFileRenameOutlineSharp";
+import RotateLeftSharp from "@mui/icons-material/RotateLeftSharp";
+import RotateRightSharp from "@mui/icons-material/RotateRightSharp";
 import SearchSharp from "@mui/icons-material/SearchSharp";
 import ManageSearchSharp from "@mui/icons-material/ManageSearchSharp";
 import SelectAllSharp from "@mui/icons-material/SelectAllSharp";
@@ -77,6 +81,8 @@ const sharp: IconSet = {
     filter: FilterListSharp,
     folder: FolderSharp,
     folderOpen: FolderOpenSharp,
+    fullScreen: FullscreenSharp,
+    fullScreenExit: FullscreenExitSharp,
     gridView: GridViewSharp,
     home: HomeSharp,
     info: InfoSharp,
@@ -93,6 +99,8 @@ const sharp: IconSet = {
     recent: HistorySharp,
     refresh: RefreshSharp,
     rename: DriveFileRenameOutlineSharp,
+    rotateLeft: RotateLeftSharp,
+    rotateRight: RotateRightSharp,
     search: SearchSharp,
     searchFolder: ManageSearchSharp,
     selectAll: SelectAllSharp,

@@ -1,7 +1,7 @@
 import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import Icon from "../icons/icon";
+import Icon from "./icon";
 
 import type { IconSource } from "../../types";
 

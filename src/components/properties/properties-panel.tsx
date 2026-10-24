@@ -15,12 +15,21 @@ import { useThumbnail } from "../../hooks/use-thumbnail";
 import { createPropertiesCache } from "../../store/properties-cache";
 import { focusOutline, visuallyHiddenSx } from "../../styles/mixins";
 import { isolate, joinIsolated } from "../../utils/bidi";
+import ToolbarActions from "../buttons/toolbar-actions";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon, FolderTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 
 import type { PropertiesCache } from "../../store/properties-cache";
-import type { EntryTotals, FileEntry, Locale, PropertiesItem, PropertyField, Requested } from "../../types";
+import type {
+    EntryTotals,
+    FileEntry,
+    Locale,
+    PropertiesItem,
+    PropertyField,
+    Requested,
+    ToolbarGroup,
+} from "../../types";
 
 interface PropertiesPanelProps {
     /** What it shows: one entry, several, or none, which asks for something to be selected. */
@@ -33,6 +42,8 @@ interface PropertiesPanelProps {
     cache?: PropertiesCache;
     /** Takes the focus as it's set, or as it mounts with it set. */
     takeFocus?: boolean;
+    /** The host's actions for what it shows, in its header. */
+    actions?: readonly ToolbarGroup[];
     onClose: () => void;
 }
 
@@ -78,6 +89,11 @@ interface Copied {
 // The size the grid asks thumbnails for, in rem, so the panel shows the one the grid has, and asks
 // the adapter for nothing more.
 const GRID_THUMBNAIL = 3.5;
+
+/** How many of the host's actions with icons show as buttons in the narrow header. */
+const INLINE_ACTIONS = 2;
+
+const NO_ACTIONS: readonly ToolbarGroup[] = [];
 
 /** How long the message that something was copied stays for screen readers, in ms. */
 const COPIED_FOR = 5000;
@@ -343,10 +359,18 @@ const Contents = ({ totals, files, folders, bytes, counted, fallback, onRetry }:
  * An entry's properties, or several entries' together: its picture and name, what the listing
  * says of it (type, size or contents, location, dates, dimensions, length), and what its adapter
  * adds, the fuller entry and properties of the backend's own (`properties`), and what's in folders
- * (`measure`). It knows nothing of where it's shown, so it can sit beside any view of files, and
- * has its own live region, saying what was copied.
+ * (`measure`), with the host's actions for it in the header. It knows nothing of where it's shown,
+ * so it can sit beside any view of files, and has its own live region, saying what was copied.
  */
-const PropertiesPanel = ({ items, changes, showHidden, cache: given, takeFocus, onClose }: PropertiesPanelProps) => {
+const PropertiesPanel = ({
+    items,
+    changes,
+    showHidden,
+    cache: given,
+    takeFocus,
+    actions = NO_ACTIONS,
+    onClose,
+}: PropertiesPanelProps) => {
     const locale = useLocale();
     const { text, formatDate, formatNumber, formatDuration, formatSize } = locale;
     const [own] = useState(createPropertiesCache);
@@ -597,6 +621,7 @@ const PropertiesPanel = ({ items, changes, showHidden, cache: given, takeFocus, 
                 <Typography id={titleId} component="h2" noWrap sx={titleSx}>
                     {text.properties}
                 </Typography>
+                <ToolbarActions groups={actions} moreLabel={text.propertiesMoreActions} inline={INLINE_ACTIONS} />
                 <TooltipIconButton label={text.propertiesClose} onClick={onClose}>
                     <Icon name="close" fontSize="small" />
                 </TooltipIconButton>

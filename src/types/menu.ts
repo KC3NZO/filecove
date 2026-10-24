@@ -4,6 +4,7 @@ import type { ClipboardEvent, KeyboardEvent } from "react";
 
 import type { ActionTarget } from "./action";
 import type { FileEntry } from "./adapter";
+import type { IconSource } from "./icon";
 import type { FolderRef, Section } from "./section";
 
 /** A point on the page the menu hangs from, as `Popover`'s `anchorPosition` takes it. */
@@ -44,3 +45,26 @@ export type RunShortcut = (event: KeyboardEvent, requests: MenuRequest[]) => boo
  * folder at `trail`, when it takes uploads, and leaves any other paste to the browser.
  */
 export type PasteFiles = (event: ClipboardEvent, section: Section, trail: FolderRef[]) => void;
+
+/**
+ * One of the app's actions as a header shows it, the preview's or the properties panel's, with what
+ * it acts on already bound: an icon button, or an item of the header's "More actions" menu.
+ */
+export interface ToolbarAction {
+    id: string;
+    label: string;
+    icon?: IconSource;
+    /** Written as menus show it, e.g. "F2"; bound while the focus is where the header is. */
+    shortcut?: string;
+    disabled: boolean;
+    destructive: boolean;
+    /** The header's own, such as the preview's Download, which shows as a button wherever buttons do. */
+    keep?: boolean;
+    run: () => void;
+}
+
+/** Toolbar actions shown together, divided from the next group. */
+export interface ToolbarGroup {
+    id: string;
+    actions: ToolbarAction[];
+}

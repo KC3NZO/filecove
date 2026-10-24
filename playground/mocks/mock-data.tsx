@@ -118,9 +118,18 @@ export const serverAdapter = createMockAdapter({
             file("colors.pdf", 220_000, "2026-06-30T12:00", "application/pdf"),
             file("logo.svg", 3_800, "2026-06-30T12:00", "image/svg+xml"),
         ]),
+        // Fonts on jsDelivr, so they need the network, as the videos do.
+        folder("fonts", "2026-10-21T09:12", [
+            file("Inter-Regular.woff2", 23_664, "2026-10-21T09:12", "font/woff2"),
+            file("Inter-Regular.woff", 30_696, "2026-10-21T09:12", "font/woff"),
+            file("Lobster-Regular.ttf", 406_076, "2026-10-21T09:10", "font/ttf"),
+            file("NotoNaskhArabic-Regular.woff2", 53_536, "2026-10-21T09:08", "font/woff2"),
+        ]),
         folder("mockups", "2026-10-16T14:54", [
             file("home.png", 1_820_000, "2026-10-16T14:54", "image/png"),
             file("settings.png", 1_310_000, "2026-10-14T10:20", "image/png"),
+            // A format the browser can't draw, which has a thumbnail all the same.
+            file("print-proof.tiff", 9_400_000, "2026-10-13T16:02", "image/tiff"),
         ]),
         folder("archive", "2025-12-01T09:00", []),
     ],
@@ -428,6 +437,102 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 label: "Properties",
                 icon: "info",
                 onSelect: (context) => context.properties(),
+            },
+        ],
+    },
+];
+
+/**
+ * Demo actions for the preview's header: Share, Rename and Delete as buttons, the rest in its "More
+ * actions" menu, with "Open in editor" closing the preview as an app's editor would take over.
+ */
+export const createPreviewActions = (notify: (message: string) => void): ActionGroup[] => [
+    {
+        id: "file",
+        actions: [
+            {
+                id: "share",
+                label: "Share",
+                icon: "share",
+                onSelect: (context) => notify(`Share ${names(context)}`),
+            },
+            {
+                id: "rename",
+                label: "Rename…",
+                icon: "rename",
+                shortcut: "F2",
+                visible: (context) => !!context.rename,
+                onSelect: (context) => context.rename?.(),
+            },
+            {
+                id: "delete",
+                label: "Delete…",
+                icon: "delete",
+                shortcut: "Delete",
+                destructive: true,
+                visible: (context) => !!context.delete,
+                onSelect: (context) => context.delete?.(),
+            },
+        ],
+    },
+    {
+        id: "more",
+        actions: [
+            {
+                id: "edit",
+                label: "Open in editor",
+                onSelect: (context) => {
+                    context.closePreview?.();
+                    notify(`Open ${names(context)} in an editor`);
+                },
+            },
+            {
+                id: "copy-to",
+                label: "Copy to…",
+                visible: (context) => !!context.copyTo,
+                onSelect: (context) => context.copyTo?.(),
+            },
+            {
+                id: "move-to",
+                label: "Move to…",
+                visible: (context) => !!context.moveTo,
+                onSelect: (context) => context.moveTo?.(),
+            },
+            {
+                id: "properties",
+                label: "Properties",
+                shortcut: "Alt+Enter",
+                onSelect: (context) => context.properties(),
+            },
+        ],
+    },
+];
+
+/** Demo actions for the properties panel's header: Download and Share as buttons, "Copy link" in its menu. */
+export const createPropertiesActions = (notify: (message: string) => void): ActionGroup[] => [
+    {
+        id: "panel",
+        actions: [
+            {
+                id: "download",
+                label: "Download",
+                icon: "download",
+                visible: (context) => !!context.download,
+                onSelect: (context) => context.download?.(),
+            },
+            {
+                id: "share",
+                label: "Share",
+                icon: "share",
+                target: "selection",
+                onSelect: (context) => notify(`Share ${names(context)}`),
+            },
+            {
+                id: "copy-link",
+                label: "Copy link",
+                target: "selection",
+                single: true,
+                onSelect: (context) => notify(`Copied a link to ${names(context)}`),
             },
         ],
     },

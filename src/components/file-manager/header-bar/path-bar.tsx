@@ -8,7 +8,7 @@ import { dragMarkers, focusRing } from "../../../styles/mixins";
 import { belowElement } from "../../../utils/menu-position";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
-import IconSlot from "../icon-slot";
+import IconSlot from "../../icons/icon-slot";
 
 import type { FileManagerLocation, FolderRef, IconSource, OpenMenu, Section } from "../../../types";
 

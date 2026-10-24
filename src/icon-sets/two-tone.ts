@@ -21,6 +21,8 @@ import InsertDriveFileTwoTone from "@mui/icons-material/InsertDriveFileTwoTone";
 import FilterListTwoTone from "@mui/icons-material/FilterListTwoTone";
 import FolderTwoTone from "@mui/icons-material/FolderTwoTone";
 import FolderOpenTwoTone from "@mui/icons-material/FolderOpenTwoTone";
+import FullscreenTwoTone from "@mui/icons-material/FullscreenTwoTone";
+import FullscreenExitTwoTone from "@mui/icons-material/FullscreenExitTwoTone";
 import GridViewTwoTone from "@mui/icons-material/GridViewTwoTone";
 import HomeTwoTone from "@mui/icons-material/HomeTwoTone";
 import InfoTwoTone from "@mui/icons-material/InfoTwoTone";
@@ -37,6 +39,8 @@ import VisibilityTwoTone from "@mui/icons-material/VisibilityTwoTone";
 import HistoryTwoTone from "@mui/icons-material/HistoryTwoTone";
 import RefreshTwoTone from "@mui/icons-material/RefreshTwoTone";
 import DriveFileRenameOutlineTwoTone from "@mui/icons-material/DriveFileRenameOutlineTwoTone";
+import RotateLeftTwoTone from "@mui/icons-material/RotateLeftTwoTone";
+import RotateRightTwoTone from "@mui/icons-material/RotateRightTwoTone";
 import SearchTwoTone from "@mui/icons-material/SearchTwoTone";
 import ManageSearchTwoTone from "@mui/icons-material/ManageSearchTwoTone";
 import SelectAllTwoTone from "@mui/icons-material/SelectAllTwoTone";
@@ -77,6 +81,8 @@ const twoTone: IconSet = {
     filter: FilterListTwoTone,
     folder: FolderTwoTone,
     folderOpen: FolderOpenTwoTone,
+    fullScreen: FullscreenTwoTone,
+    fullScreenExit: FullscreenExitTwoTone,
     gridView: GridViewTwoTone,
     home: HomeTwoTone,
     info: InfoTwoTone,
@@ -93,6 +99,8 @@ const twoTone: IconSet = {
     recent: HistoryTwoTone,
     refresh: RefreshTwoTone,
     rename: DriveFileRenameOutlineTwoTone,
+    rotateLeft: RotateLeftTwoTone,
+    rotateRight: RotateRightTwoTone,
     search: SearchTwoTone,
     searchFolder: ManageSearchTwoTone,
     selectAll: SelectAllTwoTone,

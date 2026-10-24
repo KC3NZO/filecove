@@ -1,8 +1,11 @@
+import { zip } from "./mock-zip";
+
 import type { FileContent } from "../../src";
 
 // Made-up contents for the mock adapter's files, so the preview has something to show. Pictures,
-// PDFs, sounds and text are made from the file's name; videos come from MDN's public samples, to
-// show a URL being handed over rather than bytes. Thumbnails are made from the same pictures.
+// PDFs, sounds, zips and text are made from the file's name; videos come from MDN's public samples
+// and fonts from jsDelivr, to show a URL being handed over rather than bytes. Thumbnails are made
+// from the same pictures.
 
 /** Longest text made up for a file, however large it says it is. */
 const MAX_TEXT = 1_000_000;
@@ -12,10 +15,22 @@ const SAMPLE_VIDEOS: Record<string, string> = {
     mp4: "https://mdn.github.io/shared-assets/videos/flower.mp4",
 };
 
+// Open fonts on jsDelivr, which sends them with CORS, as a font on another origin needs.
+const SAMPLE_FONTS: Record<string, string> = {
+    "inter-regular.woff2": "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-400-normal.woff2",
+    "inter-regular.woff": "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-400-normal.woff",
+    "lobster-regular.ttf": "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/lobster/Lobster-Regular.ttf",
+    "notonaskharabic-regular.woff2":
+        "https://cdn.jsdelivr.net/npm/@fontsource/noto-naskh-arabic@5.2.5/files/noto-naskh-arabic-arabic-400-normal.woff2",
+};
+
 const PICTURES = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp"]);
+// Pictures the browser can't draw, which a backend would still make thumbnails of.
+const UNDRAWN = new Set(["tif", "tiff", "heic", "psd"]);
 const SOUNDS = new Set(["mp3", "wav", "ogg", "oga", "m4a", "aac", "flac", "opus"]);
 const VIDEOS = new Set(["mp4", "webm", "mov", "m4v", "ogv"]);
-const BINARIES = new Set(["zip", "gz", "tar", "parquet", "exe", "bin", "woff", "woff2"]);
+const FONTS = new Set(["otf", "ttf", "woff", "woff2"]);
+const BINARIES = new Set(["gz", "tar", "parquet", "exe", "bin", ...UNDRAWN]);
 
 // Whole files for names worth showing as they'd really be.
 const KNOWN: Record<string, string> = {
@@ -287,12 +302,44 @@ const extensionOf = (name: string) => {
     return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
 };
 
+/** A zip of a small project named after the archive, as a release or a backup would hold. */
+const archive = (name: string) => {
+    const root = name.replace(/\.zip$/i, "");
+    const modified = new Date(Date.UTC(2026, 9, 14, 14, 26));
+    const files: [path: string, contents: string][] = [
+        ["README.md", `# ${root}\n\nPacked by the playground's mock adapter.\n`],
+        ["LICENSE", "MIT License\n"],
+        ["package.json", `${JSON.stringify({ name: root, version: "1.0.0" }, null, 2)}\n`],
+        ["src/index.ts", 'export const hello = () => "Hello";\n'],
+        ["src/utils/format.ts", "export const format = (value: number) => value.toFixed(2);\n"],
+        ["docs/guide.md", "# Guide\n\nHow to use it.\n"],
+    ];
+    const folders = ["", "src/", "src/utils/", "docs/"];
+
+    return zip([
+        ...folders.map((folder) => ({ path: `${root}/${folder}`, data: null, modified })),
+        ...files.map(([path, contents]) => ({ path: `${root}/${path}`, data: new Blob([contents]), modified })),
+    ]);
+};
+
 /** Contents for a mock file, made up from its name, claimed size and type. */
-export const sampleContent = (name: string, size?: number, mimeType?: string): FileContent => {
+export const sampleContent = async (name: string, size?: number, mimeType?: string): Promise<FileContent> => {
     const extension = extensionOf(name);
 
     if (VIDEOS.has(extension) || mimeType?.startsWith("video/")) {
         return { url: SAMPLE_VIDEOS[extension] ?? SAMPLE_VIDEOS.mp4 };
+    }
+
+    if (FONTS.has(extension)) {
+        return { url: SAMPLE_FONTS[name.toLowerCase()] ?? SAMPLE_FONTS["inter-regular.woff2"] };
+    }
+
+    if (extension === "zip") {
+        return { blob: await archive(name) };
+    }
+
+    if (BINARIES.has(extension)) {
+        return { blob: new Blob([new Uint8Array(Math.min(size ?? 0, 65_536))], { type: mimeType }) };
     }
 
     if (extension === "svg") {
@@ -311,16 +358,13 @@ export const sampleContent = (name: string, size?: number, mimeType?: string): F
         return { blob: pdf(name) };
     }
 
-    if (BINARIES.has(extension)) {
-        return { blob: new Blob([new Uint8Array(Math.min(size ?? 0, 65_536))], { type: mimeType }) };
-    }
-
     return { blob: new Blob([text(name, size)], { type: mimeType ?? "text/plain" }) };
 };
 
 /**
  * The picture a mock file's thumbnail is made from, or null for a file a backend would have none
- * for: pictures and logos as they are, without the name, and a PDF's first page.
+ * for: pictures and logos as they are, without the name, those the browser can't draw too, and a
+ * PDF's first page.
  */
 export const thumbnailSource = (name: string, mimeType?: string) => {
     const extension = extensionOf(name);
@@ -329,7 +373,7 @@ export const thumbnailSource = (name: string, mimeType?: string) => {
         return logo(name);
     }
 
-    if (PICTURES.has(extension) || mimeType?.startsWith("image/")) {
+    if (PICTURES.has(extension) || UNDRAWN.has(extension) || mimeType?.startsWith("image/")) {
         return picture(name, false);
     }
 

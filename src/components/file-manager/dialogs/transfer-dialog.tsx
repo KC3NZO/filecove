@@ -33,7 +33,7 @@ import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import PathBar from "../header-bar/path-bar";
-import IconSlot from "../icon-slot";
+import IconSlot from "../../icons/icon-slot";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 import NameDialog from "./name-dialog";
 

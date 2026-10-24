@@ -16,7 +16,7 @@ import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
 import { focusRing, menuPaperSx } from "../../../styles/mixins";
 import Icon from "../../icons/icon";
-import IconSlot from "../icon-slot";
+import IconSlot from "../../icons/icon-slot";
 
 import type { SectionGroup } from "../../../types";
 

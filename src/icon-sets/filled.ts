@@ -21,6 +21,8 @@ import InsertDriveFile from "@mui/icons-material/InsertDriveFile";
 import FilterList from "@mui/icons-material/FilterList";
 import Folder from "@mui/icons-material/Folder";
 import FolderOpen from "@mui/icons-material/FolderOpen";
+import Fullscreen from "@mui/icons-material/Fullscreen";
+import FullscreenExit from "@mui/icons-material/FullscreenExit";
 import GridView from "@mui/icons-material/GridView";
 import Home from "@mui/icons-material/Home";
 import Info from "@mui/icons-material/Info";
@@ -37,6 +39,8 @@ import Visibility from "@mui/icons-material/Visibility";
 import History from "@mui/icons-material/History";
 import Refresh from "@mui/icons-material/Refresh";
 import DriveFileRenameOutline from "@mui/icons-material/DriveFileRenameOutline";
+import RotateLeft from "@mui/icons-material/RotateLeft";
+import RotateRight from "@mui/icons-material/RotateRight";
 import Search from "@mui/icons-material/Search";
 import ManageSearch from "@mui/icons-material/ManageSearch";
 import SelectAll from "@mui/icons-material/SelectAll";
@@ -77,6 +81,8 @@ const filled: IconSet = {
     filter: FilterList,
     folder: Folder,
     folderOpen: FolderOpen,
+    fullScreen: Fullscreen,
+    fullScreenExit: FullscreenExit,
     gridView: GridView,
     home: Home,
     info: Info,
@@ -93,6 +99,8 @@ const filled: IconSet = {
     recent: History,
     refresh: Refresh,
     rename: DriveFileRenameOutline,
+    rotateLeft: RotateLeft,
+    rotateRight: RotateRight,
     search: Search,
     searchFolder: ManageSearch,
     selectAll: SelectAll,

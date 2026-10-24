@@ -1,6 +1,6 @@
-import type { FileContent, FileEntry, PreviewKind, TextExcerpt } from "../types";
+import type { FileAdapter, FileContent, FileEntry, FilePreviewer, PreviewKind, PreviewPlan, TextExcerpt } from "../types";
 
-/** How much of a text file the preview reads and shows, in bytes. */
+/** How much of a text file the preview reads and shows at first, and reads more by each time, in bytes. */
 export const TEXT_LIMIT = 256_000;
 
 /** How much of a text file is looked through for a NUL byte, which text never holds, as git does. */
@@ -39,11 +39,25 @@ const TEXT_TYPES = new Set([
     "application/yaml",
 ]);
 
+// Font formats browsers load through `FontFace`; collections (.ttc) and EOT aren't among them.
+const FONT_TYPES = new Set([
+    "application/font-sfnt",
+    "application/font-woff",
+    "application/font-woff2",
+    "application/vnd.ms-opentype",
+    "application/x-font-opentype",
+    "application/x-font-otf",
+    "application/x-font-truetype",
+    "application/x-font-ttf",
+    "application/x-font-woff",
+]);
+
 const EXTENSIONS: [kind: PreviewKind, extensions: string[]][] = [
     ["image", ["apng", "avif", "bmp", "gif", "ico", "jfif", "jpeg", "jpg", "png", "svg", "webp"]],
     ["video", ["m4v", "mov", "mp4", "ogv", "webm"]],
     ["audio", ["aac", "flac", "m4a", "mp3", "oga", "ogg", "opus", "wav", "weba"]],
     ["pdf", ["pdf"]],
+    ["font", ["otf", "ttf", "woff", "woff2"]],
     [
         "text",
         [
@@ -96,6 +110,10 @@ const kindOfType = (mimeType: string): PreviewKind | undefined => {
         return "pdf";
     }
 
+    if ((type.startsWith("font/") && type !== "font/collection") || FONT_TYPES.has(type)) {
+        return "font";
+    }
+
     if (type.startsWith("text/") || TEXT_TYPES.has(type) || type.endsWith("+json") || type.endsWith("+xml")) {
         return "text";
     }
@@ -104,10 +122,10 @@ const kindOfType = (mimeType: string): PreviewKind | undefined => {
 };
 
 /**
- * How the preview shows a file: by its MIME type, or else its name. A web page shows as its source,
- * since running a file's scripts in the page is never safe.
+ * How the preview shows a file of its own accord: by its MIME type, or else its name. A web page
+ * shows as its source, since running a file's scripts in the page is never safe.
  */
-export const previewKind = (entry: FileEntry): PreviewKind => {
+const previewKind = (entry: FileEntry): PreviewKind => {
     if (entry.kind !== "file") {
         return "none";
     }
@@ -129,6 +147,57 @@ export const previewKind = (entry: FileEntry): PreviewKind => {
     return (dot > 0 && KINDS_BY_EXTENSION.get(name.slice(dot + 1))) || "none";
 };
 
+const READS: Record<PreviewKind, PreviewPlan["reads"]> = {
+    image: "content",
+    video: "content",
+    audio: "content",
+    pdf: "content",
+    text: "text",
+    font: "font",
+    custom: "content",
+    none: "none",
+};
+
+const NOTHING: PreviewPlan = { kind: "none", reads: "none" };
+
+/**
+ * How the preview shows a file, and what it loads for it: through the first of the app's previewers
+ * that takes it, or else as the file manager's own previews do. Without the adapter's `content`,
+ * only a previewer reading nothing can show anything.
+ */
+export const planPreview = (
+    entry: FileEntry,
+    adapter: FileAdapter,
+    previewers: readonly FilePreviewer[],
+): PreviewPlan => {
+    if (entry.kind !== "file") {
+        return NOTHING;
+    }
+
+    const previewer = previewers.find(
+        (candidate) => (adapter.content || candidate.reads === "none") && candidate.accepts(entry),
+    );
+
+    if (previewer) {
+        return { kind: "custom", reads: previewer.reads ?? "content", previewer };
+    }
+
+    const kind = adapter.content ? previewKind(entry) : "none";
+
+    return kind === "none" ? NOTHING : { kind, reads: READS[kind] };
+};
+
+/**
+ * What the preview keeps a file's contents by: its id, and its size and date modified, so a file
+ * replaced under the same id, as an upload with Replace does, is loaded afresh.
+ */
+export const previewKey = ({ id, size, modifiedAt }: FileEntry) =>
+    `${id}\u0000${size ?? ""}\u0000${modifiedAt?.getTime() ?? ""}`;
+
+/** Whether the preview can show anything of `entry`, a file, for `ActionContext.preview`. */
+export const previewable = (entry: FileEntry, adapter: FileAdapter, previewers: readonly FilePreviewer[]) =>
+    !!adapter.content || planPreview(entry, adapter, previewers).kind !== "none";
+
 /** A text file's URL answering with an error status, which the preview words in its own language. */
 export class ResponseError extends Error {
     readonly status: number;
@@ -142,8 +211,8 @@ export class ResponseError extends Error {
     }
 }
 
-/** The first `TEXT_LIMIT` bytes at a URL, and whether there were more, reading no further than that. */
-const fetchStart = async (url: string, signal: AbortSignal) => {
+/** The first `limit` bytes at a URL, and whether there were more, reading no further than that. */
+const fetchStart = async (url: string, signal: AbortSignal, limit: number) => {
     const response = await fetch(url, { signal });
 
     if (!response.ok) {
@@ -153,7 +222,7 @@ const fetchStart = async (url: string, signal: AbortSignal) => {
     if (!response.body) {
         const all = new Uint8Array(await response.arrayBuffer());
 
-        return { bytes: all.subarray(0, TEXT_LIMIT), truncated: all.length > TEXT_LIMIT };
+        return { bytes: all.subarray(0, limit), truncated: all.length > limit };
     }
 
     const reader = response.body.getReader();
@@ -161,7 +230,7 @@ const fetchStart = async (url: string, signal: AbortSignal) => {
     let length = 0;
 
     try {
-        while (length <= TEXT_LIMIT) {
+        while (length <= limit) {
             const { done, value } = await reader.read();
 
             if (done) {
@@ -176,7 +245,7 @@ const fetchStart = async (url: string, signal: AbortSignal) => {
         reader.cancel().catch(() => undefined);
     }
 
-    const bytes = new Uint8Array(Math.min(length, TEXT_LIMIT));
+    const bytes = new Uint8Array(Math.min(length, limit));
     let offset = 0;
 
     for (const chunk of chunks) {
@@ -186,27 +255,55 @@ const fetchStart = async (url: string, signal: AbortSignal) => {
         offset += part.length;
     }
 
-    return { bytes, truncated: length > TEXT_LIMIT };
+    return { bytes, truncated: length > limit };
 };
 
 /**
- * Reads the start of a text file, at most `TEXT_LIMIT` bytes of it, as UTF-8. Resolves with null
- * for a file that turns out not to be text.
+ * Text from a file's first bytes, or null when they aren't text: UTF-16 when they start with its
+ * byte order mark, else UTF-8, or Windows-1252, as editors fall back to, when they aren't valid
+ * UTF-8, as a file saved by an older Windows program may not be. Cut short, the last character may
+ * be missing bytes; streaming leaves it out rather than showing it as a replacement character.
  */
-export const readText = async (content: FileContent, signal: AbortSignal): Promise<TextExcerpt | null> => {
-    const { bytes, truncated } =
-        content.url === undefined
-            ? {
-                  bytes: new Uint8Array(await content.blob.slice(0, TEXT_LIMIT).arrayBuffer()),
-                  truncated: content.blob.size > TEXT_LIMIT,
-              }
-            : await fetchStart(content.url, signal);
+const decodeText = (bytes: Uint8Array, truncated: boolean) => {
+    const options = { stream: truncated };
+
+    // UTF-16's every other byte is often NUL, so it's told by its byte order mark before looking for one.
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+        return new TextDecoder("utf-16le").decode(bytes, options);
+    }
+
+    if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+        return new TextDecoder("utf-16be").decode(bytes, options);
+    }
 
     if (bytes.subarray(0, SNIFF_LENGTH).includes(0)) {
         return null;
     }
 
-    // Cut short, the last character may be missing bytes; streaming leaves it out rather than
-    // showing it as a replacement character.
-    return { text: new TextDecoder().decode(bytes, { stream: truncated }), truncated };
+    try {
+        return new TextDecoder("utf-8", { fatal: true }).decode(bytes, options);
+    } catch {
+        return new TextDecoder("windows-1252").decode(bytes, options);
+    }
+};
+
+/**
+ * Reads the start of a text file, at most `limit` bytes of it. Resolves with null for a file that
+ * turns out not to be text.
+ */
+export const readText = async (
+    content: FileContent,
+    signal: AbortSignal,
+    limit = TEXT_LIMIT,
+): Promise<TextExcerpt | null> => {
+    const { bytes, truncated } =
+        content.url === undefined
+            ? {
+                  bytes: new Uint8Array(await content.blob.slice(0, limit).arrayBuffer()),
+                  truncated: content.blob.size > limit,
+              }
+            : await fetchStart(content.url, signal, limit);
+    const text = decodeText(bytes, truncated);
+
+    return text === null ? null : { text, truncated, limit };
 };

@@ -209,6 +209,17 @@ export const enUS: FileManagerLocaleText = {
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     zoomFit: "Best fit",
+    rotateClockwise: "Rotate clockwise",
+    rotateCounterclockwise: "Rotate counterclockwise",
+    fullScreen: "Full screen",
+    exitFullScreen: "Exit full screen",
+    moreActions: "More actions",
+    previewShowMore: "Show more",
+    previewPdfUnavailable: "This browser can't show PDF files here.",
+    previewOpenInTab: "Open in a new tab",
+    previewFontCharacters: "ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789 .,:;!?&@#%*()[]{}",
+    previewFontSample: "The quick brown fox jumps over the lazy dog.",
+    previewFontSize: (size) => `${size} px`,
 
     keyboardShortcuts: "Keyboard shortcuts",
     shortcutsGeneral: "General",
@@ -239,6 +250,7 @@ export const enUS: FileManagerLocaleText = {
     shortcutMoveOnly: "Move without selecting",
     shortcutSearchResults: "Go from the search field to the results",
     shortcutPreviewStep: "Previous or next file",
+    shortcutFirstLastFile: "First or last file",
     shortcutZoomOriginal: "Original size",
     shortcutPan: "Move around a zoomed-in image",
 
@@ -315,6 +327,7 @@ export const enUS: FileManagerLocaleText = {
 
     properties: "Properties",
     propertiesClose: "Close the properties",
+    propertiesMoreActions: "More actions",
     propertiesNothingSelected: "Select an item to see its properties",
     propertiesItems: (count) => (count === 1 ? "1 item" : `${count} items`),
     propertiesType: "Type",

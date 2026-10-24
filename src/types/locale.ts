@@ -119,6 +119,8 @@ export interface PropertiesLocaleText {
     /** The panel's title, and its name for screen readers. */
     properties: string;
     propertiesClose: string;
+    /** The header's button holding the app's actions that don't fit there, or have no icon. */
+    propertiesMoreActions: string;
     /** In place of the properties while nothing is selected among a search's results. */
     propertiesNothingSelected: string;
     /** Several entries named by how many, and how many entries a folder holds while they can't be counted down. */
@@ -441,6 +443,28 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     zoomIn: string;
     zoomOut: string;
     zoomFit: string;
+    rotateClockwise: string;
+    rotateCounterclockwise: string;
+    /** The header's button that fills the screen with the preview, and its key. */
+    fullScreen: string;
+    exitFullScreen: string;
+    /** The header's button holding the app's actions that don't fit there, or have no icon. */
+    moreActions: string;
+    /** Under a text file cut short, reading as much of it again. */
+    previewShowMore: string;
+    /** In place of a PDF, on a browser that has no PDF viewer, as some phones' browsers haven't. */
+    previewPdfUnavailable: string;
+    /** The button beside `previewPdfUnavailable`, which leaves the PDF to the browser in a tab of its own. */
+    previewOpenInTab: string;
+    /**
+     * A font's characters, shown in it, a line each: letters, digits and punctuation in the
+     * language's own script, which a translation puts its own in place of.
+     */
+    previewFontCharacters: string;
+    /** A sentence shown in a font at several sizes, in the language's own script. */
+    previewFontSample: string;
+    /** The size a font's sample is shown at, already formatted. */
+    previewFontSize: (size: string) => string;
 
     // Keyboard shortcuts, in the main menu and the window listing them. Rows reuse texts shown
     // elsewhere too, such as `back`, `selectAll`, `searchFolder` or `zoomIn`.
@@ -484,6 +508,8 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     /** Down or Enter in the search field. */
     shortcutSearchResults: string;
     shortcutPreviewStep: string;
+    /** Home and End in the preview. */
+    shortcutFirstLastFile: string;
     /** The key 1, which shows an image at its own size. */
     shortcutZoomOriginal: string;
     /** The arrows panning an image zoomed in. */

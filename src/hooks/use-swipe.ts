@@ -19,8 +19,9 @@ const DURATION = 200;
 // Decelerating, as something settling into place does.
 const EASING = "cubic-bezier(0.2, 0, 0, 1)";
 
-// Presses on controls and players keep doing what they do.
-const IGNORED = "button, a, input, textarea, video, audio";
+// Presses on controls and players keep doing what they do, as do parts of a previewer of the app's
+// own that pan sideways themselves.
+const IGNORED = "button, a, input, textarea, select, video, audio, [data-no-swipe]";
 
 interface Sample {
     x: number;
@@ -35,8 +36,19 @@ interface Swipe {
     rtl: boolean;
     /** Whether it has gone far enough sideways to be a swipe, rather than a tap or a scroll. */
     sideways: boolean;
+    /**
+     * How far what's under the finger pans with it before the swipe takes over, finger moving
+     * left and right, in px, as a zoomed image does up to its edge; null when nothing pans.
+     */
+    room: Room | null;
     /** Where the finger has been lately, for its speed as it lifts. */
     samples: Sample[];
+}
+
+/** How far, in px, something panned by the finger can still go with the finger moving left and right. */
+export interface Room {
+    left: number;
+    right: number;
 }
 
 interface SwipeOptions {
@@ -45,13 +57,25 @@ interface SwipeOptions {
     /** Whether there's anything `direction` way: 1 on, -1 back. */
     canStep: (direction: 1 | -1) => boolean;
     onStep: (direction: 1 | -1) => void;
-    /** Whether a swipe starting now is left to what's under the finger, as a zoomed image pans with it. */
-    ignore?: () => boolean;
+    /**
+     * How far what's under the finger pans with it, as a zoomed image does, before the swipe takes
+     * over the rest of the finger's way; null while nothing pans.
+     */
+    room?: () => Room | null;
 }
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const recent = (samples: Sample[], now: number) => samples.filter(({ time }) => now - time <= SPEED_WINDOW);
+
+/** The part of the finger's sideways way `dx` beyond what pans with it. */
+const beyond = (dx: number, room: Room | null) => {
+    if (!room) {
+        return dx;
+    }
+
+    return dx > 0 ? Math.max(0, dx - room.right) : Math.min(0, dx + room.left);
+};
 
 /**
  * Swiping sideways on touch to step through what's shown one at a time. The content follows the
@@ -59,7 +83,10 @@ const recent = (samples: Sample[], now: number) => samples.filter(({ time }) => 
  * the end when swiping towards the start: left in LTR) and the content stepped to slides in.
  * Otherwise it springs back, as it does from a side with nothing more, which it follows only part
  * of the way. A scroll (`pointercancel`) cancels it, and so does a second finger, leaving the pinch
- * to what's under it.
+ * to what's under it. What pans with the finger, a zoomed image, does so up to its edge, and the
+ * swipe takes the rest of the way from there, as a photo viewer's does.
+ *
+ * `slide` slides the content in the same way for a step made otherwise, by a button or a key.
  *
  * The handlers go on an element whose `touch-action` leaves sideways moves to the page (`pan-y`).
  */
@@ -91,6 +118,23 @@ export const useSwipe = (options: SwipeOptions) => {
         }
     };
 
+    // The content stepped to slides in from the side the swipe would have brought it from: the
+    // end side going on, the start side going back.
+    const slideIn = (element: HTMLElement, from: number) =>
+        settle(element, { transform: `translateX(${from}px)`, opacity: 0 }, { transform: "none", opacity: 1 });
+
+    /** Slides the content in for a step made by a button or a key: 1 on, -1 back. */
+    const slide = (direction: 1 | -1) => {
+        const element = latest.current.ref.current;
+
+        if (!element) {
+            return;
+        }
+
+        animation.current?.cancel();
+        slideIn(element, direction * (isRtl(element) ? -1 : 1) * ENTRANCE);
+    };
+
     // Runs in the capture phase, so the content is at rest before what's under the finger measures
     // where it went down.
     const onPointerDownCapture = (event: PointerEvent<HTMLElement>) => {
@@ -98,7 +142,7 @@ export const useSwipe = (options: SwipeOptions) => {
             return;
         }
 
-        const { ref, canStep, ignore } = latest.current;
+        const { ref, canStep, room } = latest.current;
         const element = ref.current;
 
         animation.current?.cancel();
@@ -117,7 +161,7 @@ export const useSwipe = (options: SwipeOptions) => {
 
         const target = event.target instanceof Element ? event.target : null;
 
-        if (!element || target?.closest(IGNORED) || ignore?.() || (!canStep(1) && !canStep(-1))) {
+        if (!element || target?.closest(IGNORED) || (!canStep(1) && !canStep(-1))) {
             return;
         }
 
@@ -128,6 +172,7 @@ export const useSwipe = (options: SwipeOptions) => {
             width: element.clientWidth,
             rtl: isRtl(element),
             sideways: false,
+            room: room?.() ?? null,
             samples: [],
         };
     };
@@ -141,12 +186,17 @@ export const useSwipe = (options: SwipeOptions) => {
             return;
         }
 
-        const dx = event.clientX - current.startX;
+        const moved = event.clientX - current.startX;
+        const dx = beyond(moved, current.room);
         const dy = event.clientY - current.startY;
 
+        current.samples = [...recent(current.samples, event.timeStamp), { x: event.clientX, time: event.timeStamp }];
+
         if (!current.sideways) {
-            // Going up or down, it's a scroll, or a pan, and left alone.
-            if (Math.abs(dy) > SLOP && Math.abs(dy) >= Math.abs(dx)) {
+            // Going up or down first, it's a scroll, or a pan of what's under the finger, and left
+            // alone. Sideways, what pans with the finger does so up to its edge, and the swipe
+            // takes the rest of the way.
+            if (Math.abs(dy) > SLOP && Math.abs(dy) >= Math.abs(moved)) {
                 swipe.current = null;
                 return;
             }
@@ -157,8 +207,6 @@ export const useSwipe = (options: SwipeOptions) => {
 
             current.sideways = true;
         }
-
-        current.samples = [...recent(current.samples, event.timeStamp), { x: event.clientX, time: event.timeStamp }];
 
         const offset = canStep(directionOf(current, dx)) ? dx : dx * RESISTANCE;
 
@@ -180,7 +228,7 @@ export const useSwipe = (options: SwipeOptions) => {
             return;
         }
 
-        const dx = event.clientX - current.startX;
+        const dx = beyond(event.clientX - current.startX, current.room);
         const samples = [...recent(current.samples, event.timeStamp), { x: event.clientX, time: event.timeStamp }];
         const first = samples[0];
         const last = samples[samples.length - 1];
@@ -197,11 +245,7 @@ export const useSwipe = (options: SwipeOptions) => {
         }
 
         onStep(direction);
-        settle(
-            element,
-            { transform: `translateX(${-Math.sign(dx) * ENTRANCE}px)`, opacity: 0 },
-            { transform: "none", opacity: 1 },
-        );
+        slideIn(element, -Math.sign(dx) * ENTRANCE);
     };
 
     const onPointerCancel = (event: PointerEvent<HTMLElement>) => {
@@ -216,5 +260,5 @@ export const useSwipe = (options: SwipeOptions) => {
         }
     };
 
-    return { onPointerDownCapture, onPointerMove, onPointerUp, onPointerCancel };
+    return { handlers: { onPointerDownCapture, onPointerMove, onPointerUp, onPointerCancel }, slide };
 };

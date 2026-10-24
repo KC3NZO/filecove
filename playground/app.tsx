@@ -10,7 +10,15 @@ import { FileManager } from "../src";
 import { useHashLocation } from "./hooks/use-hash-location";
 import { useStoredState } from "./hooks/use-stored-state";
 import { addElsewhere, childId } from "./mocks/mock-adapter";
-import { createDemoActions, createDemoMainMenu, sections, serverAdapter } from "./mocks/mock-data";
+import {
+    createDemoActions,
+    createDemoMainMenu,
+    createPreviewActions,
+    createPropertiesActions,
+    sections,
+    serverAdapter,
+} from "./mocks/mock-data";
+import { previewers } from "./mocks/mock-previewers";
 import { lateSections, locale, relistAfter, single, uncontrolled } from "./options";
 
 import type {
@@ -105,6 +113,10 @@ const App = () => {
     const [notice, setNotice] = useState({ open: false, message: "" });
     const [actions] = useState(() => createDemoActions((message) => setNotice({ open: true, message })));
     const [mainMenu] = useState(() => createDemoMainMenu((message) => setNotice({ open: true, message })));
+    const [previewActions] = useState(() => createPreviewActions((message) => setNotice({ open: true, message })));
+    const [propertiesActions] = useState(() =>
+        createPropertiesActions((message) => setNotice({ open: true, message })),
+    );
     const apiRef = useRef<FileManagerApi>(null);
     const [location, setLocation] = useHashLocation(shownSections);
     const [view, setView] = useStoredState<ViewMode>("view", "list");
@@ -238,6 +250,9 @@ const App = () => {
     const shared = {
         adapter: serverAdapter,
         actions,
+        previewActions,
+        propertiesActions,
+        previewers,
         mainMenu,
         locale,
         relistAfter,

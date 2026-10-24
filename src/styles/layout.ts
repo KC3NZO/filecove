@@ -37,3 +37,17 @@ export const TREE_SECTION_HEIGHT = 36;
 export const TREE_FOLDER_HEIGHT = 30;
 export const TREE_CAPTION_HEIGHT = 28;
 export const TREE_DIVIDER_HEIGHT = 17;
+
+/*
+ * The preview portals out of the file manager, where the root's queries don't reach, so its header
+ * and its image are containers of their own.
+ */
+export const PREVIEW_HEADER_CONTAINER = "file-manager-preview-header";
+export const PREVIEW_IMAGE_CONTAINER = "file-manager-preview-image";
+
+/** The preview's header has room for the counter between its arrows. */
+export const previewHeaderMedium = `@container ${PREVIEW_HEADER_CONTAINER} (min-width: 480px)`;
+/** The preview's header has room for its actions, and the app's, as buttons beside the file's name. */
+export const previewHeaderWide = `@container ${PREVIEW_HEADER_CONTAINER} (min-width: 640px)`;
+/** The previewed image has room for the zoom's percentage between its buttons. */
+export const previewImageWide = `@container ${PREVIEW_IMAGE_CONTAINER} (min-width: 360px)`;

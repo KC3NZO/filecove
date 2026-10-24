@@ -17,7 +17,7 @@ import { isRtl } from "../../../utils/dom";
 import { ariaShortcut, formatShortcut } from "../../../utils/shortcut";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
-import IconSlot from "../icon-slot";
+import IconSlot from "../../icons/icon-slot";
 
 import type { MainMenuGroup } from "../../../types";
 

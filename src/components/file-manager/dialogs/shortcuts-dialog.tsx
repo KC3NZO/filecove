@@ -20,6 +20,10 @@ import type { ActionGroup, FileManagerLocaleText, MainMenuGroup } from "../../..
 interface ShortcutsDialogProps {
     open: boolean;
     actions: ActionGroup[];
+    /** The app's actions in the preview's header, whose shortcuts work there, after its own keys. */
+    previewActions: ActionGroup[];
+    /** The app's actions in the properties panel's header, whose shortcuts work in the panel. */
+    propertiesActions: ActionGroup[];
     mainMenu: MainMenuGroup[];
     /** Whether any section's adapter has `search`, without which there's no search everywhere. */
     canSearchEverywhere: boolean;
@@ -140,11 +144,15 @@ const ownSections = ({ text, rtl, canSearchEverywhere, choosesSections, canPrevi
             title: text.shortcutsPreview,
             rows: [
                 { label: text.shortcutPreviewStep, combos: [["ArrowLeft"], ["ArrowRight"]] },
+                { label: text.shortcutFirstLastFile, combos: [["Home"], ["End"]] },
                 { label: text.zoomIn, combos: [["+"]] },
                 { label: text.zoomOut, combos: [["-"]] },
                 { label: text.zoomFit, combos: [["0"]] },
                 { label: text.shortcutZoomOriginal, combos: [["1"]] },
                 { label: text.shortcutPan, combos: [[ARROWS]] },
+                { label: text.rotateClockwise, combos: [["R"]] },
+                { label: text.rotateCounterclockwise, combos: [["Shift", "R"]] },
+                { label: text.fullScreen, combos: [["F"]] },
                 { label: text.close, combos: [["Space"], ["Escape"]] },
             ],
         });
@@ -153,8 +161,11 @@ const ownSections = ({ text, rtl, canSearchEverywhere, choosesSections, canPrevi
     return sections;
 };
 
-/** The consumer's actions and main menu items that have a shortcut, each once, in their order. */
-const consumerRows = (actions: ActionGroup[], mainMenu: MainMenuGroup[]) => {
+/**
+ * The consumer's actions, wherever they're shown, and main menu items that have a shortcut, each
+ * once, in their order.
+ */
+const consumerRows = (actions: ActionGroup[][], mainMenu: MainMenuGroup[]) => {
     const rows: ShortcutRow[] = [];
     const seen = new Set<string>();
     const add = (label: string, shortcut: string | undefined) => {
@@ -167,7 +178,9 @@ const consumerRows = (actions: ActionGroup[], mainMenu: MainMenuGroup[]) => {
         }
     };
 
-    actions.forEach((group) => group.actions.forEach((action) => add(action.label, action.shortcut)));
+    actions.forEach((groups) =>
+        groups.forEach((group) => group.actions.forEach((action) => add(action.label, action.shortcut))),
+    );
     mainMenu.forEach((group) => group.items.forEach((item) => add(item.label, item.shortcut)));
 
     return rows;
@@ -303,6 +316,8 @@ const Key = ({ name, text }: { name: string; text: FileManagerLocaleText }) =>
 const ShortcutsDialog = ({
     open,
     actions,
+    previewActions,
+    propertiesActions,
     mainMenu,
     canSearchEverywhere,
     choosesSections,
@@ -319,8 +334,10 @@ const ShortcutsDialog = ({
 
     const sections = useMemo(() => {
         const own = ownSections({ text, rtl, canSearchEverywhere, choosesSections, canPreview, canUpload });
-        const theirs = consumerRows(actions, mainMenu);
-        const taken = new Set(theirs.flatMap((row) => row.combos.map(comboId)));
+        // Only the content's and the tree's shortcuts, and the main menu's, come before keys of the
+        // file manager's own; the preview's and the panel's work there alone.
+        const theirs = consumerRows([actions, previewActions, propertiesActions], mainMenu);
+        const taken = new Set(consumerRows([actions], mainMenu).flatMap((row) => row.combos.map(comboId)));
         const shown = own.flatMap((section) => {
             const rows = section.yields
                 ? section.rows.flatMap((row) => {
@@ -334,7 +351,18 @@ const ShortcutsDialog = ({
         });
 
         return theirs.length > 0 ? [...shown, { title: text.shortcutsActions, rows: theirs }] : shown;
-    }, [text, rtl, canSearchEverywhere, choosesSections, canPreview, canUpload, actions, mainMenu]);
+    }, [
+        text,
+        rtl,
+        canSearchEverywhere,
+        choosesSections,
+        canPreview,
+        canUpload,
+        actions,
+        previewActions,
+        propertiesActions,
+        mainMenu,
+    ]);
 
     // The list takes the focus once the dialog has faded in, so the arrows and Page Down scroll it.
     const slotProps = useMemo(

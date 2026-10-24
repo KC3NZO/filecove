@@ -2,26 +2,37 @@ import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, Ref, SyntheticEvent } from "react";
 
 import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../../hooks/use-locale";
+import { PREVIEW_IMAGE_CONTAINER, previewImageWide } from "../../../styles/layout";
 import { pressedKeys } from "../../../utils/shortcut";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
+
+import type { Room } from "../../../hooks/use-swipe";
 
 /** What the preview hands the image it shows. */
 export interface ImageViewerHandle {
     /** Takes a key pressed anywhere in the preview, and says whether it did anything with it. */
     keyDown: (event: KeyboardEvent) => boolean;
-    /** Whether the image is zoomed in, when a swipe pans it rather than stepping to another file. */
-    zoomed: () => boolean;
+    /**
+     * How far the zoomed image pans with a finger moving left and right before a swipe takes over
+     * the rest of the way, to step to another file; null while it fits the view.
+     */
+    room: () => Room | null;
 }
 
 interface ImageViewerProps {
     ref?: Ref<ImageViewerHandle>;
     src: string;
     alt: string;
+    /** A small picture of it, the grid's thumbnail, shown in its place until it has loaded. */
+    placeholder?: string | null;
+    /** Its own size, when the listing says (`FileEntry.media`), so the placeholder takes its place exactly. */
+    expected?: { width: number; height: number };
     /** Called with the image's own size once it has loaded. */
     onLoad: (width: number, height: number) => void;
     onError: () => void;
@@ -43,6 +54,14 @@ interface Zoom extends Point {
     scale: number;
 }
 
+/** Where the image is drawn: its centre in the view, its scale, and how far it's turned, in degrees. */
+interface Placement {
+    cx: number;
+    cy: number;
+    scale: number;
+    angle: number;
+}
+
 /** The pointers pressed on the image, as they were when the last one went down or up. */
 interface Gesture {
     /** The zoom they started from, the fitted one when the image wasn't zoomed. */
@@ -62,6 +81,27 @@ interface Tap {
     time: number;
 }
 
+/** Where a finger was on the screen, and when, for its speed as it lifts. */
+interface Sample extends Point {
+    time: number;
+}
+
+/**
+ * A pinch on a Mac's touchpad in Safari, which sends it as gesture events rather than as Ctrl+wheel.
+ * `scale` is how far the fingers have spread since it began. Not in TypeScript's DOM types.
+ */
+interface GestureLike extends UIEvent {
+    scale: number;
+    clientX: number;
+    clientY: number;
+}
+
+/** Such a pinch under way: the zoom it started from, and where. */
+interface Pinch {
+    from: Zoom;
+    anchor: Point;
+}
+
 /** The room left around an image fitted to the view, on every side, in px. */
 const GAP = 16;
 /** What a step zooms in or out by: two steps double or halve the image. */
@@ -79,6 +119,17 @@ const TAP_TOLERANCE = 10;
 /** How soon after a tap, and how near it, a second tap makes a double tap, in ms and px. */
 const DOUBLE_TAP_TIME = 300;
 const DOUBLE_TAP_DISTANCE = 30;
+/** How long a zoom step, a turn or a pan by a key takes to get there, in ms. */
+const DURATION = 200;
+/** How the image glides on after a flick: its speed falls by e every this many ms. */
+const FRICTION = 325;
+/** How fast a finger lifting has to be going for the image to glide on, and how slow it stops at, in px per ms. */
+const GLIDE_SPEED = 0.2;
+const STOP_SPEED = 0.02;
+/** How far back the finger's speed is measured from as it lifts, in ms. */
+const SPEED_WINDOW = 100;
+/** The longest a frame of a glide counts for, in ms, so a stall doesn't throw the image across. */
+const MAX_FRAME = 32;
 
 /** How the arrow keys pan the zoomed image: Left shows more of its left side, and so on. */
 const PAN_KEYS: Partial<Record<string, Point>> = {
@@ -88,8 +139,11 @@ const PAN_KEYS: Partial<Record<string, Point>> = {
     ArrowDown: { x: 0, y: -1 },
 };
 
-/** The keys that zoom: in ("+", or "=" beside it on a US layout), out, to fit and to the image's own size. */
-const ZOOM_KEYS = ["+", "=", "-", "0", "1"];
+/**
+ * The keys that zoom and turn: in ("+", or "=" beside it on a US layout), out, to fit, to the
+ * image's own size, and R to turn it clockwise, or with Shift, counterclockwise.
+ */
+const IMAGE_KEYS = ["+", "=", "-", "0", "1", "r"];
 
 const ORIGIN: Point = { x: 0, y: 0 };
 
@@ -110,6 +164,17 @@ const pointIn = (element: Element, { clientX, clientY }: { clientX: number; clie
 };
 
 const screenPoint = ({ clientX, clientY }: { clientX: number; clientY: number }) => ({ x: clientX, y: clientY });
+
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Decelerating, as something settling into place does.
+const easeOut = (progress: number) => 1 - (1 - progress) ** 3;
+
+const recent = (samples: Sample[], now: number) => samples.filter(({ time }) => now - time <= SPEED_WINDOW);
+
+/** The image's own size as it's shown turned: its sides swapped by a quarter or three quarters of a turn. */
+const turned = (image: Size, turns: number): Size =>
+    Math.abs(turns) % 2 === 1 ? { width: image.height, height: image.width } : image;
 
 /** The scale that fits the image into the view, as large as it goes without stretching it past its own size. */
 const fitScale = (image: Size, view: Size) =>
@@ -163,11 +228,57 @@ const zoomTo = (from: Zoom, scale: number, anchor: Point, target: Point, image: 
     );
 };
 
+/** Where a zoom draws the image, `box` being its own size as turned. */
+const placementOf = (zoom: Zoom, box: Size, turns: number): Placement => ({
+    cx: zoom.x + (box.width * zoom.scale) / 2,
+    cy: zoom.y + (box.height * zoom.scale) / 2,
+    scale: zoom.scale,
+    angle: turns * 90,
+});
+
+const samePlacement = (a: Placement, b: Placement) =>
+    Math.abs(a.cx - b.cx) < 0.5 &&
+    Math.abs(a.cy - b.cy) < 0.5 &&
+    Math.abs(a.scale - b.scale) < 1e-6 &&
+    a.angle === b.angle;
+
+/**
+ * Part of the way from one placement to another: the scale by equal ratios, so each frame zooms
+ * by as much, and the turn evenly. Zooming at `anchor`, the point of the image under it stays
+ * there, and what keeping the image over the view moves it by is made up along the way.
+ */
+const between = (from: Placement, to: Placement, progress: number, anchor?: Point): Placement => {
+    const scale = from.scale * (to.scale / from.scale) ** progress;
+    const angle = from.angle + (to.angle - from.angle) * progress;
+
+    if (!anchor) {
+        return {
+            cx: from.cx + (to.cx - from.cx) * progress,
+            cy: from.cy + (to.cy - from.cy) * progress,
+            scale,
+            angle,
+        };
+    }
+
+    const grown = scale / from.scale;
+    const full = to.scale / from.scale;
+
+    return {
+        cx: anchor.x + (from.cx - anchor.x) * grown + (to.cx - (anchor.x + (from.cx - anchor.x) * full)) * progress,
+        cy: anchor.y + (from.cy - anchor.y) * grown + (to.cy - (anchor.y + (from.cy - anchor.y) * full)) * progress,
+        scale,
+        angle,
+    };
+};
+
+// A container, so the toolbar fits its buttons to the room the image has.
 const viewerSx: SxProps<Theme> = {
     position: "relative",
     alignSelf: "stretch",
     flex: 1,
     minWidth: 0,
+    containerType: "inline-size",
+    containerName: PREVIEW_IMAGE_CONTAINER,
 };
 
 // The browser's own touch gestures are off, so a pinch zooms the image rather than the page.
@@ -191,12 +302,32 @@ const fittedImageSx: SxProps<Theme> = {
     maxHeight: `calc(100% - ${2 * GAP}px)`,
 };
 
-// Placed, sized and moved through `style`, from the zoom.
+// Placed, sized, moved and turned through `style`, from the zoom.
 const zoomedImageSx: SxProps<Theme> = {
     display: "block",
     position: "absolute",
     maxWidth: "none",
     maxHeight: "none",
+};
+
+// Where the image will be once it has loaded: fitted the same way, its own size when that's known,
+// with the small picture drawn into that box, or else as large as the view allows.
+const placeholderSx: SxProps<Theme> = {
+    position: "absolute",
+    inset: 0,
+    m: "auto",
+    width: "100%",
+    height: "100%",
+    maxWidth: `calc(100% - ${2 * GAP}px)`,
+    maxHeight: `calc(100% - ${2 * GAP}px)`,
+    objectFit: "contain",
+    pointerEvents: "none",
+};
+
+const spinnerSx: SxProps<Theme> = {
+    position: "absolute",
+    inset: 0,
+    m: "auto",
 };
 
 const toolbarSx: SxProps<Theme> = {
@@ -214,46 +345,86 @@ const toolbarSx: SxProps<Theme> = {
     boxShadow: 2,
 };
 
+const ruleSx: SxProps<Theme> = {
+    alignSelf: "stretch",
+    width: "1px",
+    my: 0.5,
+    mx: 0.25,
+    bgcolor: "divider",
+};
+
+// Left out where the image has little room, so the buttons still fit on a phone.
 const percentSx: SxProps<Theme> = {
+    display: "none",
     minWidth: "3.5em",
     textAlign: "center",
     fontVariantNumeric: "tabular-nums",
+    [previewImageWide]: { display: "block" },
 };
 
 /**
- * An image in the preview, which zooms and pans: Ctrl+wheel or a touchpad pinch zooms at the
- * pointer, a pinch on a touch screen between the fingers, and a double click or double tap toggles
- * between fitting the view and a closer look. Zoomed in, it pans by dragging, the wheel and the
- * arrow keys. The buttons in the corner zoom around the view's centre, as do +, -, 0 (fit) and 1
- * (the image's own size), which the preview hands over through `ref`. Fitted, a swipe is left to
- * the preview, to step to another file.
+ * An image in the preview, which zooms, pans and turns: Ctrl+wheel or a touchpad pinch zooms at the
+ * pointer (Safari's gesture events too), a pinch on a touch screen between the fingers, and a double
+ * click or double tap toggles between fitting the view and a closer look. Zoomed in, it pans by
+ * dragging, gliding on after a flick on touch, with the wheel and with the arrow keys. The buttons in
+ * the corner zoom around the view's centre, as do +, -, 0 (fit) and 1 (the image's own size), and
+ * turn it a quarter, as do R and Shift+R, which the preview hands over through `ref`. Steps by a
+ * button or a key are animated, unless motion is reduced. Fitted, a swipe is left to the preview, to
+ * step to another file; zoomed, it takes over once the image has panned to its edge.
  *
- * Unzoomed, the image is laid out to fit by CSS alone, so it follows the view's size without
- * waiting on a measure; zoomed, it's placed from its own size and the view's.
+ * Unzoomed and unturned, the image is laid out to fit by CSS alone, so it follows the view's size
+ * without waiting on a measure; otherwise it's placed from its own size and the view's.
  */
-const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
+const ImageViewer = ({ ref, src, alt, placeholder, expected, onLoad, onError }: ImageViewerProps) => {
     const { text, formatPercent } = useLocale();
     const stageRef = useRef<HTMLDivElement>(null);
     const imageRef = useRef<HTMLImageElement>(null);
-    // The image's own size once it has loaded, and the view's, for rendering. Handlers read both
-    // afresh from the elements.
+    // The image's own size once it has loaded, unturned, and the view's, for rendering. Handlers
+    // read both afresh from the elements.
     const [image, setImage] = useState<Size | null>(null);
+    const [loaded, setLoaded] = useState(false);
     const [view, setView] = useState<Size | null>(null);
     // Null while the image fits the view. Changed only through `commit`, which keeps the ref in
     // step at once, so pointer moves between renders build on the latest zoom.
     const [zoom, setZoom] = useState<Zoom | null>(null);
     const zoomRef = useRef<Zoom | null>(null);
+    // Quarter turns clockwise, counted on rather than wrapped round, so each turn animates the short way.
+    const [turns, setTurns] = useState(0);
+    const turnsRef = useRef(0);
+    // While a step animates, where the image is drawn meanwhile; the zoom and the turns are already
+    // where it's going, so a key pressed meanwhile steps on from there.
+    const [frame, setFrame] = useState<Placement | null>(null);
+    const frameRef = useRef<Placement | null>(null);
+    const animation = useRef(0);
+    const glide = useRef(0);
+    // Where each pointer is on the screen.
     const pointers = useRef(new Map<number, Point>());
+    // Where the view was on the screen as the pointers last changed. Points are taken from there
+    // while they move, as the preview's swipe moves the view once the image has panned to its edge.
+    const origin = useRef<Point>(ORIGIN);
     const gesture = useRef<Gesture | null>(null);
     const press = useRef<Tap | null>(null);
     const lastTap = useRef<Tap | null>(null);
     const pointerType = useRef("");
+    const samples = useRef<Sample[]>([]);
+    const pinch = useRef<Pinch | null>(null);
 
     const commit = (next: Zoom | null) => {
         zoomRef.current = next;
         setZoom(next);
     };
 
+    const turn = (next: number) => {
+        turnsRef.current = next;
+        setTurns(next);
+    };
+
+    const showFrame = (next: Placement | null) => {
+        frameRef.current = next;
+        setFrame(next);
+    };
+
+    // The image's own size and as it's shown turned, and the view's.
     const sizes = () => {
         const stage = stageRef.current;
         const img = imageRef.current;
@@ -262,14 +433,94 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
             return null;
         }
 
+        const own = { width: img.naturalWidth, height: img.naturalHeight };
+
         return {
-            image: { width: img.naturalWidth, height: img.naturalHeight },
+            own,
+            image: turned(own, turnsRef.current),
             view: { width: stage.clientWidth, height: stage.clientHeight },
         };
     };
 
-    /** Zooms to the scale `pick` picks, keeping the image's point at `anchor` where it is, the view's centre by default. */
-    const zoomAround = (pick: (scale: number, fit: number) => number, anchor?: Point) => {
+    // Ends a step's animation where it was going, as the image is taken in hand.
+    const finish = () => {
+        if (animation.current) {
+            cancelAnimationFrame(animation.current);
+            animation.current = 0;
+            showFrame(null);
+        }
+    };
+
+    const stopGlide = () => {
+        if (glide.current) {
+            cancelAnimationFrame(glide.current);
+            glide.current = 0;
+        }
+    };
+
+    useEffect(
+        () => () => {
+            cancelAnimationFrame(animation.current);
+            cancelAnimationFrame(glide.current);
+        },
+        [],
+    );
+
+    /** Goes to a zoom and a turn, animated from where the image is drawn now, zooming at `anchor`. */
+    const moveTo = (next: Zoom | null, nextTurns: number, anchor?: Point) => {
+        const measured = sizes();
+
+        stopGlide();
+        cancelAnimationFrame(animation.current);
+        animation.current = 0;
+
+        if (!measured) {
+            commit(next);
+            turn(nextTurns);
+
+            return;
+        }
+
+        const { own, view: room } = measured;
+        const box = turned(own, nextTurns);
+        const from =
+            frameRef.current ??
+            placementOf(zoomRef.current ?? fitted(measured.image, room), measured.image, turnsRef.current);
+        const to = placementOf(next ?? fitted(box, room), box, nextTurns);
+
+        commit(next);
+        turn(nextTurns);
+
+        if (reducedMotion() || samePlacement(from, to)) {
+            showFrame(null);
+
+            return;
+        }
+
+        const start = performance.now();
+        const step = (now: number) => {
+            const progress = (now - start) / DURATION;
+
+            if (progress >= 1) {
+                animation.current = 0;
+                showFrame(null);
+
+                return;
+            }
+
+            showFrame(between(from, to, easeOut(progress), anchor));
+            animation.current = requestAnimationFrame(step);
+        };
+
+        showFrame(from);
+        animation.current = requestAnimationFrame(step);
+    };
+
+    /**
+     * Zooms to the scale `pick` picks, keeping the image's point at `anchor` where it is, the view's
+     * centre by default, animated for a step made by a key, a button or a double click.
+     */
+    const zoomAround = (pick: (scale: number, fit: number) => number, anchor?: Point, animated = false) => {
         const measured = sizes();
 
         if (!measured) {
@@ -279,19 +530,61 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
         const { image: own, view: room } = measured;
         const from = zoomRef.current ?? fitted(own, room);
         const point = anchor ?? { x: room.width / 2, y: room.height / 2 };
+        const next = zoomTo(from, pick(from.scale, fitScale(own, room)), point, point, own, room);
 
-        commit(zoomTo(from, pick(from.scale, fitScale(own, room)), point, point, own, room));
+        if (animated) {
+            moveTo(next, turnsRef.current, point);
+        } else {
+            finish();
+            commit(next);
+        }
     };
 
     const toggle = (anchor: Point) =>
-        zoomAround((scale, fit) => (scale > fit ? fit : Math.max(1, 2 * fit)), anchor);
+        zoomAround((scale, fit) => (scale > fit ? fit : Math.max(1, 2 * fit)), anchor, true);
 
-    const panBy = (dx: number, dy: number) => {
+    // A quarter turn, clockwise or not. Fitted, it fits again; zoomed, it keeps its scale, as far as
+    // the view allows, with the part of the image at the view's centre still there.
+    const rotate = (direction: 1 | -1) => {
+        const measured = sizes();
+
+        if (!measured) {
+            return;
+        }
+
+        const { image: box, view: room } = measured;
+        const current = zoomRef.current;
+        let next: Zoom | null = null;
+
+        if (current) {
+            const centre = { x: room.width / 2, y: room.height / 2 };
+            const u = (centre.x - current.x) / current.scale;
+            const v = (centre.y - current.y) / current.scale;
+            const [x, y] = direction > 0 ? [box.height - v, u] : [v, box.width - u];
+            const swapped = { width: box.height, height: box.width };
+            const from = { scale: current.scale, x: centre.x - x * current.scale, y: centre.y - y * current.scale };
+
+            next = zoomTo(from, current.scale, centre, centre, swapped, room);
+        }
+
+        moveTo(next, turnsRef.current + direction);
+    };
+
+    const panBy = (dx: number, dy: number, animated = false) => {
         const measured = sizes();
         const current = zoomRef.current;
 
-        if (measured && current) {
-            commit(settle({ ...current, x: current.x + dx, y: current.y + dy }, measured.image, measured.view));
+        if (!measured || !current) {
+            return;
+        }
+
+        const next = settle({ ...current, x: current.x + dx, y: current.y + dy }, measured.image, measured.view);
+
+        if (animated) {
+            moveTo(next, turnsRef.current);
+        } else {
+            finish();
+            commit(next);
         }
     };
 
@@ -301,21 +594,24 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
                 return false;
             }
 
-            // The first key the press stands for that zooms, so AZERTY's 1 key counts without Shift,
-            // as it types "&", and Czech's still zooms in, as it types "+".
-            switch (pressedKeys(event).find((key) => ZOOM_KEYS.includes(key))) {
+            // The first key the press stands for that zooms or turns, so AZERTY's 1 key counts
+            // without Shift, as it types "&", and Czech's still zooms in, as it types "+".
+            switch (pressedKeys(event).find((key) => IMAGE_KEYS.includes(key))) {
                 case "+":
                 case "=":
-                    zoomAround((scale) => stepScale(scale, 1));
+                    zoomAround((scale) => stepScale(scale, 1), undefined, true);
                     return true;
                 case "-":
-                    zoomAround((scale) => stepScale(scale, -1));
+                    zoomAround((scale) => stepScale(scale, -1), undefined, true);
                     return true;
                 case "0":
-                    zoomAround((_, fit) => fit);
+                    zoomAround((_, fit) => fit, undefined, true);
                     return true;
                 case "1":
-                    zoomAround(() => 1);
+                    zoomAround(() => 1, undefined, true);
+                    return true;
+                case "r":
+                    rotate(event.shiftKey ? -1 : 1);
                     return true;
             }
 
@@ -327,11 +623,23 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
                 return false;
             }
 
-            panBy(pan.x * room.clientWidth * PAN_FRACTION, pan.y * room.clientHeight * PAN_FRACTION);
+            panBy(pan.x * room.clientWidth * PAN_FRACTION, pan.y * room.clientHeight * PAN_FRACTION, true);
 
             return true;
         },
-        zoomed: () => zoomRef.current !== null,
+        room: () => {
+            const measured = sizes();
+            const current = zoomRef.current;
+
+            if (!measured || !current) {
+                return null;
+            }
+
+            const width = measured.image.width * current.scale;
+            const extent = measured.view.width;
+
+            return width <= extent ? { left: 0, right: 0 } : { left: current.x - (extent - width), right: -current.x };
+        },
     }));
 
     // Browsers send a pinch on a touchpad as Ctrl+wheel. A mouse's notch zooms by a step at most,
@@ -343,12 +651,20 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
             return;
         }
 
+        // Safari's pinch comes as gesture events, which zoom it already.
+        if (pinch.current && event.ctrlKey) {
+            event.preventDefault();
+            return;
+        }
+
         const unit =
             event.deltaMode === WheelEvent.DOM_DELTA_LINE
                 ? LINE_HEIGHT
                 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
                   ? stage.clientHeight
                   : 1;
+
+        stopGlide();
 
         if (event.ctrlKey) {
             event.preventDefault();
@@ -366,6 +682,48 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
         }
     };
 
+    // Safari on a Mac sends a touchpad's pinch as gesture events, `scale` growing from 1 as the
+    // fingers spread. On a touch screen it sends them alongside the pointers', which zoom already.
+    const handleGestureStart = (event: GestureLike) => {
+        const stage = stageRef.current;
+        const measured = sizes();
+
+        event.preventDefault();
+
+        if (pointers.current.size > 0 || !stage || !measured) {
+            return;
+        }
+
+        finish();
+        stopGlide();
+        pinch.current = { from: zoomRef.current ?? fitted(measured.image, measured.view), anchor: pointIn(stage, event) };
+    };
+
+    const handleGestureChange = (event: GestureLike) => {
+        const current = pinch.current;
+        const measured = sizes();
+
+        event.preventDefault();
+
+        if (current && measured) {
+            commit(
+                zoomTo(
+                    current.from,
+                    current.from.scale * event.scale,
+                    current.anchor,
+                    current.anchor,
+                    measured.image,
+                    measured.view,
+                ),
+            );
+        }
+    };
+
+    const handleGestureEnd = (event: GestureLike) => {
+        event.preventDefault();
+        pinch.current = null;
+    };
+
     // A zoomed image keeps its scale as the view resizes, as far as the new size allows.
     const handleResize = () => {
         const stage = stageRef.current;
@@ -374,6 +732,7 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
             return;
         }
 
+        finish();
         setView({ width: stage.clientWidth, height: stage.clientHeight });
 
         const measured = sizes();
@@ -384,10 +743,10 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
         }
     };
 
-    const listeners = useRef({ handleWheel, handleResize });
+    const listeners = useRef({ handleWheel, handleResize, handleGestureStart, handleGestureChange, handleGestureEnd });
 
     useEffect(() => {
-        listeners.current = { handleWheel, handleResize };
+        listeners.current = { handleWheel, handleResize, handleGestureStart, handleGestureChange, handleGestureEnd };
     });
 
     useEffect(() => {
@@ -397,32 +756,107 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
             return;
         }
 
-        // Not passive, so Ctrl+wheel zooms the image rather than the page.
+        // Not passive, so Ctrl+wheel and Safari's pinch zoom the image rather than the page.
         const handleWheelEvent = (event: WheelEvent) => listeners.current.handleWheel(event);
+        const handleGestureStartEvent = (event: Event) => listeners.current.handleGestureStart(event as GestureLike);
+        const handleGestureChangeEvent = (event: Event) => listeners.current.handleGestureChange(event as GestureLike);
+        const handleGestureEndEvent = (event: Event) => listeners.current.handleGestureEnd(event as GestureLike);
         const observer = new ResizeObserver(() => listeners.current.handleResize());
 
         stage.addEventListener("wheel", handleWheelEvent, { passive: false });
+        stage.addEventListener("gesturestart", handleGestureStartEvent, { passive: false });
+        stage.addEventListener("gesturechange", handleGestureChangeEvent, { passive: false });
+        stage.addEventListener("gestureend", handleGestureEndEvent, { passive: false });
         observer.observe(stage);
 
         return () => {
             stage.removeEventListener("wheel", handleWheelEvent);
+            stage.removeEventListener("gesturestart", handleGestureStartEvent);
+            stage.removeEventListener("gesturechange", handleGestureChangeEvent);
+            stage.removeEventListener("gestureend", handleGestureEndEvent);
             observer.disconnect();
         };
     }, []);
 
+    /** A point on the screen in the view, as the view was when the pointers last changed. */
+    const inView = (point: Point) => ({ x: point.x - origin.current.x, y: point.y - origin.current.y });
+
     // Starts the gesture afresh from where the pointers are, each time one goes down or up.
     const regroup = () => {
+        const stage = stageRef.current;
         const measured = sizes();
         const points = [...pointers.current.values()].slice(0, 2);
+
+        if (stage) {
+            const rect = stage.getBoundingClientRect();
+
+            origin.current = { x: rect.left, y: rect.top };
+        }
 
         gesture.current =
             measured && points.length > 0
                 ? {
                       from: zoomRef.current ?? fitted(measured.image, measured.view),
-                      centre: centreOf(points),
+                      centre: inView(centreOf(points)),
                       spread: points.length > 1 ? distance(points[0], points[1]) : 0,
                   }
                 : null;
+    };
+
+    // After a flick on touch, the zoomed image glides on, slowing as it goes, until it stops or meets
+    // an edge, as a photo viewer's does.
+    const glideOn = (event: PointerEvent<HTMLDivElement>) => {
+        const moves = [...recent(samples.current, event.timeStamp), { ...screenPoint(event), time: event.timeStamp }];
+        const [first] = moves;
+        const last = moves[moves.length - 1];
+        const elapsed = last.time - first.time;
+
+        if (elapsed <= 0 || reducedMotion()) {
+            return;
+        }
+
+        let vx = (last.x - first.x) / elapsed;
+        let vy = (last.y - first.y) / elapsed;
+
+        if (Math.hypot(vx, vy) < GLIDE_SPEED) {
+            return;
+        }
+
+        let before = performance.now();
+        const step = (now: number) => {
+            const measured = sizes();
+            const current = zoomRef.current;
+            const elapsedFrame = Math.min(now - before, MAX_FRAME);
+
+            before = now;
+
+            if (!measured || !current) {
+                glide.current = 0;
+                return;
+            }
+
+            const wanted = { ...current, x: current.x + vx * elapsedFrame, y: current.y + vy * elapsedFrame };
+            const next = settle(wanted, measured.image, measured.view);
+
+            // Meeting an edge stops it going that way.
+            if (Math.abs(next.x - wanted.x) > 0.5) {
+                vx = 0;
+            }
+
+            if (Math.abs(next.y - wanted.y) > 0.5) {
+                vy = 0;
+            }
+
+            commit(next);
+
+            const decay = Math.exp(-elapsedFrame / FRICTION);
+
+            vx *= decay;
+            vy *= decay;
+            glide.current = Math.hypot(vx, vy) < STOP_SPEED ? 0 : requestAnimationFrame(step);
+        };
+
+        glide.current = requestAnimationFrame(step);
     };
 
     const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -432,16 +866,17 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
             return;
         }
 
-        const point = pointIn(event.currentTarget, event);
-
+        finish();
+        stopGlide();
         event.currentTarget.setPointerCapture(event.pointerId);
-        pointers.current.set(event.pointerId, point);
+        pointers.current.set(event.pointerId, screenPoint(event));
         // Double taps are caught here, as not every browser sends `dblclick` for them; a mouse's
         // double click comes through `dblclick`, at the system's speed.
         press.current =
             event.pointerType !== "mouse" && pointers.current.size === 1
-                ? { point, screen: screenPoint(event), time: event.timeStamp }
+                ? { point: pointIn(event.currentTarget, event), screen: screenPoint(event), time: event.timeStamp }
                 : null;
+        samples.current = [{ ...screenPoint(event), time: event.timeStamp }];
         regroup();
     };
 
@@ -451,12 +886,17 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
             return;
         }
 
-        const point = pointIn(event.currentTarget, event);
-
-        pointers.current.set(event.pointerId, point);
+        pointers.current.set(event.pointerId, screenPoint(event));
 
         if (press.current && distance(press.current.screen, screenPoint(event)) > TAP_TOLERANCE) {
             press.current = null;
+        }
+
+        if (pointers.current.size === 1) {
+            samples.current = [
+                ...recent(samples.current, event.timeStamp),
+                { ...screenPoint(event), time: event.timeStamp },
+            ];
         }
 
         const measured = sizes();
@@ -472,7 +912,7 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
                 ? (current.from.scale * distance(points[0], points[1])) / current.spread
                 : current.from.scale;
 
-        commit(zoomTo(current.from, scale, current.centre, centreOf(points), measured.image, measured.view));
+        commit(zoomTo(current.from, scale, current.centre, inView(centreOf(points)), measured.image, measured.view));
     };
 
     const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
@@ -481,6 +921,7 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
         }
 
         const tap = press.current;
+        const panned = gesture.current?.spread === 0;
 
         press.current = null;
 
@@ -493,6 +934,14 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
             } else {
                 lastTap.current = { ...tap, time: event.timeStamp };
             }
+        } else if (
+            event.type === "pointerup" &&
+            event.pointerType !== "mouse" &&
+            panned &&
+            pointers.current.size === 0 &&
+            zoomRef.current
+        ) {
+            glideOn(event);
         }
 
         regroup();
@@ -511,24 +960,31 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
             setImage({ width, height });
         }
 
+        setLoaded(true);
         onLoad(width, height);
     };
 
-    const fit = image && view ? fitScale(image, view) : 1;
-    const scale = zoom?.scale ?? fit;
+    const box = image && turned(image, turns);
+    const fit = box && view ? fitScale(box, view) : 1;
+    const scale = frame?.scale ?? zoom?.scale ?? fit;
+    // Laid out by CSS while it's fitted and unturned; placed from the sizes otherwise.
+    const placement =
+        frame ?? (box && view && (zoom || turns % 4 !== 0) ? placementOf(zoom ?? fitted(box, view), box, turns) : null);
 
     const placed: CSSProperties | undefined =
-        zoom && image
+        placement && image
             ? {
                   // From the view's top left, right to left too: the zoom is worked out from the
                   // pointer's place on the screen, and a style set inline isn't flipped by Emotion's
-                  // RTL plugin.
+                  // RTL plugin. Turned about its centre, which the translation puts in place.
                   top: 0,
                   left: 0,
-                  width: image.width * zoom.scale,
-                  height: image.height * zoom.scale,
-                  transform: `translate(${zoom.x}px, ${zoom.y}px)`,
-                  imageRendering: zoom.scale >= PIXELATED_SCALE ? "pixelated" : undefined,
+                  width: image.width * placement.scale,
+                  height: image.height * placement.scale,
+                  transform:
+                      `translate(${placement.cx - (image.width * placement.scale) / 2}px, ` +
+                      `${placement.cy - (image.height * placement.scale) / 2}px) rotate(${placement.angle}deg)`,
+                  imageRendering: placement.scale >= PIXELATED_SCALE ? "pixelated" : undefined,
               }
             : undefined;
 
@@ -537,7 +993,7 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
             <Box
                 ref={stageRef}
                 sx={stageSx}
-                data-zoomed={!!placed}
+                data-zoomed={!!zoom}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
@@ -545,6 +1001,16 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
                 onLostPointerCapture={handlePointerUp}
                 onDoubleClick={handleDoubleClick}
             >
+                {!loaded && placeholder && (
+                    <Box
+                        component="img"
+                        src={placeholder}
+                        alt=""
+                        draggable={false}
+                        sx={placeholderSx}
+                        style={expected}
+                    />
+                )}
                 <Box
                     ref={imageRef}
                     component="img"
@@ -556,15 +1022,16 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
                     onLoad={handleLoad}
                     onError={onError}
                 />
+                {!loaded && <CircularProgress size={28} aria-label={text.loading} sx={spinnerSx} />}
             </Box>
-            {image && view && (
+            {box && view && (
                 <Box sx={toolbarSx}>
                     <TooltipIconButton
                         size="small"
                         label={text.zoomOut}
                         aria-keyshortcuts="-"
                         disabled={!zoom}
-                        onClick={() => zoomAround((current) => stepScale(current, -1))}
+                        onClick={() => zoomAround((current) => stepScale(current, -1), undefined, true)}
                     >
                         <Icon name="zoomOut" fontSize="small" />
                     </TooltipIconButton>
@@ -575,8 +1042,8 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
                         size="small"
                         label={text.zoomIn}
                         aria-keyshortcuts="Plus"
-                        disabled={scale >= maxScale(image, view) - 1e-9}
-                        onClick={() => zoomAround((current) => stepScale(current, 1))}
+                        disabled={(zoom?.scale ?? fit) >= maxScale(box, view) - 1e-9}
+                        onClick={() => zoomAround((current) => stepScale(current, 1), undefined, true)}
                     >
                         <Icon name="zoomIn" fontSize="small" />
                     </TooltipIconButton>
@@ -585,9 +1052,27 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
                         label={text.zoomFit}
                         aria-keyshortcuts="0"
                         disabled={!zoom}
-                        onClick={() => zoomAround((_, best) => best)}
+                        onClick={() => zoomAround((_, best) => best, undefined, true)}
                     >
                         <Icon name="zoomFit" fontSize="small" />
+                    </TooltipIconButton>
+                    <Box sx={ruleSx} />
+                    {/* Turning is the same either way the page runs, so the icons aren't mirrored. */}
+                    <TooltipIconButton
+                        size="small"
+                        label={text.rotateCounterclockwise}
+                        aria-keyshortcuts="Shift+R"
+                        onClick={() => rotate(-1)}
+                    >
+                        <Icon name="rotateLeft" fontSize="small" />
+                    </TooltipIconButton>
+                    <TooltipIconButton
+                        size="small"
+                        label={text.rotateClockwise}
+                        aria-keyshortcuts="R"
+                        onClick={() => rotate(1)}
+                    >
+                        <Icon name="rotateRight" fontSize="small" />
                     </TooltipIconButton>
                 </Box>
             )}

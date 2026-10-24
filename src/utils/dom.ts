@@ -27,3 +27,37 @@ export const focusLost = () => !document.activeElement || document.activeElement
 /** A length in rem as device pixels, at the root's font size and the screen's pixel ratio, rounded up. */
 export const devicePixels = (rem: number) =>
     Math.ceil(rem * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) * window.devicePixelRatio);
+
+// Safari before 16.4, and on iPads before then, only has the prefixed Fullscreen API.
+type PrefixedDocument = Document & {
+    webkitFullscreenEnabled?: boolean;
+    webkitFullscreenElement?: Element | null;
+    webkitExitFullscreen?: () => Promise<void> | void;
+};
+type PrefixedElement = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+
+/** Whether the page can fill the screen; iPhones' browsers can't, but for videos. */
+export const fullscreenEnabled = () =>
+    document.fullscreenEnabled || !!(document as PrefixedDocument).webkitFullscreenEnabled;
+
+/** What fills the screen, through the Fullscreen API, or null. */
+export const fullscreenElement = () =>
+    document.fullscreenElement ?? (document as PrefixedDocument).webkitFullscreenElement ?? null;
+
+/** Fills the screen with `element`, from a click or a key press; rejects when the browser won't. */
+export const enterFullscreen = (element: HTMLElement) =>
+    Promise.resolve(
+        element.requestFullscreen ? element.requestFullscreen() : (element as PrefixedElement).webkitRequestFullscreen?.(),
+    );
+
+/** Leaves the screen to the browser again. */
+export const exitFullscreen = () => {
+    const prefixed = document as PrefixedDocument;
+
+    return Promise.resolve(document.exitFullscreen ? document.exitFullscreen() : prefixed.webkitExitFullscreen?.()).catch(
+        () => undefined,
+    );
+};
+
+/** The events saying the page went in or out of full screen. */
+export const FULLSCREEN_EVENTS = ["fullscreenchange", "webkitfullscreenchange"] as const;

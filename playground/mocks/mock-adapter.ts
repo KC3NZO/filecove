@@ -254,12 +254,12 @@ const packed = (node: MockNode, name: string, showHidden: boolean): { path: stri
 };
 
 /** A file's contents: an uploaded file's own bytes, or else contents made up from its name. */
-const contentOf = (node: MockNode): FileContent =>
+const contentOf = async (node: MockNode): Promise<FileContent> =>
     node.blob ? { blob: node.blob } : sampleContent(node.name, node.size, node.mimeType);
 
-/** A file's bytes, fetched when its contents are a URL, as the videos' are. */
+/** A file's bytes, fetched when its contents are a URL, as the videos' and fonts' are. */
 const bytesOf = async (node: MockNode, signal: AbortSignal) => {
-    const content = contentOf(node);
+    const content = await contentOf(node);
 
     if (content.url === undefined) {
         return content.blob;

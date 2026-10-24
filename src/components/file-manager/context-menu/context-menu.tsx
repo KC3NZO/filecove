@@ -14,7 +14,7 @@ import { DirectionContext } from "../../../contexts/direction-context";
 import { insetLabelSx } from "../../../styles/direction";
 import { menuPaperSx } from "../../../styles/mixins";
 import { ariaShortcut } from "../../../utils/shortcut";
-import IconSlot from "../icon-slot";
+import IconSlot from "../../icons/icon-slot";
 
 import type { ActionContext, ActionGroup, MenuPosition } from "../../../types";
 

@@ -8,19 +8,23 @@ import { useForkRef } from "@mui/material/utils";
 import { useData } from "../../hooks/use-folder";
 import { folderKey } from "../../store/folder-store";
 import { PROPERTIES_WIDTH, rootExtraWide } from "../../styles/layout";
+import { runToolbarShortcut, toolbarGroups } from "../../utils/action-groups";
 import { joinIsolated } from "../../utils/bidi";
 import { folderOf } from "../../utils/navigation";
+import { typesInField } from "../../utils/shortcut";
 import PropertiesPanel from "../properties/properties-panel";
 
 import type { PropertiesCache } from "../../store/properties-cache";
 import type {
     ActionContext,
+    ActionGroup,
     FileEntry,
     FolderRef,
     MenuRequest,
     PropertiesItem,
     PropertiesSubject,
     Section,
+    ToolbarGroup,
 } from "../../types";
 
 interface PropertiesPaneProps {
@@ -36,7 +40,12 @@ interface PropertiesPaneProps {
     cache: PropertiesCache;
     /** Takes the focus, for one render, e.g. as the context menu's Properties opens it. */
     takeFocus: boolean;
-    /** What the context menu's actions get, for the panel's Rename and "Open item location". */
+    /** The app's actions for the panel's header (`propertiesActions`). */
+    actions: ActionGroup[];
+    /**
+     * What the context menu's actions get, for the panel's Rename and "Open item location", and
+     * the header's actions.
+     */
     contextFor: (request: MenuRequest) => ActionContext;
     /** The panel's close button. */
     onClose: () => void;
@@ -49,6 +58,7 @@ interface PropertiesPaneProps {
 }
 
 const NO_ITEMS: PropertiesItem[] = [];
+const NO_TOOLBAR: ToolbarGroup[] = [];
 
 /** How many made-up entries of folders are kept, for folders no listing holds, such as a section's root. */
 const MAX_BARE = 50;
@@ -120,6 +130,7 @@ const PropertiesPane = ({
     showHidden,
     cache,
     takeFocus,
+    actions,
     contextFor,
     onClose,
     onEscape,
@@ -254,19 +265,54 @@ const PropertiesPane = ({
         // `listings` stands for the listings read through the store.
     }, [visible, subject, store, adapter, contextFor, listings]);
 
+    // The app's actions in the header, for what the panel shows: its entries, which must share a
+    // folder, as the context menu's do, or else the folder it shows.
+    const headerActions = useMemo(() => {
+        if (!visible || actions.length === 0 || subject.kind === "none") {
+            return NO_TOOLBAR;
+        }
+
+        if (subject.kind === "folder") {
+            const { section, trail } = subject;
+
+            return toolbarGroups(actions, contextFor({ target: "folder", section, trail, entries: [] }));
+        }
+
+        const [first] = subject.entries;
+        const folderId = folderOf(first.section, first.trail).id;
+        const together = subject.entries.every(
+            ({ section, trail }) => section === first.section && folderOf(section, trail).id === folderId,
+        );
+
+        return together
+            ? toolbarGroups(
+                  actions,
+                  contextFor({
+                      target: "selection",
+                      section: first.section,
+                      trail: first.trail,
+                      entries: items.map((item) => item.entry),
+                      inResults: subject.inResults,
+                  }),
+              )
+            : NO_TOOLBAR;
+    }, [visible, actions, subject, items, contextFor]);
+
     // Escape in a menu or a dialog, which portal out of the pane but still bubble here through
-    // React's tree, is theirs.
+    // React's tree, is theirs, and so are their other keys. The header's actions' shortcuts work
+    // anywhere in the panel but a field typed in.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         const plain = !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
 
-        if (
-            event.key === "Escape" &&
-            plain &&
-            event.target instanceof Node &&
-            event.currentTarget.contains(event.target)
-        ) {
+        if (event.defaultPrevented || !(event.target instanceof Node && event.currentTarget.contains(event.target))) {
+            return;
+        }
+
+        if (event.key === "Escape" && plain) {
             event.preventDefault();
             onEscape();
+        } else if (!typesInField(event) && runToolbarShortcut(event, headerActions)) {
+            event.preventDefault();
         }
     };
 
@@ -294,6 +340,7 @@ const PropertiesPane = ({
                     showHidden={showHidden}
                     cache={cache}
                     takeFocus={takeFocus}
+                    actions={headerActions}
                     onClose={onClose}
                 />
             )}

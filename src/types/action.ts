@@ -34,10 +34,18 @@ export interface ActionContext {
     openLocation?: () => void;
     /**
      * Shows the files among `entries` in the file manager's preview, one at a time. A single file
-     * steps through the files of the folder it's listed in, in the content's order. Missing when the
-     * section's adapter has no `content`, or `entries` holds no files.
+     * steps through the files of the folder it's listed in, in the content's order. Missing when
+     * `entries` holds no files, and when the section's adapter has no `content`, unless one of the
+     * file manager's `previewers` that reads nothing takes one of them. Missing too for an action in
+     * the preview's own header, which is previewing already.
      */
     preview?: () => void;
+    /**
+     * Closes the preview, for an action in the preview's header (`previewActions`) that takes the
+     * user elsewhere, such as an editor of the app's own, which the preview would otherwise stay
+     * over. `open`, `openLocation` and `properties` close it themselves there. Missing elsewhere.
+     */
+    closePreview?: () => void;
     /**
      * Saves `entries` on the user's device, or with none, `folder` itself: a single file from the
      * section's adapter's `content`, and folders or several entries as the one file its `download`

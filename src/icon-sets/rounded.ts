@@ -21,6 +21,8 @@ import InsertDriveFileRounded from "@mui/icons-material/InsertDriveFileRounded";
 import FilterListRounded from "@mui/icons-material/FilterListRounded";
 import FolderRounded from "@mui/icons-material/FolderRounded";
 import FolderOpenRounded from "@mui/icons-material/FolderOpenRounded";
+import FullscreenRounded from "@mui/icons-material/FullscreenRounded";
+import FullscreenExitRounded from "@mui/icons-material/FullscreenExitRounded";
 import GridViewRounded from "@mui/icons-material/GridViewRounded";
 import HomeRounded from "@mui/icons-material/HomeRounded";
 import InfoRounded from "@mui/icons-material/InfoRounded";
@@ -37,6 +39,8 @@ import VisibilityRounded from "@mui/icons-material/VisibilityRounded";
 import HistoryRounded from "@mui/icons-material/HistoryRounded";
 import RefreshRounded from "@mui/icons-material/RefreshRounded";
 import DriveFileRenameOutlineRounded from "@mui/icons-material/DriveFileRenameOutlineRounded";
+import RotateLeftRounded from "@mui/icons-material/RotateLeftRounded";
+import RotateRightRounded from "@mui/icons-material/RotateRightRounded";
 import SearchRounded from "@mui/icons-material/SearchRounded";
 import ManageSearchRounded from "@mui/icons-material/ManageSearchRounded";
 import SelectAllRounded from "@mui/icons-material/SelectAllRounded";
@@ -77,6 +81,8 @@ const rounded: IconSet = {
     filter: FilterListRounded,
     folder: FolderRounded,
     folderOpen: FolderOpenRounded,
+    fullScreen: FullscreenRounded,
+    fullScreenExit: FullscreenExitRounded,
     gridView: GridViewRounded,
     home: HomeRounded,
     info: InfoRounded,
@@ -93,6 +99,8 @@ const rounded: IconSet = {
     recent: HistoryRounded,
     refresh: RefreshRounded,
     rename: DriveFileRenameOutlineRounded,
+    rotateLeft: RotateLeftRounded,
+    rotateRight: RotateRightRounded,
     search: SearchRounded,
     searchFolder: ManageSearchRounded,
     selectAll: SelectAllRounded,

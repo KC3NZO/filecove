@@ -21,6 +21,8 @@ import InsertDriveFileOutlined from "@mui/icons-material/InsertDriveFileOutlined
 import FilterListOutlined from "@mui/icons-material/FilterListOutlined";
 import FolderOutlined from "@mui/icons-material/FolderOutlined";
 import FolderOpenOutlined from "@mui/icons-material/FolderOpenOutlined";
+import FullscreenOutlined from "@mui/icons-material/FullscreenOutlined";
+import FullscreenExitOutlined from "@mui/icons-material/FullscreenExitOutlined";
 import GridViewOutlined from "@mui/icons-material/GridViewOutlined";
 import HomeOutlined from "@mui/icons-material/HomeOutlined";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
@@ -37,6 +39,8 @@ import VisibilityOutlined from "@mui/icons-material/VisibilityOutlined";
 import HistoryOutlined from "@mui/icons-material/HistoryOutlined";
 import RefreshOutlined from "@mui/icons-material/RefreshOutlined";
 import DriveFileRenameOutlineOutlined from "@mui/icons-material/DriveFileRenameOutlineOutlined";
+import RotateLeftOutlined from "@mui/icons-material/RotateLeftOutlined";
+import RotateRightOutlined from "@mui/icons-material/RotateRightOutlined";
 import SearchOutlined from "@mui/icons-material/SearchOutlined";
 import ManageSearchOutlined from "@mui/icons-material/ManageSearchOutlined";
 import SelectAllOutlined from "@mui/icons-material/SelectAllOutlined";
@@ -77,6 +81,8 @@ const outlined: IconSet = {
     filter: FilterListOutlined,
     folder: FolderOutlined,
     folderOpen: FolderOpenOutlined,
+    fullScreen: FullscreenOutlined,
+    fullScreenExit: FullscreenExitOutlined,
     gridView: GridViewOutlined,
     home: HomeOutlined,
     info: InfoOutlined,
@@ -93,6 +99,8 @@ const outlined: IconSet = {
     recent: HistoryOutlined,
     refresh: RefreshOutlined,
     rename: DriveFileRenameOutlineOutlined,
+    rotateLeft: RotateLeftOutlined,
+    rotateRight: RotateRightOutlined,
     search: SearchOutlined,
     searchFolder: ManageSearchOutlined,
     selectAll: SelectAllOutlined,
