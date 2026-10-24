@@ -168,6 +168,7 @@ export const enUS: FileManagerLocaleText = {
     uploadTypesLeftOut: (count, name, sectionName, types) =>
         `${count === 1 ? `“${name}” is` : `${count} files are`} left out, since “${sectionName}” only takes ` +
         `these types of files: ${types}.`,
+    uploadShown: (name, folderName) => `Showing “${name}” in “${folderName}”`,
 
     download: "Download",
 
@@ -254,6 +255,7 @@ export const enUS: FileManagerLocaleText = {
     uploadDone: "Uploaded",
     uploadCancel: (fileName) => `Cancel uploading ${fileName}`,
     uploadRetry: (fileName) => `Upload ${fileName} again`,
+    uploadShow: (fileName) => `Show ${fileName} in its folder`,
     uploadPreparing: "Preparing",
     uploadFolderProgress: (done, total) => `${done} of ${files(total)}`,
     uploadFolderDone: (count) => files(count),

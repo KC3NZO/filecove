@@ -38,6 +38,12 @@ interface UploadPanelProps {
     items: UploadItem[];
     onCancel: (id: number) => void;
     onRetry: (id: number) => void;
+    /**
+     * Shows a finished upload in the folder it went into. Offered on the rows of finished uploads
+     * that `canShow` takes, every one of them without it, and on none without `onShow`.
+     */
+    onShow?: (item: UploadItem) => void;
+    canShow?: (item: UploadItem) => boolean;
     /** Cancels every upload waiting or under way. */
     onCancelAll: () => void;
     /** Forgets every upload that has ended. */
@@ -48,6 +54,8 @@ interface UploadRowProps {
     item: UploadItem;
     onCancel: (id: number) => void;
     onRetry: (id: number) => void;
+    /** Shows the finished upload in its folder; missing when it can't be. */
+    onShow?: (item: UploadItem) => void;
 }
 
 // The same width as a small IconButton, so a done row's check lines up with the other rows' buttons.
@@ -241,7 +249,7 @@ const describeFile = ({ file, folder, status, progress, error }: FileUploadItem,
     }
 };
 
-const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
+const UploadRow = ({ item, onCancel, onRetry, onShow }: UploadRowProps) => {
     const { id, status, progress } = item;
     const name = item.kind === "file" ? item.file.name : item.name;
     const failures = item.kind === "folder" ? item.failures : [];
@@ -260,9 +268,20 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
         );
     } else if (status === "done") {
         action = (
-            <Box sx={doneSx}>
-                <Icon name="check" fontSize="small" titleAccess={text.uploadDone} />
-            </Box>
+            <>
+                {onShow && (
+                    <TooltipIconButton
+                        size="small"
+                        label={text.uploadShow(isolate(name))}
+                        onClick={() => onShow(item)}
+                    >
+                        <Icon name="folderOpen" fontSize="small" />
+                    </TooltipIconButton>
+                )}
+                <Box sx={doneSx}>
+                    <Icon name="check" fontSize="small" titleAccess={text.uploadDone} />
+                </Box>
+            </>
         );
     } else {
         action = (
@@ -321,11 +340,12 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
 
 /**
  * The upload queue at a glance: a summary that can fold the list away, and a row per file or folder
- * with its progress or how it ended, to cancel it or try it again. It knows nothing of where it's
- * shown, so it can sit under any view of files. The close button cancels whatever is still
- * uploading, which stays listed to try again, and once nothing is, forgets the list.
+ * with its progress or how it ended, to cancel it or try it again, or once done, to show it where it
+ * went. It knows nothing of where it's shown, so it can sit under any view of files. The close
+ * button cancels whatever is still uploading, which stays listed to try again, and once nothing
+ * is, forgets the list.
  */
-const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadPanelProps) => {
+const UploadPanel = ({ items, onCancel, onRetry, onShow, canShow, onCancelAll, onClear }: UploadPanelProps) => {
     const [expanded, setExpanded] = useState(true);
     const { text, formatSize } = useLocale();
     const { count, busy, size, sent, measured } = summarize(items);
@@ -399,7 +419,13 @@ const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadP
             <Collapse in={expanded}>
                 <Box component="ul" sx={panelListSx}>
                     {items.map((item) => (
-                        <UploadRow key={item.id} item={item} onCancel={onCancel} onRetry={onRetry} />
+                        <UploadRow
+                            key={item.id}
+                            item={item}
+                            onCancel={onCancel}
+                            onRetry={onRetry}
+                            onShow={onShow && (!canShow || canShow(item)) ? onShow : undefined}
+                        />
                     ))}
                 </Box>
             </Collapse>

@@ -22,6 +22,12 @@ interface UploadBase {
     progress?: number;
     /** Why it failed, as the adapter said, to show beside it. */
     error?: string;
+    /**
+     * The id of what it put in `folder`, once known, to show it there: a file's, once sent, when
+     * the adapter's `upload` resolved with its entry, and a folder's once made, or found there to
+     * merge into.
+     */
+    entryId?: string;
 }
 
 /** A file in the upload queue. Replaced, never mutated, as it moves along. */

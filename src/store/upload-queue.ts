@@ -39,6 +39,8 @@ interface FileStep {
     progress?: number;
     /** Whether sending it was tried before, so it may be there, from a call cut short by a cancel. */
     tried?: boolean;
+    /** The id of its entry, once sent, when the adapter resolved with it. */
+    entryId?: string;
 }
 
 /**
@@ -283,6 +285,7 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                 failures: job.listed,
                 moreFailures: job.unlisted,
                 progress: job.size > 0 ? sent / job.size : undefined,
+                entryId: job.root?.state === "done" ? job.root.id : undefined,
             };
         } else {
             const [step] = job.files;
@@ -297,6 +300,7 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                 error,
                 file: step.file,
                 progress: step.progress,
+                entryId: step.entryId,
             };
         }
 
@@ -473,7 +477,8 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                 const conflict = ownFolder ? (step.tried ? "replace" : "keepBoth") : job.item.conflict;
 
                 step.tried = true;
-                await adapter.upload(step.file, targetOf(job, step) as string, {
+
+                const sent: FileEntry | void = await adapter.upload(step.file, targetOf(job, step) as string, {
                     signal,
                     conflict,
                     onProgress: (loaded, total) => {
@@ -484,6 +489,8 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                         }
                     },
                 });
+
+                step.entryId = sent ? sent.id : undefined;
             })
             .then(
                 () => settle(),
@@ -613,13 +620,16 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
             };
         },
 
-        /** Queues files to be uploaded into `folder` through `adapter`, which takes uploads. */
+        /**
+         * Queues files to be uploaded into `folder` through `adapter`, which takes uploads, and
+         * returns the ids of their uploads, in the order of `files`.
+         */
         add(adapter: FileAdapter, folder: FolderRef, files: File[], conflict: ConflictPolicy) {
             if (files.length === 0) {
-                return;
+                return [];
             }
 
-            files.forEach((file) => {
+            const ids = files.map((file) => {
                 const step: FileStep = { kind: "file", file, state: "waiting" };
                 const id = nextId++;
 
@@ -627,16 +637,22 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
                     { ...blank(), files: [step], ready: [step], size: file.size },
                     { kind: "file", id, file, adapter, folder, conflict, status: "queued" },
                 );
+
+                return id;
             });
+
             pump();
             notify();
+
+            return ids;
         },
 
         /**
          * Queues folders to be uploaded into `folder` through `adapter`, which takes uploads and
          * makes folders, each with everything in it, read first. Files `accepts` refuses are left
          * out, and so are folders that held nothing else. With "replace", a folder merged into
-         * gets the files with names it has already in their place.
+         * gets the files with names it has already in their place. Returns the ids of their
+         * uploads, in the order of `folders`.
          */
         addFolders(
             adapter: FileAdapter,
@@ -646,10 +662,10 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
             accepts?: (file: File) => boolean,
         ) {
             if (folders.length === 0) {
-                return;
+                return [];
             }
 
-            folders.forEach((upload) => {
+            const ids = folders.map((upload) => {
                 const id = nextId++;
                 const job = enqueue(
                     { ...blank(), upload, accepts },
@@ -672,9 +688,14 @@ export const createUploadQueue = (onChanged: (adapter: FileAdapter, folderIds: s
 
                 read(job);
                 show(job);
+
+                return id;
             });
+
             pump();
             notify();
+
+            return ids;
         },
 
         /** Cancels an upload that is waiting or under way. */

@@ -65,6 +65,23 @@ export interface EntryOrigin {
     location: string;
 }
 
+/**
+ * What an upload just put in a folder, for the folder view to highlight for a moment once it lists
+ * it: found by its id, when that's known, or else by its name. Internal.
+ */
+export interface Arrival {
+    /** Counts arrivals, so each is told apart. */
+    key: number;
+    adapter: FileAdapter;
+    /** The folder it went into. */
+    folderId: string;
+    entryId?: string;
+    /** Missing when it may have been kept under another name, and the adapter didn't say which. */
+    name?: string;
+    /** Asked for with "Show in folder": also scrolled to, and given the view's Tab stop. */
+    show: boolean;
+}
+
 /** Props shared by the list and grid views. Internal, not exported from the package entry. */
 export interface FileViewProps {
     /**
@@ -87,6 +104,8 @@ export interface FileViewProps {
     selectedIds: ReadonlySet<string>;
     /** Entries cut to the clipboard, shown faded until they're pasted. */
     cutIds: ReadonlySet<string>;
+    /** Entries just uploaded, highlighted for a moment; none among a search's results. */
+    arrivedIds?: ReadonlySet<string>;
     /** The folder's adapter, which may give its files thumbnails. */
     adapter: FileAdapter | undefined;
     /** Entries can be dragged onto a folder, to be moved or copied into it. */

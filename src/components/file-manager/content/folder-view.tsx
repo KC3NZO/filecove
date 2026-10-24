@@ -21,7 +21,7 @@ import { useSelection } from "../../../hooks/use-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { mirroredBarSx } from "../../../styles/direction";
-import { focusOutline, forcedBarSx, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
+import { ARRIVED_FOR, focusOutline, forcedBarSx, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
 import { focusLost, isRtl } from "../../../utils/dom";
 import { isHidden } from "../../../utils/hidden";
 import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
@@ -38,6 +38,7 @@ import FileList from "./file-list";
 import SelectionBar from "./selection-bar";
 
 import type {
+    Arrival,
     DropTarget,
     EntrySelection,
     FileEntry,
@@ -79,6 +80,11 @@ interface FolderViewProps {
     takeFocus: boolean;
     /** An entry to select and scroll to once the listing has it, e.g. a folder just created. */
     revealId?: string;
+    /**
+     * What uploads just put in folders, highlighted for a moment once this folder shows them, and
+     * those asked for with "Show in folder" scrolled to as well.
+     */
+    arrivals: readonly Arrival[];
     /** The selected ids, while the consumer controls them; the view keeps its own otherwise. */
     selectedIds?: ReadonlySet<string>;
     /** The ids the view's own selection starts with. */
@@ -104,6 +110,8 @@ interface FolderViewProps {
     onRevealed: (focused: boolean) => void;
     /** Called while `revealId` is listed but left out by `query`, so ending the search shows it. */
     onRevealUnmatched: () => void;
+    /** Told the `key`s of the arrivals highlighted, which are done with. */
+    onArrived: (keys: number[]) => void;
 }
 
 /** Where the view's focus is among the entries: the entry, and where it was listed. */
@@ -121,6 +129,8 @@ interface ScrollRequest {
 /** The entry an event happened on, by its `data-entry-id`. */
 const entryIdAt = (target: EventTarget) =>
     target instanceof Element ? target.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId : undefined;
+
+const NOTHING_ARRIVED: ReadonlySet<string> = new Set();
 
 const entryElement = (surface: HTMLElement, id: string) =>
     surface.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(id)}"]`);
@@ -201,6 +211,7 @@ const FolderView = ({
     busy,
     takeFocus,
     revealId,
+    arrivals,
     selectedIds: controlledIds,
     defaultSelectedIds,
     onSelectionChange,
@@ -213,6 +224,7 @@ const FolderView = ({
     onPasteFiles,
     onRevealed,
     onRevealUnmatched,
+    onArrived,
 }: FolderViewProps) => {
     const folder = folderOf(section, trail);
     const { state, reload } = useFolder(section, folder.id, true, true);
@@ -486,6 +498,67 @@ const FolderView = ({
             onRevealUnmatched();
         }
     }, [revealUnmatched, onRevealUnmatched]);
+
+    // What an upload just put in the folder is highlighted for a moment once it's shown, found by id,
+    // or by name when the adapter didn't say. It's never selected, as an upload can end while the
+    // user is acting on other entries. One asked for with "Show in folder" is scrolled to as well,
+    // and takes the Tab stop, but not the focus, which stays in the upload panel.
+    const [arrivedIds, setArrivedIds] = useState(NOTHING_ARRIVED);
+    const arrivedTimers = useRef(new Set<number>());
+
+    useEffect(() => {
+        const timers = arrivedTimers.current;
+
+        return () => {
+            timers.forEach((timer) => window.clearTimeout(timer));
+            timers.clear();
+        };
+    }, []);
+
+    useEffect(() => {
+        const mine = arrivals.filter((arrival) => arrival.adapter === adapter && arrival.folderId === folder.id);
+
+        if (!entries || mine.length === 0) {
+            return;
+        }
+
+        let byName: Map<string, number> | undefined;
+        const found = mine.flatMap((arrival) => {
+            let index: number | undefined;
+
+            if (arrival.entryId !== undefined) {
+                index = indexById.get(arrival.entryId);
+            } else if (arrival.name !== undefined) {
+                byName ??= new Map(entries.map((entry, at) => [entry.name, at] as const));
+                index = byName.get(arrival.name);
+            }
+
+            return index === undefined ? [] : [{ arrival, index }];
+        });
+
+        if (found.length === 0) {
+            return;
+        }
+
+        const ids = found.map(({ index }) => entries[index].id);
+        const shown = found.find(({ arrival }) => arrival.show);
+        const timer = window.setTimeout(() => {
+            arrivedTimers.current.delete(timer);
+            setArrivedIds((prev) => new Set([...prev].filter((id) => !ids.includes(id))));
+        }, ARRIVED_FOR);
+
+        arrivedTimers.current.add(timer);
+        setArrivedIds((prev) => new Set([...prev, ...ids]));
+
+        if (shown) {
+            const { id } = entries[shown.index];
+
+            setFocus({ id, index: shown.index });
+            pendingScroll.current = { id, focus: false };
+        }
+
+        onArrived(found.map(({ arrival }) => arrival.key));
+    }, [arrivals, adapter, folder.id, entries, indexById, onArrived]);
 
     // Scrolls to the entry asked for, focusing it if asked to, once it's rendered, which it is once
     // it has the view's focus, and once the entries are in their places. An entry that's gone from
@@ -954,6 +1027,7 @@ const FolderView = ({
                 focusId={focusId}
                 selectedIds={selectedIds}
                 cutIds={cutIds}
+                arrivedIds={arrivedIds}
                 adapter={adapter}
                 draggable={draggable}
                 draggedIds={draggedIds}

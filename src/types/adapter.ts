@@ -258,10 +258,13 @@ export interface FileAdapter {
     /**
      * Uploads one file into `folderId`. Files from the browser's file picker or dropped from the
      * desktop are uploaded one call each, a few at a time, so each has its own progress, error and
-     * cancel. Without it, the file manager has no way to upload. Reject with an `Error` to show its
-     * message beside the file, e.g. when it's too large or not allowed.
+     * cancel. Resolve with the file's entry as it now is, so the file manager can show where it
+     * went, even when it was kept under another name beside one of the same name; without it, the
+     * file is found by its name, which a file kept both no longer has. Without `upload`, the file
+     * manager has no way to upload. Reject with an `Error` to show its message beside the file,
+     * e.g. when it's too large or not allowed.
      */
-    upload?(file: File, folderId: string, options: UploadOptions): Promise<void>;
+    upload?(file: File, folderId: string, options: UploadOptions): Promise<FileEntry | void>;
     /**
      * Says where a file's contents are, for the preview or to download it (`purpose`): a URL to load
      * them from, or the bytes. For the preview, a URL is used as it is, in an `<img>`, `<video>`,

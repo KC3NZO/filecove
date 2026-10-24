@@ -41,6 +41,8 @@ export interface UploadLocaleText {
     /** `fileName` is the file's name, or the folder's for a folder. */
     uploadCancel: (fileName: string) => string;
     uploadRetry: (fileName: string) => string;
+    /** The button on an uploaded file or folder that shows it in the folder it went into. */
+    uploadShow: (fileName: string) => string;
     /** A folder's status while what's in it is read, before its files are known. */
     uploadPreparing: string;
     /** A folder's status while it uploads: how many of its files are uploaded so far. */
@@ -338,6 +340,11 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     uploadTypesOnly: (sectionName: string, types: string) => string;
     /** When files of types the section doesn't take were given with others. `name` is for when `count` is 1. */
     uploadTypesLeftOut: (count: number, name: string, sectionName: string, types: string) => string;
+    /**
+     * Read to screen readers as an upload is shown in its folder from the panel, which keeps the
+     * focus. `name` is the file's or folder's, `folderName` the folder's it went into.
+     */
+    uploadShown: (name: string, folderName: string) => string;
 
     // Downloading
     /** The preview's Download button. */

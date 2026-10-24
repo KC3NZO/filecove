@@ -18,6 +18,7 @@ import { useDownloadQueue } from "../../hooks/use-download-queue";
 import { useEntryDrag } from "../../hooks/use-entry-drag";
 import { useLocaleValue } from "../../hooks/use-locale";
 import { useLocationHistory } from "../../hooks/use-location-history";
+import type { ReviseLocation } from "../../hooks/use-location-history";
 import { useSetting } from "../../hooks/use-setting";
 import { useStableSet } from "../../hooks/use-stable-set";
 import { useTextDirection } from "../../hooks/use-text-direction";
@@ -69,6 +70,7 @@ import Sidebar from "./sidebar/sidebar";
 import type {
     ActionContext,
     ActionGroup,
+    Arrival,
     Clipboard,
     ConflictPolicy,
     DroppedFiles,
@@ -97,6 +99,7 @@ import type {
     SelectionDetails,
     SortOrder,
     TreeReveal,
+    UploadItem,
     ViewMode,
 } from "../../types";
 import type { MenuState } from "./context-menu/context-menu";
@@ -325,6 +328,16 @@ interface Reveal {
     announce?: string;
 }
 
+/** Where an upload in the panel went, for "Show in folder". */
+interface UploadPlace {
+    location: FileManagerLocation;
+    /**
+     * Its name there, to find it by when the adapter doesn't say its id; missing for a file kept
+     * beside one of its name, under a name the adapter chose.
+     */
+    name?: string;
+}
+
 /** `defaultSelectedIds`, for the folder the file manager opened in, until another opens. */
 interface InitialSelection {
     key: string | null;
@@ -349,6 +362,13 @@ const NO_TRAIL: FolderRef[] = [];
 const NO_IDS: ReadonlySet<string> = new Set();
 const NO_ENTRIES: FileEntry[] = [];
 const NOTHING_TOLD: ToldSelection = { ids: NO_IDS, entries: NO_ENTRIES };
+const NO_ARRIVALS: readonly Arrival[] = [];
+
+/**
+ * How long what an upload just put in a folder waits for a folder view to show it, in ms, as the
+ * folder may not be open, or be listed again only a moment later.
+ */
+const ARRIVAL_WAIT = 10_000;
 
 const sameEntries = (a: FileEntry[], b: FileEntry[]) =>
     a === b || (a.length === b.length && a.every((entry, index) => entry === b[index]));
@@ -559,12 +579,34 @@ const FileManager = ({
         navigate,
         back,
         forward,
-        revise,
+        revise: reviseHistory,
     } = useLocationHistory({
         location: locationProp,
         initial: () => defaultLocation ?? fallback ?? { sectionId: "", trail: NO_TRAIL },
         onChange: onLocationChange,
     });
+
+    // Where each upload in the panel went, by its id, for "Show in folder". The places are rewritten
+    // with the history's, so a folder renamed is followed, and one whose trail is cut short, as by a
+    // folder deleted above it or its section gone back to its root, is gone, so the upload can't be
+    // shown any more.
+    const uploadPlaces = useRef(new Map<number, UploadPlace>());
+
+    const revise = useCallback(
+        (update: ReviseLocation) => {
+            reviseHistory(update);
+            uploadPlaces.current.forEach((upload, id) => {
+                const location = update(upload.location, false);
+
+                if (location && location.trail.length === upload.location.trail.length) {
+                    upload.location = location;
+                } else {
+                    uploadPlaces.current.delete(id);
+                }
+            });
+        },
+        [reviseHistory],
+    );
 
     // A place in a section the file manager doesn't have, which a section removed, or a location
     // passed for one it never had, leaves, shows the first section's root while the history is put
@@ -1553,7 +1595,40 @@ const FileManager = ({
     // in are listed again like any other change.
     const uploads = useUploadQueue(relist);
 
+    // What uploads just put in folders, for the folder view to highlight once it shows them.
+    const [arrivals, setArrivals] = useState(NO_ARRIVALS);
+    const arrivalCount = useRef(0);
+    const arrived = useRef(new Set<number>());
+
+    const arrive = useCallback((arrival: Omit<Arrival, "key">) => {
+        const key = (arrivalCount.current += 1);
+
+        setArrivals((prev) => [...prev, { ...arrival, key }]);
+        window.setTimeout(() => setArrivals((prev) => prev.filter((waiting) => waiting.key !== key)), ARRIVAL_WAIT);
+    }, []);
+
+    const handleArrived = useCallback((keys: number[]) => {
+        setArrivals((prev) => prev.filter((waiting) => !keys.includes(waiting.key)));
+    }, []);
+
+    // Each upload arrives as it's done, in whichever folder view shows where it went.
+    useEffect(() => {
+        uploads.items.forEach((item) => {
+            if (item.status === "done" && !arrived.current.has(item.id)) {
+                arrived.current.add(item.id);
+                arrive({
+                    adapter: item.adapter,
+                    folderId: item.folder.id,
+                    entryId: item.entryId,
+                    name: uploadPlaces.current.get(item.id)?.name,
+                    show: false,
+                });
+            }
+        });
+    }, [uploads.items, arrive]);
+
     // Files in the folders of types the section doesn't take are left out as the folders are read.
+    // A file kept beside one of its name may be given another, which only the adapter knows.
     const startUpload = useCallback(
         (
             { section: target, adapter: served, trail }: UploadRequest,
@@ -1562,19 +1637,72 @@ const FileManager = ({
             conflict: ConflictPolicy,
         ) => {
             const into = folderOf(target, trail);
+            const location = { sectionId: target.id, trail };
             const patterns = uploadPatterns(target);
+            const accepts = patterns ? (file: File) => acceptsFile(patterns, file) : undefined;
+            const listed = store.get(folderKey(target.id, into.id))?.entries;
+            const taken = new Set(conflict === "keepBoth" ? listed?.map((entry) => entry.name) : []);
 
             closeUploadCheck();
-            uploads.queue.addFolders(
-                served,
-                into,
-                folders,
-                conflict,
-                patterns ? (file) => acceptsFile(patterns, file) : undefined,
-            );
-            uploads.queue.add(served, into, files, conflict);
+            uploads.queue.addFolders(served, into, folders, conflict, accepts).forEach((id, index) => {
+                uploadPlaces.current.set(id, { location, name: folders[index].name });
+            });
+            uploads.queue.add(served, into, files, conflict).forEach((id, index) => {
+                const { name } = files[index];
+
+                uploadPlaces.current.set(id, { location, name: taken.has(name) ? undefined : name });
+            });
         },
-        [closeUploadCheck, uploads.queue],
+        [closeUploadCheck, uploads.queue, store],
+    );
+
+    // Forgets the ended uploads, and where they went.
+    const clearUploads = useCallback(() => {
+        uploads.queue.clear();
+
+        const kept = new Set(uploads.queue.getItems().map((item) => item.id));
+
+        uploadPlaces.current.forEach((_, id) => !kept.has(id) && uploadPlaces.current.delete(id));
+        arrived.current.forEach((id) => !kept.has(id) && arrived.current.delete(id));
+    }, [uploads.queue]);
+
+    // "Show in folder" on a finished upload: while its section is there, served as it was, and the
+    // folder it went into hasn't gone (see `revise`).
+    const canShowUpload = useCallback(
+        (item: UploadItem) => {
+            const upload = uploadPlaces.current.get(item.id);
+            const shown = upload && sectionsById.get(upload.location.sectionId);
+
+            return !!shown && (shown.adapter ?? adapter) === item.adapter;
+        },
+        [sectionsById, adapter],
+    );
+
+    // Opens the folder, ending a search, even in the open folder, as "Open item location" does, and
+    // has the folder view scroll to what the upload put there and highlight it, never selecting it.
+    // The focus stays on the button, so the panel's other uploads can be shown in turn.
+    const showUpload = useCallback(
+        (item: UploadItem) => {
+            const upload = uploadPlaces.current.get(item.id);
+            const shown = upload && sectionsById.get(upload.location.sectionId);
+
+            if (!upload || !shown || !canShowUpload(item)) {
+                return;
+            }
+
+            const into = folderOf(shown, upload.location.trail);
+            const name = item.kind === "file" ? item.file.name : item.name;
+
+            arrive({ adapter: item.adapter, folderId: into.id, entryId: item.entryId, name: upload.name, show: true });
+            stopSearching();
+
+            if (!samePlace(upload.location, place)) {
+                goTo(upload.location);
+            }
+
+            announce(localeValue.text.uploadShown(isolate(name), isolate(into.name)));
+        },
+        [sectionsById, canShowUpload, arrive, stopSearching, place, goTo, announce, localeValue],
     );
 
     // With path ids, a change can leave an id naming another folder: a deleted or moved folder's id
@@ -2355,6 +2483,7 @@ const FileManager = ({
                                                         busy={busy}
                                                         takeFocus={focusContent && !showsResults}
                                                         revealId={revealId}
+                                                        arrivals={arrivals}
                                                         selectedIds={selectionControlled ? selectedIdSet : undefined}
                                                         defaultSelectedIds={
                                                             initialSelection?.key === openKey
@@ -2371,6 +2500,7 @@ const FileManager = ({
                                                         onPasteFiles={pasteFiles}
                                                         onRevealed={handleRevealed}
                                                         onRevealUnmatched={closeSearch}
+                                                        onArrived={handleArrived}
                                                     />
                                                 )}
                                             </Box>
@@ -2393,8 +2523,10 @@ const FileManager = ({
                                                     items={uploads.items}
                                                     onCancel={uploads.queue.cancel}
                                                     onRetry={uploads.queue.retry}
+                                                    onShow={showUpload}
+                                                    canShow={canShowUpload}
                                                     onCancelAll={uploads.queue.cancelAll}
-                                                    onClear={uploads.queue.clear}
+                                                    onClear={clearUploads}
                                                 />
                                             </Box>
                                         )}

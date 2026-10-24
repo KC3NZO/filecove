@@ -463,9 +463,9 @@ export const createMockAdapter = (
                 });
             }),
 
-        // The file itself is kept, for the preview. A folder that refuses files does so before
-        // anything is sent, and so does a file with "fail" in its name, to show a file failing
-        // inside a folder uploaded.
+        // The file itself is kept, for the preview, and its entry handed back, under the name it was
+        // kept as. A folder that refuses files does so before anything is sent, and so does a file
+        // with "fail" in its name, to show a file failing inside a folder uploaded.
         upload: (file, folderId, { signal, conflict, onProgress }) =>
             Promise.resolve()
                 .then(() => {
@@ -489,9 +489,13 @@ export const createMockAdapter = (
                             blob: file,
                         };
 
-                        if (!(conflict === "skip" && clashes(target, node))) {
-                            insert(target, folderId, node, conflict);
+                        if (conflict === "skip" && clashes(target, node)) {
+                            return undefined;
                         }
+
+                        insert(target, folderId, node, conflict);
+
+                        return toEntry(folderId, node);
                     }),
                 ),
 

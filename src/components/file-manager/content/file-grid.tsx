@@ -6,9 +6,11 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { viewMedium } from "../../../styles/layout";
 import {
+    arrivedMarker,
     cutMarker,
     dragMarkers,
     focusVisibleRing,
+    forcedArrived,
     forcedColors,
     forcedSelected,
     hoverBackground,
@@ -37,6 +39,8 @@ interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "o
     focused: boolean;
     selected: boolean;
     cut: boolean;
+    /** Whether the entry was just uploaded, and is highlighted for a moment. */
+    arrived: boolean;
     dragged: boolean;
     /** Whether the dragged entries would be dropped into this folder now. */
     dropTarget: boolean;
@@ -83,9 +87,10 @@ const tileSx: SxProps<Theme> = (theme) => ({
     '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
     "& > svg": { flexShrink: 0 },
     ...cutMarker,
+    ...arrivedMarker(theme),
     ...focusVisibleRing,
     ...dragMarkers(theme),
-    [forcedColors]: forcedSelected,
+    [forcedColors]: { ...forcedSelected, ...forcedArrived },
 });
 
 // Two lines tall even for a short name, so every tile is as tall, since the grid measures one for
@@ -115,6 +120,7 @@ const FileTile = memo(
         focused,
         selected,
         cut,
+        arrived,
         adapter,
         draggable,
         dragged,
@@ -138,6 +144,7 @@ const FileTile = memo(
             data-no-marquee
             data-selected={selected}
             data-cut={cut}
+            data-arrived={arrived}
             data-dragged={dragged}
             data-drop-target={dropTarget}
             onClick={(event) => {
@@ -174,6 +181,7 @@ const FileGrid = ({
     focusId,
     selectedIds,
     cutIds,
+    arrivedIds,
     adapter,
     draggable,
     draggedIds,
@@ -206,6 +214,7 @@ const FileGrid = ({
                         focused={entry.id === focusId}
                         selected={selectedIds.has(entry.id)}
                         cut={cutIds.has(entry.id)}
+                        arrived={!!arrivedIds?.has(entry.id)}
                         adapter={adapter}
                         draggable={draggable}
                         dragged={draggedIds.has(entry.id)}

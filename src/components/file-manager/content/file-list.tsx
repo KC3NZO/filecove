@@ -9,10 +9,12 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { useLocale } from "../../../hooks/use-locale";
 import { viewMedium, viewWide } from "../../../styles/layout";
 import {
+    arrivedMarker,
     cutMarker,
     dragMarkers,
     focusRing,
     focusVisibleRing,
+    forcedArrived,
     forcedColors,
     forcedSelected,
     hoverBackground,
@@ -52,6 +54,8 @@ interface FileRowProps
     focused: boolean;
     selected: boolean;
     cut: boolean;
+    /** Whether the entry was just uploaded, and is highlighted for a moment. */
+    arrived: boolean;
     dragged: boolean;
     /** Whether the dragged entries would be dropped into this folder now. */
     dropTarget: boolean;
@@ -137,9 +141,10 @@ const rowSx: SxProps<Theme> = (theme) => ({
     // A row scrolled into view stops below the sticky column header rather than under it.
     [viewMedium]: { minHeight: 44, scrollMarginTop: "3rem" },
     ...cutMarker,
+    ...arrivedMarker(theme),
     ...focusVisibleRing,
     ...dragMarkers(theme),
-    [forcedColors]: forcedSelected,
+    [forcedColors]: { ...forcedSelected, ...forcedArrived },
 });
 
 // Only as wide as the icon and name, so a long name truncates within the column.
@@ -267,6 +272,7 @@ const FileRow = memo(
         focused,
         selected,
         cut,
+        arrived,
         adapter,
         draggable,
         dragged,
@@ -296,6 +302,7 @@ const FileRow = memo(
                 data-striped={index % 2 === 0}
                 data-selected={selected}
                 data-cut={cut}
+                data-arrived={arrived}
                 data-dragged={dragged}
                 data-drop-target={dropTarget}
                 onClick={(event) => {
@@ -380,6 +387,7 @@ const FileList = ({
     focusId,
     selectedIds,
     cutIds,
+    arrivedIds,
     adapter,
     draggable,
     draggedIds,
@@ -425,6 +433,7 @@ const FileList = ({
                             focused={entry.id === focusId}
                             selected={selectedIds.has(entry.id)}
                             cut={cutIds.has(entry.id)}
+                            arrived={!!arrivedIds?.has(entry.id)}
                             adapter={adapter}
                             draggable={draggable}
                             dragged={draggedIds.has(entry.id)}

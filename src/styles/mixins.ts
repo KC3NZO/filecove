@@ -1,3 +1,4 @@
+import { keyframes } from "@mui/material/styles";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 // `theme.vars` is set when the consumer's theme uses CSS variables; read tokens from it
@@ -67,6 +68,30 @@ export const dragMarkers = (theme: Theme) => ({
     },
 });
 
+/** How long an entry just uploaded is highlighted, in ms, its fade included. */
+export const ARRIVED_FOR = 2500;
+
+// Held for a moment, then faded away. A shadow inside the edge rather than a background, so it lies
+// over the row's own stripe, hover or selection, under its contents.
+const arrivedFade = keyframes`
+    0%, 40% { box-shadow: inset 0 0 0 100vmax var(--arrived-tint); }
+    100% { box-shadow: inset 0 0 0 100vmax transparent; }
+`;
+
+/**
+ * Highlights a row or tile whose entry was just uploaded, keyed off `data-arrived`, which is set for
+ * `ARRIVED_FOR`: an accent tint over whatever background it has, fading away, as it never changes
+ * the selection. Forced colors drop shadows, so it goes with `forcedArrived` under `forcedColors`.
+ */
+export const arrivedMarker = (theme: Theme) => {
+    const tokens = theme.vars || theme;
+
+    return {
+        "--arrived-tint": theme.alpha(tokens.palette.primary.main, `${tokens.palette.action.selectedOpacity} + 0.24`),
+        '&[data-arrived="true"]': { animation: `${arrivedFade} ${ARRIVED_FOR}ms ease-out` },
+    };
+};
+
 /** The outline every keyboard focus ring draws, inside the element's edge. */
 export const focusOutline = {
     outline: "2px solid",
@@ -102,6 +127,14 @@ export const forcedColors = "@media (forced-colors: active)";
  */
 export const forcedSelected = {
     '&[data-selected="true"]': { bgcolor: "Highlight", color: "HighlightText" },
+};
+
+/**
+ * A row or tile just uploaded (`data-arrived`), outlined in the system's selection colour for as
+ * long as it's highlighted. Goes under `forcedColors`.
+ */
+export const forcedArrived = {
+    '&[data-arrived="true"]': { outline: "2px solid Highlight", outlineOffset: "-2px" },
 };
 
 /** A pressed toggle button (`aria-pressed`) in the system's selection colour. Goes under `forcedColors`. */

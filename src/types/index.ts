@@ -56,6 +56,7 @@ export type {
     TreeRow,
 } from "./tree";
 export type {
+    Arrival,
     EntryLayout,
     EntryOrigin,
     FileViewProps,
