@@ -26,6 +26,7 @@ import type {
     FileManagerLocation,
     MainMenuGroup,
     OpenMenu,
+    PasteFiles,
     RunShortcut,
     SearchScope,
     Section,
@@ -71,6 +72,7 @@ interface SidebarProps {
     onNavigate: (place: FileManagerLocation) => void;
     onOpenMenu: OpenMenu;
     onShortcut: RunShortcut;
+    onPasteFiles: PasteFiles;
     onClose: () => void;
 }
 
@@ -236,6 +238,7 @@ const Sidebar = ({
     onNavigate,
     onOpenMenu,
     onShortcut,
+    onPasteFiles,
     onClose,
     onSearchEverywhere,
     mainMenu,
@@ -519,6 +522,7 @@ const Sidebar = ({
             onSelectSection={selectSection}
             onOpenMenu={onOpenMenu}
             onShortcut={onShortcut}
+            onPasteFiles={onPasteFiles}
         />
     );
 

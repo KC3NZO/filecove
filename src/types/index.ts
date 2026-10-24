@@ -25,7 +25,7 @@ export type { FolderState } from "./folder";
 export type { IconComponent, IconName, IconOverrides, IconSet, IconSource, IconVariant } from "./icon";
 export type { DownloadLocaleText, FileManagerLocaleText, Locale, UploadLocaleText } from "./locale";
 export type { MainMenuGroup, MainMenuItem } from "./main-menu";
-export type { MenuPosition, MenuRequest, OpenMenu, RunShortcut } from "./menu";
+export type { MenuPosition, MenuRequest, OpenMenu, PasteFiles, RunShortcut } from "./menu";
 export type { FileManagerLocation, LocationChangeReason } from "./navigation";
 export type { PreviewContent, PreviewKind, TextExcerpt } from "./preview";
 export type { FileManagerSearch, SearchHit, SearchScope, SearchTarget, SectionSearch } from "./search";

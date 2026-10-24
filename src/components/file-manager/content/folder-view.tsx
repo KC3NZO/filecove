@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { DragEvent, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
+import type { ClipboardEvent, DragEvent, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -46,6 +46,7 @@ import type {
     MenuPosition,
     MenuRequest,
     OpenMenu,
+    PasteFiles,
     RunShortcut,
     Section,
     SelectModifiers,
@@ -94,6 +95,8 @@ interface FolderViewProps {
     onOpenFile: (request: MenuRequest) => boolean;
     onOpenMenu: OpenMenu;
     onShortcut: RunShortcut;
+    /** Uploads files pasted from the system clipboard into the folder. */
+    onPasteFiles: PasteFiles;
     /**
      * Called once `revealId` has been selected, saying whether it takes the focus, or given up on,
      * with `false`.
@@ -207,6 +210,7 @@ const FolderView = ({
     onOpenFile,
     onOpenMenu,
     onShortcut,
+    onPasteFiles,
     onRevealed,
     onRevealUnmatched,
 }: FolderViewProps) => {
@@ -701,6 +705,9 @@ const FolderView = ({
     // "New folder" works with entries selected. The consumer's shortcuts come before the view's own
     // keys, so an action can take a key such as Enter. A control in the view, such as a column
     // header, keeps Enter and Space, and the view's own keys only work on the entries and the view.
+    // Files pasted from the system clipboard go into the open folder, where Ctrl+V pastes.
+    const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => onPasteFiles(event, section, trail);
+
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         const entryId = entryIdAt(event.target);
         const own = event.target === event.currentTarget || entryId !== undefined;
@@ -1036,6 +1043,7 @@ const FolderView = ({
             onFocus={handleFocus}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             onDragStart={handleDragStart}
             {...drop.handlers}
         >

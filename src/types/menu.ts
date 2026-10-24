@@ -1,6 +1,6 @@
 // Internal to the package, not exported from the package entry.
 
-import type { KeyboardEvent } from "react";
+import type { ClipboardEvent, KeyboardEvent } from "react";
 
 import type { ActionTarget } from "./action";
 import type { FileEntry } from "./adapter";
@@ -38,3 +38,9 @@ export type OpenMenu = (position: MenuPosition, request: MenuRequest) => boolean
  * selection and then the open folder. Returns false when none matched.
  */
 export type RunShortcut = (event: KeyboardEvent, requests: MenuRequest[]) => boolean;
+
+/**
+ * Uploads the files a paste carries (files copied on the desktop, a copied picture) into the
+ * folder at `trail`, when it takes uploads, and leaves any other paste to the browser.
+ */
+export type PasteFiles = (event: ClipboardEvent, section: Section, trail: FolderRef[]) => void;

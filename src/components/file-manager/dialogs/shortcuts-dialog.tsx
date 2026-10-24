@@ -27,6 +27,8 @@ interface ShortcutsDialogProps {
     choosesSections: boolean;
     /** Whether any section's adapter has `content`, without which nothing is previewed. */
     canPreview: boolean;
+    /** Whether any section takes uploads, without which nothing pasted is uploaded. */
+    canUpload: boolean;
     onClose: () => void;
     /** Called once it has faded out, to give the focus back. */
     onClosed: () => void;
@@ -59,13 +61,14 @@ interface SectionOptions {
     canSearchEverywhere: boolean;
     choosesSections: boolean;
     canPreview: boolean;
+    canUpload: boolean;
 }
 
 // Stands for any of the four arrows.
 const ARROWS = "Arrows";
 
 /** The file manager's own keys, as `keyboard.md` lists them, by where they work. */
-const ownSections = ({ text, rtl, canSearchEverywhere, choosesSections, canPreview }: SectionOptions) => {
+const ownSections = ({ text, rtl, canSearchEverywhere, choosesSections, canPreview, canUpload }: SectionOptions) => {
     // Back and forward, and expanding and collapsing, swap right to left, as the arrows on the
     // buttons and the chevrons are mirrored.
     const start = rtl ? "ArrowRight" : "ArrowLeft";
@@ -78,6 +81,9 @@ const ownSections = ({ text, rtl, canSearchEverywhere, choosesSections, canPrevi
                 { label: text.keyboardShortcuts, combos: [["Ctrl", "?"]] },
                 { label: text.shortcutToggleHidden, combos: [["Ctrl", "H"]] },
                 { label: text.shortcutContextMenu, combos: [["ContextMenu"], ["Shift", "F10"]] },
+                ...(canUpload
+                    ? [{ label: text.shortcutPasteFiles, combos: [["Ctrl", "V"], ["Shift", "Insert"]] }]
+                    : []),
             ],
         },
         {
@@ -300,6 +306,7 @@ const ShortcutsDialog = ({
     canSearchEverywhere,
     choosesSections,
     canPreview,
+    canUpload,
     onClose,
     onClosed,
 }: ShortcutsDialogProps) => {
@@ -310,7 +317,7 @@ const ShortcutsDialog = ({
     const rtl = dir === "rtl";
 
     const sections = useMemo(() => {
-        const own = ownSections({ text, rtl, canSearchEverywhere, choosesSections, canPreview });
+        const own = ownSections({ text, rtl, canSearchEverywhere, choosesSections, canPreview, canUpload });
         const theirs = consumerRows(actions, mainMenu);
         const taken = new Set(theirs.flatMap((row) => row.combos.map(comboId)));
         const shown = own.flatMap((section) => {
@@ -326,7 +333,7 @@ const ShortcutsDialog = ({
         });
 
         return theirs.length > 0 ? [...shown, { title: text.shortcutsActions, rows: theirs }] : shown;
-    }, [text, rtl, canSearchEverywhere, choosesSections, canPreview, actions, mainMenu]);
+    }, [text, rtl, canSearchEverywhere, choosesSections, canPreview, canUpload, actions, mainMenu]);
 
     // The list takes the focus once the dialog has faded in, so the arrows and Page Down scroll it.
     const slotProps = useMemo(

@@ -327,6 +327,8 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     shortcutsActions: string;
     shortcutContextMenu: string;
     shortcutToggleHidden: string;
+    /** Ctrl+V and Shift+Insert, uploading files copied on the desktop. */
+    shortcutPasteFiles: string;
     shortcutToggleSidebar: string;
     /** F6, between the sidebar tree and the content. */
     shortcutSwitchPane: string;
@@ -366,6 +368,7 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     keySpace: string;
     keyBackspace: string;
     keyDelete: string;
+    keyInsert: string;
     keyTab: string;
     keyHome: string;
     keyEnd: string;

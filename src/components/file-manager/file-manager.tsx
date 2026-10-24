@@ -30,12 +30,13 @@ import { visibleActionGroups } from "../../utils/action-groups";
 import { isolate } from "../../utils/bidi";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { canDownload, downloadedEntries } from "../../utils/download";
+import { filesIn } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
 import { importsFrom } from "../../utils/sections";
 import { sameSearch } from "../../utils/search";
 import { sameIds } from "../../utils/sets";
-import { matchesShortcut, pressedKeys, pressesKey, showsShortcuts, typesInField } from "../../utils/shortcut";
+import { matchesShortcut, pastes, pressedKeys, pressesKey, showsShortcuts, typesInField } from "../../utils/shortcut";
 import { DEFAULT_SORT, entryComparator, sameSort } from "../../utils/sort";
 import DownloadPanel from "../downloads/download-panel";
 import UploadPanel from "../uploads/upload-panel";
@@ -77,6 +78,7 @@ import type {
     MenuRequest,
     OpenMenu,
     RefreshOptions,
+    PasteFiles,
     RunShortcut,
     SearchScope,
     SearchTarget,
@@ -712,6 +714,14 @@ const FileManager = ({
     // Whether anything can be previewed, for the keyboard shortcuts to list the preview's keys.
     const canPreview = useMemo(
         () => sections.some((group) => group.sections.some((shown) => !!(shown.adapter ?? adapter).content)),
+        [sections, adapter],
+    );
+
+    const canUpload = useMemo(
+        () =>
+            sections.some((group) =>
+                group.sections.some((shown) => !!(shown.adapter ?? adapter).upload && (shown.acceptUploads ?? true)),
+            ),
         [sections, adapter],
     );
 
@@ -1438,6 +1448,25 @@ const FileManager = ({
         [offerUpload],
     );
 
+    // Files pasted from the system clipboard too, into the folder Ctrl+V pastes into, but never while
+    // entries cut or copied in the file manager can be pasted there, which come first. The page can't
+    // tell which was copied last. Ctrl+V only gets this far when no action took it (`runShortcut`);
+    // Shift+Insert always does.
+    const pasteFiles = useCallback<PasteFiles>(
+        (event, target, trail) => {
+            const served = target.adapter ?? adapter;
+            const ownFirst = clipboard && canPaste(clipboard, served, target, trail);
+            const upload =
+                event.clipboardData.types.includes("Files") && !ownFirst ? offerUpload(target, trail) : undefined;
+
+            if (upload) {
+                event.preventDefault();
+                upload(filesIn(event.clipboardData));
+            }
+        },
+        [adapter, clipboard, offerUpload],
+    );
+
     // Only opens from a click or key press, which an action's `onSelect` runs in.
     const pickFiles = useCallback((into: (dropped: DroppedFiles) => void) => {
         pickedInto.current = into;
@@ -1973,11 +2002,19 @@ const FileManager = ({
                         .flatMap((group) => group.actions)
                         .find((candidate) => candidate.shortcut && matchesShortcut(event, candidate.shortcut, key));
 
-                    if (action && !action.disabled?.(context)) {
-                        action.onSelect(context);
+                    if (!action) {
+                        return false;
                     }
 
-                    return !!action;
+                    // The paste key of a disabled action goes on to the browser, whose paste may
+                    // carry files from the desktop to upload (`pasteFiles`).
+                    if (action.disabled?.(context)) {
+                        return !pastes(event);
+                    }
+
+                    action.onSelect(context);
+
+                    return true;
                 }),
             ),
         [actions, contextFor],
@@ -2173,6 +2210,7 @@ const FileManager = ({
                                         onNavigate={navigateFromSidebar}
                                         onOpenMenu={openMenu}
                                         onShortcut={runShortcut}
+                                        onPasteFiles={pasteFiles}
                                         onClose={closeSidebar}
                                         onSearchEverywhere={searchEverywhere}
                                         mainMenu={mainMenu}
@@ -2280,6 +2318,7 @@ const FileManager = ({
                                                         onOpenFile={openFile}
                                                         onOpenMenu={openMenu}
                                                         onShortcut={runShortcut}
+                                                        onPasteFiles={pasteFiles}
                                                         onRevealed={handleRevealed}
                                                         onRevealUnmatched={closeSearch}
                                                     />
@@ -2383,6 +2422,7 @@ const FileManager = ({
                                     canSearchEverywhere={canSearchEverywhere}
                                     choosesSections={searchTargets.length > 1}
                                     canPreview={canPreview}
+                                    canUpload={canUpload}
                                     onClose={closeShortcuts}
                                     onClosed={handleShortcutsClosed}
                                 />

@@ -2,8 +2,9 @@ import { useContext, useEffect, useRef, useState } from "react";
 import type { DragEvent } from "react";
 
 import { DragContext } from "../contexts/drag-context";
+import { filesIn } from "../utils/files";
 
-import type { DroppedFiles, DropTarget } from "../types";
+import type { DropTarget } from "../types";
 
 interface DropTargetOptions {
     /**
@@ -35,32 +36,6 @@ const copies = (event: DragEvent) => event.ctrlKey || event.altKey;
  * be told before the drop, not what they are.
  */
 export const carriesFiles = (event: DragEvent) => event.dataTransfer.types.includes("Files");
-
-/**
- * The files dropped, read while the drop event lasts. Folders show up among the files too, as
- * empty ones, so they're told apart by their entry and only named.
- */
-const droppedFiles = (data: DataTransfer): DroppedFiles => {
-    const files: File[] = [];
-    const folders: string[] = [];
-
-    Array.from(data.items).forEach((item) => {
-        if (item.kind !== "file") {
-            return;
-        }
-
-        const entry = item.webkitGetAsEntry();
-        const file = item.getAsFile();
-
-        if (entry?.isDirectory) {
-            folders.push(entry.name);
-        } else if (file) {
-            files.push(file);
-        }
-    });
-
-    return { files, folders };
-};
 
 /**
  * Takes drops on a whole view whose `targetsAt` finds the folder under the pointer, or on a single
@@ -107,7 +82,7 @@ export const useDropTarget = ({ targetsAt, onHold }: DropTargetOptions) => {
                 const upload = drag?.uploadInto(target);
 
                 if (upload) {
-                    return { key: target.key, run: () => upload(droppedFiles(event.dataTransfer)) };
+                    return { key: target.key, run: () => upload(filesIn(event.dataTransfer)) };
                 }
             }
         }

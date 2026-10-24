@@ -1,5 +1,13 @@
 import { memo, useContext } from "react";
-import type { CSSProperties, DOMAttributes, DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type {
+    ClipboardEvent,
+    CSSProperties,
+    DOMAttributes,
+    DragEvent,
+    KeyboardEvent,
+    MouseEvent,
+    ReactNode,
+} from "react";
 
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -40,6 +48,7 @@ import type {
     FolderRow,
     MenuPosition,
     OpenMenu,
+    PasteFiles,
     RunShortcut,
     SectionRow,
     SelectModifiers,
@@ -68,6 +77,7 @@ interface TreeProps {
     onSelectSection: (key: string) => void;
     onOpenMenu: OpenMenu;
     onShortcut: RunShortcut;
+    onPasteFiles: PasteFiles;
 }
 
 interface TreeRowItemProps extends TreeProps {
@@ -127,6 +137,8 @@ interface TreeItemProps {
     onMenu: (position: MenuPosition) => boolean;
     /** Runs the action whose shortcut the key press matches; returns whether one did. */
     onShortcut: (event: KeyboardEvent) => boolean;
+    /** Uploads files pasted from the system clipboard into its folder. */
+    onPaste: (event: ClipboardEvent) => void;
 }
 
 /*
@@ -314,6 +326,7 @@ const TreeItem = ({
     onToggle,
     onMenu,
     onShortcut,
+    onPaste,
 }: TreeItemProps) => {
     const isSection = variant === "section";
     const { expandable, expanded, loading } = row;
@@ -369,6 +382,13 @@ const TreeItem = ({
         event.preventDefault();
     };
 
+    // Only a paste on the item itself acts on it, as with a key press.
+    const handlePaste = (event: ClipboardEvent<HTMLLIElement>) => {
+        if (event.target === event.currentTarget) {
+            onPaste(event);
+        }
+    };
+
     return (
         <Box
             component="li"
@@ -386,6 +406,7 @@ const TreeItem = ({
             aria-busy={loading || undefined}
             data-tree-key={row.id}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
         >
             <Box
                 sx={rowSx}
@@ -484,6 +505,7 @@ const FolderItem = memo(
         onSelectFolder,
         onOpenMenu,
         onShortcut,
+        onPasteFiles,
     }: FolderItemProps) => {
         const { id: key, section, entry, parentTrail, trail, siblings, siblingKeys, expandable, expanded } = row;
         const cutIds = useCutIds(section);
@@ -572,6 +594,7 @@ const FolderItem = memo(
                 onToggle={() => onToggle(key)}
                 onMenu={handleMenu}
                 onShortcut={handleShortcut}
+                onPaste={(event) => onPasteFiles(event, section, trail)}
             />
         );
     },
@@ -592,6 +615,7 @@ const SectionItem = memo(
         onSelectSection,
         onOpenMenu,
         onShortcut,
+        onPasteFiles,
     }: SectionItemProps) => {
         const { id: key, section, expandable, expanded } = row;
 
@@ -628,6 +652,7 @@ const SectionItem = memo(
                 onToggle={() => onToggle(key)}
                 onMenu={handleMenu}
                 onShortcut={handleShortcut}
+                onPaste={(event) => onPasteFiles(event, section, ROOT_TRAIL)}
             />
         );
     },

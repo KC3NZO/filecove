@@ -31,6 +31,14 @@ export const pressesKey = (event: Pick<KeyboardEvent, "key" | "code">, key: stri
     pressedKeys(event).includes(key);
 
 /**
+ * Whether a key press is the browser's paste, which fires a `paste` event unless it's prevented:
+ * Ctrl+V or ⌘V, the key marked V on any layout, or Shift+Insert.
+ */
+export const pastes = (event: KeyboardEvent) =>
+    ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && pressesKey(event, "v")) ||
+    (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && event.key === "Insert");
+
+/**
  * Whether a key press, taken as `key` (one of its `pressedKeys`), matches a shortcut written as
  * menus show it, e.g. "Shift+Ctrl+N", "F2", "Delete" or "Space". Ctrl also matches ⌘, so the same
  * shortcut works on macOS.
@@ -104,6 +112,7 @@ export const keyLabel = (key: string, text: FileManagerLocaleText) => {
         space: text.keySpace,
         backspace: text.keyBackspace,
         delete: text.keyDelete,
+        insert: text.keyInsert,
         tab: text.keyTab,
         home: text.keyHome,
         end: text.keyEnd,
