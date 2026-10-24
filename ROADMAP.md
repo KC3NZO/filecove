@@ -44,22 +44,24 @@ What's left in the features already built, what packaging needs before a release
 - [x] **new:** The file picker has no `accept` setting, so an app can't limit file types. *Done 2026-10-24: `Section.acceptUploads` takes a string in `accept`'s syntax, offered by the picker, checked for picked, dropped and pasted files, which the upload check leaves out saying which types the section takes, and refused while dragging when the files' types surely don't match. Folders have no rule of their own, by choice (see `uploads.md`).*
 
 ### Preview
-- [ ] The app's own actions in the preview's header.
-- [ ] Sliding animation when stepping with the buttons or keys.
-- [ ] Swiping on past the edge of a zoomed image.
-- [ ] Safari's touchpad pinch (it sends `gesturechange`).
-- [ ] Momentum when panning by touch, and animated zoom steps.
-- [ ] Rotating images and full screen.
-- [ ] Fonts.
-- [ ] A way for the app to plug in its own previewer per file type (highlighted code, rendered Markdown, office documents, archive contents), rather than building those in, which would add heavy dependencies to the package.
+- [x] The app's own actions in the preview's header. *Done 2026-10-24: `previewActions`, as an `ActionContext` for the file shown with `closePreview`, as buttons (four with icons) and a "More actions" menu, all in the menu on a narrow screen, their shortcuts working in the preview; Rename, Delete and Move open over the preview, which follows what they did, and what they announce is said from inside it.*
+- [x] Sliding animation when stepping with the buttons or keys. *Done 2026-10-24: the file slides in from its side as a swipe's does, and Home and End go to the first and last file.*
+- [x] Swiping on past the edge of a zoomed image. *Done 2026-10-24: the finger pans the image to its edge, and the swipe takes the rest of the way.*
+- [x] Safari's touchpad pinch (it sends `gesturechange`). *Done 2026-10-24: gesture events zoom as Ctrl+wheel does elsewhere, and are left alone on a touch screen, whose pointers zoom already.*
+- [x] Momentum when panning by touch, and animated zoom steps. *Done 2026-10-24: a flicked image glides on, slowing, until an edge; zoom steps, turns and arrow pans animate over 200 ms, unless motion is reduced.*
+- [x] Rotating images and full screen. *Done 2026-10-24: R and Shift+R, and two buttons, turn an image a quarter, keeping its zoom; F and a header button fill the window and, through the Fullscreen API, the screen, with the page so menus and dialogs over the preview still show.*
+- [x] Fonts. *Done 2026-10-24: TTF, OTF, WOFF and WOFF2, loaded with `FontFace`, shown as a specimen of characters and a sample at six sizes, in the language's own script from the text.*
+- [x] A way for the app to plug in its own previewer per file type (highlighted code, rendered Markdown, office documents, archive contents), rather than building those in, which would add heavy dependencies to the package. *Done 2026-10-24: `previewers`, each with `accepts`, `reads` ("content", "text" or "none", loaded ahead like the preview's own) and `render`, inside `Suspense` and an error boundary; the playground renders Markdown, CSV and zips.*
+- [x] **new:** The text preview stops at 256 kB, reads only UTF-8, and PDFs show nothing on a browser without a PDF viewer. *Done 2026-10-24: Show more reads as much again each time; UTF-16 with its byte order mark and Windows-1252 are decoded; a browser without a viewer gets "Open in a new tab".*
+- [x] **new:** A file renamed, deleted or moved while it's previewed, or replaced under the same id, kept showing as it was. *Done 2026-10-24: the preview follows its folder's listing and the file manager's changes, showing the next file in the place of one that went, and closing with none left; contents are kept by id, size and date.*
 
 ### Properties
 - [ ] Editing fields (an adapter `updateProperties`, for the media manager's alt text and caption; fields already carry an `id` for it), designed with the media manager's contract.
-- [ ] The app's own actions in the panel's header, designed together with the preview's.
+- [x] The app's own actions in the panel's header, designed together with the preview's. *Done 2026-10-24: `propertiesActions`, for its entries or the folder it shows, through the same `ToolbarActions` as the preview's, two as buttons, their shortcuts working in the panel.*
 - [ ] Tabs (activity, versions, sharing), a picture larger than the grid's thumbnail, and resizing the docked panel.
 
 ### Thumbnails
-- [ ] A thumbnail in the preview while the file loads. (The sidebar tree and the Move/Copy picker show only folders, so they have no thumbnails to show.)
+- [x] A thumbnail in the preview while the file loads. (The sidebar tree and the Move/Copy picker show only folders, so they have no thumbnails to show.) *Done 2026-10-24: the grid's thumbnail stands where the file will be, under the spinner, sized as the image will be when the listing says; it's a video's poster, and the picture of a file with no preview, such as a TIFF.*
 - [ ] Square cropping, and a frame around pictures.
 
 ### Search
@@ -124,4 +126,4 @@ What's left in the features already built, what packaging needs before a release
 
 ## Left out by choice
 
-Not gaps: tests, a built-in editor, keyboard drag and drop, renaming in place, a built-in trash (an app builds one from `move` and a section of its own), modal dialogs for background work, resuming an upload after a reload (the browser no longer has the files, and resuming partway is the backend's upload protocol), upload types per folder (a section rooted there, or the adapter's `upload`, covers it), and `onClipboardChange` until a consumer needs it (see "Internal by choice" in `props.md`).
+Not gaps: tests, a built-in editor, previewers for other kinds built into the package (an app plugs them in through `previewers`), saving an image turned in the preview, keyboard drag and drop, renaming in place, a built-in trash (an app builds one from `move` and a section of its own), modal dialogs for background work, resuming an upload after a reload (the browser no longer has the files, and resuming partway is the backend's upload protocol), upload types per folder (a section rooted there, or the adapter's `upload`, covers it), and `onClipboardChange` until a consumer needs it (see "Internal by choice" in `props.md`).

@@ -5,7 +5,6 @@ paths:
   - "src/types/icon.ts"
   - "src/contexts/icon-context.ts"
   - "src/hooks/use-icon-config.ts"
-  - "src/components/file-manager/icon-slot.tsx"
 ---
 
 # Icons
@@ -28,9 +27,11 @@ The icon variant (`filled`, `outlined`, `rounded`, `sharp`, `twoTone`) is chosen
 - `<Icon name variant?>` renders from that context, and its `variant` prop overrides the provider for that icon only.
 - The context and its default variant, `outlined` (`DEFAULT_ICON_VARIANT`), are in `contexts/icon-context.ts`. Components read it with `useIconConfig` (`hooks/use-icon-config.ts`).
 
+`IconSlot` (`components/icons/icon-slot.tsx`) renders an `IconSource` in a 1.25rem box: a name through `Icon`, or the consumer's element fitted to it, for sections, actions and main menu items wherever they show.
+
 ## Mirrored right to left
 
-`Icon` mirrors the names in `MIRRORED` on a right-to-left page (`scale: -1 1` under `:dir(rtl)`): back and forward, the chevrons, `move` and `selectMode`, the icons that point the way the text runs, and a consumer's overrides of them too. A new icon with a direction to it goes in that set. See `rtl.md`.
+`Icon` mirrors the names in `MIRRORED` on a right-to-left page (`scale: -1 1` under `:dir(rtl)`): back and forward, the chevrons, `move` and `selectMode`, the icons that point the way the text runs, and a consumer's overrides of them too. A new icon with a direction to it goes in that set; `rotateLeft` and `rotateRight` (counterclockwise and clockwise) don't, as a turn is the same either way. See `rtl.md`.
 
 ## Adding an icon
 

@@ -1,5 +1,6 @@
 ---
 paths:
+  - "src/components/file-manager/dialogs/preview-dialog.tsx"
   - "src/components/file-manager/content/item-icon.tsx"
   - "src/components/file-manager/content/file-list.tsx"
   - "src/components/file-manager/content/file-grid.tsx"
@@ -41,11 +42,12 @@ The list and the grid show a file's thumbnail in place of its type icon when the
 - `alt=""`, since the name is beside it.
 - The views pass the folder's adapter down (`FileViewProps.adapter`). The drag preview passes no `view`, so it keeps the icon; a picture not yet decoded wouldn't make it into the drag image.
 - The properties panel shows the grid's thumbnail (`useThumbnail` with the grid's view and size), grown to fill a slightly larger box, so it asks the adapter for nothing more and may look slightly soft (see `properties.md`).
+- The preview shows the grid's thumbnail the same way: in the file's place while it loads, under the spinner, sized as the image will be when the listing says its size (`FileEntry.media`); as a video's poster; and, larger, for a file it has no preview of, such as a TIFF, in place of the type icon (see "While a file loads" in `preview.md`). Text, fonts and audio don't ask for one.
 
 ## The playground
 
-The mock adapter's `thumbnail` makes thumbnails from the same made-up pictures as its contents (`thumbnailSource` in `mock-content.ts`): the landscapes without the name, the logos, and a page drawn for PDFs. Uploaded pictures use their own bytes. Each is shrunk to `size` as a PNG on a canvas (`shrink`), as a backend making them to order would. Files with none answer null at once, and the rest take the simulated latency. `archive` mixes PNGs, SVGs and PDFs among its 10,000 files, for scrolling through many, and `docs/contract.pdf` fails and keeps its icon.
+The mock adapter's `thumbnail` makes thumbnails from the same made-up pictures as its contents (`thumbnailSource` in `mock-content.ts`): the landscapes without the name, for pictures the browser can't draw too (TIFF, HEIC, PSD, as Design assets' `print-proof.tiff`), the logos, and a page drawn for PDFs. Uploaded pictures use their own bytes. Each is shrunk to `size` as a PNG on a canvas (`shrink`), as a backend making them to order would. Files with none answer null at once, and the rest take the simulated latency. `archive` mixes PNGs, SVGs and PDFs among its 10,000 files, for scrolling through many, and `docs/contract.pdf` fails and keeps its icon.
 
 ## Not yet
 
-A thumbnail in the preview as a placeholder while the file loads, a bigger icon size for a grid of pictures (grid zoom levels, an optional idea in the roadmap), cropping to a square, and a frame around pictures, which would need telling transparent ones, such as logos, apart.
+A bigger icon size for a grid of pictures (grid zoom levels, an optional idea in the roadmap), cropping to a square, and a frame around pictures, which would need telling transparent ones, such as logos, apart.

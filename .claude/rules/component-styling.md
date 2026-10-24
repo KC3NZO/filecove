@@ -14,6 +14,8 @@ The component adapts to the box it is placed in, not the viewport. `src/styles/l
 - The root (`rootMedium`, `rootWide`, `rootExtraWide`). At `rootWide` (900px or wider) the sidebar docks, unless it's hidden (`data-hidden`, with the frame's `data-sidebar-hidden` giving the panels back their margin on its side); below it, the sidebar is an in-component overlay. At `rootExtraWide` (1100px or wider) the properties dock on the content's other side, while shown (`data-shown`); below it, they're an overlay too (see `properties.md`).
 - The content view (`viewMedium`, `viewWide`), which decides which list columns show.
 
+The preview portals out of the root, where its queries don't reach, so its header and its image are containers of their own (`PREVIEW_HEADER_CONTAINER` with `previewHeaderMedium` and `previewHeaderWide`, `PREVIEW_IMAGE_CONTAINER` with `previewImageWide`; see `preview.md`).
+
 Use these constants as `sx` keys. Don't use `theme.breakpoints` or `useMediaQuery` inside the component. The one exception is `@media (hover: none)`, which detects a touch device rather than a size (it shows the header's Select button).
 
 ## Right to left: logical properties

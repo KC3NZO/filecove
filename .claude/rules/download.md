@@ -15,7 +15,7 @@ paths:
 
 # Downloading
 
-`ActionContext.download()` saves the context's entries on the user's device, or with none, the context's folder itself, so a folder's empty space, the path bar's menu and a section row's download the open folder or the section's root. The preview's Download button saves the file shown, and `FileManagerApi.download(entries?, location?)` does the same from outside, e.g. a consumer's own toolbar (see "From outside"). The consumer places and labels the action, as with every other one (the playground's "Download", for both targets, with no shortcut).
+`ActionContext.download()` saves the context's entries on the user's device, or with none, the context's folder itself, so a folder's empty space, the path bar's menu and a section row's download the open folder or the section's root. The preview's Download button, in its header's "More actions" menu on a narrow screen, saves the file shown, and `FileManagerApi.download(entries?, location?)` does the same from outside, e.g. a consumer's own toolbar (see "From outside"). The consumer places and labels the action, as with every other one (the playground's "Download", for both targets, with no shortcut).
 
 Downloads are prepared in the background while the user browses, never in a modal. Once the browser has the file, its own downloads show the progress.
 
