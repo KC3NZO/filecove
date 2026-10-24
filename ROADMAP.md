@@ -6,7 +6,7 @@ What's left in the features already built, what packaging needs before a release
 
 1. ~~Re-list a folder in the background when it opens, showing the cached listing meanwhile, with a prop to turn it off (A, "Folder data and cache").~~ Done 2026-10-23.
 2. ~~Tooltips on icon-only buttons, selection that shows in Windows High Contrast mode, and screen-reader announcements when operations finish (A, "Interface polish" and "Operations").~~ Done 2026-10-23.
-3. Properties, then folder upload (C).
+3. Properties, then ~~folder upload~~ (C). Folder upload done 2026-10-24.
 4. Packaging, in one pass before a release (B).
 
 ## A. Gaps in features already built
@@ -34,7 +34,9 @@ What's left in the features already built, what packaging needs before a release
 - [ ] Touch dragging.
 
 ### Uploads
-- [ ] Uploading folders (planned, C.2).
+- [x] Uploading folders (planned, C.2). *Done 2026-10-24: dropped, pasted or picked (`ActionContext.uploadFolder`) folders are uploaded with everything in them, through the adapter's `createFolder` and `upload`, one row each in the panel, and a folder whose name is taken is merged into the one there, kept both under a free name, or skipped.*
+- [ ] **new:** A folder's row in the upload panel doesn't list its files, nor which of them failed and why beyond the first error.
+- [ ] **new (minor):** Cancelling while a folder of an upload is being made can leave it made without the queue knowing, and Retry then fails, as its name is taken.
 - [x] Pasting files from the system clipboard. *Done 2026-10-23: Ctrl+V, ⌘V or Shift+Insert in the content or on a tree row uploads them there, unless the file manager's own cut or copied entries can be pasted there, which come first. The menu's Paste can't (reading the clipboard from a click needs permission), and what a browser hands over from the desktop differs by browser and system.*
 - [x] A way for a section to refuse uploads. *Done 2026-10-23: `Section.acceptUploads: false` takes no uploads, by the picker or by dropping, in any of the section's folders. It goes by the section, as `importFrom` does.*
 - [ ] Showing which files just arrived: "Show in folder" on a finished upload in the panel, and a brief highlight in the open folder, never a change to the selection.
@@ -97,7 +99,7 @@ What's left in the features already built, what packaging needs before a release
 
 ### Planned, in order
 1. [ ] Properties, designed together with the media manager's details panel.
-2. [ ] Folder upload.
+2. [x] Folder upload. *Done 2026-10-24 (see A, "Uploads").*
 3. [ ] A pick mode (filter by type, a Choose button).
 4. [ ] The media manager, after its contract is designed on paper.
 5. [ ] List columns from `FileEntry.meta`.
