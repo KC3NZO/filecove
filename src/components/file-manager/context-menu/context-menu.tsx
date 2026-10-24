@@ -11,6 +11,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
+import { insetLabelSx } from "../../../styles/direction";
 import { menuPaperSx } from "../../../styles/mixins";
 import { ariaShortcut } from "../../../utils/shortcut";
 import IconSlot from "../icon-slot";
@@ -31,9 +32,8 @@ interface ContextMenuProps {
     onClose: () => void;
 }
 
-// A label without an icon is inset, which MUI does with a `padding-left`.
 const itemSx: SxProps<Theme> = {
-    "& .MuiListItemText-inset": { paddingLeft: 0, paddingInlineStart: "36px" },
+    ...insetLabelSx,
     '&[data-destructive="true"]': {
         color: "error.main",
         "& .MuiListItemIcon-root": { color: "inherit" },

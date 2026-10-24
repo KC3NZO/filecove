@@ -32,6 +32,10 @@ interface HeaderBarProps {
     sidebarHidden: boolean;
     /** Whether the sidebar docks at the moment, rather than collapsing, as container queries decide. */
     sidebarDocked: () => boolean;
+    /** Whether the docked properties show. */
+    propertiesOpen: boolean;
+    /** Whether the properties dock at the moment, rather than opening over the content. */
+    propertiesDocked: () => boolean;
     onBack: () => void;
     onForward: () => void;
     onToggleView: () => void;
@@ -44,6 +48,10 @@ interface HeaderBarProps {
     onShowSidebar: () => void;
     /** Hides or shows the docked sidebar. */
     onToggleSidebar: () => void;
+    /** Shows or hides the docked properties. */
+    onToggleProperties: () => void;
+    /** Opens the properties over the content, giving the focus back to `opener` as they close. */
+    onOpenProperties: (opener: HTMLElement | null) => void;
     /** The button that shows the sidebar, which takes the focus back when the overlay closes. */
     sidebarButtonRef?: Ref<HTMLButtonElement>;
 }
@@ -147,6 +155,8 @@ const HeaderBar = ({
     canSearchEverywhere,
     sidebarHidden,
     sidebarDocked,
+    propertiesOpen,
+    propertiesDocked,
     onBack,
     onForward,
     onToggleView,
@@ -156,6 +166,8 @@ const HeaderBar = ({
     onSearch,
     onShowSidebar,
     onToggleSidebar,
+    onToggleProperties,
+    onOpenProperties,
     sidebarButtonRef,
 }: HeaderBarProps) => {
     const { text } = useLocale();
@@ -226,9 +238,13 @@ const HeaderBar = ({
                     showHidden={showHidden}
                     sidebarHidden={sidebarHidden}
                     sidebarDocked={sidebarDocked}
+                    propertiesOpen={propertiesOpen}
+                    propertiesDocked={propertiesDocked}
                     onSortChange={onSortChange}
                     onToggleHidden={onToggleHidden}
                     onToggleSidebar={onToggleSidebar}
+                    onToggleProperties={onToggleProperties}
+                    onOpenProperties={onOpenProperties}
                 />
             </Box>
         </Box>

@@ -450,7 +450,7 @@ const ErrorItem = ({ row }: ErrorItemProps) => {
     const retry = () => store.load(folderKey(section.id, folderId), section.adapter ?? adapter, folderId, true);
 
     const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+        if (event.target === event.currentTarget && !event.altKey && (event.key === "Enter" || event.key === " ")) {
             event.preventDefault();
             retry();
         }

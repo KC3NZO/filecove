@@ -111,6 +111,7 @@ const App = () => {
     const [sort, setSort] = useStoredState<SortOrder>("sort", { key: "name", direction: "asc" });
     const [showHidden, setShowHidden] = useStoredState("showHidden", false);
     const [sidebarHidden, setSidebarHidden] = useStoredState("sidebarHidden", false);
+    const [propertiesOpen, setPropertiesOpen] = useStoredState("propertiesOpen", false);
     // The section the playground opens in starts expanded, as it does when the file manager keeps it.
     const [expandedFolders, setExpandedFolders] = useStoredState<SectionFolder[]>("expandedFolders", () =>
         shownSections
@@ -158,6 +159,16 @@ const App = () => {
         }
     };
 
+    // Shows the selection's properties, or with nothing selected, the open folder's, as a toolbar of an
+    // app's own would, through the same panel as the context menu's Properties.
+    const showProperties = () => {
+        const context = selected
+            ? apiRef.current?.actionContext(selection.entries, selection.location)
+            : apiRef.current?.actionContext();
+
+        context?.properties();
+    };
+
     // Makes a folder in the open folder, as a toolbar of an app's own would, through the same name
     // dialog as the context menu's New folder.
     const createFolder = () => {
@@ -198,6 +209,7 @@ const App = () => {
               defaultSort: sort,
               defaultShowHidden: showHidden,
               defaultSidebarHidden: sidebarHidden,
+              defaultPropertiesOpen: propertiesOpen,
               defaultExpandedFolders: expandedFolders,
               defaultSearchExcludedSections: searchExcluded,
           }
@@ -212,6 +224,8 @@ const App = () => {
               onShowHiddenChange: setShowHidden,
               sidebarHidden,
               onSidebarHiddenChange: setSidebarHidden,
+              propertiesOpen,
+              onPropertiesOpenChange: setPropertiesOpen,
               expandedFolders,
               onExpandedFoldersChange: setExpandedFolders,
               search,
@@ -249,6 +263,9 @@ const App = () => {
                 </Button>
                 <Button size="small" color="inherit" onClick={createFolder}>
                     New folder
+                </Button>
+                <Button size="small" color="inherit" onClick={showProperties}>
+                    Properties
                 </Button>
                 <Button size="small" color="inherit" onClick={searchFor}>
                     Search "record"

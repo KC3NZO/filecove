@@ -24,8 +24,9 @@ import { useStableSet } from "../../hooks/use-stable-set";
 import { useTextDirection } from "../../hooks/use-text-direction";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { createFolderStore, folderKey, keyFolder } from "../../store/folder-store";
+import { createPropertiesCache } from "../../store/properties-cache";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
-import { ROOT_CONTAINER, VIEW_CONTAINER, rootWide } from "../../styles/layout";
+import { ROOT_CONTAINER, VIEW_CONTAINER, rootExtraWide, rootWide } from "../../styles/layout";
 import { withSx } from "../../styles/sx";
 import { visibleActionGroups } from "../../utils/action-groups";
 import { isolate } from "../../utils/bidi";
@@ -65,6 +66,7 @@ import DragPreview from "./drag-preview";
 import HeaderBar from "./header-bar/header-bar";
 import PathBar from "./header-bar/path-bar";
 import SearchField from "./header-bar/search-field";
+import PropertiesPane from "./properties-pane";
 import Sidebar from "./sidebar/sidebar";
 
 import type {
@@ -90,7 +92,9 @@ import type {
     OpenMenu,
     RefreshOptions,
     PasteFiles,
+    PropertiesSubject,
     RunShortcut,
+    SearchHit,
     SearchScope,
     SearchTarget,
     Section,
@@ -201,6 +205,20 @@ interface BaseProps extends RootAttributes {
      * it's hidden, the header's "Show sidebar" button.
      */
     onSidebarHiddenChange?: (sidebarHidden: boolean) => void;
+    /**
+     * Whether the properties panel shows beside the content while there's room to dock it, for a
+     * consumer that keeps it. It shows the content's selection, or the open folder while nothing is
+     * selected, and follows the selection. Narrower, it opens over the content instead, with
+     * Alt+Enter, the view options menu or `ActionContext.properties`, and closes as the user moves on.
+     */
+    propertiesOpen?: boolean;
+    /** Whether the docked properties show at first, when the file manager keeps it; false when omitted. */
+    defaultPropertiesOpen?: boolean;
+    /**
+     * Told when the user shows or hides the docked properties, with Alt+Enter, the view options menu,
+     * the panel's close button or `ActionContext.properties`.
+     */
+    onPropertiesOpenChange?: (propertiesOpen: boolean) => void;
     /**
      * Folders expanded in the sidebar tree, for a consumer that keeps them, e.g. across reloads. A
      * section's own row is its root folder. Only the chevrons, Right and Left on a row, and a drag
@@ -356,13 +374,23 @@ interface ToldSelection {
     entries: FileEntry[];
 }
 
+/** The content's selection as its folder view reports it, with the `folderKey` of its folder. */
+interface ShownSelection {
+    key: string | null;
+    ids: ReadonlySet<string>;
+    entries: FileEntry[];
+}
+
 const NO_ACTIONS: ActionGroup[] = [];
 const NO_MAIN_MENU: MainMenuGroup[] = [];
 const NO_TRAIL: FolderRef[] = [];
 const NO_IDS: ReadonlySet<string> = new Set();
 const NO_ENTRIES: FileEntry[] = [];
 const NOTHING_TOLD: ToldSelection = { ids: NO_IDS, entries: NO_ENTRIES };
+const NOTHING_SHOWN: ShownSelection = { key: null, ids: NO_IDS, entries: NO_ENTRIES };
 const NO_ARRIVALS: readonly Arrival[] = [];
+const NO_HITS: SearchHit[] = [];
+const NO_SUBJECT: PropertiesSubject = { kind: "none" };
 
 /**
  * How long what an upload just put in a folder waits for a folder view to show it, in ms, as the
@@ -375,6 +403,24 @@ const sameEntries = (a: FileEntry[], b: FileEntry[]) =>
 
 const folderIdsOf = (entries: FileEntry[]) =>
     entries.filter((entry) => entry.kind === "folder").map((entry) => entry.id);
+
+const sameKeys = (a: readonly SearchHit[], b: readonly SearchHit[]) =>
+    a.length === b.length && a.every((hit, index) => hit.key === b[index].key);
+
+/** What a menu was opened on, for the properties: its entries, or with none, its folder itself. */
+const subjectOf = ({ section, trail, entries, inResults }: MenuRequest): PropertiesSubject =>
+    entries.length > 0
+        ? { kind: "entries", inResults: !!inResults, entries: entries.map((entry) => ({ entry, section, trail })) }
+        : { kind: "folder", section, trail };
+
+/** Whether the sections a subject names are still the file manager's, as they were. */
+const subjectHolds = (subject: PropertiesSubject, sectionsById: ReadonlyMap<string, Section>) => {
+    if (subject.kind === "folder") {
+        return sectionsById.get(subject.section.id) === subject.section;
+    }
+
+    return subject.kind === "none" || subject.entries.every(({ section }) => sectionsById.get(section.id) === section);
+};
 
 // While entries are dragged, the backdrop of the overlay sidebar lets drops through to the content,
 // so a folder dragged out of the sidebar can land there.
@@ -415,7 +461,30 @@ const backdropSx: SxProps<Theme> = {
     [rootWide]: { display: "none" },
 };
 
+// Behind the properties' overlay, which docks from `rootExtraWide`.
+const propertiesBackdropSx: SxProps<Theme> = {
+    position: "absolute",
+    zIndex: 1,
+    [rootExtraWide]: { display: "none" },
+};
+
 const mainSx: SxProps<Theme> = {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    minWidth: 0,
+};
+
+// Under the header bar: the content with the panels under it, and the docked properties beside
+// them. Not positioned, so the properties' overlay covers the file manager from top to bottom, as
+// the sidebar's does.
+const bodySx: SxProps<Theme> = {
+    display: "flex",
+    flex: 1,
+    minHeight: 0,
+};
+
+const columnSx: SxProps<Theme> = {
     display: "flex",
     flexDirection: "column",
     flex: 1,
@@ -502,6 +571,9 @@ const FileManager = ({
     sidebarHidden: sidebarHiddenProp,
     defaultSidebarHidden = false,
     onSidebarHiddenChange,
+    propertiesOpen: propertiesOpenProp,
+    defaultPropertiesOpen = false,
+    onPropertiesOpenChange,
     expandedFolders: expandedFoldersProp,
     defaultExpandedFolders,
     onExpandedFoldersChange,
@@ -531,6 +603,7 @@ const FileManager = ({
     const localeValue = useLocaleValue(localeText, locale);
     const [store] = useState(createFolderStore);
     const [thumbnails] = useState(createThumbnailCache);
+    const [propertiesCache] = useState(createPropertiesCache);
     const data = useMemo(() => ({ store, adapter, thumbnails, relistAfter }), [store, adapter, thumbnails, relistAfter]);
 
     useEffect(() => () => store.abortAll(), [store]);
@@ -661,6 +734,18 @@ const FileManager = ({
         defaultValue: defaultSidebarHidden,
         onChange: onSidebarHiddenChange,
     });
+    // Whether the docked properties show, with Alt+Enter or the view menu. Collapsed, they show as an
+    // overlay instead, while `propertiesOverlay`.
+    const [propertiesOpen, setPropertiesOpen] = useSetting({
+        name: "propertiesOpen",
+        value: propertiesOpenProp,
+        defaultValue: defaultPropertiesOpen,
+        onChange: onPropertiesOpenChange,
+    });
+    const [propertiesOverlay, setPropertiesOverlay] = useState(false);
+    // What the properties show in place of the selection, as `ActionContext.properties` asked, until
+    // the selection or the location changes.
+    const [pinned, setPinned] = useState<PropertiesSubject | null>(null);
     const [view, setView] = useSetting({
         name: "view",
         value: viewProp,
@@ -709,6 +794,9 @@ const FileManager = ({
     // Handed to what portals out of the file manager, so it runs the same way (`DirectionContext`).
     const direction = useTextDirection(rootRef);
     const panelRef = useRef<HTMLDivElement>(null);
+    const paneRef = useRef<HTMLDivElement>(null);
+    // What had the focus when the properties' overlay opened, which gets it back as the overlay closes.
+    const propertiesOpener = useRef<HTMLElement | null>(null);
     const sidebarRef = useRef<HTMLDivElement>(null);
     const sidebarButtonRef = useRef<HTMLButtonElement>(null);
     // What had the focus when the overlay sidebar opened, which gets it back as the overlay closes.
@@ -724,6 +812,15 @@ const FileManager = ({
             setFocusContent(false);
         }
     }, [focusContent]);
+
+    // Asks the properties to take the focus, for one render, as the context menu's Properties or F6 does.
+    const [focusProperties, setFocusProperties] = useState(false);
+
+    useEffect(() => {
+        if (focusProperties) {
+            setFocusProperties(false);
+        }
+    }, [focusProperties]);
 
     // What the search field in the path bar's place searches, the open folder or every section,
     // or null while it isn't there, and what's typed in it, which the consumer may control. A
@@ -810,6 +907,33 @@ const FileManager = ({
 
     const searchedFor = query.trim();
     const showsResults = searchScope === "everywhere" && searchedFor !== "" && searchedTargets.length > 0;
+
+    // A search everywhere's selection, which the properties show while its results do. The results
+    // showing or going, and a change of what's selected among them, end what `ActionContext.properties`
+    // asked the properties to show instead.
+    const [resultSelection, setResultSelection] = useState(NO_HITS);
+    const resultsSelected = useRef(NO_HITS);
+    const [resultsShown, setResultsShown] = useState(showsResults);
+
+    if (resultsShown !== showsResults) {
+        setResultsShown(showsResults);
+        setResultSelection(NO_HITS);
+        resultsSelected.current = NO_HITS;
+        setPinned(null);
+    }
+
+    const handleResultSelection = useCallback((hits: SearchHit[]) => {
+        const before = resultsSelected.current;
+
+        if (!sameKeys(before, hits)) {
+            setPinned(null);
+        }
+
+        if (!sameKeys(before, hits) || before.some((hit, index) => hit.entry !== hits[index].entry)) {
+            resultsSelected.current = hits;
+            setResultSelection(hits);
+        }
+    }, []);
     const searchInputRef = useRef<HTMLInputElement>(null);
     // What had the focus when the search opened, which gets it back as the search closes.
     const searchOpener = useRef<HTMLElement | null>(null);
@@ -825,6 +949,8 @@ const FileManager = ({
         const left = placeReason === "replace" ? undefined : folderLeft(shownPlace, place);
 
         setShownPlace(place);
+        // The properties follow the selection again in the folder opened.
+        setPinned(null);
 
         if (!(reveal && reveal.key === openKey)) {
             // A created or renamed entry the open folder no longer waits for is announced now.
@@ -885,6 +1011,30 @@ const FileManager = ({
             callbacks.current.onSelectionChange?.([...ids], { entries, location });
         },
         [],
+    );
+
+    // The content's selection as its folder view reports it, which the properties show, and the ids
+    // it had, by the folder, so a change of the selection there, not of its entries' listing, ends
+    // what `ActionContext.properties` asked them to show instead.
+    const [shownSelection, setShownSelection] = useState(NOTHING_SHOWN);
+    const selectionShown = useRef(NOTHING_SHOWN);
+
+    const handleSelectionChange = useCallback(
+        (ids: ReadonlySet<string>, entries: FileEntry[], location: FileManagerLocation) => {
+            const before = selectionShown.current;
+
+            tellSelection(ids, entries, location);
+
+            if (before.key === openKey && !sameIds(before.ids, ids)) {
+                setPinned(null);
+            }
+
+            if (before.key !== openKey || !sameIds(before.ids, ids) || !sameEntries(before.entries, entries)) {
+                selectionShown.current = { key: openKey, ids, entries };
+                setShownSelection(selectionShown.current);
+            }
+        },
+        [tellSelection, openKey],
     );
 
     // Places in sections the file manager no longer has leave the history, and the current one, if
@@ -1185,10 +1335,17 @@ const FileManager = ({
 
     const focusFromSearch = useCallback(() => setFocusContent(true), []);
 
-    // F6 moves the focus between the sidebar tree and the content, as in GNOME Files. While the
-    // sidebar is collapsed, it opens the overlay, which takes the focus.
+    // F6 moves the focus between the sidebar tree, the content and the docked properties, as in
+    // GNOME Files. While the sidebar is collapsed, it opens the overlay, which takes the focus.
     const switchPane = () => {
         const sidebar = sidebarRef.current;
+        const pane = paneRef.current;
+
+        if (pane && !overlays(pane) && propertiesOpen && panelRef.current?.contains(document.activeElement)) {
+            setFocusProperties(true);
+
+            return;
+        }
 
         if (sidebar && !sidebar.contains(document.activeElement)) {
             if (overlays(sidebar) && !sidebarOpen) {
@@ -1253,6 +1410,126 @@ const FileManager = ({
         }
     };
 
+    // The properties' overlay takes the focus as it opens, and keeps what had it, or `opener`, to
+    // give it back to.
+    const openPropertiesOverlay = useCallback((opener?: HTMLElement | null) => {
+        propertiesOpener.current =
+            opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+        setPropertiesOverlay(true);
+        setFocusProperties(true);
+    }, []);
+
+    // Closing the overlay with the focus in it gives the focus back to what had it before the
+    // overlay opened, or else to the content. It shows the selection again when it next opens.
+    const closePropertiesOverlay = useCallback(() => {
+        const pane = paneRef.current;
+        const opener = propertiesOpener.current;
+
+        setPropertiesOverlay(false);
+        setPinned(null);
+        propertiesOpener.current = null;
+
+        if (pane && overlays(pane) && pane.contains(document.activeElement)) {
+            if (opener && opener !== document.body && opener.isConnected) {
+                opener.focus();
+            }
+
+            if (document.activeElement !== opener) {
+                setFocusContent(true);
+            }
+        }
+    }, []);
+
+    // Shows or hides the docked properties. Hidden with the focus in them, they hand the focus to the
+    // content, and they show the selection again when they next show.
+    const showDockedProperties = useCallback(
+        (shown: boolean) => {
+            if (!shown) {
+                if (paneRef.current?.contains(document.activeElement)) {
+                    setFocusContent(true);
+                }
+
+                setPinned(null);
+            }
+
+            setPropertiesOpen(shown);
+        },
+        [setPropertiesOpen],
+    );
+
+    // Docked or not, as container queries decide; hidden, the docked properties still say they dock.
+    const propertiesDocked = useCallback(() => !!paneRef.current && !overlays(paneRef.current), []);
+
+    const toggleDockedProperties = useCallback(
+        () => showDockedProperties(!propertiesOpen),
+        [showDockedProperties, propertiesOpen],
+    );
+
+    // Alt+Enter shows and hides the properties, as Windows and GNOME open them: the docked ones,
+    // leaving the focus where it is, so the arrow keys still move through the content as they follow
+    // it, or else the overlay, which takes the focus.
+    const toggleProperties = () => {
+        if (propertiesDocked()) {
+            if (!paneRef.current?.contains(document.activeElement)) {
+                announce(propertiesOpen ? localeValue.text.propertiesHidden : localeValue.text.propertiesShown);
+            }
+
+            toggleDockedProperties();
+        } else if (propertiesOverlay) {
+            closePropertiesOverlay();
+        } else {
+            openPropertiesOverlay();
+        }
+    };
+
+    // `ActionContext.properties`: they show what the menu, or the consumer's toolbar, acted on, and
+    // take the focus, once the menu has given it back to where it was opened from. The overlay gives
+    // it back there as it closes.
+    const showProperties = useCallback(
+        (subject: PropertiesSubject) => {
+            setPinned(subject);
+            setFocusProperties(true);
+
+            if (propertiesDocked()) {
+                setPropertiesOpen(true);
+            } else if (!propertiesOverlay) {
+                const active = document.activeElement;
+                const from = active?.closest('[role="menu"]') ? menuOpener.current : active;
+
+                openPropertiesOverlay(from instanceof HTMLElement ? from : null);
+            }
+        },
+        [propertiesDocked, setPropertiesOpen, propertiesOverlay, openPropertiesOverlay],
+    );
+
+    // The panel's close button.
+    const closeProperties = useCallback(() => {
+        if (propertiesDocked()) {
+            showDockedProperties(false);
+        } else {
+            closePropertiesOverlay();
+        }
+    }, [propertiesDocked, showDockedProperties, closePropertiesOverlay]);
+
+    // Escape in the panel closes the overlay, and from the docked panel goes back to the content.
+    const handlePropertiesEscape = useCallback(() => {
+        if (propertiesDocked()) {
+            setFocusContent(true);
+        } else {
+            closePropertiesOverlay();
+        }
+    }, [propertiesDocked, closePropertiesOverlay]);
+
+    // Moving the focus on to the file manager behind the overlay closes it, as a click there does,
+    // and leaves the focus where it went. A menu or a dialog, outside the file manager, keeps it open.
+    const handlePropertiesFocusOut = useCallback((to: Node) => {
+        if (rootRef.current?.contains(to)) {
+            setPropertiesOverlay(false);
+            setPinned(null);
+            propertiesOpener.current = null;
+        }
+    }, []);
+
     // Opens the window listing the keys. It gives the focus back itself as it closes, to `opener`
     // or to what has it now, since the main menu it may be opened from hands the focus back to its
     // button only as it closes, after the window has taken note of what had it.
@@ -1306,8 +1583,8 @@ const FileManager = ({
     };
 
     // Keys that work anywhere in the file manager: the main menu's shortcuts, F6, F9, Ctrl+?, Ctrl+H,
-    // Ctrl+F, Ctrl+Shift+F, and Alt+Left and Alt+Right for back and forward, the other way round
-    // right to left, as the arrows on the buttons are.
+    // Ctrl+F, Ctrl+Shift+F, Alt+Enter, and Alt+Left and Alt+Right for back and forward, the other
+    // way round right to left, as the arrows on the buttons are.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         // Menus and dialogs portal out of the file manager, but their key presses still bubble here
         // through React's tree; they aren't the file manager's.
@@ -1355,6 +1632,8 @@ const FileManager = ({
             (!event.shiftKey || canSearchEverywhere)
         ) {
             openSearch(event.shiftKey ? "everywhere" : "folder");
+        } else if (event.altKey && !others && event.key === "Enter") {
+            toggleProperties();
         } else if (event.altKey && !others && event.key === (direction === "rtl" ? "ArrowRight" : "ArrowLeft")) {
             goBack();
         } else if (event.altKey && !others && event.key === (direction === "rtl" ? "ArrowLeft" : "ArrowRight")) {
@@ -1969,7 +2248,8 @@ const FileManager = ({
     );
 
     const contextFor = useCallback(
-        ({ target, section: menuSection, trail, entries, listing, inResults }: MenuRequest): ActionContext => {
+        (request: MenuRequest): ActionContext => {
+            const { target, section: menuSection, trail, entries, listing, inResults } = request;
             const menuFolder = folderOf(menuSection, trail);
             const folderAdapter = menuSection.adapter ?? adapter;
             const base = { section: menuSection, adapter: folderAdapter, trail };
@@ -2059,6 +2339,7 @@ const FileManager = ({
                 download: canDownload(folderAdapter, downloaded)
                     ? () => askDownload(folderAdapter, downloaded, menuFolder)
                     : undefined,
+                properties: () => showProperties(subjectOf(request)),
                 upload:
                     uploadHere &&
                     ((files?: File[]) =>
@@ -2123,6 +2404,7 @@ const FileManager = ({
             offerPaste,
             offerUpload,
             pickFiles,
+            showProperties,
             sectionsById,
             clipboard,
             onOpenFile,
@@ -2302,6 +2584,43 @@ const FileManager = ({
         };
     });
 
+    // What the properties show: what `ActionContext.properties` asked for, while its sections are
+    // as they were, or else a search everywhere's selection while its results show, or the content's
+    // selection, or with nothing selected, the open folder itself.
+    const propertiesSubject = useMemo((): PropertiesSubject => {
+        if (pinned && subjectHolds(pinned, sectionsById)) {
+            return pinned;
+        }
+
+        if (showsResults) {
+            return resultSelection.length > 0
+                ? {
+                      kind: "entries",
+                      inResults: true,
+                      entries: resultSelection.map(({ entry, section: shown, trail }) => ({
+                          entry,
+                          section: shown,
+                          trail,
+                      })),
+                  }
+                : NO_SUBJECT;
+        }
+
+        if (!section) {
+            return NO_SUBJECT;
+        }
+
+        if (shownSelection.key === openKey && shownSelection.entries.length > 0) {
+            return {
+                kind: "entries",
+                inResults: false,
+                entries: shownSelection.entries.map((entry) => ({ entry, section, trail: place.trail })),
+            };
+        }
+
+        return { kind: "folder", section, trail: place.trail };
+    }, [pinned, sectionsById, showsResults, resultSelection, section, shownSelection, openKey, place.trail]);
+
     useImperativeHandle(
         apiRef,
         (): FileManagerApi => ({
@@ -2369,6 +2688,11 @@ const FileManager = ({
                                         style={drag.context.dragged ? PASS_THROUGH : undefined}
                                         onClick={closeSidebar}
                                     />
+                                    <Backdrop
+                                        open={propertiesOverlay}
+                                        sx={propertiesBackdropSx}
+                                        onClick={closePropertiesOverlay}
+                                    />
                                     <Sidebar
                                         ref={sidebarRef}
                                         title={title ?? localeValue.text.sidebarTitle}
@@ -2434,6 +2758,8 @@ const FileManager = ({
                                             canSearchEverywhere={canSearchEverywhere}
                                             sidebarHidden={sidebarHidden}
                                             sidebarDocked={sidebarDocked}
+                                            propertiesOpen={propertiesOpen}
+                                            propertiesDocked={propertiesDocked}
                                             onBack={goBack}
                                             onForward={goForward}
                                             onToggleView={toggleView}
@@ -2443,93 +2769,117 @@ const FileManager = ({
                                             onSearch={toggleSearch}
                                             onShowSidebar={showSidebar}
                                             onToggleSidebar={toggleDocked}
+                                            onToggleProperties={toggleDockedProperties}
+                                            onOpenProperties={openPropertiesOverlay}
                                             sidebarButtonRef={sidebarButtonRef}
                                         />
-                                        <Box ref={panelRef} sx={panelSx}>
-                                            {/* A search everywhere's results show in the folder's place
-                                                while something is typed. The folder stays mounted
-                                                under them, hidden, so it comes back as it was, its
-                                                selection included. */}
-                                            {showsResults && (
-                                                <SearchResults
-                                                    targets={searchedTargets}
-                                                    query={searchedFor}
-                                                    version={searchVersion}
-                                                    view={view}
-                                                    sort={sort}
-                                                    showHidden={showHidden}
-                                                    hasActions={hasActions}
-                                                    takeFocus={focusContent}
-                                                    onSortChange={setSort}
-                                                    onNavigate={goTo}
-                                                    onOpenFile={openFile}
-                                                    onOpenMenu={openMenu}
-                                                    onShortcut={runShortcut}
-                                                />
-                                            )}
-                                            {/* Keyed by folder, so each opens at the top with nothing selected. */}
-                                            <Box key={openKey ?? undefined} sx={viewSx} hidden={showsResults}>
-                                                {!section && <NoSections />}
-                                                {section && (
-                                                    <FolderView
-                                                        section={section}
-                                                        trail={place.trail}
-                                                        view={view}
-                                                        sort={sort}
-                                                        showHidden={showHidden}
-                                                        query={searchScope === "folder" ? query : ""}
-                                                        hasActions={hasActions}
-                                                        selecting={selecting}
-                                                        busy={busy}
-                                                        takeFocus={focusContent && !showsResults}
-                                                        revealId={revealId}
-                                                        arrivals={arrivals}
-                                                        selectedIds={selectionControlled ? selectedIdSet : undefined}
-                                                        defaultSelectedIds={
-                                                            initialSelection?.key === openKey
-                                                                ? initialSelection.ids
-                                                                : undefined
-                                                        }
-                                                        onSelectionChange={tellSelection}
-                                                        onSelectingChange={setSelecting}
-                                                        onSortChange={setSort}
-                                                        onNavigate={goTo}
-                                                        onOpenFile={openFile}
-                                                        onOpenMenu={openMenu}
-                                                        onShortcut={runShortcut}
-                                                        onPasteFiles={pasteFiles}
-                                                        onRevealed={handleRevealed}
-                                                        onRevealUnmatched={closeSearch}
-                                                        onArrived={handleArrived}
-                                                    />
+                                        <Box sx={bodySx}>
+                                            <Box sx={columnSx}>
+                                                <Box ref={panelRef} sx={panelSx}>
+                                                    {/* A search everywhere's results show in the folder's place
+                                                        while something is typed. The folder stays mounted
+                                                        under them, hidden, so it comes back as it was, its
+                                                        selection included. */}
+                                                    {showsResults && (
+                                                        <SearchResults
+                                                            targets={searchedTargets}
+                                                            query={searchedFor}
+                                                            version={searchVersion}
+                                                            view={view}
+                                                            sort={sort}
+                                                            showHidden={showHidden}
+                                                            hasActions={hasActions}
+                                                            takeFocus={focusContent}
+                                                            onSortChange={setSort}
+                                                            onNavigate={goTo}
+                                                            onOpenFile={openFile}
+                                                            onOpenMenu={openMenu}
+                                                            onShortcut={runShortcut}
+                                                            onSelectionChange={handleResultSelection}
+                                                        />
+                                                    )}
+                                                    {/* Keyed by folder, so each opens at the top with nothing
+                                                        selected. */}
+                                                    <Box key={openKey ?? undefined} sx={viewSx} hidden={showsResults}>
+                                                        {!section && <NoSections />}
+                                                        {section && (
+                                                            <FolderView
+                                                                section={section}
+                                                                trail={place.trail}
+                                                                view={view}
+                                                                sort={sort}
+                                                                showHidden={showHidden}
+                                                                query={searchScope === "folder" ? query : ""}
+                                                                hasActions={hasActions}
+                                                                selecting={selecting}
+                                                                busy={busy}
+                                                                takeFocus={focusContent && !showsResults}
+                                                                revealId={revealId}
+                                                                arrivals={arrivals}
+                                                                selectedIds={
+                                                                    selectionControlled ? selectedIdSet : undefined
+                                                                }
+                                                                defaultSelectedIds={
+                                                                    initialSelection?.key === openKey
+                                                                        ? initialSelection.ids
+                                                                        : undefined
+                                                                }
+                                                                onSelectionChange={handleSelectionChange}
+                                                                onSelectingChange={setSelecting}
+                                                                onSortChange={setSort}
+                                                                onNavigate={goTo}
+                                                                onOpenFile={openFile}
+                                                                onOpenMenu={openMenu}
+                                                                onShortcut={runShortcut}
+                                                                onPasteFiles={pasteFiles}
+                                                                onRevealed={handleRevealed}
+                                                                onRevealUnmatched={closeSearch}
+                                                                onArrived={handleArrived}
+                                                            />
+                                                        )}
+                                                    </Box>
+                                                </Box>
+                                                {shownDownloads.length > 0 && (
+                                                    <Box sx={taskPanelSx}>
+                                                        <DownloadPanel
+                                                            items={shownDownloads}
+                                                            onCancel={downloads.queue.cancel}
+                                                            onRetry={downloads.queue.retry}
+                                                            onSave={downloads.queue.save}
+                                                            onCancelAll={downloads.queue.cancelAll}
+                                                            onClear={downloads.queue.clear}
+                                                        />
+                                                    </Box>
+                                                )}
+                                                {uploads.items.length > 0 && (
+                                                    <Box sx={taskPanelSx}>
+                                                        <UploadPanel
+                                                            items={uploads.items}
+                                                            onCancel={uploads.queue.cancel}
+                                                            onRetry={uploads.queue.retry}
+                                                            onShow={showUpload}
+                                                            canShow={canShowUpload}
+                                                            onCancelAll={uploads.queue.cancelAll}
+                                                            onClear={clearUploads}
+                                                        />
+                                                    </Box>
                                                 )}
                                             </Box>
+                                            <PropertiesPane
+                                                ref={paneRef}
+                                                subject={propertiesSubject}
+                                                shown={propertiesOpen}
+                                                open={propertiesOverlay}
+                                                changes={searchVersion}
+                                                showHidden={showHidden}
+                                                cache={propertiesCache}
+                                                takeFocus={focusProperties}
+                                                contextFor={contextFor}
+                                                onClose={closeProperties}
+                                                onEscape={handlePropertiesEscape}
+                                                onFocusOut={handlePropertiesFocusOut}
+                                            />
                                         </Box>
-                                        {shownDownloads.length > 0 && (
-                                            <Box sx={taskPanelSx}>
-                                                <DownloadPanel
-                                                    items={shownDownloads}
-                                                    onCancel={downloads.queue.cancel}
-                                                    onRetry={downloads.queue.retry}
-                                                    onSave={downloads.queue.save}
-                                                    onCancelAll={downloads.queue.cancelAll}
-                                                    onClear={downloads.queue.clear}
-                                                />
-                                            </Box>
-                                        )}
-                                        {uploads.items.length > 0 && (
-                                            <Box sx={taskPanelSx}>
-                                                <UploadPanel
-                                                    items={uploads.items}
-                                                    onCancel={uploads.queue.cancel}
-                                                    onRetry={uploads.queue.retry}
-                                                    onShow={showUpload}
-                                                    canShow={canShowUpload}
-                                                    onCancelAll={uploads.queue.cancelAll}
-                                                    onClear={clearUploads}
-                                                />
-                                            </Box>
-                                        )}
                                     </Box>
                                 </Box>
                                 <Announcer announcement={announcement} />

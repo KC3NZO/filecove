@@ -11,6 +11,11 @@ export const VIEW_CONTAINER = "file-manager-view";
 export const rootMedium = `@container ${ROOT_CONTAINER} (min-width: 600px)`;
 /** Root has room to dock the sidebar beside the content instead of overlaying it. */
 export const rootWide = `@container ${ROOT_CONTAINER} (min-width: 900px)`;
+/**
+ * Root has room to dock the properties on the content's other side too, leaving the content wide
+ * enough for the list's size and date columns.
+ */
+export const rootExtraWide = `@container ${ROOT_CONTAINER} (min-width: 1100px)`;
 
 /** Content view fits the size, modified and star columns. */
 export const viewMedium = `@container ${VIEW_CONTAINER} (min-width: 540px)`;
@@ -18,6 +23,8 @@ export const viewMedium = `@container ${VIEW_CONTAINER} (min-width: 540px)`;
 export const viewWide = `@container ${VIEW_CONTAINER} (min-width: 760px)`;
 
 export const SIDEBAR_WIDTH = 248;
+
+export const PROPERTIES_WIDTH = 300;
 
 /** Shared by the sidebar header and the main header bar so the two line up. */
 export const HEADER_HEIGHT = 52;

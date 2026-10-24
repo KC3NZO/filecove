@@ -80,6 +80,7 @@ const ownSections = ({ text, rtl, canSearchEverywhere, choosesSections, canPrevi
             rows: [
                 { label: text.keyboardShortcuts, combos: [["Ctrl", "?"]] },
                 { label: text.shortcutToggleHidden, combos: [["Ctrl", "H"]] },
+                { label: text.shortcutToggleProperties, combos: [["Alt", "Enter"]] },
                 { label: text.shortcutContextMenu, combos: [["ContextMenu"], ["Shift", "F10"]] },
                 ...(canUpload
                     ? [{ label: text.shortcutPasteFiles, combos: [["Ctrl", "V"], ["Shift", "Insert"]] }]

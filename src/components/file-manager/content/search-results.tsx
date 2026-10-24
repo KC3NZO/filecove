@@ -73,6 +73,8 @@ interface SearchResultsProps {
     onOpenFile: (request: MenuRequest) => boolean;
     onOpenMenu: OpenMenu;
     onShortcut: RunShortcut;
+    /** Told the selected results as they change, which the properties show. */
+    onSelectionChange: (hits: SearchHit[]) => void;
 }
 
 /** Where the view's focus is among the results: the result's key, and where it was listed. */
@@ -184,6 +186,7 @@ const SearchResults = ({
     onOpenFile,
     onOpenMenu,
     onShortcut,
+    onSelectionChange,
 }: SearchResultsProps) => {
     const { searches, retry } = useSearch(targets, query, showHidden, version);
     const cut = useContext(CutContext);
@@ -256,6 +259,11 @@ const SearchResults = ({
     );
     // An action takes entries of one folder, so the selection is only acted on as a whole then.
     const actOnSelection = inOneFolder(selectedHits);
+
+    useEffect(() => {
+        onSelectionChange(selectedHits);
+    }, [onSelectionChange, selectedHits]);
+
     const typeAhead = useTypeAhead();
 
     // A menu, a shortcut or the preview acts on results of one folder, there, with that folder's

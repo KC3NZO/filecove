@@ -105,12 +105,65 @@ export interface DownloadLocaleText {
 }
 
 /**
+ * What the properties panel says. Kept apart from the rest, as the upload and download panels'
+ * are, since the panel is meant to be shared with the media manager to come. The backend's own
+ * properties come labelled by the consumer, in their language.
+ */
+export interface PropertiesLocaleText {
+    /** The panel's title, and its name for screen readers. */
+    properties: string;
+    propertiesClose: string;
+    /** In place of the properties while nothing is selected among a search's results. */
+    propertiesNothingSelected: string;
+    /** Several entries named by how many, and how many entries a folder holds while they can't be counted down. */
+    propertiesItems: (count: number) => string;
+    propertiesType: string;
+    /** A type label with the MIME type it was told by, e.g. "Image" and "image/png". */
+    propertiesTypeWithMime: (type: string, mimeType: string) => string;
+    propertiesSize: string;
+    /** A size with its exact bytes, both already formatted, e.g. "4.2 MB" and "4,213,045 bytes". */
+    propertiesSizeExact: (size: string, bytes: string) => string;
+    propertiesContents: string;
+    /**
+     * What's in folders, counted all the way down, or several entries and what's in them, the size
+     * already formatted, e.g. "12 files and 3 folders, totalling 4.5 MB". Both counts may be 0.
+     */
+    propertiesTotals: (files: number, folders: number, size: string) => string;
+    /** Several entries, when what's in their folders can't be counted: "2 files and 1 folder". */
+    propertiesKinds: (files: number, folders: number) => string;
+    /** Read for the spinner beside totals still being counted. */
+    propertiesCounting: string;
+    propertiesLocation: string;
+    /** In place of the location of entries in different folders, as a search's results may be. */
+    propertiesSeveralFolders: string;
+    /** The button on a search's result that opens the folder it's in. */
+    propertiesOpenLocation: string;
+    propertiesModified: string;
+    propertiesCreated: string;
+    propertiesDimensions: string;
+    propertiesDuration: string;
+    /** The button that asks for a new name. */
+    propertiesRename: string;
+    /** Read while the backend's own properties are being asked for. */
+    propertiesLoading: string;
+    /** Why the backend's own properties couldn't be had, when the adapter didn't say. */
+    propertiesFailed: string;
+    /** Why what's in folders couldn't be counted, when the adapter didn't say; `count` is the folders. */
+    propertiesCountFailed: (count: number) => string;
+    propertiesTryAgain: string;
+    /** The button copying a property's value; `label` is the property's. */
+    propertiesCopy: (label: string) => string;
+    /** Read once a value is copied; `label` is the property's. */
+    propertiesCopied: (label: string) => string;
+}
+
+/**
  * Every text `FileManager` shows or reads to screen readers, apart from what the consumer passes it
  * (section and action labels, `title`). Texts about entries are functions, so each language words
  * and pluralizes them its own way. Counts come as plain numbers, and `name` is the entry's name,
  * meant for when `count` is 1. `kind` is "file" or "folder".
  */
-export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleText {
+export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleText, PropertiesLocaleText {
     // Shared
     loading: string;
     cancel: string;
@@ -350,6 +403,14 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     /** The preview's Download button. */
     download: string;
 
+    // Properties, beside the panel's own texts
+    /** The view menu's item showing and hiding the docked properties, or opening them over the content. */
+    showProperties: string;
+    /** Read to screen readers as Alt+Enter shows the docked properties, which leaves the focus where it is. */
+    propertiesShown: string;
+    /** Read to screen readers as Alt+Enter hides the docked properties, when the focus wasn't in them. */
+    propertiesHidden: string;
+
     // Preview
     previous: string;
     next: string;
@@ -389,7 +450,9 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     /** Ctrl+V and Shift+Insert, uploading files copied on the desktop. */
     shortcutPasteFiles: string;
     shortcutToggleSidebar: string;
-    /** F6, between the sidebar tree and the content. */
+    /** Alt+Enter, showing and hiding the properties. */
+    shortcutToggleProperties: string;
+    /** F6, between the sidebar tree, the content and the docked properties. */
     shortcutSwitchPane: string;
     shortcutExpand: string;
     shortcutCollapse: string;
@@ -448,10 +511,18 @@ export interface Locale {
     text: FileManagerLocaleText;
     /** A number in the locale's digits, without grouping, as dimensions and counters show it. */
     formatNumber: (value: number) => string;
+    /** A number grouped as the locale groups digits, e.g. "12,345", as a property of the backend's shows it. */
+    formatCount: (value: number) => string;
     /** A fraction as a whole percentage, e.g. 1.5 as "150%". */
     formatPercent: (value: number) => string;
     /** Bytes in decimal units, as GNOME Files shows them: "999 bytes", "1.5 kB". */
     formatSize: (bytes: number) => string;
+    /** Bytes exactly, grouped: "4,213,045 bytes". */
+    formatBytes: (bytes: number) => string;
+    /** A date and time in full, for the properties: "Oct 24, 2026, 3:12 PM". */
+    formatDate: (date: Date) => string;
+    /** A length in seconds as a clock shows it: "4:05", "1:02:03". */
+    formatDuration: (seconds: number) => string;
     /** A file's size, or how many entries a folder holds, or a dash when it isn't known. */
     describeSize: (entry: FileEntry) => string;
     /** When an entry was modified, or a dash when it isn't known. */

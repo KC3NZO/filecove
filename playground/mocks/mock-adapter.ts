@@ -3,11 +3,15 @@ import { zip } from "./mock-zip";
 
 import type {
     ConflictPolicy,
+    EntryProperties,
+    EntryTotals,
     FileAdapter,
     FileContent,
     FileEntry,
     FolderRef,
     ListResult,
+    MediaInfo,
+    PropertyGroup,
     SearchMatch,
     SearchResult,
 } from "../../src";
@@ -69,6 +73,12 @@ const DOWNLOAD_LIMIT = 500;
 const PACK_TIME_EACH = 40;
 const PACK_TIME: [min: number, max: number] = [1500, 6000];
 
+/** How many entries counting what's in folders goes through between reports of how far it got. */
+const COUNT_STEP = 250;
+
+/** Simulated time each step of counting what's in folders takes, in ms. */
+const COUNT_STEP_TIME = 40;
+
 /** Simulated speed a single file is fetched at to be downloaded, in bytes per second. */
 const DOWNLOAD_SPEED = 2_000_000;
 
@@ -99,6 +109,71 @@ const MARKS = /\p{M}/gu;
 const fold = (text: string) => text.toLowerCase().normalize("NFKD").replace(MARKS, "");
 
 const clone = (node: MockNode): MockNode => ({ ...node, children: node.children?.map(clone) });
+
+/** A number made from a text, the same for the same text, for properties made up from names. */
+const hashOf = (text: string) => [...text].reduce((hash, char) => (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0, 7);
+
+const extensionOf = (name: string) => name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+
+const IMAGE_SIZES: [width: number, height: number][] = [
+    [1920, 1080],
+    [1600, 1200],
+    [1280, 720],
+    [2048, 2048],
+    [1080, 1350],
+];
+
+/**
+ * What a picture, a video or a piece of audio is like, made up from its name, as a backend reading
+ * the files would know it. An uploaded picture's isn't known, as it isn't read.
+ */
+const mediaOf = (node: MockNode): MediaInfo | undefined => {
+    const type = node.mimeType ?? "";
+    const extension = extensionOf(node.name);
+    const hash = hashOf(node.name);
+
+    if (node.children || node.blob) {
+        return undefined;
+    }
+
+    if (type === "image/svg+xml" || extension === "svg") {
+        return { width: 512, height: 512 };
+    }
+
+    if (type.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp"].includes(extension)) {
+        const [width, height] = IMAGE_SIZES[hash % IMAGE_SIZES.length];
+
+        return { width, height };
+    }
+
+    if (type.startsWith("video/") || ["mp4", "webm", "mov"].includes(extension)) {
+        return extension === "webm"
+            ? { width: 1280, height: 720, duration: 32 }
+            : { width: 1920, height: 1080, duration: 120 + (hash % 600) };
+    }
+
+    if (type.startsWith("audio/") || ["mp3", "wav", "ogg", "flac"].includes(extension)) {
+        return { duration: 60 + (hash % 240) };
+    }
+
+    return undefined;
+};
+
+/** A checksum made up from the id, 64 hexadecimal digits, as a SHA-256 is written. */
+const checksumOf = (id: string) => {
+    let seed = hashOf(id);
+
+    return Array.from({ length: 64 }, () => {
+        seed = (Math.imul(seed, 1_103_515_245) + 12_345) >>> 0;
+
+        return (seed >>> 24).toString(16).padStart(2, "0").slice(-1);
+    }).join("");
+};
+
+const TAGS = ["draft", "reviewed", "client", "internal", "final", "archive"];
+
+/** Who owns what's below each root, in the order the roots are given. */
+const OWNERS = ["you", "deploy-bot", "Design team"];
 
 const clamp = (value: number, [min, max]: [min: number, max: number]) => Math.min(Math.max(value, min), max);
 
@@ -338,6 +413,10 @@ export const createMockAdapter = (
 
     const clashes = (target: MockNode, node: MockNode) => !!target.children?.some((child) => child.name === node.name);
 
+    // The root a path is below, which says who owns it.
+    const rootOf = (path: string) =>
+        Object.keys(roots).find((root) => path === root || path.startsWith(root === "/" ? "/" : `${root}/`)) ?? "/";
+
     const adapter: FileAdapter = {
         list: (folderId, { signal, cursor }) =>
             respond<ListResult>(signal, () => {
@@ -390,6 +469,120 @@ export const createMockAdapter = (
                     matches: matches.slice(start, end),
                     nextCursor: end < matches.length ? String(end) : undefined,
                 };
+            }),
+
+        // An entry's properties as a backend keeps them: when it was made, and what a picture, a
+        // video or a piece of audio is like, which listings leave out, made up from its name, with
+        // its owner, its permissions, its path, a checksum for a file, a link to share it and some
+        // tags. What can't be read fails, as `restricted` and `contract.pdf` do. A folder may come
+        // with only its id, as a section's root does.
+        properties: (entry, { signal }) =>
+            respond<EntryProperties>(signal, () => {
+                const node = entry.kind === "folder" ? folderAt(entry.id) : locate(entry).node;
+                const hash = hashOf(entry.id);
+                const root = rootOf(entry.id);
+                const made = node.modified
+                    ? new Date(new Date(node.modified).getTime() - ((hash % 120) + 1) * 86_400_000)
+                    : undefined;
+                const code = (hash % 46_656).toString(36).padStart(3, "0");
+                const tags = TAGS.filter((_, index) => (hash >>> (index * 3)) % 4 === 0).slice(0, 3);
+                const groups: PropertyGroup[] = [
+                    {
+                        id: "access",
+                        fields: [
+                            {
+                                id: "owner",
+                                label: "Owner",
+                                type: "text",
+                                value: OWNERS[Math.max(Object.keys(roots).indexOf(root), 0) % OWNERS.length],
+                            },
+                            {
+                                id: "permissions",
+                                label: "Permissions",
+                                type: "text",
+                                value: root.startsWith("/shared") ? "Read only" : "Read and write",
+                            },
+                            { id: "path", label: "Path", type: "text", value: entry.id, copyable: true },
+                        ],
+                    },
+                ];
+
+                if (!node.children) {
+                    groups.push({
+                        id: "integrity",
+                        title: "Integrity",
+                        fields: [
+                            {
+                                id: "sha256",
+                                label: "SHA-256",
+                                type: "text",
+                                value: checksumOf(entry.id),
+                                copyable: true,
+                            },
+                        ],
+                    });
+                }
+
+                groups.push({
+                    id: "sharing",
+                    title: "Sharing",
+                    fields: [
+                        {
+                            id: "link",
+                            label: "Link",
+                            type: "link",
+                            value: `files.example.com/s/${code}`,
+                            href: `https://files.example.com/s/${code}`,
+                        },
+                        { id: "views", label: "Views", type: "number", value: 12 + (hash % 9000) },
+                    ],
+                });
+
+                if (tags.length > 0) {
+                    groups.push({ id: "labels", fields: [{ id: "tags", label: "Tags", type: "tags", value: tags }] });
+                }
+
+                return { entry: { ...entry, createdAt: made, media: mediaOf(node) }, groups };
+            }),
+
+        // Counts what's in folders by walking the tree, `COUNT_STEP` entries a step, reporting the
+        // totals so far after each, as a backend walking a bucket's keys a page at a time would, so
+        // `archive` and API service's root count up. Folders that can't be read are counted but not
+        // looked in, and dotfiles and what's in dot folders are left out while hidden files aren't
+        // shown. A folder that can't be read itself fails it, as `restricted` does.
+        measure: (entries, { signal, showHidden, onProgress }) =>
+            respond(signal, () => entries.map((entry) => folderAt(entry.id))).then(async (nodes) => {
+                const totals: EntryTotals = { files: 0, folders: 0, size: 0 };
+                const waiting = [...nodes];
+                let counted = 0;
+
+                for (let node = waiting.pop(); node; node = waiting.pop()) {
+                    for (const child of node.children ?? []) {
+                        if (!showHidden && child.name.startsWith(".")) {
+                            continue;
+                        }
+
+                        if (child.children) {
+                            totals.folders += 1;
+
+                            if (!child.fails) {
+                                waiting.push(child);
+                            }
+                        } else {
+                            totals.files += 1;
+                            totals.size += child.size ?? child.blob?.size ?? 0;
+                        }
+
+                        counted += 1;
+
+                        if (counted % COUNT_STEP === 0) {
+                            onProgress({ ...totals });
+                            await wait(signal, COUNT_STEP_TIME);
+                        }
+                    }
+                }
+
+                return totals;
             }),
 
         createFolder: (parentId, name, { signal }) =>

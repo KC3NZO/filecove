@@ -47,6 +47,15 @@ export interface ActionContext {
      */
     download?: () => void;
     /**
+     * Shows `entries`, or with none, `folder` itself, in the file manager's properties panel, and
+     * moves the focus into it: docked beside the content where there's room, which asks for
+     * `propertiesOpen` to be true, and over it where there isn't. The panel shows them until the
+     * content's selection or the location changes, and follows the selection from then on. Always
+     * there, since what a listing brings needs nothing more of the adapter; its `properties` and
+     * `measure` add to it.
+     */
+    properties: () => void;
+    /**
      * Asks for a name and creates a folder in `folder`. Missing when the section's adapter has no
      * `createFolder`, so an action can hide with `visible: (context) => !!context.createFolder`.
      */

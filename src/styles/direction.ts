@@ -13,6 +13,14 @@ export const dialogActionsSx: SxProps<Theme> = {
     "& > :not(style) ~ :not(style)": { marginLeft: 0, marginInlineStart: "8px" },
 };
 
+/**
+ * A menu item whose label has no icon, inset to line up with the labels that have one, which
+ * `ListItemText` does with a `padding-left`. It has to match MUI's descendant selector to win.
+ */
+export const insetLabelSx = {
+    "& .MuiListItemText-inset": { paddingLeft: 0, paddingInlineStart: "36px" },
+} satisfies SxProps<Theme>;
+
 const mirrored = {
     "&:dir(rtl)": { scale: "-1 1" },
 } satisfies SxProps<Theme>;

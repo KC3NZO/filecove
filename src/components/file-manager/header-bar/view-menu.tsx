@@ -14,8 +14,10 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
+import { insetLabelSx } from "../../../styles/direction";
 import { menuPaperSx } from "../../../styles/mixins";
 import { isRtl } from "../../../utils/dom";
+import { formatShortcut } from "../../../utils/shortcut";
 import { SORT_KEYS, SORT_LABELS, withSortKey } from "../../../utils/sort";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
@@ -29,10 +31,19 @@ interface ViewMenuProps {
     sidebarHidden: boolean;
     /** Whether the sidebar docks at the moment, read as the menu opens. */
     sidebarDocked: () => boolean;
+    /** Whether the docked properties show. */
+    propertiesOpen: boolean;
+    /** Whether the properties dock at the moment, read as the menu opens. */
+    propertiesDocked: () => boolean;
     onSortChange: (sort: SortOrder) => void;
     onToggleHidden: () => void;
     onToggleSidebar: () => void;
+    onToggleProperties: () => void;
+    /** Opens the properties over the content, giving the focus back to `opener` as they close. */
+    onOpenProperties: (opener: HTMLElement | null) => void;
 }
+
+const PROPERTIES_KEYS = ["Alt", "Enter"];
 
 const DIRECTIONS: readonly SortDirection[] = ["asc", "desc"];
 
@@ -76,23 +87,30 @@ const shortcutSx: SxProps<Theme> = {
 };
 
 /**
- * The header's view options: how the content is sorted, whether hidden files show and, while the
- * sidebar docks, whether it shows. It stays open while options change, so the key and the
- * direction can both be picked in one go.
+ * The header's view options: how the content is sorted, whether hidden files show, while the
+ * sidebar docks, whether it shows, and whether the properties show, docked, or else opening them
+ * over the content. It stays open while options change, so the key and the direction can both be
+ * picked in one go.
  */
 const ViewMenu = ({
     sort,
     showHidden,
     sidebarHidden,
     sidebarDocked,
+    propertiesOpen,
+    propertiesDocked,
     onSortChange,
     onToggleHidden,
     onToggleSidebar,
+    onToggleProperties,
+    onOpenProperties,
 }: ViewMenuProps) => {
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     // The menu portals out of the file manager, where its container queries don't reach, so
     // whether the sidebar docks is read as it opens. Collapsed, the header's button shows it.
     const [docked, setDocked] = useState(false);
+    // Read so too: docked properties are shown and hidden here, and otherwise opened over the content.
+    const [propertiesDock, setPropertiesDock] = useState(false);
     const [rtl, setRtl] = useState(false);
     const { text } = useLocale();
     const dir = useContext(DirectionContext);
@@ -106,6 +124,7 @@ const ViewMenu = ({
                 aria-expanded={!!anchor}
                 onClick={(event) => {
                     setDocked(sidebarDocked());
+                    setPropertiesDock(propertiesDocked());
                     setRtl(isRtl(event.currentTarget));
                     setAnchor(event.currentTarget);
                 }}
@@ -188,6 +207,44 @@ const ViewMenu = ({
                         <ListItemText>{text.showSidebar}</ListItemText>
                         <Typography variant="body2" sx={shortcutSx}>
                             F9
+                        </Typography>
+                    </MenuItem>
+                )}
+                {propertiesDock ? (
+                    <MenuItem
+                        role="menuitemcheckbox"
+                        aria-checked={propertiesOpen}
+                        aria-keyshortcuts="Alt+Enter"
+                        onClick={onToggleProperties}
+                    >
+                        <ListItemIcon>
+                            <Checkbox
+                                size="small"
+                                checked={propertiesOpen}
+                                tabIndex={-1}
+                                disableRipple
+                                sx={controlSx}
+                            />
+                        </ListItemIcon>
+                        <ListItemText>{text.showProperties}</ListItemText>
+                        <Typography variant="body2" sx={shortcutSx}>
+                            {formatShortcut(PROPERTIES_KEYS, text)}
+                        </Typography>
+                    </MenuItem>
+                ) : (
+                    // Over the content, the properties take the focus, so the menu closes, handing
+                    // its button to them to give the focus back to.
+                    <MenuItem
+                        aria-keyshortcuts="Alt+Enter"
+                        sx={insetLabelSx}
+                        onClick={() => {
+                            setAnchor(null);
+                            onOpenProperties(anchor);
+                        }}
+                    >
+                        <ListItemText inset>{text.showProperties}</ListItemText>
+                        <Typography variant="body2" sx={shortcutSx}>
+                            {formatShortcut(PROPERTIES_KEYS, text)}
                         </Typography>
                     </MenuItem>
                 )}

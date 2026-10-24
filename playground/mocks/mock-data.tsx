@@ -427,7 +427,7 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 id: "properties",
                 label: "Properties",
                 icon: "info",
-                onSelect: (context) => notify(`Properties of ${names(context)}`),
+                onSelect: (context) => context.properties(),
             },
         ],
     },

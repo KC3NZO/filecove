@@ -22,7 +22,7 @@ export const keyFolder = (key: string) => {
     return { sectionId: key.slice(0, cut), folderId: key.slice(cut + 1) };
 };
 
-// Plain objects and arrays, such as an entry's `meta`, which every listing brings anew.
+// Plain objects and arrays, such as an entry's `meta` or `media`, which every listing brings anew.
 const isPlain = (value: unknown): value is Record<string, unknown> => {
     if (typeof value !== "object" || value === null) {
         return false;
@@ -50,7 +50,7 @@ const sameFields = (a: object, b: object, depth: number) => {
     );
 };
 
-// An entry a new listing brings as it was: every field the same, `meta`'s one level down.
+// An entry a new listing brings as it was: every field the same, `meta`'s and `media`'s one level down.
 const sameEntry = (a: FileEntry, b: FileEntry) =>
     a === b || (Object.getPrototypeOf(a) === Object.getPrototypeOf(b) && sameFields(a, b, 1));
 

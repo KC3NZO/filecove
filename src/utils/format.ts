@@ -35,12 +35,15 @@ export const createLocale = (
         : enUS;
 
     const numberFormat = new Intl.NumberFormat(locale, { useGrouping: false });
+    const countFormat = new Intl.NumberFormat(locale);
     const percentFormat = new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 });
     const byteFormat = new Intl.NumberFormat(locale, { style: "unit", unit: "byte", unitDisplay: "long" });
     const unitFormats = SIZE_UNITS.map(
         (unit) => new Intl.NumberFormat(locale, { style: "unit", unit, maximumFractionDigits: 1 }),
     );
     const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "short" });
+    const fullDateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
+    const clockFormat = new Intl.NumberFormat(locale, { minimumIntegerDigits: 2, useGrouping: false });
     const nameCollator = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
     const letterCollator = new Intl.Collator(locale, { sensitivity: "base" });
     const listFormat = new Intl.ListFormat(locale, { type: "conjunction" });
@@ -59,6 +62,18 @@ export const createLocale = (
         }
 
         return unitFormats[unit].format(value);
+    };
+
+    // Hours only when there are any, and minutes and seconds two digits each after the first.
+    const formatDuration = (seconds: number) => {
+        const whole = Math.max(0, Math.round(seconds));
+        const hours = Math.floor(whole / 3600);
+        const minutes = Math.floor((whole % 3600) / 60);
+        const rest = whole % 60;
+
+        return hours > 0
+            ? [numberFormat.format(hours), clockFormat.format(minutes), clockFormat.format(rest)].join(":")
+            : [numberFormat.format(minutes), clockFormat.format(rest)].join(":");
     };
 
     const describeSize = (entry: FileEntry) => {
@@ -105,8 +120,12 @@ export const createLocale = (
     return {
         text,
         formatNumber: (value) => numberFormat.format(value),
+        formatCount: (value) => countFormat.format(value),
         formatPercent: (value) => percentFormat.format(value),
         formatSize,
+        formatBytes: (bytes) => byteFormat.format(bytes),
+        formatDate: (date) => fullDateFormat.format(date),
+        formatDuration,
         describeSize,
         describeDate: (entry) => (entry.modifiedAt ? dateFormat.format(entry.modifiedAt) : "—"),
         describeType,

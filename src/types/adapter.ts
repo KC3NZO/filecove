@@ -22,7 +22,15 @@ export interface FileEntry {
     /** Files: size in bytes. */
     size?: number;
     modifiedAt?: Date;
+    /** When the entry was made, which its properties show. */
+    createdAt?: Date;
     mimeType?: string;
+    /**
+     * Files: what a picture, a video or a piece of audio is like, which its properties show. Leave
+     * it out, or any part of it, when the backend can't tell cheaply as it lists, and hand it over
+     * from `properties` instead.
+     */
+    media?: MediaInfo;
     /** Folders: how many entries they contain, shown in the size column. */
     childCount?: number;
     /**
@@ -39,6 +47,16 @@ export interface FileEntry {
     hidden?: boolean;
     /** Anything else the adapter wants to carry for custom actions; the file manager ignores it. */
     meta?: Record<string, unknown>;
+}
+
+/** What a picture, a video or a piece of audio is like (`FileEntry.media`). */
+export interface MediaInfo {
+    /** A picture's or a video's width, in pixels. */
+    width?: number;
+    /** A picture's or a video's height, in pixels. */
+    height?: number;
+    /** A video's or a piece of audio's length, in seconds. */
+    duration?: number;
 }
 
 export interface ListOptions {
@@ -217,6 +235,88 @@ export interface ThumbnailOptions {
     size: number;
 }
 
+/** Passed to `properties`. */
+export interface PropertiesOptions {
+    /** Aborted when the properties are no longer wanted: the panel moved on to something else, or closed. */
+    signal: AbortSignal;
+}
+
+/**
+ * One value among an entry's properties, of a type the file manager writes out in its `locale`:
+ * text, a number, a size in bytes, a date, a link, or a list of tags.
+ */
+export type PropertyValue =
+    | {
+          type: "text";
+          value: string;
+          /** Gives it a button that copies it, e.g. for a checksum or an address. */
+          copyable?: boolean;
+      }
+    | { type: "number"; value: number }
+    | { type: "size"; value: number }
+    | { type: "date"; value: Date }
+    | {
+          type: "link";
+          /** The link's text. */
+          value: string;
+          /** Where it goes, opened in a new tab. */
+          href: string;
+      }
+    | { type: "tags"; value: readonly string[] };
+
+/** A property of the backend's own, such as an owner, permissions or a checksum, with its label. */
+export type PropertyField = PropertyValue & {
+    /** Tells it apart within its group, and stays the same for the same property. */
+    id: string;
+    /** In the consumer's language, as action labels are. */
+    label: string;
+};
+
+/** Properties shown together, under a title when they have one. */
+export interface PropertyGroup {
+    id: string;
+    title?: string;
+    fields: PropertyField[];
+}
+
+/** What `properties` hands over. An object, so fields can be added later without a breaking change. */
+export interface EntryProperties {
+    /**
+     * The entry with the fields its listing left out as too costly to give for every entry, such as
+     * `createdAt` or `media`. The properties show it in place of the listed one; the listing stays
+     * as it is.
+     */
+    entry?: FileEntry;
+    /** The backend's own properties, shown after the file manager's. */
+    groups?: PropertyGroup[];
+}
+
+/** Everything in some folders, counted all the way down (`measure`). */
+export interface EntryTotals {
+    files: number;
+    folders: number;
+    /** The files' sizes added up, in bytes. */
+    size: number;
+}
+
+/** Passed to `measure`. */
+export interface MeasureOptions {
+    /** Aborted when the totals are no longer wanted: the panel moved on to something else, or closed. */
+    signal: AbortSignal;
+    /**
+     * Whether the file manager shows hidden files, so a backend can leave out hidden entries, and
+     * what's in hidden folders, while the user isn't seeing them, as `download` can. The folders
+     * themselves are always meant, hidden or not.
+     */
+    showHidden: boolean;
+    /**
+     * Reports the totals counted so far, which the properties show counting up, as a backend
+     * walking the folders one by one would. Calling it is optional; without it, the totals show
+     * once they're all counted.
+     */
+    onProgress: (totals: EntryTotals) => void;
+}
+
 export interface FileAdapter {
     /**
      * Lists the direct children of a folder, all at once or a page at a time (`nextCursor`). Reject
@@ -307,4 +407,26 @@ export interface FileAdapter {
      * with an `Error` to show its message beside the section's results.
      */
     search?(rootId: string, query: string, options: SearchOptions): Promise<SearchResult>;
+    /**
+     * Hands over one entry's properties, for the properties panel, called a moment after the panel
+     * comes to show it: the entry with fields its listing leaves out as too costly (`createdAt`,
+     * `media`), and properties of the backend's own, such as an owner, permissions, a checksum or a
+     * link to share. A folder shown from its own menu, the open folder or a section's root, may come
+     * as an entry with only `id`, `name` and `kind`, a root named after its section, as `download`
+     * has them. What a listing brings is shown without it, which is all there is without it.
+     * Results are kept for as long as the entry is listed as it was. Reject with an `Error` to show
+     * its message in their place.
+     */
+    properties?(entry: FileEntry, options: PropertiesOptions): Promise<EntryProperties>;
+    /**
+     * Counts everything in folders, all the way down, for the properties panel: how many files and
+     * folders, and the files' sizes added up, together for all of them. The folders may be in
+     * different folders, as a search's results are, and may come with only `id`, `name` and
+     * `kind`, as `properties` has them. It's called a moment after the panel comes to show them,
+     * and again after a change made through the file manager, or a refresh, while it does.
+     * Without it, a folder shows how many entries it holds (`childCount`), and the file manager
+     * never walks the folders itself. Reject with an `Error` to show its message in place of the
+     * totals, e.g. when there are too many to count.
+     */
+    measure?(folders: FileEntry[], options: MeasureOptions): Promise<EntryTotals>;
 }

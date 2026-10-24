@@ -9,6 +9,17 @@ const files = (count: number) => (count === 1 ? "1 file" : `${count} files`);
 
 const downloads = (count: number) => (count === 1 ? "a download" : `${count} downloads`);
 
+const folders = (count: number) => (count === 1 ? "1 folder" : `${count} folders`);
+
+// Files and folders together, leaving out a count of none unless both are.
+const filesAndFolders = (fileCount: number, folderCount: number) => {
+    if (fileCount > 0 && folderCount > 0) {
+        return `${files(fileCount)} and ${folders(folderCount)}`;
+    }
+
+    return folderCount > 0 ? folders(folderCount) : files(fileCount);
+};
+
 /**
  * The component's own text in US English, which every key left out of `localeText` falls back to.
  * It has every key, so it's the place to start a translation from.
@@ -172,6 +183,10 @@ export const enUS: FileManagerLocaleText = {
 
     download: "Download",
 
+    showProperties: "Show properties",
+    propertiesShown: "Properties shown",
+    propertiesHidden: "Properties hidden",
+
     previous: "Previous",
     next: "Next",
     previewPosition: (name, position, count) => `${name}, ${position} of ${count}`,
@@ -199,7 +214,8 @@ export const enUS: FileManagerLocaleText = {
     shortcutToggleHidden: "Show or hide hidden files",
     shortcutPasteFiles: "Upload files from the clipboard",
     shortcutToggleSidebar: "Show or hide the sidebar",
-    shortcutSwitchPane: "Switch between the sidebar and the content",
+    shortcutToggleProperties: "Show or hide the properties",
+    shortcutSwitchPane: "Switch between the sidebar, the content and the properties",
     shortcutExpand: "Expand a folder",
     shortcutCollapse: "Collapse a folder",
     shortcutOpen: "Open the focused item",
@@ -287,4 +303,34 @@ export const enUS: FileManagerLocaleText = {
     downloadCancel: (count, name) => `Cancel downloading ${entries(count, name)}`,
     downloadRetry: (count, name) => `Download ${entries(count, name)} again`,
     downloadSave: (count, name) => `Download ${entries(count, name)}`,
+
+    properties: "Properties",
+    propertiesClose: "Close the properties",
+    propertiesNothingSelected: "Select an item to see its properties",
+    propertiesItems: (count) => (count === 1 ? "1 item" : `${count} items`),
+    propertiesType: "Type",
+    propertiesTypeWithMime: (type, mimeType) => `${type} (${mimeType})`,
+    propertiesSize: "Size",
+    propertiesSizeExact: (size, bytes) => `${size} (${bytes})`,
+    propertiesContents: "Contents",
+    propertiesTotals: (fileCount, folderCount, size) =>
+        fileCount === 0 && folderCount === 0
+            ? "Empty"
+            : `${filesAndFolders(fileCount, folderCount)}, totalling ${size}`,
+    propertiesKinds: (fileCount, folderCount) => filesAndFolders(fileCount, folderCount),
+    propertiesCounting: "Counting",
+    propertiesLocation: "Location",
+    propertiesSeveralFolders: "Several folders",
+    propertiesOpenLocation: "Open item location",
+    propertiesModified: "Modified",
+    propertiesCreated: "Created",
+    propertiesDimensions: "Dimensions",
+    propertiesDuration: "Duration",
+    propertiesRename: "Rename…",
+    propertiesLoading: "Loading",
+    propertiesFailed: "Couldn't get the rest of the properties.",
+    propertiesCountFailed: (count) => `Couldn't count what's in ${itOrThem(count)}.`,
+    propertiesTryAgain: "Try again",
+    propertiesCopy: (label) => `Copy ${label}`,
+    propertiesCopied: (label) => `${label} copied`,
 };
