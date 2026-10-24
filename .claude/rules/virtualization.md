@@ -71,8 +71,9 @@ The tree is flattened into the rows it shows (`hooks/use-tree-rows.ts`, `FlatTre
 
 `useTreeRows` reads every listing it shows from the store, and is flattened again whenever any listing changes, by the store's `version`. Each listing's folders are sorted once, kept in a `WeakMap` by the listing, which is replaced rather than changed.
 
-- A folder is listed once the tree comes to show its folders: when it's expanded along with every row above it, and its `hasSubfolders` hint isn't false. A section's root is listed when the section is expanded, and a single section's root at once.
-- Only folders the tree has just come to show are listed, so a listing that failed isn't tried again on every change, only from its Retry or once it's shown again. So is a folder shown already whose section another adapter now serves, since `requested` remembers which adapter each was listed with, and that section's listings are dropped (see `props.md`).
+- A folder is listed once the tree comes to show its folders: when it's expanded along with every row above it, and its `hasSubfolders` hint isn't false. A section's root is listed when the section is expanded, and a single section's root at once. Coming to show a folder listed before opens it (`store.open`), which lists it again in the background once its listing is `relistAfter` old (see "Listing again as a folder opens" in `file-manager.md`).
+- Only folders the tree has just come to show are opened, so a listing that failed isn't tried again on every change, only from its Retry or once it's shown again. So is a folder shown already whose section another adapter now serves, since `requested` remembers which adapter each was listed with, and that section's listings are dropped (see `props.md`). A folder shown whose listing is gone, dropped as its id may name another folder now (`forget`), is listed afresh.
+- The tree tells the store which listings it shows (`store.show`), so they're never dropped to make room (see "Keeping listings" in `file-manager.md`).
 
 ### What stays rendered
 

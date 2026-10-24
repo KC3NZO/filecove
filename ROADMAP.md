@@ -4,7 +4,7 @@ What's left in the features already built, what packaging needs before a release
 
 ## Order
 
-1. Re-list a folder in the background when it opens, showing the cached listing meanwhile, with a prop to turn it off (A, "Folder data and cache").
+1. ~~Re-list a folder in the background when it opens, showing the cached listing meanwhile, with a prop to turn it off (A, "Folder data and cache").~~ Done 2026-10-23.
 2. Tooltips on icon-only buttons, selection that shows in Windows High Contrast mode, and screen-reader announcements when operations finish (A, "Interface polish" and "Operations").
 3. Properties, then folder upload (C).
 4. Packaging, in one pass before a release (B).
@@ -12,10 +12,11 @@ What's left in the features already built, what packaging needs before a release
 ## A. Gaps in features already built
 
 ### Folder data and cache
-- [ ] **new:** Once a folder is listed, opening it again shows the saved copy and never asks the adapter again. Changes made elsewhere (another user, another tab) only show after a refresh. There's no re-check when a folder opens, no expiry, and no adapter `watch`.
-- [ ] **new:** Saved listings are never dropped while the component is open. Thumbnails stop at 1,000; folder listings have no limit.
-- [ ] **new:** With an empty `sections` (say, while the app is still loading them) the content area is blank, with no message.
-- [ ] A section rooted further below a changed folder only updates if that folder happens to be loaded (known limit).
+- [x] **new:** Once a folder is listed, opening it again shows the saved copy and never asks the adapter again. Changes made elsewhere (another user, another tab) only show after a refresh. There's no re-check when a folder opens, no expiry, and no adapter `watch`. *Done 2026-10-23: a folder opened again (content, tree, picker) is listed again in the background, `relistAfter` (default 0, `Infinity` for never) sets how old a listing may be first, and unchanged entries keep their objects. An adapter `watch` stays under "Optional ideas".*
+- [x] **new:** Saved listings are never dropped while the component is open. Thumbnails stop at 1,000; folder listings have no limit. *Done 2026-10-23: listings nothing shows are dropped beyond 20,000 entries, longest unseen first, never one with a kept listing below it.*
+- [x] **new:** With an empty `sections` (say, while the app is still loading them) the content area is blank, with no message. *Done 2026-10-23: "No sections to show", folder-only buttons disabled, and the first section to come starts expanded.*
+- [x] A section rooted further below a changed folder only updates if that folder happens to be loaded (known limit). *Done 2026-10-23: after a folder is deleted, moved or renamed, a section that doesn't list it lists what it shows again at once, and every listing of the adapter's sections is checked again as it opens.*
+- [x] **new:** A folder that a paste or move with Replace put another in the place of kept its old listing, so an expanded tree row showed the old contents. *Done 2026-10-23: replaced folders go through `dropFolders`.*
 
 ### Operations (create, rename, copy, move, delete, paste)
 - [ ] A non-modal panel for long copies and moves.
@@ -97,7 +98,7 @@ What's left in the features already built, what packaging needs before a release
 - [ ] **new:** There's no `"use client"` directive, which Next.js App Router needs.
 - [ ] The README is still Vite's template, there's no LICENSE or CHANGELOG, `index.html` still has the repo name as its title, and the repo name mentions Pigment.
 - [ ] **new:** The MUI-style ways to customise are missing: stable class names, theme `defaultProps` and `styleOverrides`, and `slots`/`slotProps` (for example to replace the empty state or add header buttons).
-- [ ] **new:** Fixed numbers an app can't change: 3 uploads and 3 downloads at once, 6 thumbnails at once, and the search delay.
+- [ ] **new:** Fixed numbers an app can't change: 3 uploads and 3 downloads at once, 6 thumbnails at once, the search delay, and the 20,000 entries of listings kept that nothing shows.
 
 ## C. New features
 
@@ -110,7 +111,7 @@ What's left in the features already built, what packaging needs before a release
 6. [ ] Undo.
 
 ### Optional ideas
-- [ ] Live updates: an adapter `watch`, or re-checking a folder when it opens.
+- [ ] Live updates: an adapter `watch`, or re-checking the open folder when the page is shown again (re-checking a folder as it opens is done, `relistAfter`).
 - [ ] A per-entry permissions field.
 - [ ] Grid zoom levels (Ctrl+plus and Ctrl+minus, as in GNOME).
 - [ ] Choosing and resizing list columns.
