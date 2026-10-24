@@ -4,6 +4,7 @@ paths:
   - "src/hooks/use-upload-queue.ts"
   - "src/hooks/use-drop-target.ts"
   - "src/utils/files.ts"
+  - "src/types/section.ts"
   - "src/components/uploads/**"
   - "src/components/file-manager/dialogs/upload-dialog.tsx"
   - "src/types/upload.ts"
@@ -36,7 +37,7 @@ Keep it that way: `FileManager` imports the shared parts, never the other way ro
 
 Every route ends in `askUpload` in `file-manager.tsx`, with a `DroppedFiles` (`files`, plus the names of dropped `folders`):
 
-- **`ActionContext.upload(files?)`** uploads into the context's `folder`. Without `files` it opens the browser's file picker, a hidden `<input type="file" multiple>` in the root, which only opens from a click or key press (an action's `onSelect` runs in one). It's missing when the adapter has no `upload`, the section refuses uploads (see "Sections refusing uploads"), or while another upload is being checked. The consumer places and labels the action, as with every other one.
+- **`ActionContext.upload(files?)`** uploads into the context's `folder`. Without `files` it opens the browser's file picker, a hidden `<input type="file" multiple>` in the root, which only opens from a click or key press (an action's `onSelect` runs in one). It offers only the types the section takes, and is missing when the adapter has no `upload`, the section takes no uploads (see "Sections limiting uploads"), or while another upload is being checked. The consumer places and labels the action, as with every other one.
 - **Dropping files from the desktop** onto the same targets that take dragged entries: a folder in the content, the open folder's empty space or a file in it, a tree folder, or a section row. `use-drop-target.ts` handles both kinds of drag. Dragged files show only as `"Files"` in `dataTransfer.types` until the drop, so they're offered by adapter alone (`DragContext.uploadInto`) and read on drop (`droppedFiles`). The highlight, the panel outline and the 700 ms hold to expand all work as they do for entries. A drag from outside never says how it ended, so a target unmarks itself on `dragleave` and `drop`.
 - **Pasting files from the system clipboard** (files copied in the desktop's file manager, a copied picture or screenshot) with the browser's paste key, Ctrl+V, ⌘V or Shift+Insert, into the folder Ctrl+V pastes into: the open folder from the content, or a tree row's folder (a section row's root). `folder-view.tsx` and the tree rows (`TreeItem`, on the item itself) hand their `paste` event to `pasteFiles` (`PasteFiles`, `types/menu.ts`) in `file-manager.tsx`, which uploads what `filesIn` (`utils/files.ts`, shared with drops) reads from `clipboardData`, through `offerUpload`, so a section refusing uploads and one upload being checked count as for a drop.
   - **The file manager's own entries come first**: while the clipboard of cut or copied entries can be pasted into that folder (`canPaste`, a paste running or not), nothing is uploaded, since the page can't tell which was copied last without asking for permission. Ctrl+V reaches the browser only when no action took it: the consumer's paste action runs and prevents it, and a disabled action lets the paste key through (`pastes` in `utils/shortcut.ts`, `runShortcut`), so the playground's Paste, greyed out with nothing to paste, still lets files be pasted. Shift+Insert always reaches the browser, which is why `pasteFiles` checks the clipboard itself.
@@ -45,13 +46,18 @@ Every route ends in `askUpload` in `file-manager.tsx`, with a `DroppedFiles` (`f
   - Text fields are left alone, as the paste goes only to the content and the tree.
 - Files dropped anywhere the views don't take them are refused on the root (`refuseFiles`, dropEffect "none"), or the browser would open them in place of the page.
 
-## Sections refusing uploads
+## Sections limiting uploads
 
-A section's optional `acceptUploads` (`types/section.ts`, public, default `true`) set to `false` takes no uploads into any of its folders, though its adapter has `upload`, for a section the user may browse but not add files to. Unlike `importFrom`, it's about files from the desktop, not entries from other sections, and the two are independent.
+A section's optional `acceptUploads` (`types/section.ts`, public, default `true`) says which files can be uploaded into its folders, though its adapter has `upload`: any (`true`), none (`false`, for a section the user may browse but not add files to), or those matching a string in the file input's `accept` syntax (`"image/*,.pdf"`). Unlike `importFrom`, it's about files from outside, not entries from other sections, and the two are independent. The helpers are in `utils/files.ts`, which imports nothing from `components/file-manager/`, so the media manager can use them too.
 
-- `offerUpload` in `file-manager.tsx` checks it, the one place every route asks: so `ActionContext.upload` is missing in its folders (the playground's "Upload files…" hides), and its drop targets don't take files dragged from the desktop, showing the no-drop cursor, with the root refusing the drop so the browser doesn't open them.
-- It goes by the section, not the folder, so the same folder shown in another section that takes uploads takes them there, as with `importFrom`, since sections are independent.
-- The playground's Design assets refuses uploads, as it refuses entries from other sections.
+- **None:** `offerUpload` in `file-manager.tsx` checks `takesUploads`, the one place every route asks, so `ActionContext.upload` is missing in its folders (the playground's "Upload files…" hides), and its drop targets don't take files dragged from the desktop, showing the no-drop cursor, with the root refusing the drop so the browser doesn't open them.
+- **Some:** `uploadPatterns` reads the string as a file input reads `accept`: comma-separated, trimmed and lowercased, extensions (".pdf"), MIME types ("image/png") and wildcards ("image/*"). A string with no pattern, or with `*/*`, takes any file. `acceptsFile` matches a file by its name's extension or its MIME type, without parameters; a file the browser gives no type, as for an extension it doesn't know, only matches an extension.
+  - The picker offers only those types (`accept` on the hidden input, set by `pickFiles` as it opens), but most systems' pickers let the user pick any, so it's a convenience.
+  - The upload check (below) leaves out what doesn't match, however it came: picked, dropped, pasted or handed to `ActionContext.upload(files)`.
+  - A drag only tells each file's type before the drop, not its name, so a target refuses it, with the no-drop cursor, only when no pattern is an extension and every file dragged has a type no pattern takes (`mayAccept`, through `DragContext.uploadInto`'s `items`). A folder, or a file of no type, may match, and the drop's check decides.
+  - The adapter's `upload` still has the final say, and its error shows in the panel.
+- It goes by the section, not the folder, so the same folder shown in another section takes what that section takes, as with `importFrom`, since sections are independent. Folders have no rule of their own, by choice: backends don't limit types per folder, a folder that needs a rule can be a section of its own (one can be rooted anywhere), and an adapter whose rule depends on the folder rejects the file in `upload` before sending anything, which shows in the panel.
+- The playground's Design assets takes no uploads, as it takes no entries from other sections, and the Media bucket only pictures, videos and sound (`"image/*,video/*,audio/*"`).
 
 ## The check before queueing
 
@@ -59,7 +65,7 @@ A section's optional `acceptUploads` (`types/section.ts`, public, default `true`
 
 - Names the folder's listing already has get Replace, Keep both and Skip (`conflict-step.tsx`); otherwise `conflict` is "keepBoth", so a clash the cache missed never overwrites anything.
 - **Skip leaves the clashing files out of the queue** instead of sending them for the adapter to skip, since sending a large file for nothing could take minutes. "skip" still goes to the adapter for clashes the cache missed.
-- Dropped folders can't be uploaded yet. They're named as left out, with Cancel and Upload for the rest, or, when only folders were dropped, a "Couldn't upload" notice.
+- Dropped folders can't be uploaded yet, and files of types the section doesn't take (`acceptUploads`) aren't uploaded. Both are named as left out (`uploadFoldersLeftOut`, `uploadTypesLeftOut`), with Cancel and Upload for the rest, or, when nothing is left, a "Couldn't upload" notice saying why (`uploadFoldersOnly`, `uploadTypesOnly`). The types are told by the section's label and the type labels the list shows ("Image, Video, and Audio", `Locale.describeAccepted`), as a list in the locale's way. Clashes are only looked for among the files that are uploaded.
 
 ## The panel
 

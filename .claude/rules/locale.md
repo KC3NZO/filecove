@@ -37,7 +37,7 @@ Adding a text means adding its key to the interface, with a comment when its use
 
 - `formatSize` writes bytes in decimal units through `Intl.NumberFormat`'s `unit` style, so units are in the locale's own words too ("1,5 ko" in French): "byte" in full below 1 kB, then kilobytes up to terabytes, short.
 - `formatNumber` writes digits in the locale's script without grouping, for dimensions and counters; `formatPercent` the image viewer's zoom.
-- `describeSize`, `describeDate` and `describeType` describe an entry for the list and the preview. `describeType` takes "PDF", "JSON" and an uppercased extension as they are.
+- `describeSize`, `describeDate` and `describeType` describe an entry for the list and the preview. `describeAccepted` names the types a section's `acceptUploads` takes with `describeType`'s labels, each isolated, joined by `Intl.ListFormat` ("Image, Video, and PDF"), for the upload check's notices. `describeType` takes "PDF", "JSON" and an uppercased extension as they are.
 - `compareNames` sorts names in natural order (`numeric`), and `sameLetters` matches type-ahead, both case and accents aside, both by the locale's collation, so a language that counts "å" as a letter of its own keeps it apart from "a".
 - `foldLetters` readies names and what's typed for a folder search: lowercased the locale's way, then with every accent dropped, "å" included, since collation can't find text within text (see "Searching the open folder" in `file-manager.md`).
 - Sorting goes through it: `entryComparator(sort, locale)` and `nameOrder(locale)` for the tree's and the picker's fixed order, the same function for as long as the locale is, so the tree's sorted folders are cached by locale and listing.

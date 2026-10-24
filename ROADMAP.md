@@ -38,7 +38,7 @@ What's left in the features already built, what packaging needs before a release
 - [x] Pasting files from the system clipboard. *Done 2026-10-23: Ctrl+V, ⌘V or Shift+Insert in the content or on a tree row uploads them there, unless the file manager's own cut or copied entries can be pasted there, which come first. The menu's Paste can't (reading the clipboard from a click needs permission), and what a browser hands over from the desktop differs by browser and system.*
 - [x] A way for a section to refuse uploads. *Done 2026-10-23: `Section.acceptUploads: false` takes no uploads, by the picker or by dropping, in any of the section's folders. It goes by the section, as `importFrom` does.*
 - [ ] Showing which files just arrived: "Show in folder" on a finished upload in the panel, and a brief highlight in the open folder, never a change to the selection.
-- [ ] **new:** The file picker has no `accept` setting, so an app can't limit file types.
+- [x] **new:** The file picker has no `accept` setting, so an app can't limit file types. *Done 2026-10-24: `Section.acceptUploads` takes a string in `accept`'s syntax, offered by the picker, checked for picked, dropped and pasted files, which the upload check leaves out saying which types the section takes, and refused while dragging when the files' types surely don't match. Folders have no rule of their own, by choice (see `uploads.md`).*
 
 ### Preview
 - [ ] The app's own actions in the preview's header.
@@ -116,4 +116,4 @@ What's left in the features already built, what packaging needs before a release
 
 ## Left out by choice
 
-Not gaps: tests, a built-in editor, keyboard drag and drop, renaming in place, a built-in trash (an app builds one from `move` and a section of its own), modal dialogs for background work, resuming an upload after a reload (the browser no longer has the files, and resuming partway is the backend's upload protocol), and `onClipboardChange` until a consumer needs it (see "Internal by choice" in `props.md`).
+Not gaps: tests, a built-in editor, keyboard drag and drop, renaming in place, a built-in trash (an app builds one from `move` and a section of its own), modal dialogs for background work, resuming an upload after a reload (the browser no longer has the files, and resuming partway is the backend's upload protocol), upload types per folder (a section rooted there, or the adapter's `upload`, covers it), and `onClipboardChange` until a consumer needs it (see "Internal by choice" in `props.md`).
