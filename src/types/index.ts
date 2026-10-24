@@ -26,7 +26,7 @@ export type {
     TransferOptions,
     UploadOptions,
 } from "./adapter";
-export type { Clipboard } from "./clipboard";
+export type { Clipboard, ClipboardLookup } from "./clipboard";
 export type { DownloadItem, DownloadStatus, PreparedDownload } from "./download";
 export type { DraggedEntries, DragSource, DropInto, DropTarget } from "./drag";
 export type { Clash, FolderState } from "./folder";

@@ -13,6 +13,7 @@ import { DirectionContext } from "../../contexts/direction-context";
 import { DragContext } from "../../contexts/drag-context";
 import { LocaleContext } from "../../contexts/locale-context";
 import { useAnnouncer } from "../../hooks/use-announcer";
+import { useClipboardFollow } from "../../hooks/use-clipboard-follow";
 import { carriesFiles } from "../../hooks/use-drop-target";
 import { useDownloadQueue } from "../../hooks/use-download-queue";
 import { useEntryDrag } from "../../hooks/use-entry-drag";
@@ -1112,9 +1113,13 @@ const FileManager = ({
 
     const hasActions = useMemo(() => actions.some((group) => group.actions.length > 0), [actions]);
 
+    // Entries on the clipboard that a change may have reached are looked for again.
+    useClipboardFollow(clipboard, setClipboard, store);
+
+    // Cut entries being found again by name aren't marked, as their ids may name others meanwhile.
     const cut = useMemo(
         () =>
-            clipboard?.kind === "cut"
+            clipboard?.kind === "cut" && clipboard.lookup?.by !== "name"
                 ? { adapter: clipboard.adapter, ids: new Set(clipboard.entries.map((entry) => entry.id)) }
                 : null,
         [clipboard],
@@ -1853,10 +1858,14 @@ const FileManager = ({
     // Files pasted from the system clipboard too, into the folder Ctrl+V pastes into, but never while
     // entries cut or copied in the file manager can be pasted there, which come first. The page can't
     // tell which was copied last. Ctrl+V only gets this far when no action took it (`runShortcut`);
-    // Shift+Insert always does.
+    // Shift+Insert always does. While the entries are looked for again, nothing is pasted, since
+    // they may yet turn out pastable there.
     const pasteFiles = useCallback<PasteFiles>(
         (event, target, trail) => {
-            const ownFirst = clipboard && canPaste(clipboard, target.adapter ?? adapter, target, trail);
+            const served = target.adapter ?? adapter;
+            const ownFirst =
+                clipboard &&
+                (clipboard.lookup ? clipboard.adapter === served : canPaste(clipboard, served, target, trail));
             const upload = ownFirst ? undefined : offerUpload(target, trail);
 
             if (!upload || !event.clipboardData.types.includes("Files")) {
@@ -2113,6 +2122,26 @@ const FileManager = ({
         [revise, sectionsOf, store],
     );
 
+    // Whether a section may be rooted below one of the folders, as `dropFolders` has it: it's one
+    // `served` serves, none of whose listings lists one of them. Read before their listings go.
+    const mayBeRootedBelow = useCallback(
+        (served: FileAdapter, folderIds: readonly string[]) => {
+            if (folderIds.length === 0) {
+                return () => false;
+            }
+
+            const ids = new Set(folderIds);
+            const above = new Set(
+                sectionsOf(served)
+                    .filter((shown) => store.lists(shown.id, ids))
+                    .map((shown) => shown.id),
+            );
+
+            return (sectionId: string) => !above.has(sectionId);
+        },
+        [sectionsOf, store],
+    );
+
     // A copy's or move's `onChanged`: as `relist`, and the folders a Replace or Merge merged others
     // into are listed again all the way down, wherever they're cached, since what's in them may have
     // changed at any depth. Their ids still name them. A section that doesn't list one may be rooted
@@ -2140,10 +2169,12 @@ const FileManager = ({
 
     // Moved folders go from the cache (`dropFolders`). The open place, in whichever section shows
     // them, can't follow a moved folder it's inside, so it goes where the folder went. Moved entries
-    // leave the clipboard too, since their ids may have changed.
+    // leave the clipboard too, since their ids may have changed, and the rest are looked for again
+    // when they may be below a moved folder.
     const handleMoved = useCallback(
         (fromAdapter: FileAdapter, entries: FileEntry[], destination: FileManagerLocation) => {
             const movedIds = new Set(entries.map((entry) => entry.id));
+            const mayBeBelow = mayBeRootedBelow(fromAdapter, folderIdsOf(entries));
             const dropped = dropFolders(fromAdapter, folderIdsOf(entries));
 
             if (
@@ -2154,9 +2185,11 @@ const FileManager = ({
                 goTo(destination);
             }
 
-            setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, movedIds));
+            setClipboard(
+                (prev) => prev && withoutEntries(prev, fromAdapter, movedIds, dropped, mayBeBelow(prev.section.id)),
+            );
         },
-        [adapter, section, place, dropFolders, goTo],
+        [adapter, section, place, dropFolders, mayBeRootedBelow, goTo],
     );
 
     // The sidebar tree scrolls to a folder just created, in whichever section shows it, once the
@@ -2245,7 +2278,8 @@ const FileManager = ({
     );
 
     // Deleted folders go from the cache (`dropFolders`), and places inside one, in the history too,
-    // end at the folder that held it, in every section showing it. Deleted entries leave the clipboard.
+    // end at the folder that held it, in every section showing it. Deleted entries leave the clipboard,
+    // and the rest are looked for again when they may be below a deleted folder.
     const handleDeleted = useCallback(
         ({ adapter: fromAdapter, entries }: DeleteRequest) => {
             const deletedIds = new Set(entries.map((entry) => entry.id));
@@ -2253,13 +2287,16 @@ const FileManager = ({
 
             closeDelete();
 
+            const mayBeBelow = mayBeRootedBelow(fromAdapter, folderIdsOf(entries));
             const dropped = dropFolders(fromAdapter, folderIdsOf(entries));
 
             revise((visited) => (showing.has(visited.sectionId) ? outsideDeleted(visited, dropped) : visited));
-            setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, deletedIds));
+            setClipboard(
+                (prev) => prev && withoutEntries(prev, fromAdapter, deletedIds, dropped, mayBeBelow(prev.section.id)),
+            );
             announce(localeValue.text.deleteDone(entries.length, isolate(entries[0].name)));
         },
-        [closeDelete, dropFolders, revise, sectionsOf, announce, localeValue],
+        [closeDelete, dropFolders, mayBeRootedBelow, revise, sectionsOf, announce, localeValue],
     );
 
     // The new or renamed entry is selected if its folder is open, in whichever section shows it. A
@@ -2286,9 +2323,21 @@ const FileManager = ({
                 announce(message);
             }
 
-            // A renamed entry on the clipboard is pasted as it is now.
+            // A folder's ids, old and new, may name other folders' contents, as path ids do. Whether a
+            // section may be rooted below the folder renamed is read before its listings go.
+            const gone = entry.kind === "folder" && before && entry.id !== before.id ? [before.id] : [];
+            const mayBeBelow = mayBeRootedBelow(served, gone);
+            const dropped =
+                entry.kind === "folder" && entry.id !== before?.id
+                    ? dropFolders(served, before ? [entry.id, before.id] : [entry.id], gone)
+                    : NO_IDS;
+
+            // A renamed entry on the clipboard is pasted as it is now, entries below a renamed folder
+            // are followed, and those that may be below it otherwise are looked for again.
             if (before) {
-                setClipboard((prev) => prev && withRenamed(prev, served, before, entry));
+                setClipboard(
+                    (prev) => prev && withRenamed(prev, served, before, entry, dropped, mayBeBelow(prev.section.id)),
+                );
             }
 
             if (entry.kind !== "folder") {
@@ -2297,13 +2346,7 @@ const FileManager = ({
 
             if (!before) {
                 revealInTree(served, parentId, entry);
-            }
 
-            if (entry.id !== before?.id) {
-                dropFolders(served, before ? [entry.id, before.id] : [entry.id], before ? [before.id] : []);
-            }
-
-            if (!before) {
                 return;
             }
 
@@ -2333,7 +2376,7 @@ const FileManager = ({
                 });
             }
         },
-        [closeNaming, openKey, sectionsOf, dropFolders, revealInTree, revise, announce, localeValue],
+        [closeNaming, openKey, sectionsOf, dropFolders, mayBeRootedBelow, revealInTree, revise, announce, localeValue],
     );
 
     const contextFor = useCallback(
