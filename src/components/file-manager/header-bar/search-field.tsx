@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, RefObject } from "react";
 
 import Box from "@mui/material/Box";
-import IconButton from "@mui/material/IconButton";
 import InputBase from "@mui/material/InputBase";
 import type { SxProps, Theme } from "@mui/material/styles";
 
@@ -10,6 +9,7 @@ import { useLocale } from "../../../hooks/use-locale";
 import { focusOutline } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { isRtl } from "../../../utils/dom";
+import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 import SearchSectionsMenu from "./search-sections-menu";
 
@@ -194,9 +194,9 @@ const SearchField = ({
             )}
             {/* Keeps the focus in the field as it's pressed, so it clears what's typed without
                 losing it, or closes the search with the field as the place to go back from. */}
-            <IconButton
+            <TooltipIconButton
                 size="small"
-                aria-label={query ? text.clearSearch : text.closeSearch}
+                label={query ? text.clearSearch : text.closeSearch}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
                     if (query) {
@@ -208,7 +208,7 @@ const SearchField = ({
                 }}
             >
                 <Icon name="close" fontSize="small" />
-            </IconButton>
+            </TooltipIconButton>
         </Box>
     );
 };

@@ -2,12 +2,12 @@ import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, Ref, SyntheticEvent } from "react";
 
 import Box from "@mui/material/Box";
-import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../../hooks/use-locale";
 import { pressedKeys } from "../../../utils/shortcut";
+import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 
 /** What the preview hands the image it shows. */
@@ -559,36 +559,36 @@ const ImageViewer = ({ ref, src, alt, onLoad, onError }: ImageViewerProps) => {
             </Box>
             {image && view && (
                 <Box sx={toolbarSx}>
-                    <IconButton
+                    <TooltipIconButton
                         size="small"
-                        aria-label={text.zoomOut}
+                        label={text.zoomOut}
                         aria-keyshortcuts="-"
                         disabled={!zoom}
                         onClick={() => zoomAround((current) => stepScale(current, -1))}
                     >
                         <Icon name="zoomOut" fontSize="small" />
-                    </IconButton>
+                    </TooltipIconButton>
                     <Typography variant="body2" color="text.secondary" sx={percentSx}>
                         {formatPercent(scale)}
                     </Typography>
-                    <IconButton
+                    <TooltipIconButton
                         size="small"
-                        aria-label={text.zoomIn}
+                        label={text.zoomIn}
                         aria-keyshortcuts="Plus"
                         disabled={scale >= maxScale(image, view) - 1e-9}
                         onClick={() => zoomAround((current) => stepScale(current, 1))}
                     >
                         <Icon name="zoomIn" fontSize="small" />
-                    </IconButton>
-                    <IconButton
+                    </TooltipIconButton>
+                    <TooltipIconButton
                         size="small"
-                        aria-label={text.zoomFit}
+                        label={text.zoomFit}
                         aria-keyshortcuts="0"
                         disabled={!zoom}
                         onClick={() => zoomAround((_, best) => best)}
                     >
                         <Icon name="zoomFit" fontSize="small" />
-                    </IconButton>
+                    </TooltipIconButton>
                 </Box>
             )}
         </Box>

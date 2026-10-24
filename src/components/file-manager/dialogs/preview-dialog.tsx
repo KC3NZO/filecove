@@ -5,7 +5,6 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog, { dialogClasses } from "@mui/material/Dialog";
-import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
@@ -17,6 +16,7 @@ import { dialogPaperSx, focusOutline, visuallyHiddenSx } from "../../../styles/m
 import { isolate, joinIsolated } from "../../../utils/bidi";
 import { isRtl } from "../../../utils/dom";
 import { ResponseError, TEXT_LIMIT, previewKind } from "../../../utils/preview";
+import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import { FileTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import ImageViewer from "./image-viewer";
@@ -461,23 +461,23 @@ const PreviewDialog = ({
                 </Box>
                 {count > 1 && (
                     <Box sx={stepperSx}>
-                        <IconButton aria-label={text.previous} disabled={index === 0} onClick={() => step(-1)}>
+                        <TooltipIconButton label={text.previous} disabled={index === 0} onClick={() => step(-1)}>
                             <Icon name="chevronLeft" />
-                        </IconButton>
+                        </TooltipIconButton>
                         <Typography variant="body2" color="text.secondary" sx={counterSx} aria-hidden>
                             {joinIsolated([formatNumber(index + 1), formatNumber(count)], " / ")}
                         </Typography>
-                        <IconButton aria-label={text.next} disabled={index === count - 1} onClick={() => step(1)}>
+                        <TooltipIconButton label={text.next} disabled={index === count - 1} onClick={() => step(1)}>
                             <Icon name="chevronRight" />
-                        </IconButton>
+                        </TooltipIconButton>
                     </Box>
                 )}
-                <IconButton aria-label={text.download} onClick={() => onDownload(request, entry)}>
+                <TooltipIconButton label={text.download} onClick={() => onDownload(request, entry)}>
                     <Icon name="download" />
-                </IconButton>
-                <IconButton aria-label={text.close} onClick={onClose}>
+                </TooltipIconButton>
+                <TooltipIconButton label={text.close} onClick={onClose}>
                     <Icon name="close" />
-                </IconButton>
+                </TooltipIconButton>
             </Box>
             <Box sx={bodySx} {...swipe}>
                 <Box ref={slideRef} sx={slideSx}>

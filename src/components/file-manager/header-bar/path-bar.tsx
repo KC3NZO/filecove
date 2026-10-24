@@ -1,11 +1,11 @@
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
-import IconButton from "@mui/material/IconButton";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../../hooks/use-locale";
 import { focusRing } from "../../../styles/mixins";
 import { belowElement } from "../../../utils/menu-position";
+import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 import IconSlot from "../icon-slot";
 
@@ -131,9 +131,9 @@ const PathBar = ({ section, trail, hasActions, onNavigate, onOpenMenu }: PathBar
                 </Box>
             </Box>
             {hasActions && (
-                <IconButton
+                <TooltipIconButton
                     size="small"
-                    aria-label={text.folderMenu}
+                    label={text.folderMenu}
                     sx={menuButtonSx}
                     onClick={(event) =>
                         onOpenMenu(belowElement(event.currentTarget), {
@@ -145,7 +145,7 @@ const PathBar = ({ section, trail, hasActions, onNavigate, onOpenMenu }: PathBar
                     }
                 >
                     <Icon name="more" fontSize="small" />
-                </IconButton>
+                </TooltipIconButton>
             )}
         </Box>
     );

@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Collapse from "@mui/material/Collapse";
-import IconButton from "@mui/material/IconButton";
 import LinearProgress from "@mui/material/LinearProgress";
 import Typography from "@mui/material/Typography";
 
@@ -21,6 +20,7 @@ import {
     panelToggleIconSx,
 } from "../../styles/panel";
 import { isolate, joinIsolated } from "../../utils/bidi";
+import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon, FolderTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 
@@ -110,26 +110,26 @@ const DownloadRow = ({ item, onCancel, onRetry, onSave }: DownloadRowProps) => {
 
     if (isActive(item)) {
         action = (
-            <IconButton size="small" aria-label={text.downloadCancel(count, name)} onClick={() => onCancel(id)}>
+            <TooltipIconButton size="small" label={text.downloadCancel(count, name)} onClick={() => onCancel(id)}>
                 <Icon name="close" fontSize="small" />
-            </IconButton>
+            </TooltipIconButton>
         );
     } else if (status === "ready") {
         action = (
-            <IconButton
+            <TooltipIconButton
                 size="small"
                 color="primary"
-                aria-label={text.downloadSave(count, name)}
+                label={text.downloadSave(count, name)}
                 onClick={() => onSave(id)}
             >
                 <Icon name="download" fontSize="small" />
-            </IconButton>
+            </TooltipIconButton>
         );
     } else {
         action = (
-            <IconButton size="small" aria-label={text.downloadRetry(count, name)} onClick={() => onRetry(id)}>
+            <TooltipIconButton size="small" label={text.downloadRetry(count, name)} onClick={() => onRetry(id)}>
                 <Icon name="refresh" fontSize="small" />
-            </IconButton>
+            </TooltipIconButton>
         );
     }
 
@@ -211,19 +211,19 @@ const DownloadPanel = ({ items, onCancel, onRetry, onSave, onCancelAll, onClear 
                         </Typography>
                     )}
                 </Box>
-                <IconButton
-                    aria-label={expanded ? text.downloadsHide : text.downloadsShow}
+                <TooltipIconButton
+                    label={expanded ? text.downloadsHide : text.downloadsShow}
                     aria-expanded={expanded}
                     onClick={() => setExpanded((prev) => !prev)}
                 >
                     <Icon name="expand" fontSize="small" sx={panelToggleIconSx} />
-                </IconButton>
-                <IconButton
-                    aria-label={active > 0 ? text.downloadsCancelAll : text.downloadsClose}
+                </TooltipIconButton>
+                <TooltipIconButton
+                    label={active > 0 ? text.downloadsCancelAll : text.downloadsClose}
                     onClick={active > 0 ? onCancelAll : onClear}
                 >
                     <Icon name="close" fontSize="small" />
-                </IconButton>
+                </TooltipIconButton>
             </Box>
             <Collapse in={expanded}>
                 <Box component="ul" sx={panelListSx}>

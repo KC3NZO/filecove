@@ -2,7 +2,6 @@ import { useContext, useState } from "react";
 
 import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
-import IconButton from "@mui/material/IconButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import ListSubheader from "@mui/material/ListSubheader";
@@ -17,6 +16,7 @@ import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
 import { isRtl } from "../../../utils/dom";
 import { SORT_KEYS, SORT_LABELS, withSortKey } from "../../../utils/sort";
+import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 
 import type { SortDirection, SortOrder } from "../../../types";
@@ -104,8 +104,8 @@ const ViewMenu = ({
 
     return (
         <>
-            <IconButton
-                aria-label={text.viewOptions}
+            <TooltipIconButton
+                label={text.viewOptions}
                 aria-haspopup="menu"
                 aria-expanded={!!anchor}
                 onClick={(event) => {
@@ -115,7 +115,7 @@ const ViewMenu = ({
                 }}
             >
                 <Icon name="expand" fontSize="small" />
-            </IconButton>
+            </TooltipIconButton>
             <Menu
                 dir={dir}
                 open={!!anchor}

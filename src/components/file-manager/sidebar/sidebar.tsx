@@ -3,7 +3,6 @@ import type { CSSProperties, DragEvent, FocusEvent, KeyboardEvent, Ref } from "r
 
 import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
-import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
@@ -18,6 +17,7 @@ import { HEADER_HEIGHT, SIDEBAR_WIDTH, rootWide } from "../../../styles/layout";
 import { focusOutline } from "../../../styles/mixins";
 import { focusLost, isRtl, scrollParent } from "../../../utils/dom";
 import { focusTreeItem, isTypingKey, matchName } from "../../../utils/keyboard";
+import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 import TreeRowItem, { GuideLine } from "./location-item";
 import MainMenu from "./main-menu";
@@ -538,8 +538,8 @@ const Sidebar = ({
                 {/* Keeps the focus in an open search's field as it's pressed, which it closes or
                     switches to searching everywhere. */}
                 {canSearchEverywhere && (
-                    <IconButton
-                        aria-label={text.searchEverywhere}
+                    <TooltipIconButton
+                        label={text.searchEverywhere}
                         aria-pressed={searchScope === "everywhere"}
                         aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
                         sx={searchButtonSx}
@@ -547,7 +547,7 @@ const Sidebar = ({
                         onClick={onSearchEverywhere}
                     >
                         <Icon name="search" fontSize="small" />
-                    </IconButton>
+                    </TooltipIconButton>
                 )}
                 <Typography component="span" noWrap sx={titleSx}>
                     {title}

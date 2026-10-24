@@ -1,11 +1,11 @@
 import type { ReactNode, Ref } from "react";
 
 import Box from "@mui/material/Box";
-import IconButton from "@mui/material/IconButton";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../../hooks/use-locale";
 import { HEADER_HEIGHT, rootMedium, rootWide } from "../../../styles/layout";
+import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 import ViewMenu from "./view-menu";
 
@@ -159,28 +159,28 @@ const HeaderBar = ({
     return (
         <Box sx={headerSx}>
             <Box sx={startGroupSx}>
-                <IconButton
+                <TooltipIconButton
                     ref={sidebarButtonRef}
-                    aria-label={text.showSidebar}
+                    label={text.showSidebar}
                     aria-keyshortcuts="F9"
                     sx={sidebarHidden ? undefined : collapsedOnlySx}
                     onClick={onShowSidebar}
                 >
                     <Icon name="menu" fontSize="small" />
-                </IconButton>
-                <IconButton aria-label={text.back} disabled={!canGoBack} onClick={onBack}>
+                </TooltipIconButton>
+                <TooltipIconButton label={text.back} disabled={!canGoBack} onClick={onBack}>
                     <Icon name="arrowBack" fontSize="small" />
-                </IconButton>
-                <IconButton aria-label={text.forward} disabled={!canGoForward} sx={mediumUpSx} onClick={onForward}>
+                </TooltipIconButton>
+                <TooltipIconButton label={text.forward} disabled={!canGoForward} sx={mediumUpSx} onClick={onForward}>
                     <Icon name="arrowForward" fontSize="small" />
-                </IconButton>
+                </TooltipIconButton>
             </Box>
             <Box sx={pathSlotSx}>
                 <Box sx={pathSx}>{pathBar}</Box>
                 {/* Keeps the focus in an open search's field as it's pressed, which it closes or
                     switches to searching the folder. */}
-                <IconButton
-                    aria-label={text.searchFolder}
+                <TooltipIconButton
+                    label={text.searchFolder}
                     aria-pressed={searchScope === "folder"}
                     aria-keyshortcuts="Control+F Meta+F"
                     disabled={!hasFolder}
@@ -189,22 +189,22 @@ const HeaderBar = ({
                     onClick={() => onSearch("folder")}
                 >
                     <Icon name="searchFolder" fontSize="small" />
-                </IconButton>
+                </TooltipIconButton>
             </Box>
             <Box sx={endGroupSx}>
-                <IconButton
-                    aria-label={selecting ? text.doneSelecting : text.select}
+                <TooltipIconButton
+                    label={selecting ? text.doneSelecting : text.select}
                     aria-pressed={selecting}
                     disabled={!hasFolder}
                     sx={selectButtonSx}
                     onClick={onToggleSelecting}
                 >
                     <Icon name="selectMode" fontSize="small" />
-                </IconButton>
+                </TooltipIconButton>
                 {/* The sidebar's magnifier, while the sidebar isn't there to hold it. */}
                 {canSearchEverywhere && (
-                    <IconButton
-                        aria-label={text.searchEverywhere}
+                    <TooltipIconButton
+                        label={text.searchEverywhere}
                         aria-pressed={searchScope === "everywhere"}
                         aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
                         sx={sidebarHidden ? pressedSx : collapsedOnlyPressedSx}
@@ -212,11 +212,11 @@ const HeaderBar = ({
                         onClick={() => onSearch("everywhere")}
                     >
                         <Icon name="search" fontSize="small" />
-                    </IconButton>
+                    </TooltipIconButton>
                 )}
-                <IconButton aria-label={view === "list" ? text.gridView : text.listView} onClick={onToggleView}>
+                <TooltipIconButton label={view === "list" ? text.gridView : text.listView} onClick={onToggleView}>
                     <Icon name={view === "list" ? "gridView" : "listView"} fontSize="small" />
-                </IconButton>
+                </TooltipIconButton>
                 <ViewMenu
                     sort={sort}
                     showHidden={showHidden}

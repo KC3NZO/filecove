@@ -5,7 +5,6 @@ import Box from "@mui/material/Box";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
-import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
@@ -13,6 +12,7 @@ import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
 import { dialogPaperSx, focusOutline, visuallyHiddenSx } from "../../../styles/mixins";
 import { comboId, keyLabel, shortcutKeys, showsShortcuts } from "../../../utils/shortcut";
+import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 
 import type { ActionGroup, FileManagerLocaleText, MainMenuGroup } from "../../../types";
@@ -363,9 +363,9 @@ const ShortcutsDialog = ({
             <DialogTitle id={`${id}-title`} sx={titleSx}>
                 {text.keyboardShortcuts}
             </DialogTitle>
-            <IconButton aria-label={text.close} sx={closeSx} onClick={onClose}>
+            <TooltipIconButton label={text.close} sx={closeSx} onClick={onClose}>
                 <Icon name="close" fontSize="small" />
-            </IconButton>
+            </TooltipIconButton>
             <DialogContent ref={contentRef} tabIndex={0} sx={contentSx}>
                 <Box sx={columnsSx}>
                     {sections.map((section, index) => (

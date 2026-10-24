@@ -1,10 +1,10 @@
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../../hooks/use-locale";
+import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 
 interface SelectionBarProps {
@@ -55,9 +55,9 @@ const SelectionBar = ({ count, total, hasActions, onClose, onSelectAll, onSelect
     return (
         // Its taps are its own, not clicks on the folder's empty space.
         <Box sx={barSx} data-no-marquee onClick={(event) => event.stopPropagation()}>
-            <IconButton aria-label={text.doneSelecting} onClick={onClose}>
+            <TooltipIconButton label={text.doneSelecting} onClick={onClose}>
                 <Icon name="close" fontSize="small" />
-            </IconButton>
+            </TooltipIconButton>
             <Typography variant="body2" noWrap sx={countSx}>
                 {count === 0 ? text.selectItems : text.selectionCount(count)}
             </Typography>
@@ -65,13 +65,13 @@ const SelectionBar = ({ count, total, hasActions, onClose, onSelectAll, onSelect
                 {allSelected ? text.selectNone : text.selectAll}
             </Button>
             {hasActions && (
-                <IconButton
-                    aria-label={text.selectionActions}
+                <TooltipIconButton
+                    label={text.selectionActions}
                     disabled={count === 0}
                     onClick={(event) => onMenu(event.currentTarget)}
                 >
                     <Icon name="more" fontSize="small" />
-                </IconButton>
+                </TooltipIconButton>
             )}
         </Box>
     );

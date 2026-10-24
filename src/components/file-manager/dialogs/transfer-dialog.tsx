@@ -8,7 +8,6 @@ import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
-import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemButton from "@mui/material/ListItemButton";
@@ -30,6 +29,7 @@ import { isHidden } from "../../../utils/hidden";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { folderLeft, folderOf } from "../../../utils/navigation";
 import { nameOrder } from "../../../utils/sort";
+import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import PathBar from "../header-bar/path-bar";
@@ -622,9 +622,9 @@ const TransferDialog = ({
                 <DialogContent sx={contentSx}>
                     {!conflicts && (
                         <Box sx={toolbarSx}>
-                            <IconButton size="small" aria-label={text.back} disabled={!canGoUp} onClick={goUp}>
+                            <TooltipIconButton size="small" label={text.back} disabled={!canGoUp} onClick={goUp}>
                                 <Icon name="arrowBack" fontSize="small" />
-                            </IconButton>
+                            </TooltipIconButton>
                             <Box sx={locationSx}>
                                 {place ? (
                                     <PathBar
@@ -641,14 +641,14 @@ const TransferDialog = ({
                                 )}
                             </Box>
                             {adapter.createFolder && (
-                                <IconButton
+                                <TooltipIconButton
                                     size="small"
-                                    aria-label={text.newFolder}
+                                    label={text.newFolder}
                                     disabled={!canCreate}
                                     onClick={askName}
                                 >
                                     <Icon name="newFolder" fontSize="small" />
-                                </IconButton>
+                                </TooltipIconButton>
                             )}
                         </Box>
                     )}

@@ -2,7 +2,6 @@ import { useContext, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import Divider from "@mui/material/Divider";
-import IconButton from "@mui/material/IconButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Menu from "@mui/material/Menu";
@@ -15,6 +14,7 @@ import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
 import { isRtl } from "../../../utils/dom";
 import { ariaShortcut, formatShortcut } from "../../../utils/shortcut";
+import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 import IconSlot from "../icon-slot";
 
@@ -111,9 +111,9 @@ const MainMenu = ({ groups, onShowShortcuts }: MainMenuProps) => {
 
     return (
         <>
-            <IconButton
+            <TooltipIconButton
                 ref={buttonRef}
-                aria-label={text.mainMenu}
+                label={text.mainMenu}
                 aria-haspopup="menu"
                 aria-expanded={!!anchor}
                 onClick={(event) => {
@@ -122,7 +122,7 @@ const MainMenu = ({ groups, onShowShortcuts }: MainMenuProps) => {
                 }}
             >
                 <Icon name="menu" fontSize="small" />
-            </IconButton>
+            </TooltipIconButton>
             <Menu
                 dir={dir}
                 open={!!anchor}

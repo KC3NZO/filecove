@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Collapse from "@mui/material/Collapse";
-import IconButton from "@mui/material/IconButton";
 import LinearProgress from "@mui/material/LinearProgress";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
@@ -22,6 +21,7 @@ import {
     panelToggleIconSx,
 } from "../../styles/panel";
 import { isolate, joinIsolated } from "../../utils/bidi";
+import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 
@@ -106,9 +106,9 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
 
     if (isActive(item)) {
         action = (
-            <IconButton size="small" aria-label={text.uploadCancel(isolate(file.name))} onClick={() => onCancel(id)}>
+            <TooltipIconButton size="small" label={text.uploadCancel(isolate(file.name))} onClick={() => onCancel(id)}>
                 <Icon name="close" fontSize="small" />
-            </IconButton>
+            </TooltipIconButton>
         );
     } else if (status === "done") {
         action = (
@@ -118,9 +118,9 @@ const UploadRow = ({ item, onCancel, onRetry }: UploadRowProps) => {
         );
     } else {
         action = (
-            <IconButton size="small" aria-label={text.uploadRetry(isolate(file.name))} onClick={() => onRetry(id)}>
+            <TooltipIconButton size="small" label={text.uploadRetry(isolate(file.name))} onClick={() => onRetry(id)}>
                 <Icon name="refresh" fontSize="small" />
-            </IconButton>
+            </TooltipIconButton>
         );
     }
 
@@ -210,19 +210,19 @@ const UploadPanel = ({ items, onCancel, onRetry, onCancelAll, onClear }: UploadP
                         </Typography>
                     )}
                 </Box>
-                <IconButton
-                    aria-label={expanded ? text.uploadsHide : text.uploadsShow}
+                <TooltipIconButton
+                    label={expanded ? text.uploadsHide : text.uploadsShow}
                     aria-expanded={expanded}
                     onClick={() => setExpanded((prev) => !prev)}
                 >
                     <Icon name="expand" fontSize="small" sx={panelToggleIconSx} />
-                </IconButton>
-                <IconButton
-                    aria-label={active > 0 ? text.uploadsCancelAll : text.uploadsClose}
+                </TooltipIconButton>
+                <TooltipIconButton
+                    label={active > 0 ? text.uploadsCancelAll : text.uploadsClose}
                     onClick={active > 0 ? onCancelAll : onClear}
                 >
                     <Icon name="close" fontSize="small" />
-                </IconButton>
+                </TooltipIconButton>
             </Box>
             <Collapse in={expanded}>
                 <Box component="ul" sx={panelListSx}>
