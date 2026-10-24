@@ -5,6 +5,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../../hooks/use-locale";
 import { HEADER_HEIGHT, rootMedium, rootWide } from "../../../styles/layout";
+import { forcedColors, forcedPressed } from "../../../styles/mixins";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 import ViewMenu from "./view-menu";
@@ -110,10 +111,12 @@ const collapsedOnlySx: SxProps<Theme> = {
 
 const pressedSx: SxProps<Theme> = {
     '&[aria-pressed="true"]': { color: "primary.main" },
+    [forcedColors]: forcedPressed,
 };
 
 const collapsedOnlyPressedSx: SxProps<Theme> = {
     '&[aria-pressed="true"]': { color: "primary.main" },
+    [forcedColors]: forcedPressed,
     [rootWide]: { display: "none" },
 };
 
@@ -123,6 +126,7 @@ const selectButtonSx: SxProps<Theme> = {
     display: "none",
     '&[aria-pressed="true"]': { color: "primary.main" },
     "@media (hover: none)": { display: "inline-flex" },
+    [forcedColors]: forcedPressed,
 };
 
 const mediumUpSx: SxProps<Theme> = {

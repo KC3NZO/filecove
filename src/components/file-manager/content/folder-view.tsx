@@ -21,7 +21,7 @@ import { useSelection } from "../../../hooks/use-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { mirroredBarSx } from "../../../styles/direction";
-import { focusOutline, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
+import { focusOutline, forcedBarSx, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
 import { focusLost, isRtl } from "../../../utils/dom";
 import { isHidden } from "../../../utils/hidden";
 import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
@@ -155,7 +155,7 @@ const marqueeSx: SxProps<Theme> = (theme) => ({
 
 // Overlays the top edge while a loaded folder refreshes, without pushing the content down, and runs
 // from the start side.
-const progressSx: SxProps<Theme> = [{ position: "sticky", top: 0, zIndex: 2, mb: "-4px" }, mirroredBarSx];
+const progressSx: SxProps<Theme> = [{ position: "sticky", top: 0, zIndex: 2, mb: "-4px" }, mirroredBarSx, forcedBarSx];
 
 const stateSx: SxProps<Theme> = {
     flex: 1,

@@ -13,6 +13,8 @@ import {
     dragMarkers,
     focusRing,
     focusVisibleRing,
+    forcedColors,
+    forcedSelected,
     hoverBackground,
     selectedBackground,
     selectedHoverBackground,
@@ -137,6 +139,7 @@ const rowSx: SxProps<Theme> = (theme) => ({
     ...cutMarker,
     ...focusVisibleRing,
     ...dragMarkers(theme),
+    [forcedColors]: forcedSelected,
 });
 
 // Only as wide as the icon and name, so a long name truncates within the column.

@@ -12,6 +12,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
+import { menuPaperSx } from "../../../styles/mixins";
 import { isRtl } from "../../../utils/dom";
 import { ariaShortcut, formatShortcut } from "../../../utils/shortcut";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
@@ -29,13 +30,8 @@ interface MainMenuProps {
 
 const SHORTCUTS_KEYS = ["Ctrl", "?"];
 
-const paperSx: SxProps<Theme> = {
-    minWidth: 220,
-    borderRadius: 2,
-};
-
 const slotProps: MenuProps["slotProps"] = {
-    paper: { sx: paperSx },
+    paper: { sx: menuPaperSx },
     list: { dense: true },
 };
 

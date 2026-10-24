@@ -14,7 +14,7 @@ import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualRows } from "../../../hooks/use-virtual-rows";
 import { folderKey } from "../../../store/folder-store";
 import { HEADER_HEIGHT, SIDEBAR_WIDTH, rootWide } from "../../../styles/layout";
-import { focusOutline } from "../../../styles/mixins";
+import { focusOutline, forcedColors, forcedPressed } from "../../../styles/mixins";
 import { focusLost, isRtl, scrollParent } from "../../../utils/dom";
 import { focusTreeItem, isTypingKey, matchName } from "../../../utils/keyboard";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
@@ -130,6 +130,7 @@ const headerSx: SxProps<Theme> = {
 
 const searchButtonSx: SxProps<Theme> = {
     '&[aria-pressed="true"]': { color: "primary.main" },
+    [forcedColors]: forcedPressed,
 };
 
 const titleSx: SxProps<Theme> = {

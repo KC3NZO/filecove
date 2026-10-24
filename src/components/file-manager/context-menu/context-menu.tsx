@@ -11,6 +11,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
+import { menuPaperSx } from "../../../styles/mixins";
 import { ariaShortcut } from "../../../utils/shortcut";
 import IconSlot from "../icon-slot";
 
@@ -29,11 +30,6 @@ interface ContextMenuProps {
     menu: MenuState | null;
     onClose: () => void;
 }
-
-const paperSx: SxProps<Theme> = {
-    minWidth: 220,
-    borderRadius: 2,
-};
 
 // A label without an icon is inset, which MUI does with a `padding-left`.
 const itemSx: SxProps<Theme> = {
@@ -100,7 +96,7 @@ const ContextMenu = ({ menu, onClose }: ContextMenuProps) => {
     const dir = useContext(DirectionContext);
     const slotProps = useMemo(
         () => ({
-            paper: { sx: paperSx },
+            paper: { sx: menuPaperSx },
             list: { dense: true },
             root: {
                 // A right-click outside the open menu closes it, rather than opening the browser's menu

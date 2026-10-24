@@ -87,6 +87,45 @@ export const focusVisibleRing = {
     "&:focus-visible": focusOutline,
 };
 
+/**
+ * Windows' High Contrast themes, and any other forced colors mode, drop every background colour and
+ * box shadow and put the user's own colours in place of text, border and outline colours. What a
+ * background alone shows, a selection, a progress bar's fill, a pressed button's accent or a menu's
+ * edge, would vanish, so under this key it's shown in system colours, which the mode keeps.
+ */
+export const forcedColors = "@media (forced-colors: active)";
+
+/**
+ * A selected row, tile or tree row (`data-selected`) in the system's selection colours, as a native
+ * list shows it. Text inside inherits `HighlightText`, as the mode resets its colours to inherit.
+ * Goes under `forcedColors`, after the rules it overrides.
+ */
+export const forcedSelected = {
+    '&[data-selected="true"]': { bgcolor: "Highlight", color: "HighlightText" },
+};
+
+/** A pressed toggle button (`aria-pressed`) in the system's selection colour. Goes under `forcedColors`. */
+export const forcedPressed = {
+    '&[aria-pressed="true"]': { color: "Highlight" },
+};
+
+/** An edge for a surface that only a shadow or a background set apart. Goes under `forcedColors`. */
+export const forcedEdge = {
+    outline: "1px solid CanvasText",
+};
+
+/** A `LinearProgress` whose fill shows in the system's selection colour. */
+export const forcedBarSx = {
+    [forcedColors]: { "& .MuiLinearProgress-bar": { bgcolor: "Highlight" } },
+};
+
+/** The paper of the file manager's menus, edged in forced colors, where its shadow is dropped. */
+export const menuPaperSx: SxProps<Theme> = {
+    minWidth: 220,
+    borderRadius: 2,
+    [forcedColors]: forcedEdge,
+};
+
 /** Hides text from view while screen readers still read it, e.g. a column's sort order or a live status. */
 export const visuallyHiddenSx: SxProps<Theme> = {
     position: "absolute",

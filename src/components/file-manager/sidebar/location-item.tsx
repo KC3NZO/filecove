@@ -18,6 +18,8 @@ import {
     cutMarker,
     dragMarkers,
     focusOutline,
+    forcedColors,
+    forcedSelected,
     hoverBackground,
     selectedBackground,
     selectedHoverBackground,
@@ -165,6 +167,8 @@ const rowSx: SxProps<Theme> = (theme) => ({
     ...cutMarker,
     '[role="treeitem"]:focus-visible > &': focusOutline,
     ...dragMarkers(theme),
+    // The open folder's accent text, then the selection over it.
+    [forcedColors]: { '&[data-open="true"]': { color: "Highlight" }, ...forcedSelected },
 });
 
 // The row's main part, which a click opens or selects. It's no button: the item around it takes

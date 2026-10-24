@@ -1,4 +1,5 @@
 import { mirroredBarSx } from "./direction";
+import { forcedBarSx } from "./mixins";
 
 import type { SxProps, Theme } from "@mui/material/styles";
 
@@ -73,4 +74,4 @@ export const panelRowSx: SxProps<Theme> = {
  * A row's progress bar, which fills from the start side: MUI fills from the left unless the theme
  * says right to left.
  */
-export const panelBarSx: SxProps<Theme> = [{ my: 0.5, height: 3, borderRadius: 1.5 }, mirroredBarSx];
+export const panelBarSx: SxProps<Theme> = [{ my: 0.5, height: 3, borderRadius: 1.5 }, mirroredBarSx, forcedBarSx];

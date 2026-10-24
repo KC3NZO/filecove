@@ -9,6 +9,8 @@ import {
     cutMarker,
     dragMarkers,
     focusVisibleRing,
+    forcedColors,
+    forcedSelected,
     hoverBackground,
     selectedBackground,
     selectedHoverBackground,
@@ -83,6 +85,7 @@ const tileSx: SxProps<Theme> = (theme) => ({
     ...cutMarker,
     ...focusVisibleRing,
     ...dragMarkers(theme),
+    [forcedColors]: forcedSelected,
 });
 
 // Two lines tall even for a short name, so every tile is as tall, since the grid measures one for

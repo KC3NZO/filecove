@@ -7,7 +7,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../../hooks/use-locale";
-import { focusRing, visuallyHiddenSx } from "../../../styles/mixins";
+import { focusRing, forcedColors, visuallyHiddenSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { isRtl } from "../../../utils/dom";
 import Icon from "../../icons/icon";
@@ -75,6 +75,7 @@ const tabSx: SxProps<Theme> = {
     },
     '&[aria-selected="true"]': { color: "text.primary" },
     '&[aria-selected="true"]::after': { opacity: 1 },
+    [forcedColors]: { "&::after": { bgcolor: "Highlight" } },
     ...focusRing,
 };
 

@@ -4,12 +4,18 @@ import type { IconButtonProps } from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 
 import { DirectionContext } from "../../contexts/direction-context";
+import { forcedColors, forcedEdge } from "../../styles/mixins";
 
 // Keeps a tooltip clear of the viewport's edges, so a button at the edge of the screen (the header's
 // last, the sidebar's first) doesn't get one touching it. The arrow still points at the button.
 // At module scope, since the tooltip builds its options again whenever this changes.
 const popperOptions = {
     modifiers: [{ name: "preventOverflow", options: { padding: 8 } }],
+};
+
+// Forced colors drop the tooltip's background, which would leave its text floating over the page.
+const tooltipSx = {
+    [forcedColors]: forcedEdge,
 };
 
 interface TooltipIconButtonProps extends Omit<IconButtonProps, "aria-label" | "title"> {
@@ -28,7 +34,12 @@ const TooltipIconButton = ({ label, ...props }: TooltipIconButtonProps) => {
     const dir = useContext(DirectionContext);
 
     return (
-        <Tooltip title={label} arrow enterDelay={500} slotProps={{ popper: { dir, popperOptions } }}>
+        <Tooltip
+            title={label}
+            arrow
+            enterDelay={500}
+            slotProps={{ popper: { dir, popperOptions }, tooltip: { sx: tooltipSx } }}
+        >
             <IconButton aria-label={label} {...props} />
         </Tooltip>
     );
