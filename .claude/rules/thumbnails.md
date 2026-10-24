@@ -40,6 +40,7 @@ The list and the grid show a file's thumbnail in place of its type icon when the
 - The `img` has `pointer-events: none` and `draggable={false}`, so a press, right-click or drag reaches the row or tile rather than the picture: no "Save image as", and no picture dragged in place of the entry.
 - `alt=""`, since the name is beside it.
 - The views pass the folder's adapter down (`FileViewProps.adapter`). The drag preview passes no `view`, so it keeps the icon; a picture not yet decoded wouldn't make it into the drag image.
+- The properties panel shows the grid's thumbnail (`useThumbnail` with the grid's view and size), grown to fill a slightly larger box, so it asks the adapter for nothing more and may look slightly soft (see `properties.md`).
 
 ## The playground
 

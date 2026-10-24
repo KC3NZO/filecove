@@ -1,0 +1,78 @@
+---
+paths:
+  - "src/components/properties/**"
+  - "src/components/file-manager/properties-pane.tsx"
+  - "src/components/file-manager/file-manager.tsx"
+  - "src/components/file-manager/header-bar/view-menu.tsx"
+  - "src/hooks/use-properties.ts"
+  - "src/store/properties-cache.ts"
+  - "src/types/properties.ts"
+  - "src/types/adapter.ts"
+  - "src/types/action.ts"
+  - "playground/mocks/mock-adapter.ts"
+  - "playground/app.tsx"
+---
+
+# Properties
+
+The properties are a **panel, not a dialog**: docked beside the content where there's room, over it where there isn't, as the sidebar is on the other side. It shows what's selected in the content and follows the selection, or the open folder itself while nothing is selected, as web file managers (Drive, OneDrive, Dropbox, Nextcloud) show details. A panel rather than GNOME's dialog, as the user prefers non-modal panels (see the download panel's history), and since the media manager to come needs the same panel for its details (WordPress's "Attachment details" beside the grid).
+
+## What the adapter hands over
+
+What a listing brings (`FileEntry`) is shown with nothing more of the adapter, so the panel works with any adapter. Two optional members, and two optional entry fields, add to it:
+
+- **`FileEntry.createdAt`** and **`FileEntry.media`** (`MediaInfo`: `width`, `height`, `duration`), shown when the listing has them. `media` is only the basics for now, and is where the media manager's renditions will grow, by addition. The store compares `media` one level down, as `meta` (`sameEntry`).
+- **`properties(entry, { signal })`** hands over one entry's `EntryProperties`: `entry`, the entry with fields the listing left out as too costly (`createdAt`, `media`), shown over the listed one (merged, `{ ...listed, ...fuller }`), the listing left as it is, and `groups` of the backend's own `PropertyField`s (an owner, permissions, a checksum, a link), each with an `id`, a `label` in the consumer's language, as action labels are, and a typed value the panel writes out in the `locale`: `text` (with an optional copy button), `number` (grouped), `size`, `date`, `link` (a new tab) or `tags` (chips). Fields keep their `id` so a later `updateProperties?(entry, values)` can save fields marked editable without a breaking change, for the media manager's alt text and caption.
+- **`measure(folders, { signal, showHidden, onProgress })`** counts what's in folders, all the way down, as `EntryTotals` (`files`, `folders`, `size`). It's separate from `properties` because it's the slow part (S3 has no folder sizes), so a backend can offer one without the other, and the panel shows the facts while the totals count. The folders may be in different folders (a search's results) and may come bare. `showHidden` matches `download`'s. `onProgress(totals)` is optional to call, and shows the totals counting up. Without `measure`, a folder shows how many entries it holds (`childCount`), and the component never walks folders with `list`, the same choice as for search everywhere.
+- A folder shown itself, the open folder or one whose menu asked, comes as its entry in its parent's cached listing, or as a bare `{ id, name, kind }` when no listing holds it, a section's root named after the section, as `download` has them. Bare entries are kept by section, id and name (`bare` in the pane), so the same folder stays the same object.
+
+## The cache
+
+`store/properties-cache.ts` keeps what came, one per `FileManager` (`propertiesCache`), outliving the panel as it shows and hides. It imports nothing from the file manager.
+
+- An entry's properties are kept by its entry object (a `WeakMap`), which a listing keeps for as long as the entry is as it was (`withUnchanged`), so an unchanged entry isn't asked again and a changed or renamed one is.
+- Counts are kept by their folders' entry objects and adapters, `showHidden`, and the host's count of its changes (`changes`, the file manager's `searchVersion`, which goes up with every change made through it and every refresh), so what a change made is counted again. Up to `MAX_KEPT_COUNTS` (30) are kept that nothing shows. While a count is on its way with nothing reported, the last totals counted for the same folders stand in as its progress, so a change made meanwhile, as uploads finishing once a second, doesn't blank them.
+- Each is asked for once it has been wanted for `ASK_AFTER` (200 ms), so moving through a list with the arrow keys asks only about where it stops, and stopped if it stops being wanted first. A count no panel wants any more is aborted and forgotten.
+- A selection's folders served by different adapters, as a search's results may be, are counted by each adapter, and the totals added up, as are the totals each reports on the way. Counting needs every one of their adapters to have `measure`.
+- `useProperties` (`hooks/use-properties.ts`) reads it for the panel, with `useSyncExternalStore`: `details` (one item, when its adapter has `properties`) and `totals` (when the items have folders and every adapter has `measure`), each a `Requested` (`loading` with optional `progress`, `ready`, `error`), and their retries, which forget what came and ask again. The folders are told apart by their entry objects' identities in a key, so a count under way carries on however often the items are made anew.
+
+## The panel
+
+`components/properties/properties-panel.tsx` takes `PropertiesItem`s (`types/properties.ts`: the entry, its adapter, its location written out, a folder's count from its own listing, and its Rename and "Open item location", when it has them), and knows nothing of sections or the file manager, so the media manager can use it. It's an `aside` named by its title, focusable (`tabIndex={-1}`), ringed on `:focus-visible`.
+
+- **One entry:** its picture, the grid's thumbnail (`useThumbnail` with the grid's view and size, so nothing more is asked of the adapter; a little smaller than its box, so it may look slightly soft) or else its type icon, its name, Rename… and "Open item location" when given, then rows: Type (with the MIME type, `propertiesTypeWithMime`), Size ("4.2 MB (4,213,045 bytes)", `formatBytes`, from 1 kB up) or Contents, Location, Modified, Created, Dimensions and Duration, then the backend's groups, each under its title, set apart by a rule.
+- **Contents:** one folder's totals ("12 files and 3 folders, totalling 4.5 MB", "Empty"), with a spinner while counting, showing how many entries it holds meanwhile; or how many it holds without `measure`. Several entries: files alone add up at once from their own sizes; with folders, the selected files are added to the totals and the selected folders counted among the folders; without `measure`, "2 files and 1 folder" (`propertiesKinds`). A count that fails shows the adapter's message, or `propertiesCountFailed`, with Try again.
+- **Several entries:** the copy icon, "3 items", Contents, and the Location when they share one, or "Several folders". No backend groups, which are one entry's.
+- **None:** "Select an item to see its properties", as for a search everywhere with nothing selected.
+- The backend's properties show a spinner while they come, and the adapter's message, or `propertiesFailed`, with Try again, as an `alert`, when they fail, in their place only: the listing's rows still show.
+- Values the panel formats, and the backend's, are in `<bdi>`; texts built around them take them isolated, and the location is joined by `joinIsolated` with " / ", as a search's results show it (see `rtl.md`).
+- Copying a value says so from the panel's own live region (`propertiesCopied`), so it isn't announced by the file manager.
+- Its text is `PropertiesLocaleText` (`types/locale.ts`), kept apart as the upload and download panels' are; it reads none of the file manager's own keys (see `locale.md`).
+- `takeFocus` focuses it as it's set, or as it mounts with it set.
+
+## In the file manager
+
+`components/file-manager/properties-pane.tsx` places the panel and feeds it:
+
+- **Layout.** Under the header bar, `file-manager.tsx` has a row (`bodySx`): the content with the download and upload panels under it (`columnSx`), and the pane. From `rootExtraWide` (1100px, which leaves the content room for the list's size and date columns beside a docked sidebar) the pane docks on the content's end side, `PROPERTIES_WIDTH` (300px), as an inset `background.paper` card like the content, shown while `propertiesOpen` (`data-shown`). Below it, it's an overlay over the whole file manager from the end side, `min(320px, 85%)` wide, sliding in by `translate` with `--closed-shift` (the sidebar's way, see `rtl.md`), over its own backdrop (`propertiesBackdropSx`, hidden from `rootExtraWide`), while `propertiesOverlay` (`data-open`). The row isn't positioned, so the overlay is placed by the root, as the sidebar's is.
+- **Docked or not** is read from the pane's computed `position`, as the sidebar's is (`overlays`): by the file manager as keys and buttons ask (`propertiesDocked`), and by the pane itself with a `ResizeObserver` on the row, since the panel is only mounted while it shows (`visible`: docked and shown, or the overlay open), so nothing is asked of the adapter while it's hidden. The docked state outlives the root narrowing: widened again, it shows again.
+- **What it shows** (`propertiesSubject` in `file-manager.tsx`, a `PropertiesSubject`): what `ActionContext.properties` asked for (`pinned`), while its sections are the file manager's as they were (`subjectHolds`); or else a search everywhere's selection while its results show (`SearchResults`' `onSelectionChange`, an internal prop, since that selection isn't public); or the content's selection, as `FolderView` reports it (`handleSelectionChange`, which also tells the consumer, kept by the open folder's key); or with nothing selected, the open folder itself. The pane reads each entry from its folder's listing now (`listed`), subscribing to the store, so a change made meanwhile shows, and asks `contextFor` for Rename and "Open item location", for one entry only, and never for a section's root, which is the consumer's.
+- **The pin** is dropped as the location changes (in `shownPlace`'s render), as the content's selection changes ids in the open folder (not as its entries are listed again), as a search's results show or go or their selection changes, and as the panel hides or the overlay closes.
+
+### Opening and closing
+
+- **Alt+Enter** (anywhere in the file manager, the root's handler, `toggleProperties`), as Windows, GNOME and Dolphin open properties; Enter names the same key on every layout, and on a Mac it's ⌥Return. Docked, it shows and hides the panel and leaves the focus where it is, so the arrow keys keep moving through the content as the panel follows, announcing `propertiesShown` or `propertiesHidden` unless the focus was in the panel, which hands it to the content as it hides. Collapsed, it opens the overlay, which takes the focus, and closes it, giving the focus back. The content, its search results and the tree leave Alt with Enter to it (the tree's error row included), and a consumer's action bound to Alt+Enter runs instead in the content and the tree, as any shortcut does.
+- **`ActionContext.properties()`** (always there, for any target: entries, or with none, the folder itself, in the content, the tree, a search's results or `apiRef.actionContext`) pins what the context names, shows the panel, docked (asking for `propertiesOpen`) or as the overlay, and moves the focus into it (`focusProperties`, one render, as `focusContent`). Its focus effect runs after the context menu's `FocusTrap` gives the focus back to where the menu opened, since both happen in one commit and React runs every effect cleanup first. The overlay keeps the menu's opener (`menuOpener`) to give the focus back to.
+- **The view menu** offers "Show properties" with Alt+Enter beside it, read as it opens (`propertiesDocked`): docked, a checkbox showing and hiding the panel, the menu staying open; collapsed, an item that closes the menu and opens the overlay, which gives the focus back to the menu's button.
+- **The panel's ✕** hides the docked panel (the focus going to the content) or closes the overlay. **Escape** in it goes back to the content from the docked panel, and closes the overlay. Escape in a menu or dialog that portals out is theirs.
+- **The overlay** closes as the focus moves on to the rest of the file manager (Tab, F6, a click behind its backdrop), leaving the focus where it went, while a menu or a dialog, outside the file manager, keeps it open; closed otherwise, it gives the focus back to what had it as it opened, or to the content when that's gone.
+- **F6** goes sidebar, content, docked panel, and back to the sidebar (see `keyboard.md`).
+- **Props:** `propertiesOpen` / `defaultPropertiesOpen` / `onPropertiesOpenChange` for the docked panel (see `props.md`). The overlay's open state is a passing one, closed by most things done elsewhere, as the sidebar's is. There's no `apiRef` method: `actionContext(entries?, location?).properties()` does it from a toolbar.
+
+## The playground
+
+The mock adapter's `properties` makes the rest up from each entry's name: a created date before its modified date, a picture's dimensions (logos 512 × 512), a video's dimensions and length, a sound's length (none for an uploaded file, which isn't read), then an owner by root ("you", "deploy-bot", "Design team"), permissions (Design assets read only), the path and, for a file, a SHA-256, both copyable, a link to share on `files.example.com` with a view count, and some tags. `restricted` and `docs/contract.pdf` fail, to show the error. Its `measure` walks the tree `COUNT_STEP` (250) entries a step, 40 ms each, reporting the totals so far, so `archive` (10,000 files) and API service's root count up; folders it can't read are counted but not looked in, dotfiles are left out while hidden files aren't shown, and `restricted` itself fails. The demo "Properties" action calls `context.properties()`, the footer's "Properties" calls `apiRef.actionContext(...)?.properties()` for the selection or the open folder, and `propertiesOpen` is kept in local storage with the view settings.
+
+## Not yet
+
+Editing fields (`updateProperties`, designed with the media manager's contract), the app's own actions in the panel's header (to be designed with the preview's), tabs (activity, versions, sharing), a picture larger than the grid's thumbnail, and resizing the docked panel.

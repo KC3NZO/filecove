@@ -6,7 +6,7 @@ What's left in the features already built, what packaging needs before a release
 
 1. ~~Re-list a folder in the background when it opens, showing the cached listing meanwhile, with a prop to turn it off (A, "Folder data and cache").~~ Done 2026-10-23.
 2. ~~Tooltips on icon-only buttons, selection that shows in Windows High Contrast mode, and screen-reader announcements when operations finish (A, "Interface polish" and "Operations").~~ Done 2026-10-23.
-3. Properties, then ~~folder upload~~ (C). Folder upload done 2026-10-24.
+3. ~~Properties, then folder upload (C).~~ Folder upload and properties done 2026-10-24.
 4. Packaging, in one pass before a release (B).
 
 ## A. Gaps in features already built
@@ -51,6 +51,11 @@ What's left in the features already built, what packaging needs before a release
 - [ ] Rotating images and full screen.
 - [ ] Fonts.
 - [ ] A way for the app to plug in its own previewer per file type (highlighted code, rendered Markdown, office documents, archive contents), rather than building those in, which would add heavy dependencies to the package.
+
+### Properties
+- [ ] Editing fields (an adapter `updateProperties`, for the media manager's alt text and caption; fields already carry an `id` for it), designed with the media manager's contract.
+- [ ] The app's own actions in the panel's header, designed together with the preview's.
+- [ ] Tabs (activity, versions, sharing), a picture larger than the grid's thumbnail, and resizing the docked panel.
 
 ### Thumbnails
 - [ ] A thumbnail in the preview while the file loads. (The sidebar tree and the Move/Copy picker show only folders, so they have no thumbnails to show.)
@@ -98,7 +103,7 @@ What's left in the features already built, what packaging needs before a release
 ## C. New features
 
 ### Planned, in order
-1. [ ] Properties, designed together with the media manager's details panel.
+1. [x] Properties, designed together with the media manager's details panel. *Done 2026-10-24: a panel docked beside the content from 1100px wide, over it below, following the selection or showing the open folder, from Alt+Enter, the view menu or `ActionContext.properties()`, with `propertiesOpen` to control it; the adapter adds `properties` (fuller fields and its own) and `measure` (what's in folders), and `FileEntry` takes `createdAt` and `media`. The panel is shared, for the media manager (see `properties.md`).*
 2. [x] Folder upload. *Done 2026-10-24 (see A, "Uploads").*
 3. [ ] A pick mode (filter by type, a Choose button).
 4. [ ] The media manager, after its contract is designed on paper.

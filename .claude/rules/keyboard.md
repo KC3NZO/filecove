@@ -11,6 +11,8 @@ paths:
   - "src/components/file-manager/context-menu/**"
   - "src/components/file-manager/dialogs/transfer-dialog.tsx"
   - "src/components/file-manager/dialogs/shortcuts-dialog.tsx"
+  - "src/components/file-manager/properties-pane.tsx"
+  - "src/components/properties/**"
   - "src/utils/keyboard.ts"
   - "src/utils/shortcut.ts"
   - "src/hooks/use-type-ahead.ts"
@@ -26,9 +28,10 @@ A key press goes to the consumer's shortcuts before the component's own keys, so
 
 | Where | Keys |
 |---|---|
-| Anywhere in the file manager (`file-manager.tsx`) | the main menu items' shortcuts first (see "The main menu" in `file-manager.md`), then F6 between the sidebar tree and the content, F9 to show and hide the sidebar, Ctrl+? for the keyboard shortcuts (Ctrl only, not ⌘), Ctrl+H to show and hide hidden files (Ctrl only, not ⌘), Ctrl+F or ⌘F to search the open folder and Ctrl+Shift+F or ⌘⇧F every section, Alt+Left and Alt+Right for back and forward (swapped right to left) |
+| Anywhere in the file manager (`file-manager.tsx`) | the main menu items' shortcuts first (see "The main menu" in `file-manager.md`), then F6 between the sidebar tree, the content and the docked properties, F9 to show and hide the sidebar, Ctrl+? for the keyboard shortcuts (Ctrl only, not ⌘), Ctrl+H to show and hide hidden files (Ctrl only, not ⌘), Ctrl+F or ⌘F to search the open folder and Ctrl+Shift+F or ⌘⇧F every section, Alt+Enter to show and hide the properties, Alt+Left and Alt+Right for back and forward (swapped right to left) |
 | Content (`content/folder-view.tsx`) | arrows, Home, End, PageUp, PageDown, Space, Shift+Space, Enter, Alt+Down, Backspace, Alt+Up, Ctrl+A, Escape, typing, Menu or Shift+F10, Ctrl+V or Shift+Insert for files pasted from the desktop |
 | Sidebar tree (`sidebar/sidebar.tsx`, `TreeItem` in `sidebar/location-item.tsx`) | Up, Down, Home, End, Right, Left, Enter, Space, Shift+Space, typing, Menu or Shift+F10, Ctrl+V or Shift+Insert for files pasted from the desktop, Escape (closes the overlay) |
+| The properties (`properties-pane.tsx`) | Escape back to the content from the docked panel, or to close the overlay (see "The properties" below) |
 | The search field (`header-bar/search-field.tsx`) | Escape to close, Down or Enter on to the content, Alt+Down for the sections menu (see "Search" in `file-manager.md`) |
 | A search everywhere's results (`content/search-results.tsx`) | the content's keys but Backspace and Alt+Up, which lead nowhere; on its tabs (`content/search-tabs.tsx`), Left, Right, Home and End (see "Search results" below) |
 | "Move to…" and "Copy to…" (`dialogs/transfer-dialog.tsx`) | Up, Down, Home, End, PageUp, PageDown, typing, Enter or Space to open, Backspace or Alt+Up to go up |
@@ -109,6 +112,16 @@ Below `rootWide` the sidebar is collapsed, and two keys open it besides the "Sho
 - Docked, F9 hides and shows the sidebar (`showDocked`; see "Hiding the docked sidebar" in `file-manager.md`). Hidden with the focus in it, it hands the focus to the content. Shown from the "Show sidebar" button, which only shows while the sidebar is hidden and so goes, the tree takes the focus; shown with F9 from anywhere else, the focus stays where it is. F6 passes a hidden sidebar by, to the content.
 - `overlays()` in `file-manager.tsx` tells the two modes apart from the sidebar's computed `position`, as container queries decide it, even while the docked sidebar is hidden.
 
+### The properties
+
+The properties panel (see `properties.md`) is a third pane, docked on the content's other side from `rootExtraWide`, and an overlay below it, handled as the sidebar is.
+
+- Alt+Enter shows and hides it from anywhere in the file manager. Enter is a named key, the same on every layout, and Alt with it is left alone by the content, the search results, the tree and the search field, so it reaches the root. Docked, the focus stays where it is, so the arrow keys keep moving through the content as the panel follows the selection, and the change is announced; hidden with the focus in it, it hands the focus to the content. Collapsed, the overlay takes the focus as it opens and gives it back to what had it as it closes.
+- F6 goes from the content to the docked panel while it shows, and from the panel on to the sidebar tree (or the content, while the sidebar is hidden), so the panes go round sidebar, content, properties. From the overlay, F6 goes on as from anywhere else, which closes it.
+- `ActionContext.properties()` moves the focus into the panel (`focusProperties`), after the context menu has given it back to where it opened, since React runs the menu's `FocusTrap` cleanup before the panel's effect in the same commit.
+- Escape in the docked panel goes back to the content; in the overlay it closes it. The overlay closes too as the focus moves on to the rest of the file manager, as the sidebar's does.
+- The panel is an `aside` named "Properties", focused as a whole (`tabIndex={-1}`) and ringed on `:focus-visible`; its rows are `dl`s, the backend's groups under `h3` titles, and its spinners are labelled ("Counting", "Loading").
+
 ## Move and copy dialog
 
 The transfer picker's folder list (`dialogs/transfer-dialog.tsx`) is one tab stop, focused once the dialog has faded in (the transition's `onEntered`, since the closing context menu takes back focus given any sooner), so the path bar, the list and the buttons are three stops rather than one per folder.
@@ -124,7 +137,7 @@ The transfer picker's folder list (`dialogs/transfer-dialog.tsx`) is one tab sto
 
 `dialogs/shortcuts-dialog.tsx` lists the keys, as GNOME's shortcuts window does. Ctrl+?, the main menu's "Keyboard shortcuts" and `FileManagerApi.showShortcuts()` open it (`showShortcuts` in `file-manager.tsx`). It's a modal like the other dialogs (portalled, `dialogPaperSx`), `md` wide, its sections in as many columns as fit (CSS `columns`, each section kept whole), each a heading over a `dl` on `background.paper`: what a key does, then its keys as `<kbd>` caps, `+` between keys pressed together and `/` between alternatives.
 
-- The sections are General, Navigation, Selection, Sidebar, Search and Preview (`ownSections`), then Actions: the consumer's actions and main menu items that have a `shortcut`, each label and key once, in their order (`consumerRows`).
+- The sections are General (with Alt+Enter for the properties), Navigation, Selection, Sidebar, Search and Preview (`ownSections`), then Actions: the consumer's actions and main menu items that have a `shortcut`, each label and key once, in their order (`consumerRows`).
 - Search everywhere's key shows only when a section can be searched (`canSearchEverywhere`), Alt+Down only when the field has its sections menu (more than one), the Preview section only when a section's adapter has `content`, and General's "Upload files from the clipboard" (Ctrl+V, Shift+Insert) only when a section takes uploads (`canUpload`).
 - A key the consumer's shortcuts bind does what theirs does in the content and the tree, so it's left out of the sections where they come first (`yields`: General, Navigation, Selection, Sidebar), compared by `comboId` (`utils/shortcut.ts`); a row left with no key goes. The playground's Preview takes Space, so "Select or deselect" shows only Ctrl+Space there. The search field and the preview aren't affected, since shortcuts don't run there.
 - Key names come from the text (`keyCtrl`, `keyEnter`... through `keyLabel`), the arrows show as arrows, and four arrows in one cap stand for any of them (read as `keyArrows`). Back and forward, and expand and collapse, swap right to left, as the keys do. The keys' cell is `dir="auto"`, so Latin key names run left to right on a right-to-left page, as "Ctrl+F" is written there.
@@ -136,6 +149,7 @@ An action that finishes with nothing spoken about it is read out politely from o
 
 - Announced, from the text's keys: a delete (`deleteDone`); a copy or move, by a paste, a drop or the picker (`copyDone`, `moveDone`), counting only the entries not skipped for names the folder had (the dialogs' `onDone` hands the skipped names over), and saying nothing when every one was; cutting or copying to the clipboard (`clipboardCut`, `clipboardCopied`); and creating a folder or renaming (`createDone`, `renameDone`). Names are isolated (`isolate`).
 - Not announced, as something else says it: opening a folder (the focus and the view), a folder made in the transfer picker (the picker opens it, with the focus in its list), and a created or renamed entry that takes the focus as it's revealed. So a `Reveal` carries its message, and `FolderView`'s `onRevealed(focused)` says whether the entry took the focus; one that didn't, one given up on (hidden, or not listed) and one the open folder stops waiting for as another opens are announced. Made or renamed outside the open folder, it's announced at once.
+- Showing and hiding the docked properties with Alt+Enter, which leaves the focus where it is, is announced (`propertiesShown`, `propertiesHidden`), unless the focus was in them. A value copied in the properties is said from the panel's own live region (`propertiesCopied`).
 - Uploads and downloads aren't announced here: their panels have live titles of their own (see `uploads.md` and `download.md`), all but "Show in folder" on an upload (`uploadShown`), which opens a folder while the focus stays in the panel. A failure isn't either, since its dialog stays open to show it.
 - A modal dialog hides the rest of the page from screen readers (MUI's `aria-hidden` on `<body>`'s other children) until it has faded out, and a live region in a hidden part goes unheard. So a message waits, watching `aria-hidden` with a `MutationObserver`, until the region has no hidden ancestor.
 - Each message goes in a node of its own, keyed by a count, so the same message twice is heard twice, and it's cleared after 7 s so browse mode doesn't come across old ones. A message announced before the last one was said replaces it.
