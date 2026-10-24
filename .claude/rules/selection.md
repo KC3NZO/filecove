@@ -46,13 +46,13 @@ The keyboard selects too (see `keyboard.md`): in the content, plain arrows selec
 There are no modifier keys on touch, so the content has a selection mode instead. It is on while `file-manager.tsx`'s `selectingKey` equals the open folder's key, so opening another folder ends it.
 
 - Two ways in:
-  - Long-pressing an entry (`hooks/use-long-press.ts`, 500 ms on its own timer, since iOS never fires `contextmenu` for a long-press), which selects it.
+  - Long-pressing an entry (`hooks/use-long-press.ts`, 500 ms on its own timer, since iOS never fires `contextmenu` for a long-press), which selects it. The finger moving on from there drags it (see "Drag and drop" in `file-manager.md`).
   - The header's Select button, shown only under `@media (hover: none)`.
-- In the mode every tap toggles, and a tap on empty space does nothing. `content/selection-bar.tsx` (sticky at the panel's bottom) offers ✕, the count, Select all or none, and ⋮ for the selection's menu. Leaving the mode clears the selection.
+- In the mode every tap toggles, and a tap on empty space does nothing. A long-press adds the entry to the selection, or keeps it there, rather than toggling, so the finger moving on drags the whole selection, as in the phones' and tablets' file apps. `content/selection-bar.tsx` (sticky at the panel's bottom) offers ✕, the count, Select all or none, and ⋮ for the selection's menu. Leaving the mode clears the selection.
 - Rows and tiles show check badges (`content/item-icon.tsx`, keyed off `data-selecting` and `data-selected`).
 - Outside the mode, a touch tap opens a folder or a file rather than selecting it, and selects only a file nothing can open (see `preview.md`).
 - `folder-view.tsx` reads each press's `pointerType` rather than the device, so hybrid devices get both behaviours. A touch press's `contextmenu` is swallowed, since a long-press means select.
-- The sidebar tree has no touch selection.
+- The sidebar tree has no touch selection: a long-press on a row opens its menu once the finger lifts, or drags the folder as the finger moves on (see "Drag and drop" in `file-manager.md`).
 
 ## Sidebar
 

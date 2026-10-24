@@ -41,7 +41,7 @@ Entries go in lines of equal height: one row per line in the list, as many tiles
 `keep` lists entries that are rendered wherever they are:
 
 - The focused entry (`focusId`), so it keeps the focus and the view's Tab stop however far the panel scrolls.
-- The entry a drag started from, while it's dragged. `dragend` is dispatched to its element, and from a removed element it would never reach the root.
+- The entry a drag started from, while it's dragged. `dragend` is dispatched to its element, and from a removed element it would never reach the root. A drag resting on a folder opens it and takes the whole view away, which `useEntryDrag` handles (see "Drag and drop" in `file-manager.md`); a touch drag has no `dragend`.
 
 ### Finding entries by layout, not in the page
 

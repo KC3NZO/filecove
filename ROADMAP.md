@@ -29,10 +29,10 @@ What's left in the features already built, what packaging needs before a release
 - [x] Copied entries inside a folder that was then renamed keep their old ids, so pasting them fails with the adapter's error. *Done 2026-10-24: the clipboard follows a folder above its entries renamed to a new id, finding the folders below it and the entries again by name, and after a change names can't be trusted for (a folder they may be below moved, deleted, or renamed outside their trail, a section rooted below another's changed folder included), lists their folder again and keeps those still there by id, with nothing pasted meanwhile (see "Cut, copy and paste" in `file-manager.md`).*
 
 ### Drag and drop
-- [ ] The path bar as a drop target.
-- [ ] Opening a folder in the content by holding a drag over it.
-- [ ] Opening the collapsed sidebar during a drag.
-- [ ] Touch dragging.
+- [x] The path bar as a drop target. *Done 2026-10-24: each segment takes entries and files from outside into its folder, by the paste rules, and a drag resting on one opens its folder.*
+- [x] Opening a folder in the content by holding a drag over it. *Done 2026-10-24: in the list, the grid and a search everywhere's results, after 700 ms, but for a folder being dragged, and the drag goes on there. A drag whose source row went with the view still ends.*
+- [x] Opening the collapsed sidebar during a drag. *Done 2026-10-24: resting a drag of entries or files on "Show sidebar" opens the overlay, or shows the hidden docked sidebar over the content, until the drag ends, leaving the hidden setting as it was.*
+- [x] Touch dragging. *Done 2026-10-24: a long-press then moving on drags, in the content, the tree and the results, through the same drop targets and holds as a mouse, with the image by the finger and scrolling near edges. It moves, or copies where only that can be done or with Ctrl or Option held on a keyboard. Lifting after a long-press on a tree row or a result opens its menu, on iOS too.*
 
 ### Uploads
 - [x] Uploading folders (planned, C.2). *Done 2026-10-24: dropped, pasted or picked (`ActionContext.uploadFolder`) folders are uploaded with everything in them, through the adapter's `createFolder` and `upload`, one row each in the panel, and a folder whose name is taken is merged into the one there, kept both under a free name, or skipped.*
