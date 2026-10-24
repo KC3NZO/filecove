@@ -44,6 +44,8 @@ interface PropertiesPaneProps {
     onEscape: () => void;
     /** The focus left the overlay, for `to`. */
     onFocusOut: (to: Node) => void;
+    /** It docked, or no longer does, as the space it's in changed size. */
+    onDockedChange: (docked: boolean) => void;
 }
 
 const NO_ITEMS: PropertiesItem[] = [];
@@ -122,6 +124,7 @@ const PropertiesPane = ({
     onClose,
     onEscape,
     onFocusOut,
+    onDockedChange,
 }: PropertiesPaneProps) => {
     const { store, adapter } = useData();
     const listings = useSyncExternalStore(store.subscribe, store.version);
@@ -134,6 +137,11 @@ const PropertiesPane = ({
     // folder is the same object, by which what the adapter hands over is kept.
     const bare = useRef(new Map<string, FileEntry>());
     const visible = docked ? shown : open;
+    const onDockedChangeRef = useRef(onDockedChange);
+
+    useLayoutEffect(() => {
+        onDockedChangeRef.current = onDockedChange;
+    });
 
     useLayoutEffect(() => {
         const pane = paneRef.current;
@@ -143,7 +151,19 @@ const PropertiesPane = ({
             return;
         }
 
-        const check = () => setDocked(getComputedStyle(pane).position !== "absolute");
+        let wasDocked: boolean | undefined;
+
+        const check = () => {
+            const nowDocked = getComputedStyle(pane).position !== "absolute";
+
+            setDocked(nowDocked);
+
+            if (wasDocked !== undefined && nowDocked !== wasDocked) {
+                onDockedChangeRef.current(nowDocked);
+            }
+
+            wasDocked = nowDocked;
+        };
         const observer = new ResizeObserver(check);
 
         check();

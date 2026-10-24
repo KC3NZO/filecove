@@ -1530,6 +1530,28 @@ const FileManager = ({
         }
     }, []);
 
+    // The pane docking, or no longer, as the file manager's width changes. Docking closes the
+    // overlay, so it doesn't open again as the width shrinks back. A panel that goes with the change,
+    // the overlay or the docked one, drops what `ActionContext.properties` asked it to show, and hands
+    // the focus it had to the content.
+    const handlePropertiesDocking = (docked: boolean) => {
+        const shownBefore = docked ? propertiesOverlay : propertiesOpen;
+        const shownNow = docked ? propertiesOpen : propertiesOverlay;
+
+        if (docked) {
+            setPropertiesOverlay(false);
+            propertiesOpener.current = null;
+        }
+
+        if (shownBefore && !shownNow) {
+            setPinned(null);
+
+            if (paneRef.current?.contains(document.activeElement)) {
+                setFocusContent(true);
+            }
+        }
+    };
+
     // Opens the window listing the keys. It gives the focus back itself as it closes, to `opener`
     // or to what has it now, since the main menu it may be opened from hands the focus back to its
     // button only as it closes, after the window has taken note of what had it.
@@ -2878,6 +2900,7 @@ const FileManager = ({
                                                 onClose={closeProperties}
                                                 onEscape={handlePropertiesEscape}
                                                 onFocusOut={handlePropertiesFocusOut}
+                                                onDockedChange={handlePropertiesDocking}
                                             />
                                         </Box>
                                     </Box>
