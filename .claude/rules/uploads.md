@@ -3,6 +3,7 @@ paths:
   - "src/store/upload-queue.ts"
   - "src/hooks/use-upload-queue.ts"
   - "src/hooks/use-drop-target.ts"
+  - "src/utils/files.ts"
   - "src/components/uploads/**"
   - "src/components/file-manager/dialogs/upload-dialog.tsx"
   - "src/types/upload.ts"
@@ -37,6 +38,11 @@ Every route ends in `askUpload` in `file-manager.tsx`, with a `DroppedFiles` (`f
 
 - **`ActionContext.upload(files?)`** uploads into the context's `folder`. Without `files` it opens the browser's file picker, a hidden `<input type="file" multiple>` in the root, which only opens from a click or key press (an action's `onSelect` runs in one). It's missing when the adapter has no `upload`, the section refuses uploads (see "Sections refusing uploads"), or while another upload is being checked. The consumer places and labels the action, as with every other one.
 - **Dropping files from the desktop** onto the same targets that take dragged entries: a folder in the content, the open folder's empty space or a file in it, a tree folder, or a section row. `use-drop-target.ts` handles both kinds of drag. Dragged files show only as `"Files"` in `dataTransfer.types` until the drop, so they're offered by adapter alone (`DragContext.uploadInto`) and read on drop (`droppedFiles`). The highlight, the panel outline and the 700 ms hold to expand all work as they do for entries. A drag from outside never says how it ended, so a target unmarks itself on `dragleave` and `drop`.
+- **Pasting files from the system clipboard** (files copied in the desktop's file manager, a copied picture or screenshot) with the browser's paste key, Ctrl+V, ⌘V or Shift+Insert, into the folder Ctrl+V pastes into: the open folder from the content, or a tree row's folder (a section row's root). `folder-view.tsx` and the tree rows (`TreeItem`, on the item itself) hand their `paste` event to `pasteFiles` (`PasteFiles`, `types/menu.ts`) in `file-manager.tsx`, which uploads what `filesIn` (`utils/files.ts`, shared with drops) reads from `clipboardData`, through `offerUpload`, so a section refusing uploads and one upload being checked count as for a drop.
+  - **The file manager's own entries come first**: while the clipboard of cut or copied entries can be pasted into that folder (`canPaste`, a paste running or not), nothing is uploaded, since the page can't tell which was copied last without asking for permission. Ctrl+V reaches the browser only when no action took it: the consumer's paste action runs and prevents it, and a disabled action lets the paste key through (`pastes` in `utils/shortcut.ts`, `runShortcut`), so the playground's Paste, greyed out with nothing to paste, still lets files be pasted. Shift+Insert always reaches the browser, which is why `pasteFiles` checks the clipboard itself.
+  - Only the key pastes files. The menu's Paste can't, since a click reads the system clipboard only through `navigator.clipboard.read()`, which asks for permission and gives images alone.
+  - What reaches the page is the browser's: some browsers and systems hand over files copied in a file manager, some only their paths as text, which can't be read, and some nothing at all (a paste with no types, seen copying from GNOME Files). A copied picture comes through either way. A picture comes as "image.png" every time, so a second one clashes and is asked about. Copied folders come as names, left out as dropped ones are.
+  - Text fields are left alone, as the paste goes only to the content and the tree.
 - Files dropped anywhere the views don't take them are refused on the root (`refuseFiles`, dropEffect "none"), or the browser would open them in place of the page.
 
 ## Sections refusing uploads
@@ -65,4 +71,4 @@ A section's optional `acceptUploads` (`types/section.ts`, public, default `true`
 
 ## Not yet
 
-Uploading folders (would need `createFolder` and walking `webkitGetAsEntry`), pasting files from the system clipboard, and showing which files just arrived ("Show in folder" on a finished row, and a brief highlight in the open folder, never changing the selection, since an upload can finish while the user is acting on other files). Resuming an upload after a reload is left out by choice: the browser no longer has the files, and resuming partway is the adapter's upload protocol.
+Uploading folders (would need `createFolder` and walking `webkitGetAsEntry`), and showing which files just arrived ("Show in folder" on a finished row, and a brief highlight in the open folder, never changing the selection, since an upload can finish while the user is acting on other files). Resuming an upload after a reload is left out by choice: the browser no longer has the files, and resuming partway is the adapter's upload protocol.

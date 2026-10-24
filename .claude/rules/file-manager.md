@@ -222,7 +222,7 @@ Entries only ever move or copy between sections served by the same adapter objec
 - While a paste runs, the open folder shows its progress bar (`busy`) if the paste changes it, in whichever section: it's the target, the folder listing the target, or the folder a cut leaves.
 - A cut is pasted once and leaves the clipboard; a copy can be pasted again. Entries moved by either route leave the clipboard (their ids may have changed), as do deleted ones, and a renamed entry is replaced by its new self. Entries below a renamed folder keep their stale ids, and pasting them reports the adapter's error.
 - Cut entries are marked wherever they're listed: `CutContext` (`contexts/cut-context.ts`) carries their ids and adapter, `hooks/use-cut-ids.ts` gives a section the ids it could be showing, and list rows, grid tiles and sidebar tree rows set `data-cut` for `cutMarker` (see `component-styling.md`).
-- Ctrl+V pastes into the open folder even with a folder selected, as in GNOME; the playground's "Paste into folder" has no shortcut. On a sidebar tree row, Ctrl+V pastes into that folder.
+- Ctrl+V pastes into the open folder even with a folder selected, as in GNOME; the playground's "Paste into folder" has no shortcut. On a sidebar tree row, Ctrl+V pastes into that folder. With nothing of the file manager's to paste there, Ctrl+V uploads files copied on the desktop instead (see "Starting an upload" in `uploads.md`).
 
 ## Drag and drop
 

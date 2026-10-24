@@ -35,7 +35,7 @@ What's left in the features already built, what packaging needs before a release
 
 ### Uploads
 - [ ] Uploading folders (planned, C.2).
-- [ ] Pasting files from the system clipboard.
+- [x] Pasting files from the system clipboard. *Done 2026-10-23: Ctrl+V, ⌘V or Shift+Insert in the content or on a tree row uploads them there, unless the file manager's own cut or copied entries can be pasted there, which come first. The menu's Paste can't (reading the clipboard from a click needs permission), and what a browser hands over from the desktop differs by browser and system.*
 - [x] A way for a section to refuse uploads. *Done 2026-10-23: `Section.acceptUploads: false` takes no uploads, by the picker or by dropping, in any of the section's folders. It goes by the section, as `importFrom` does.*
 - [ ] Showing which files just arrived: "Show in folder" on a finished upload in the panel, and a brief highlight in the open folder, never a change to the selection.
 - [ ] **new:** The file picker has no `accept` setting, so an app can't limit file types.
