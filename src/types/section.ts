@@ -41,6 +41,12 @@ export interface Section {
      * @default true
      */
     importFrom?: SectionImports;
+    /**
+     * Whether files can be uploaded into the section's folders, by the file picker or by dropping
+     * them from the desktop. Uploading also needs the section's adapter to have `upload`.
+     * @default true
+     */
+    acceptUploads?: boolean;
 }
 
 /** Sections shown together in the sidebar, divided from the next group by a rule. */

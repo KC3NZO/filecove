@@ -1420,13 +1420,13 @@ const FileManager = ({
         [offerPaste],
     );
 
-    // Uploads into the folder at `trail`, when its adapter takes uploads and no other upload is
-    // being checked. Files dropped from outside go the same way.
+    // Uploads into the folder at `trail`, when its section and adapter take uploads and no other
+    // upload is being checked. Files dropped from outside go the same way.
     const offerUpload = useCallback(
         (target: Section, trail: FolderRef[]) => {
             const served = target.adapter ?? adapter;
 
-            return served.upload && !uploadCheck?.open
+            return served.upload && (target.acceptUploads ?? true) && !uploadCheck?.open
                 ? (dropped: DroppedFiles) => askUpload({ section: target, adapter: served, trail, dropped })
                 : undefined;
         },
