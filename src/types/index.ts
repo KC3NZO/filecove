@@ -28,7 +28,7 @@ export type {
 } from "./adapter";
 export type { Clipboard, ClipboardLookup } from "./clipboard";
 export type { DownloadItem, DownloadStatus, PreparedDownload } from "./download";
-export type { DraggedEntries, DragSource, DropInto, DropTarget } from "./drag";
+export type { DraggedEntries, DragSource, DropEffect, DropInto, DropTarget, HeldPress } from "./drag";
 export type { Clash, FolderState } from "./folder";
 export type { IconComponent, IconName, IconOverrides, IconSet, IconSource, IconVariant } from "./icon";
 export type {

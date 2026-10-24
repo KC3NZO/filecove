@@ -423,8 +423,9 @@ const subjectHolds = (subject: PropertiesSubject, sectionsById: ReadonlyMap<stri
     return subject.kind === "none" || subject.entries.every(({ section }) => sectionsById.get(section.id) === section);
 };
 
-// While entries are dragged, the backdrop of the overlay sidebar lets drops through to the content,
-// so a folder dragged out of the sidebar can land there.
+// While entries are dragged, or the overlay sidebar opened for a drag, its backdrop lets drops
+// through to the content, so a folder dragged out of the sidebar can land there, and files dragged
+// in from outside can still go into the open folder.
 const PASS_THROUGH: CSSProperties = { pointerEvents: "none" };
 
 // Files dropped where nothing takes them would have the browser open them in place of the page, so
@@ -447,6 +448,9 @@ const rootSx = {
     overflow: "hidden",
     // It takes the focus only from a press on nothing focusable, never by Tab.
     outline: "none",
+    // While a touch or pen presses, the browser drags nothing by itself, as some do on a long-press,
+    // so the file manager's own touch drag is the only one (`useEntryDrag`).
+    '&[data-touch-press] [draggable="true"]': { WebkitUserDrag: "none" },
 } satisfies SxProps<Theme>;
 
 const frameSx: SxProps<Theme> = {
@@ -547,7 +551,9 @@ const pickerStyle: CSSProperties = { display: "none" };
 
 // Below `rootWide` the sidebar overlays the content. Container queries decide that, so it's read
 // from the sidebar's style.
-const overlays = (sidebar: HTMLElement) => getComputedStyle(sidebar).position === "absolute";
+// The hidden docked sidebar shown over the content for a drag (`peek`) still docks.
+const overlays = (sidebar: HTMLElement) =>
+    getComputedStyle(sidebar).position === "absolute" && sidebar.dataset.peek !== "true";
 
 const FileManager = ({
     adapter,
@@ -596,6 +602,7 @@ const FileManager = ({
     onKeyDown,
     onDragEnter,
     onDragOver,
+    onDragLeave,
     onDrop,
     onDragEnd,
     onPointerDownCapture,
@@ -727,6 +734,9 @@ const FileManager = ({
         }
     }, [section, setExpanded]);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    // The sidebar shown for a drag resting on the button that shows it, until the drag ends: the
+    // overlay, while it's collapsed, or the hidden docked sidebar over the content (`peek`).
+    const [sidebarForDrag, setSidebarForDrag] = useState<"overlay" | "peek" | null>(null);
     // Whether the docked sidebar is hidden, with F9 or the view menu. Collapsed, it shows as an
     // overlay instead, while `sidebarOpen`.
     const [sidebarHidden, setSidebarHidden] = useSetting({
@@ -1913,7 +1923,48 @@ const FileManager = ({
         }
     };
 
-    const drag = useEntryDrag(adapter, dropInto, uploadInto);
+    const drag = useEntryDrag(adapter, dropInto, uploadInto, rootRef);
+    const dragging = !!drag.context.dragged;
+
+    // Shows the sidebar for the drag under way, unless it shows already, leaving the overlay open
+    // or the docked sidebar hidden as before once the drag ends.
+    const showSidebarForDrag = useCallback(() => {
+        const sidebar = sidebarRef.current;
+
+        if (!sidebar) {
+            return;
+        }
+
+        if (overlays(sidebar)) {
+            if (!sidebarOpen) {
+                setSidebarForDrag("overlay");
+                setSidebarOpen(true);
+            }
+        } else if (sidebarHidden) {
+            setSidebarForDrag("peek");
+        }
+    }, [sidebarOpen, sidebarHidden]);
+
+    const endSidebarForDrag = useCallback(() => {
+        if (sidebarForDrag === "overlay") {
+            setSidebarOpen(false);
+            sidebarOpener.current = null;
+        }
+
+        setSidebarForDrag(null);
+    }, [sidebarForDrag]);
+
+    // However a drag of entries ends, dropped anywhere or called off, mouse or touch. Files dragged
+    // in from outside end with the drop, or by leaving the file manager (the root's handlers).
+    const wasDragging = useRef(false);
+
+    useEffect(() => {
+        if (wasDragging.current && !dragging) {
+            endSidebarForDrag();
+        }
+
+        wasDragging.current = dragging;
+    });
 
     // Sections served by one adapter can show the same folders, under the same ids, since ids are
     // unique within an adapter, so a change made in one of them shows in all of them.
@@ -2799,10 +2850,26 @@ const FileManager = ({
                                     onDragOver?.(event);
                                     refuseFiles(event);
                                 }}
+                                onDragLeave={(event) => {
+                                    onDragLeave?.(event);
+
+                                    // Files dragged in from outside that leave the file manager
+                                    // take the sidebar shown for them away.
+                                    if (
+                                        carriesFiles(event) &&
+                                        !(
+                                            event.relatedTarget instanceof Node &&
+                                            event.currentTarget.contains(event.relatedTarget)
+                                        )
+                                    ) {
+                                        endSidebarForDrag();
+                                    }
+                                }}
                                 onDrop={(event) => {
                                     onDrop?.(event);
                                     refuseFiles(event);
                                     drag.end();
+                                    endSidebarForDrag();
                                 }}
                                 onDragEnd={(event) => {
                                     onDragEnd?.(event);
@@ -2817,7 +2884,7 @@ const FileManager = ({
                                     <Backdrop
                                         open={sidebarOpen}
                                         sx={backdropSx}
-                                        style={drag.context.dragged ? PASS_THROUGH : undefined}
+                                        style={dragging || sidebarForDrag ? PASS_THROUGH : undefined}
                                         onClick={closeSidebar}
                                     />
                                     <Backdrop
@@ -2836,6 +2903,7 @@ const FileManager = ({
                                         reveal={treeReveal}
                                         open={sidebarOpen}
                                         hidden={sidebarHidden}
+                                        peek={sidebarForDrag === "peek"}
                                         searchScope={searchScope}
                                         canSearchEverywhere={canSearchEverywhere}
                                         onToggle={toggleExpanded}
@@ -2900,6 +2968,7 @@ const FileManager = ({
                                             onToggleSelecting={toggleSelecting}
                                             onSearch={toggleSearch}
                                             onShowSidebar={showSidebar}
+                                            onDragShowSidebar={showSidebarForDrag}
                                             onToggleSidebar={toggleDocked}
                                             onToggleProperties={toggleDockedProperties}
                                             onOpenProperties={openPropertiesOverlay}
@@ -3104,6 +3173,8 @@ const FileManager = ({
                                             ref={drag.previewRef}
                                             entry={drag.preview.entry}
                                             count={drag.preview.count}
+                                            touch={drag.preview.touch}
+                                            effect={drag.effect}
                                         />,
                                         document.body,
                                     )}

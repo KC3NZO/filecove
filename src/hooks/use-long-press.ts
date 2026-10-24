@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { MouseEvent, PointerEvent as ReactPointerEvent } from "react";
 
+import type { HeldPress } from "../types";
+
 /** How long a press must be held to count as a long-press, in ms. */
 const DELAY = 500;
 /** How far the finger may drift before the press is a scroll instead, in px. */
@@ -10,23 +12,31 @@ const TOLERANCE = 10;
 const IGNORED = "button, a, input, textarea";
 
 interface LongPressOptions {
-    /** Called when an entry, found by its `data-entry-id`, has been held long enough. */
-    onLongPress: (id: string) => void;
+    /**
+     * Called when an item has been held long enough, with where the press is, which a touch drag
+     * can go on from (`DragContext`'s `touch`).
+     */
+    onLongPress: (id: string, press: HeldPress) => void;
+    /** The item a press is on; by default an entry, found by its `data-entry-id`. */
+    itemAt?: (target: Element) => string | undefined;
 }
 
+const entryAt = (target: Element) => target.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId;
+
 /**
- * Long-press on the entries of a surface, for touch and pen. It runs on its own timer rather than
- * on `contextmenu`, which iOS Safari never fires for a long-press. A press that moves or turns
- * into a scroll (the browser sends `pointercancel`) is dropped, and the click that follows a
- * long-press is swallowed so it doesn't act on the entry a second time.
+ * Long-press on the entries of a surface, or on the items `itemAt` finds, for touch and pen. It
+ * runs on its own timer rather than on `contextmenu`, which iOS Safari never fires for a
+ * long-press. A press that moves or turns into a scroll (the browser sends `pointercancel`) is
+ * dropped, and the click that follows a long-press is swallowed so it doesn't act on the item a
+ * second time.
  */
-export const useLongPress = ({ onLongPress }: LongPressOptions) => {
+export const useLongPress = ({ onLongPress, itemAt = entryAt }: LongPressOptions) => {
     const endRef = useRef<(() => void) | null>(null);
     const suppressClick = useRef(false);
-    const callback = useRef(onLongPress);
+    const callbacks = useRef({ onLongPress, itemAt });
 
     useEffect(() => {
-        callback.current = onLongPress;
+        callbacks.current = { onLongPress, itemAt };
     });
 
     // A press still held when the view goes away (another folder opened) is dropped with it.
@@ -45,19 +55,24 @@ export const useLongPress = ({ onLongPress }: LongPressOptions) => {
             return;
         }
 
-        const id = event.target.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId;
+        const id = callbacks.current.itemAt(event.target);
 
         if (id === undefined) {
             return;
         }
 
         const { pointerId, clientX: startX, clientY: startY } = event;
+        const press: HeldPress = { pointerId, clientX: startX, clientY: startY, element: event.target };
 
         const handleMove = (moveEvent: PointerEvent) => {
-            if (
-                moveEvent.pointerId === pointerId &&
-                Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > TOLERANCE
-            ) {
+            if (moveEvent.pointerId !== pointerId) {
+                return;
+            }
+
+            press.clientX = moveEvent.clientX;
+            press.clientY = moveEvent.clientY;
+
+            if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > TOLERANCE) {
                 end();
             }
         };
@@ -78,7 +93,7 @@ export const useLongPress = ({ onLongPress }: LongPressOptions) => {
                 { once: true },
             );
 
-            callback.current(id);
+            callbacks.current.onLongPress(id, { ...press });
         };
 
         const timer = setTimeout(fire, DELAY);

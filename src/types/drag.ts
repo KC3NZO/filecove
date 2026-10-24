@@ -21,6 +21,22 @@ export interface DragSource {
     grabbed: FileEntry;
 }
 
+/**
+ * A touch or pen press held long enough on an item (`useLongPress`), which a touch drag may start
+ * from once the finger moves on.
+ */
+export interface HeldPress {
+    pointerId: number;
+    /** Where the pointer is, in the viewport. */
+    clientX: number;
+    clientY: number;
+    /** What was pressed. */
+    element: Element;
+}
+
+/** What letting go of a drag now does: move the entries, copy them, or nothing. */
+export type DropEffect = "move" | "copy" | "none";
+
 /** A folder that dragged entries could be dropped into. */
 export interface DropTarget {
     /** Tells the folder apart from a view's other drop targets, so the view can mark it. */

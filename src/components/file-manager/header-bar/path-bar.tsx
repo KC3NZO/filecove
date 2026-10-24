@@ -2,8 +2,9 @@ import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useDropTarget } from "../../../hooks/use-drop-target";
 import { useLocale } from "../../../hooks/use-locale";
-import { focusRing } from "../../../styles/mixins";
+import { dragMarkers, focusRing } from "../../../styles/mixins";
 import { belowElement } from "../../../utils/menu-position";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
@@ -23,6 +24,16 @@ interface Segment {
     id: string;
     label: string;
     icon?: IconSource;
+}
+
+interface CrumbProps {
+    section: Section;
+    segment: Segment;
+    /** Trail to the segment's folder. */
+    trail: FolderRef[];
+    /** The open folder's. */
+    current: boolean;
+    onNavigate: (place: FileManagerLocation) => void;
 }
 
 const barSx: SxProps<Theme> = {
@@ -73,7 +84,8 @@ const separatorSx: SxProps<Theme> = {
     userSelect: "none",
 };
 
-const segmentSx: SxProps<Theme> = {
+// A folder the dragged entries would go into is marked as the tree's and the content's are.
+const segmentSx: SxProps<Theme> = (theme) => ({
     gap: 0.75,
     height: 28,
     maxWidth: "14rem",
@@ -85,7 +97,8 @@ const segmentSx: SxProps<Theme> = {
     "&:hover": { bgcolor: "action.hover", color: "text.primary" },
     '&[aria-current="location"]': { color: "text.primary", fontWeight: 700 },
     ...focusRing,
-};
+    ...dragMarkers(theme),
+});
 
 const labelSx: SxProps<Theme> = {
     minWidth: 0,
@@ -95,6 +108,34 @@ const labelSx: SxProps<Theme> = {
 
 const menuButtonSx: SxProps<Theme> = {
     marginInlineStart: 0.25,
+};
+
+/**
+ * A segment of the path, which opens its folder. Entries dragged onto it go into the folder, by the
+ * same rules as pasting, and so do files from outside, as a tree row takes them. A drag resting on
+ * it opens the folder, as GNOME's path bar does, and goes on there.
+ */
+const Crumb = ({ section, segment, trail, current, onNavigate }: CrumbProps) => {
+    const open = () => onNavigate({ sectionId: section.id, trail });
+    const drop = useDropTarget({
+        targetsAt: () => [{ key: segment.id, section, trail }],
+        onHold: current ? undefined : open,
+    });
+
+    return (
+        <ButtonBase
+            sx={segmentSx}
+            aria-current={current ? "location" : undefined}
+            data-drop-target={drop.dropKey !== null}
+            onClick={open}
+            {...drop.handlers}
+        >
+            {segment.icon && <IconSlot icon={segment.icon} />}
+            <Box component="bdi" sx={labelSx}>
+                {segment.label}
+            </Box>
+        </ButtonBase>
+    );
 };
 
 /** The section's name first, then the folders opened below its root. */
@@ -116,16 +157,13 @@ const PathBar = ({ section, trail, hasActions, onNavigate, onOpenMenu }: PathBar
                                     /
                                 </Box>
                             )}
-                            <ButtonBase
-                                sx={segmentSx}
-                                aria-current={index === segments.length - 1 ? "location" : undefined}
-                                onClick={() => onNavigate({ sectionId: section.id, trail: trail.slice(0, index) })}
-                            >
-                                {segment.icon && <IconSlot icon={segment.icon} />}
-                                <Box component="bdi" sx={labelSx}>
-                                    {segment.label}
-                                </Box>
-                            </ButtonBase>
+                            <Crumb
+                                section={section}
+                                segment={segment}
+                                trail={trail.slice(0, index)}
+                                current={index === segments.length - 1}
+                                onNavigate={onNavigate}
+                            />
                         </Box>
                     ))}
                 </Box>

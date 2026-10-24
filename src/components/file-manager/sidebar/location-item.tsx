@@ -1,4 +1,4 @@
-import { memo, useContext } from "react";
+import { memo, useContext, useRef } from "react";
 import type {
     ClipboardEvent,
     CSSProperties,
@@ -21,6 +21,7 @@ import { useDraggedIds } from "../../../hooks/use-dragged-ids";
 import { useDropTarget } from "../../../hooks/use-drop-target";
 import { useData } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
+import { useLongPress } from "../../../hooks/use-long-press";
 import { folderKey } from "../../../store/folder-store";
 import {
     cutMarker,
@@ -34,7 +35,7 @@ import {
 } from "../../../styles/mixins";
 import { isRtl } from "../../../utils/dom";
 import { isMenuKey } from "../../../utils/keyboard";
-import { belowElement, pointerPosition } from "../../../utils/menu-position";
+import { belowElement, pointerPosition, pressPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { selectModifiers } from "../../../utils/selection";
 import { FolderTypeIcon } from "../../icons/file-icon";
@@ -109,6 +110,9 @@ type DragHandlers = Pick<
     "onDragStart" | "onDragEnter" | "onDragOver" | "onDragLeave" | "onDrop"
 >;
 
+/** A row's `useLongPress`, which a touch or pen press held on it goes to. */
+type PressHandlers = Pick<DOMAttributes<HTMLElement>, "onPointerDown" | "onClickCapture">;
+
 interface TreeItemProps {
     variant: "section" | "folder";
     /** Where the row goes, and whether it expands. */
@@ -127,6 +131,7 @@ interface TreeItemProps {
     /** Letting go of the dragged entries now would drop them into its folder. */
     dropTarget: boolean;
     dragHandlers: DragHandlers;
+    pressHandlers: PressHandlers;
     /** A click on the row, which opens it or, with Ctrl or Shift, selects it. */
     onSelect: (event: MouseEvent) => void;
     /** Opens it, for Enter. */
@@ -193,6 +198,7 @@ const mainPartSx = {
     borderRadius: "inherit",
     cursor: "pointer",
     userSelect: "none",
+    WebkitTouchCallout: "none",
     WebkitTapHighlightColor: "transparent",
 } as const;
 
@@ -320,6 +326,7 @@ const TreeItem = ({
     dragged = false,
     dropTarget,
     dragHandlers,
+    pressHandlers,
     onSelect,
     onOpen,
     onSpace,
@@ -330,9 +337,15 @@ const TreeItem = ({
 }: TreeItemProps) => {
     const isSection = variant === "section";
     const { expandable, expanded, loading } = row;
+    // The pointer of the latest press, read per press, as the content reads it.
+    const pointerType = useRef("mouse");
 
+    // A touch long-press is the row's own (`pressHandlers`), which opens the menu as the finger
+    // lifts or drags the folder, so neither the browser's menu nor ours opens on top of it.
     const handleContextMenu = (event: MouseEvent) => {
-        if (onMenu(pointerPosition(event))) {
+        if (pointerType.current !== "mouse") {
+            event.preventDefault();
+        } else if (onMenu(pointerPosition(event))) {
             event.preventDefault();
         }
     };
@@ -416,7 +429,11 @@ const TreeItem = ({
                 data-cut={cut}
                 data-dragged={dragged}
                 data-drop-target={dropTarget}
+                onPointerDownCapture={(event) => {
+                    pointerType.current = event.pointerType;
+                }}
                 onContextMenu={handleContextMenu}
+                {...pressHandlers}
                 {...dragHandlers}
             >
                 <Box sx={isSection ? sectionButtonSx : folderButtonSx} onClick={onSelect}>
@@ -572,9 +589,19 @@ const FolderItem = memo(
                 { target: "folder", section, trail, entries: [] },
             ]);
 
+        const pick = () => ({ section, trail: parentTrail, entries: takeSelection(), grabbed: entry });
+
         const handleDragStart = (event: DragEvent) => {
-            drag?.start(event, () => ({ section, trail: parentTrail, entries: takeSelection(), grabbed: entry }));
+            drag?.start(event, pick);
         };
+
+        // The tree has no selection mode, so on touch a long-press opens the folder's menu once the
+        // finger lifts, as a right-click would, and the finger moving on drags it, as a mouse does.
+        const longPress = useLongPress({
+            itemAt: () => key,
+            onLongPress: (_, press) =>
+                drag?.touch(press, draggable ? pick : null, () => handleMenu(pressPosition(press))),
+        });
 
         return (
             <TreeItem
@@ -588,6 +615,7 @@ const FolderItem = memo(
                 dragged={draggedIds.has(entry.id)}
                 dropTarget={drop.dropKey !== null}
                 dragHandlers={{ ...drop.handlers, onDragStart: draggable ? handleDragStart : undefined }}
+                pressHandlers={longPress}
                 onSelect={handleSelect}
                 onOpen={open}
                 onSpace={(modifiers) => onSelectFolder(target, modifiers)}
@@ -618,6 +646,7 @@ const SectionItem = memo(
         onPasteFiles,
     }: SectionItemProps) => {
         const { id: key, section, expandable, expanded } = row;
+        const drag = useContext(DragContext);
 
         // Dropped onto, the entries go into the root. Its row isn't an entry, so it's never dragged.
         const drop = useDropTarget({
@@ -638,6 +667,13 @@ const SectionItem = memo(
         const handleShortcut = (event: KeyboardEvent) =>
             onShortcut(event, [{ target: "folder", section, trail: ROOT_TRAIL, entries: [] }]);
 
+        // On touch, a long-press opens its menu once the finger lifts, as a right-click would. It's
+        // never dragged, so the finger moving on scrolls.
+        const longPress = useLongPress({
+            itemAt: () => key,
+            onLongPress: (_, press) => drag?.touch(press, null, () => handleMenu(pressPosition(press))),
+        });
+
         return (
             <TreeItem
                 variant="section"
@@ -647,6 +683,7 @@ const SectionItem = memo(
                 open={key === openKey}
                 dropTarget={drop.dropKey !== null}
                 dragHandlers={drop.handlers}
+                pressHandlers={longPress}
                 onSelect={open}
                 onOpen={open}
                 onToggle={() => onToggle(key)}

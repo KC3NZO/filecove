@@ -647,7 +647,9 @@ const FolderView = ({
 
     // Dropped onto a folder, the entries go into it, by the same rules as pasting. Dropped anywhere
     // else, a file included, they go into the open folder, keyed by its id, which none of its
-    // entries has.
+    // entries has. A drag resting on a folder opens it, as spring-loaded folders do in GNOME and the
+    // Finder, whether it takes what's dragged or not, but for one of the folders dragged, whose
+    // insides they can't go into. The drag goes on there.
     const drop = useDropTarget({
         targetsAt: (event) => {
             const entry = entryAt(event);
@@ -663,15 +665,41 @@ const FolderView = ({
 
             return targets;
         },
+        onHold: (key) => {
+            const index = indexById.get(key);
+            const entry = index === undefined ? undefined : entries?.[index];
+
+            if (entry?.kind === "folder" && !draggedIds.has(entry.id)) {
+                handleOpen(entry);
+            }
+        },
     });
 
+    // A long-press starts selection mode with the entry selected, or in it adds the entry to the
+    // selection, keeping one already there, so the finger moving on drags the whole selection, as
+    // in the phones' and tablets' file apps.
     const longPress = useLongPress({
-        onLongPress: (id) => {
-            if (selecting) {
-                select(id, { toggle: true, range: false });
-            } else {
+        onLongPress: (id, press) => {
+            const index = indexById.get(id);
+            const entry = index === undefined ? undefined : entries?.[index];
+
+            if (!selecting) {
                 replace({ ids: new Set([id]), anchor: id });
                 onSelectingChange(true);
+            } else if (!selectedIds.has(id)) {
+                select(id, { toggle: true, range: false });
+            }
+
+            if (entry && draggable) {
+                const carried = selecting
+                    ? (entries ?? []).filter((item) => item.id === id || selectedIds.has(item.id))
+                    : [entry];
+
+                drag?.touch(press, () => {
+                    setGrabbedId(entry.id);
+
+                    return { section, trail, entries: carried, grabbed: entry };
+                });
             }
         },
     });

@@ -2,13 +2,20 @@ import type { MouseEvent } from "react";
 
 import { isRtl } from "./dom";
 
-import type { MenuPosition } from "../types";
+import type { HeldPress, MenuPosition } from "../types";
 
 /** At the pointer, for right-clicks. */
 export const pointerPosition = (event: MouseEvent): MenuPosition => ({
     top: event.clientY,
     left: event.clientX,
     rtl: isRtl(event.currentTarget),
+});
+
+/** Where a touch press was held, for the menu a long-press opens. */
+export const pressPosition = (press: HeldPress): MenuPosition => ({
+    top: press.clientY,
+    left: press.clientX,
+    rtl: isRtl(press.element),
 });
 
 /**

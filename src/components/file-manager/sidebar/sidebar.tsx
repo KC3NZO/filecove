@@ -54,6 +54,11 @@ interface SidebarProps {
     open: boolean;
     /** Whether the docked sidebar is hidden; has no effect while it's collapsed. */
     hidden: boolean;
+    /**
+     * Whether the hidden docked sidebar shows over the content for a drag, as the overlay does
+     * while it's collapsed, leaving it hidden once the drag ends.
+     */
+    peek: boolean;
     /** What the open search searches, or null; the magnifier at the top is for searching everywhere. */
     searchScope: SearchScope | null;
     /** Whether any section can be searched everywhere, without which the magnifier isn't there. */
@@ -118,6 +123,13 @@ const sidebarSx: SxProps<Theme> = (theme) => ({
         visibility: "visible",
         transition: "none",
         '&[data-hidden="true"]': { display: "none" },
+        '&[data-hidden="true"][data-peek="true"]': {
+            display: "flex",
+            position: "absolute",
+            zIndex: 2,
+            width: `min(${SIDEBAR_WIDTH + 32}px, 85%)`,
+            boxShadow: 8,
+        },
     },
 });
 
@@ -230,6 +242,7 @@ const Sidebar = ({
     reveal,
     open,
     hidden,
+    peek,
     searchScope,
     canSearchEverywhere,
     onToggle,
@@ -536,6 +549,7 @@ const Sidebar = ({
             sx={sidebarSx}
             data-open={open}
             data-hidden={hidden}
+            data-peek={peek}
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
         >

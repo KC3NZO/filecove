@@ -12,6 +12,7 @@ import { CutContext } from "../../../contexts/cut-context";
 import { DragContext } from "../../../contexts/drag-context";
 import { useDropTarget } from "../../../hooks/use-drop-target";
 import { useLocale } from "../../../hooks/use-locale";
+import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
 import { useSearch } from "../../../hooks/use-search";
 import { useSelection } from "../../../hooks/use-selection";
@@ -24,7 +25,7 @@ import { isolate, joinIsolated } from "../../../utils/bidi";
 import { focusLost, isRtl } from "../../../utils/dom";
 import { isHidden } from "../../../utils/hidden";
 import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
-import { belowElement } from "../../../utils/menu-position";
+import { belowElement, pressPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
 import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import { pressesKey } from "../../../utils/shortcut";
@@ -418,7 +419,8 @@ const SearchResults = ({
     };
 
     // Folders among the results take drops, by the same rules as pasting. Their empty space takes
-    // none, since the results are no folder.
+    // none, since the results are no folder. A drag resting on a folder opens it, as opening one does,
+    // ending the search, but for one of those dragged, and goes on there.
     const drop = useDropTarget({
         targetsAt: (event) => {
             const hit = hitAt(event);
@@ -434,6 +436,16 @@ const SearchResults = ({
             };
 
             return [target];
+        },
+        onHold: (key) => {
+            const hit = hitByKey.get(key);
+
+            if (hit?.entry.kind === "folder" && !draggedKeys.has(key)) {
+                onNavigate({
+                    sectionId: hit.section.id,
+                    trail: [...hit.trail, { id: hit.entry.id, name: hit.entry.name }],
+                });
+            }
         },
     });
 
@@ -494,6 +506,40 @@ const SearchResults = ({
         [hitByKey, selectedIds, actOnSelection, selectedHits, select, onOpenMenu, requestFor],
     );
 
+    // Results have no selection mode, so a long-press opens the result's menu once the finger
+    // lifts, as a right-click would. The finger moving on instead drags it, or the selection it's
+    // in when that's in one folder, as a mouse drag does.
+    const longPress = useLongPress({
+        onLongPress: (key, press) => {
+            const hit = hitByKey.get(key);
+            const entry = entries.find((item) => item.id === key);
+
+            if (!hit || !entry) {
+                return;
+            }
+
+            const position = pressPosition(press);
+            const carried = selectedIds.has(key) && actOnSelection ? selectedHits : [hit];
+            const pick = () => {
+                setGrabbedId(key);
+
+                if (carried.length === 1) {
+                    select(key);
+                }
+
+                return {
+                    section: hit.section,
+                    trail: hit.trail,
+                    entries: carried.map((one) => one.entry),
+                    grabbed: hit.entry,
+                };
+            };
+            const movable = !!(hit.adapter.move || hit.adapter.copy);
+
+            drag?.touch(press, movable ? pick : null, () => handleEntryMenu(position, entry));
+        },
+    });
+
     const handleBackgroundClick = (event: MouseEvent) => {
         const { toggle, range } = selectModifiers(event);
 
@@ -508,6 +554,20 @@ const SearchResults = ({
         }
 
         marquee.onPointerDown(event);
+        longPress.onPointerDown(event);
+    };
+
+    const handleClickCapture = (event: MouseEvent) => {
+        marquee.onClickCapture(event);
+        longPress.onClickCapture(event);
+    };
+
+    // A touch long-press is ours, so neither the browser's menu nor ours opens on top of it.
+    const handleContextMenuCapture = (event: MouseEvent) => {
+        if (pointerType.current !== "mouse") {
+            event.preventDefault();
+            event.stopPropagation();
+        }
     };
 
     const focusResult = (id: string, index: number) => {
@@ -799,8 +859,9 @@ const SearchResults = ({
                         pointerType.current = event.pointerType;
                     }}
                     onPointerDown={handlePointerDown}
-                    onClickCapture={marquee.onClickCapture}
+                    onClickCapture={handleClickCapture}
                     onClick={handleBackgroundClick}
+                    onContextMenuCapture={handleContextMenuCapture}
                     onFocus={handleFocus}
                     onBlur={handleBlur}
                     onKeyDown={handleKeyDown}

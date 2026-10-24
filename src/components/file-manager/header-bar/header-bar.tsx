@@ -3,6 +3,7 @@ import type { ReactNode, Ref } from "react";
 import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useDragHold } from "../../../hooks/use-drop-target";
 import { useLocale } from "../../../hooks/use-locale";
 import { HEADER_HEIGHT, rootMedium, rootWide } from "../../../styles/layout";
 import { forcedColors, forcedPressed } from "../../../styles/mixins";
@@ -46,6 +47,8 @@ interface HeaderBarProps {
     onSearch: (scope: SearchScope) => void;
     /** Opens the collapsed sidebar, or shows the hidden docked one. */
     onShowSidebar: () => void;
+    /** Opens the sidebar for a drag that rests on the button that shows it, until the drag ends. */
+    onDragShowSidebar: () => void;
     /** Hides or shows the docked sidebar. */
     onToggleSidebar: () => void;
     /** Shows or hides the docked properties. */
@@ -109,11 +112,21 @@ const endGroupSx: SxProps<Theme> = {
     gap: 0.25,
 };
 
+// A drag resting on the button that shows the sidebar opens it, and meanwhile the button shows as
+// hovered, which browsers don't show while dragging.
+const dragOverSx = {
+    '&[data-drag-over="true"]': { bgcolor: "action.hover" },
+    [forcedColors]: { '&[data-drag-over="true"]': { outline: "2px solid Highlight" } },
+};
+
+const sidebarButtonSx: SxProps<Theme> = dragOverSx;
+
 /**
  * Only while the sidebar is collapsed, or hidden: the button that shows it, and search everywhere,
  * which otherwise lives at the top of the sidebar.
  */
-const collapsedOnlySx: SxProps<Theme> = {
+const collapsedSidebarButtonSx: SxProps<Theme> = {
+    ...dragOverSx,
     [rootWide]: { display: "none" },
 };
 
@@ -165,12 +178,14 @@ const HeaderBar = ({
     onToggleSelecting,
     onSearch,
     onShowSidebar,
+    onDragShowSidebar,
     onToggleSidebar,
     onToggleProperties,
     onOpenProperties,
     sidebarButtonRef,
 }: HeaderBarProps) => {
     const { text } = useLocale();
+    const sidebarHold = useDragHold(onDragShowSidebar);
 
     return (
         <Box sx={headerSx}>
@@ -179,8 +194,10 @@ const HeaderBar = ({
                     ref={sidebarButtonRef}
                     label={text.showSidebar}
                     aria-keyshortcuts="F9"
-                    sx={sidebarHidden ? undefined : collapsedOnlySx}
+                    sx={sidebarHidden ? sidebarButtonSx : collapsedSidebarButtonSx}
+                    data-drag-over={sidebarHold.over}
                     onClick={onShowSidebar}
+                    {...sidebarHold.handlers}
                 >
                     <Icon name="menu" fontSize="small" />
                 </TooltipIconButton>
