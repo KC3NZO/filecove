@@ -39,7 +39,7 @@ Keep it that way: `FileManager` imports the shared parts, never the other way ro
 
 ## Starting an upload
 
-Every route ends in `askUpload` in `file-manager.tsx`, with a `DroppedFiles` (`files`, and `folders` as `FolderSource`s, see "Folders"):
+Every route ends in `askUpload` in `file-manager.tsx`, with a `DroppedFiles` (`files`, and `folders` as `FolderSource`s, see "Folders"). Uploads can't be undone, so one starting ends the undo history (see `undo.md`).
 
 - **`ActionContext.upload(files?)`** uploads into the context's `folder`. Without `files` it opens the browser's file picker, a hidden `<input type="file" multiple>` in the root, which only opens from a click or key press (an action's `onSelect` runs in one). It offers only the types the section takes, and is missing when the adapter has no `upload`, the section takes no uploads (see "Sections limiting uploads"), or while another upload is being checked. The consumer places and labels the action, as with every other one.
 - **`ActionContext.uploadFolder()`** opens the same input as a folder picker (`webkitdirectory`, set by `pickFiles` as it opens), and uploads the folder picked. It's missing when `upload` is, when the adapter has no `createFolder`, or when the browser can't pick folders (`picksFolders`). The playground's "Upload folder…" sits beside "Upload files…".

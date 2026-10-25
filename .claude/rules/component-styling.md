@@ -47,6 +47,7 @@ Shared color helpers are in `src/styles/mixins.ts`: `hoverBackground`, `selected
 - Dialogs use `dialogPaperSx`: the window's `background.default` with a `divider` outline, and no `backgroundImage`. MUI's elevated Paper lays a white overlay over it in dark mode that turns any dark background grey. A view inside a dialog, like the transfer picker's folder list, sits on `background.paper`, so a dialog is laid out like the window: chrome on default, view on paper.
 - Dialog buttons other than the main action are `color="inherit"`, so only the one that does the work is accented.
 - Menus still use MUI's Paper as it comes, overlay included.
+- The notice over the content (`notice-bar.tsx`, see `undo.md`) is MUI's `SnackbarContent` with its own colours (`palette.SnackbarContent`, or an emphasized `background.default` without CSS variables), its button and ✕ `inherit`.
 
 ## Forced colors (Windows High Contrast)
 
@@ -56,7 +57,7 @@ Windows' High Contrast themes, and any forced colors mode, drop background colou
 - Pressed toggle buttons, the search buttons and Select, take `Highlight` (`forcedPressed`), and so does the open search tab's underline.
 - Rows and tiles just uploaded, whose tint is a shadow, take a 2px `Highlight` outline while they're highlighted (`forcedArrived`).
 - `LinearProgress` fills take `Highlight` (`forcedBarSx`, in the content's, the search results' and the panels' bars).
-- Menus (`menuPaperSx`, shared by the four menus) and tooltips get a 1px `CanvasText` outline (`forcedEdge`), where their shadow and background set them apart.
+- Menus (`menuPaperSx`, shared by the four menus), tooltips and the notice over the content get a 1px `CanvasText` outline (`forcedEdge`), where their shadow and background set them apart.
 - Hover shows nothing for now. Chrome's DevTools emulate it (Rendering, "Emulate CSS media feature forced-colors").
 
 A new state shown by a background or a shadow alone needs its own rule under `forcedColors`.
