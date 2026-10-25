@@ -29,12 +29,12 @@ There is no test runner configured.
 
 - `index.ts` is the public entry. It exports `FileManager`, `IconProvider`, `enUS` (the English text) and the public types, and nothing else is public.
 - `components/file-manager/` is the frame and its parts (`sidebar/`, `header-bar/`, `content/`, `context-menu/`, `dialogs/`, and `properties-pane.tsx`, which places the properties panel).
-- `components/uploads/`, `components/downloads/` and `components/properties/` have the upload, download and properties panels, kept free of file manager imports so the planned media manager can reuse them (see `uploads.md`, `download.md` and `properties.md`).
+- `components/uploads/`, `components/downloads/`, `components/transfers/` and `components/properties/` have the upload, download, copy and move, and properties panels, kept free of file manager imports so the planned media manager can reuse them (see `uploads.md`, `download.md`, `transfers.md` and `properties.md`).
 - `components/buttons/` has `TooltipIconButton`, the icon-only button with a tooltip, and `ToolbarActions`, the app's actions as a header's buttons and "More actions" menu, shared by the file manager and the panels.
 - `components/icons/` has `Icon`, `IconProvider`, `IconSlot` (a name or the consumer's element in an icon's box), and `FileTypeIcon` / `FolderTypeIcon`, the only way to render `@react-symbols/icons`.
 - `types/` holds shared and exported types, one file per domain, re-exported from `types/index.ts`. Files marked internal stay out of `src/index.ts`.
 - `locales/` has the component's text, in English only (`enUS`).
-- `hooks/`, `contexts/`, `store/` (the folder listing cache, the thumbnail and properties caches, and the upload and download queues), `utils/` (plain functions), `styles/` (container-query constants, style helpers) and `icon-sets/`.
+- `hooks/`, `contexts/`, `store/` (the folder listing cache, the thumbnail and properties caches, and the upload, download and transfer queues), `utils/` (plain functions), `styles/` (container-query constants, style helpers) and `icon-sets/`.
 
 Imports are relative, with no path alias. The only barrels are `src/index.ts` and `src/types/index.ts`; everything else is imported by file, e.g. `components/icons/icon`.
 
@@ -48,7 +48,7 @@ Imports are relative, with no path alias. The only barrels are `src/index.ts` an
 
 The properties panel shows the content's selection, or the open folder, docked beside the content or over it, from Alt+Enter, the view menu or `ActionContext.properties()`, with the app's optional `propertiesActions` in its header (see `properties.md`).
 
-Opening a file goes to the optional `onOpenFile(entry, context)`, or to the built-in preview when there's none or it returns `false` (see `preview.md`). The preview shows images (zoomed, panned, turned, full screen), videos, audio, PDFs, text and fonts itself, the app's optional `previewers` show other kinds (or take over these), and `previewActions` puts the app's actions in its header. There's no built-in editor, by choice, and no previewer beyond the browser's formats, so the package carries no heavy library. Downloading saves a single file from `content`, and folders or several entries from `download`, prepared in the background and shown in a panel while it takes a moment, and the browser's own downloads show the progress (see `download.md`).
+Opening a file goes to the optional `onOpenFile(entry, context)`, or to the built-in preview when there's none or it returns `false` (see `preview.md`). The preview shows images (zoomed, panned, turned, full screen), videos, audio, PDFs, text and fonts itself, the app's optional `previewers` show other kinds (or take over these), and `previewActions` puts the app's actions in its header. There's no built-in editor, by choice, and no previewer beyond the browser's formats, so the package carries no heavy library. Downloading saves a single file from `content`, and folders or several entries from `download`, prepared in the background and shown in a panel while it takes a moment, and the browser's own downloads show the progress (see `download.md`). Copies and moves, by the picker, a paste or a drop, run in the background too, a few at once, shown in a panel of their own while they take a moment, with Try again for one that fails (see `transfers.md`).
 
 The optional `localeText` and `locale` set the component's own text, and the language numbers, sizes, dates and the order of names follow (see `locale.md`).
 
@@ -76,6 +76,7 @@ Each file in `.claude/rules/` loads when Claude reads a file matching its `paths
 | `component-styling.md` | container queries, palette tokens, CSS custom properties | `src/` |
 | `file-manager.md` | data store and paging, navigation, hiding the sidebar, context menu, sorting, the parts | `src/components/file-manager/`, `hooks/`, `store/`, `utils/` |
 | `download.md` | `ActionContext.download`, the adapter's `content` for a download and its `download`, saving blobs and URLs, the download queue and panel, the mock's zips | the download panel, store and hook, the preview dialog, `utils/download.ts`, `styles/panel.ts`, download, adapter and action types, the mock adapter and zip |
+| `transfers.md` | copies and moves in the background: the dialogs handing off, the transfer queue and panel, `TransferOptions.onProgress`, ending, trying again, the progress bar, the mock's copies | the transfer panel, queue, hook and types, `utils/transfer.ts`, the transfer and paste dialogs, `types/adapter.ts`, `styles/panel.ts`, the mock adapter |
 | `uploads.md` | the upload queue and panel, dropping files from the desktop, what's shared with the media manager | upload store, hook, panel, dialog and types, `use-drop-target.ts`, `types/adapter.ts` |
 | `selection.md` | content and sidebar selection, marquee, touch selection mode | selection components, hooks and utils |
 | `keyboard.md` | keyboard navigation, focus, ARIA roles of the content and the tree, the keyboard shortcuts window | the frame, content, sidebar, context menu, transfer and shortcuts dialogs, keyboard utils |

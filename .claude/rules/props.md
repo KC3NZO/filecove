@@ -110,7 +110,7 @@ What the checklist leaves internal, and why. Anything not listed here or above i
 - **The sidebar tree's selection**: a passing selection for acting on folders there (see "Selection").
 - **A search everywhere's selection and open tab**: the results come from many folders, and `SelectionDetails` has one location (see "Selection").
 - **The cut or copied entries**: kept while mounted, and `actionContext`'s `paste` says whether there's anything to paste. A toolbar learns of a change only as it asks again; a callback for it can be added when a consumer needs one.
-- **The upload and download queues and their panels' collapsed state**: the queues report what the adapter is doing, which the consumer's adapter already knows.
+- **The upload, download and transfer queues and their panels' collapsed state**: the queues report what the adapter is doing, which the consumer's adapter already knows.
 - **Focus, scroll and the entry grabbed for a drag**: `focus()` and `reveal` move the first two from outside.
 
 ## The root element

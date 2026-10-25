@@ -20,7 +20,9 @@ What's left in the features already built, what packaging needs before a release
 - [x] **new:** A folder that a paste or move with Replace put another in the place of kept its old listing, so an expanded tree row showed the old contents. *Done 2026-10-23: replaced folders go through `dropFolders`.*
 
 ### Operations (create, rename, copy, move, delete, paste)
-- [ ] A non-modal panel for long copies and moves.
+- [x] A non-modal panel for long copies and moves. *Done 2026-10-25: the picker, pastes and drops hand the copy or move to a transfer queue once its names are settled and close, three running at once; one taking over 500 ms shows in a panel above the download panel, with its bytes when the adapter reports them (`TransferOptions.onProgress`), and cancelling; one that's done leaves it, announced; one that fails stays with the adapter's error and Try again, which checks the destination's names again for what its folder still lists. A cut leaves the clipboard as its paste starts, and a paste no longer waits for the one before (see `transfers.md`).*
+- [ ] **new:** A failed copy or move can't say which of its entries went through, since it's one adapter call; Try again goes by the source's listing.
+- [ ] **new (minor):** Entries being moved aren't marked while the move runs, and can be acted on meanwhile.
 - [ ] Copying between different adapters.
 - [ ] **new:** There are no per-entry permissions. `FileEntry` has no read-only field, so a read-only folder still accepts drops and pastes. An app can hide its actions with `visible`, but it can't refuse drop or paste targets, nor stop entries from being moved out of a read-only folder or section (`importFrom` only controls what comes in; copying out is only reading).
 - [x] Name-clash dialog: Merge for a folder clashing with a folder, no Replace when a file clashes with a folder, and Replace no longer the highlighted main button. *Done 2026-10-24: in the transfer, paste and upload dialogs alike, Replace merges a folder into a folder all the way down and reads Merge when only folders clash, a file and a folder are kept both rather than replacing each other, with no Replace when every clash is such a pair, and Keep both is the main button. A folder an upload merges into is listed whenever anything goes in it, so a file there beside a folder of its name goes with "keepBoth", and a folder beside a file of its name is made under a free name. `ConflictPolicy`'s "replace" says so for the adapter (see "Name clashes" in `file-manager.md`).*
@@ -118,7 +120,7 @@ What's left in the features already built, what packaging needs before a release
 - [x] Zoom levels for the list and the grid (Ctrl+plus and Ctrl+minus, as in GNOME), which also give pictures larger thumbnails. *Done 2026-10-25: each view zooms by its own steps (the list four sizes, the grid five), its icons, thumbnails, rows or columns growing and the text staying, with Ctrl+plus, Ctrl+minus, Ctrl+0, Ctrl+wheel and a touchpad pinch in the content only, so the browser's page zoom works everywhere else, and from the view menu; `zoom` / `defaultZoom` / `onZoomChange` control it. The entry at the top stays there as the lines change size, larger thumbnails are asked for as a view zooms in, and the level is announced.*
 - [ ] Zooming the content with a pinch on a touch screen, which zooms the page for now, since the content takes the touch to scroll.
 - [ ] Choosing and resizing list columns.
-- [ ] Progress and errors for the app's own long actions (compress, extract) through the planned job panel.
+- [ ] Progress and errors for the app's own long actions (compress, extract) through the planned job panel, which could grow from the transfer queue and panel.
 - [ ] "New file" with the name dialog.
 - [ ] Renaming several files at once.
 - [ ] Going to a location by typing a path (would need an adapter `resolve`, since ids are never parsed).

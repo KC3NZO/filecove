@@ -17,7 +17,7 @@ paths:
   - "src/components/file-manager/content/folder-view.tsx"
   - "src/components/file-manager/content/file-list.tsx"
   - "src/components/uploads/upload-panel.tsx"
-  - "src/hooks/use-transfer.ts"
+  - "src/components/transfers/transfer-panel.tsx"
   - "src/hooks/use-entry-drag.ts"
   - "src/hooks/use-marquee.ts"
   - "playground/options.ts"
@@ -48,7 +48,7 @@ A MUI component's physical style is overridden where we use it, by resetting the
 - A menu's labels without an icon are inset by a `padding-left` of `MenuItem`'s on `ListItemText` (`insetLabelSx`, in the context menu's `itemSx` and on the view menu's "Show properties" while it opens the overlay, which has to match MUI's descendant selector to win).
 - `ListItem` and `ListItemButton` align their text with `text-align: left`; the picker's rows set `start` (`itemSx` and `rowSx` in `transfer-dialog.tsx`).
 - The name field's outlined label is placed by `left`, a pixel shift and `transform-origin: top left`, and the border's notch and the error text are aligned with `text-align: left`. `fieldSx` in `name-dialog.tsx` places the label by `inset-inline-start` and two custom properties, and aligns the other two to the start.
-- `LinearProgress` fills by the theme's `direction`, not the page's, so the upload and download rows' bars (`panelBarSx`) and the refresh bar over the content are mirrored with `scale` under `:dir(rtl)` (`mirroredBarSx`), unless the theme already says right to left. `CircularProgress` isn't mirrored, as a clock isn't.
+- `LinearProgress` fills by the theme's `direction`, not the page's, so the transfer, upload and download rows' bars (`panelBarSx`) and the refresh bar over the content are mirrored with `scale` under `:dir(rtl)` (`mirroredBarSx`), unless the theme already says right to left. `CircularProgress` isn't mirrored, as a clock isn't.
 - `Menu` and its `Popover` default to the theme's `direction` for the side they open towards, so both menus pass their own origins (see "What mirrors").
 
 To use a MUI component not used yet, read its source in `node_modules/@mui/material` for `left`, `right`, `margin-left`, `padding-left`, `text-align`, `translateX`, `transform-origin` and `useRtl`, and override what shows with a prop or content we use. A prop we don't use (`startIcon`, `edge`, `inset` dividers, a `Button`'s start or end `loadingPosition`) needs nothing until it is.
@@ -71,8 +71,8 @@ To use a MUI component not used yet, read its source in `node_modules/@mui/mater
 
 Text that comes from outside the sentence or line around it can be in any script, whatever the page's language: names, an adapter's or a server's message, a consumer's shortcut, and sizes, dates and numbers formatted in the `locale`. So it's isolated from what's around it and takes its own direction from its first strong letter. Otherwise ".bashrc" shows as "bashrc." right to left, a name ending in brackets loses them to the wrong end, an English "Permission denied." puts its full stop first, and Latin-digit pieces joined on a right-to-left page read in the wrong order.
 
-- On their own, in `<bdi>`: names in the list, the grid, tree rows, path bar segments, the preview's title, the picker's rows, upload and download rows, the properties' name and the drag image; the message of a folder that couldn't be listed; the shortcuts in the context menu; and in the properties, the values the panel formats (dates, lengths, the backend's numbers and sizes), the backend's own values, tags and links, and the adapter's messages. The block around keeps the page's direction, so a Latin name still lines up on the right right to left, and a long one is cut short at its start, keeping its extension.
-- In a string, between FSI and PDI (`isolate`, `utils/bidi.ts`): every name, message or formatted value the component hands a text of `FileManagerLocaleText` (sizes and dates included, and the server's status text), and an adapter's message shown as a failure (`useTransfer`, the name and delete dialogs, the picker, the preview, the upload and download rows). Translations don't have to isolate them.
+- On their own, in `<bdi>`: names in the list, the grid, tree rows, path bar segments, the preview's title, the picker's rows, transfer, upload and download rows, the properties' name and the drag image; the message of a folder that couldn't be listed; the shortcuts in the context menu; and in the properties, the values the panel formats (dates, lengths, the backend's numbers and sizes), the backend's own values, tags and links, and the adapter's messages. The block around keeps the page's direction, so a Latin name still lines up on the right right to left, and a long one is cut short at its start, keeping its extension.
+- In a string, between FSI and PDI (`isolate`, `utils/bidi.ts`): every name, message or formatted value the component hands a text of `FileManagerLocaleText` (sizes and dates included, and the server's status text), and an adapter's message shown as a failure (the name and delete dialogs, the picker, the preview, the transfer, upload and download rows). Translations don't have to isolate them.
 - Joins written in code isolate each piece (`joinIsolated`), so they're laid out the way the page runs: the list's size and date, the preview's details, its dimensions and its "3 / 12", the upload rows' status and folder, and the properties' dimensions and location.
 - The name field (`name-dialog.tsx`) is `dir="auto"`, and the text preview is `unicode-bidi: plaintext`, so each line runs and lines up as its own letters do, as in a text editor.
 

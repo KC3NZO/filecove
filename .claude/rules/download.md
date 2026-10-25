@@ -54,7 +54,7 @@ Two optional members, and a single file prefers the first:
 
 ## The panel
 
-`components/downloads/download-panel.tsx` shows the queue's shown items, and knows nothing of where it's shown. `FileManager` places it as an inset panel under the content, above the upload panel when both show (`taskPanelSx`), only while it has items. Its look is the upload panel's, from `styles/panel.ts`, which both use.
+`components/downloads/download-panel.tsx` shows the queue's shown items, and knows nothing of where it's shown. `FileManager` places it as an inset panel under the content, below the transfer panel and above the upload panel when they show (`taskPanelSx`), only while it has items. Its look is the upload panel's, from `styles/panel.ts`, which both use.
 
 - The summary has a status icon (a ring while any is waiting or being prepared, filling with the bytes come of those totals once every one of them has reported progress, and spinning until then, the download icon while some are ready, an error otherwise), a title ("Preparing 2 downloads", "A download is ready", "A download failed", announced politely), and the counts the title leaves out ("1 ready · 1 failed").
 - The chevron folds the list away. The ✕ cancels everything waiting or being prepared; once nothing is, it forgets the rest and the panel goes.
