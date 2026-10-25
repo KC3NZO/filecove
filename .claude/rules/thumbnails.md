@@ -19,8 +19,8 @@ The list and the grid show a file's thumbnail in place of its type icon when the
 
 ## What the adapter is told
 
-- **`view`** is the view the thumbnail is for: `"list"` (a 1.75rem square beside the name) or `"grid"` (3.5rem). The two are asked for and kept separately, so a backend keeping a few sizes picks one by it.
-- **`size`** is the side of that square in device pixels (`devicePixels` in `utils/dom.ts`: rem times the root's font size times `devicePixelRatio`, rounded up), for a backend making thumbnails to order. It's read when a thumbnail is first asked for, so zooming afterwards doesn't ask again.
+- **`view`** is the view the thumbnail is for: `"list"` (a square beside the name, 1.75rem at the list's start) or `"grid"` (3.5rem at its start). The two are asked for and kept separately, so a backend keeping a few sizes picks one by it.
+- **`size`** is the side of that square in device pixels (`devicePixels` in `utils/dom.ts`: rem times the root's font size times `devicePixelRatio`, rounded up), for a backend making thumbnails to order. It follows the view's zoom (see "Zoom" in `file-manager.md`), from 1.3125rem in the list up to 10.5rem in the grid, so a backend keeping a few sizes picks the nearest larger one by it. The browser's own zoom isn't followed: it's read as a thumbnail is asked for.
 - **`signal`** aborts when the entry stops being rendered before its thumbnail came.
 
 `thumbnail` is called for every file rendered, so an adapter should answer null at once for files it knows have none, by type say, rather than make a round trip: those calls share the queue with the ones that matter.
@@ -29,9 +29,10 @@ The list and the grid show a file's thumbnail in place of its type icon when the
 
 `store/thumbnail-cache.ts` holds one cache per `FileManager` (`thumbnails` in `DataContext`, cleared on unmount), keyed by adapter, view and entry id, so sections sharing an adapter share thumbnails.
 
-- `want` asks for a thumbnail unless it's kept or on its way. `MAX_ACTIVE` (6) calls run at once, and the rest wait in the order they were wanted. Each comes through an `Image` before it's shown (`loadImage`), so a broken one stays an icon and a loaded one shows at once.
+- `want` asks for a thumbnail unless it's kept or on its way, at the size wanted or larger. `MAX_ACTIVE` (6) calls run at once, and the rest wait in the order they were wanted. Each comes through an `Image` before it's shown (`loadImage`), so a broken one stays an icon and a loaded one shows at once.
 - Only rendered entries want theirs (see `virtualization.md`), so a folder of 10,000 files asks only for those in or near view. An entry that stops being rendered before its thumbnail came drops the request. That's checked in a microtask once the commit is over, so an entry rendered again straight away, as it is when the listing is refreshed or under StrictMode, keeps it going.
 - What came is kept while nothing shows it, up to `MAX_KEPT` (1,000), dropping those wanted longest ago, and a blob's object URL is revoked as its thumbnail goes. A null is kept too, so a file with none isn't asked again.
+- A larger size wanted than the one kept, as a view zooms in, or the properties ask of a grid only ever zoomed out, asks for it again at that size, keeping the smaller picture showing until the larger has loaded, and keeping it if the larger fails. A smaller size wanted is served by the larger one kept, so zooming out asks for nothing. A file with none isn't asked again at any size. A request under way when a larger size is wanted is aborted and queued again at the larger size; the slot's `size` is the largest wanted, and a request that comes back after another has taken its place (`slot.controller` changed) is dropped, its object URL revoked. One a view stopped showing before it came is dropped, smaller picture and all.
 - A file whose size or date modified has changed (`versionOf`) is asked for again. A renamed file whose id is its path has a new id, and so a new thumbnail.
 
 ## How it's shown
@@ -41,7 +42,7 @@ The list and the grid show a file's thumbnail in place of its type icon when the
 - The `img` has `pointer-events: none` and `draggable={false}`, so a press, right-click or drag reaches the row or tile rather than the picture: no "Save image as", and no picture dragged in place of the entry.
 - `alt=""`, since the name is beside it.
 - The views pass the folder's adapter down (`FileViewProps.adapter`). The drag preview passes no `view`, so it keeps the icon; a picture not yet decoded wouldn't make it into the drag image.
-- The properties panel shows the grid's thumbnail (`useThumbnail` with the grid's view and size), grown to fill a slightly larger box, so it asks the adapter for nothing more and may look slightly soft (see `properties.md`).
+- The properties panel shows the grid's thumbnail (`useThumbnail` with the grid's view and its starting size, `GRID_SIZES[GRID_START]`), grown to fill a slightly larger box, so it asks the adapter for nothing more, unless the grid was only ever zoomed out, and may look slightly soft, unless the grid was zoomed in (see `properties.md`).
 - The preview shows the grid's thumbnail the same way: in the file's place while it loads, under the spinner, sized as the image will be when the listing says its size (`FileEntry.media`); as a video's poster; and, larger, for a file it has no preview of, such as a TIFF, in place of the type icon (see "While a file loads" in `preview.md`). Text, fonts and audio don't ask for one.
 
 ## The playground
@@ -50,4 +51,4 @@ The mock adapter's `thumbnail` makes thumbnails from the same made-up pictures a
 
 ## Not yet
 
-A bigger icon size for a grid of pictures (grid zoom levels, an optional idea in the roadmap), cropping to a square, and a frame around pictures, which would need telling transparent ones, such as logos, apart.
+Cropping to a square, and a frame around pictures, which would need telling transparent ones, such as logos, apart.

@@ -279,7 +279,7 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 
   The menu is the only control in the grid view, and in a list too narrow for its header row.
 - The sidebar tree ignores it and stays by name (`nameOrder`), as does the transfer picker. Section order is the consumer's.
-- The same menu has a "Show hidden files" checkbox (see "Hidden files"), and, while the sidebar docks, "Show sidebar" (see "Hiding the docked sidebar").
+- The same menu has a "Show hidden files" checkbox (see "Hidden files"), and, while the sidebar docks, "Show sidebar" (see "Hiding the docked sidebar"), "Show properties", and zooming (see "Zoom").
 
 ## Hidden files
 
@@ -294,6 +294,20 @@ Sorting is client-side, in `utils/sort.ts`. `file-manager.tsx` owns the `SortOrd
 - A created or renamed entry to be revealed (`revealId`), or a folder left through that is hidden, is given up on while hidden entries are off, rather than waiting for a listing that will never show it.
 - `childCount` and `hasSubfolders` are the adapter's own and count hidden entries as the backend does.
 - An entry or tree row that has the focus when it gets hidden hands it on as a removed one does: to the entry now in its place, or the row shown before it.
+
+## Zoom
+
+The list and the grid each zoom, as in GNOME Files, by steps from the size they start at: the list's icons or thumbnails beside the names (75%, 100%, 150% and 200% of 1.75rem) and the grid's (75% to 300% of 3.5rem), with the list's rows and the grid's columns growing with them (`LIST_ICON_SIZES`, `GRID_SIZES` in `styles/layout.ts`). Text stays as it is, which is the browser's zoom's job. Each view keeps its own step, so switching views keeps both, and it persists across folders, as the sort does. The consumer can control it (`zoom`, `defaultZoom`, `onZoomChange`, a `ViewZoom`; see `props.md`).
+
+- `utils/zoom.ts` turns a step into sizes (`listIconSize`, `gridSize`), a step beyond a view's sizes counting as the nearest end, and steps it (`zoomedBy`, `canZoom`), from where it shows, and gives its size as a share of its start (`zoomScale`). `zoomContent` in `file-manager.tsx` zooms the view shown and announces the size it's at (`zoomChanged`, "Zoom 150%", through `formatPercent`), as nothing else says it; from the view menu that waits until the menu closes, as a menu hides the rest from screen readers, but the percentage there says it meanwhile.
+- **Keys**: Ctrl+plus (or Ctrl+=, beside it on a US layout), Ctrl+minus and Ctrl+0, ⌘ too, as browsers zoom a page (`zoomStep` in `utils/shortcut.ts`, + and - as typed wherever the layout has them, 0 the key printed with it), handled by the root but **only with the focus in the content panel** (the folder view or a search's results), so the browser's own page zoom still works from the sidebar, the header, the panels and outside, for those who rely on it. A consumer's shortcut on the same keys runs first in the content, as any does.
+- **Ctrl+wheel and pinching** over the content panel (`hooks/use-wheel-zoom.ts`, non-passive listeners on `panelRef`): a mouse's notch is a step, and a touchpad's pinch, which Chrome and Firefox send as Ctrl+wheel, steps every 50px it travels, counted afresh after a 250 ms pause or a turn the other way. Safari sends a touchpad's pinch as gesture events, which step every 1.4× the fingers spread or close; on a touch screen, where it sends them alongside the touches, they're left to the browser. Ctrl+wheel over the content never zooms the page, even at a view's end.
+- **The view menu** ends, after a rule, with a "Zoom" subheader (`zoom`), styled as "Sort by", over a row across the menu as browsers' menus have one: a round Zoom out button, the size as a percentage between, which puts it back (named `zoomResetFrom`, "150%, reset zoom", its tooltip `zoomReset`), and a round Zoom in (`zoomIn` and `zoomOut` shared with the preview), each with a tooltip, its `aria-keyshortcuts`, and disabled where it can't go, the menu staying open. They're `MenuItem`s shaped as buttons, in a `group` `li` named by the subheader, since MUI 9's menu only moves the focus between the items registered with it (its roving tab index, in page order), so Up and Down reach them as any item.
+- The list sets `--icon-size` on itself, which its rows' heights (`max(52px, icon + 16px)` narrow, where the size and date fold under the name, `icon + 16px` from `viewMedium`) and the Name header's inset follow, and the grid sets `--column` and `--wide-column`, its narrowest columns, below and from `viewMedium`. Every row and tile is still as tall as the others, as the virtualization needs.
+- As the lines change size, the entry at the panel's top stays there (see "Lines" in `virtualization.md`), and with the focus in the view, the focused entry is scrolled into view too (`zoomedFrom` in the folder view and the results).
+- Larger thumbnails are asked for as a view zooms in, the smaller ones showing meanwhile, and a larger one kept serves a smaller size (see `thumbnails.md`).
+- The sidebar tree, the picker and the drag image don't zoom.
+- Not yet: a pinch on a touch screen zooms the page, not the view, as the content takes the touch to scroll.
 
 ## The parts
 

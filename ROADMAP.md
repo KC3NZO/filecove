@@ -115,7 +115,8 @@ What's left in the features already built, what packaging needs before a release
 
 ### Optional ideas
 - [ ] Live updates: an adapter `watch`, or re-checking the open folder when the page is shown again (re-checking a folder as it opens is done, `relistAfter`).
-- [ ] Grid zoom levels (Ctrl+plus and Ctrl+minus, as in GNOME), which also give a grid of pictures larger thumbnails.
+- [x] Zoom levels for the list and the grid (Ctrl+plus and Ctrl+minus, as in GNOME), which also give pictures larger thumbnails. *Done 2026-10-25: each view zooms by its own steps (the list four sizes, the grid five), its icons, thumbnails, rows or columns growing and the text staying, with Ctrl+plus, Ctrl+minus, Ctrl+0, Ctrl+wheel and a touchpad pinch in the content only, so the browser's page zoom works everywhere else, and from the view menu; `zoom` / `defaultZoom` / `onZoomChange` control it. The entry at the top stays there as the lines change size, larger thumbnails are asked for as a view zooms in, and the level is announced.*
+- [ ] Zooming the content with a pinch on a touch screen, which zooms the page for now, since the content takes the touch to scroll.
 - [ ] Choosing and resizing list columns.
 - [ ] Progress and errors for the app's own long actions (compress, extract) through the planned job panel.
 - [ ] "New file" with the name dialog.
