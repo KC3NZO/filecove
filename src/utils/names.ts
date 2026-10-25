@@ -6,16 +6,24 @@ type EntryKind = FileEntry["kind"];
 
 /**
  * Why a name can't be given to an entry, or undefined when it can. `name` is expected trimmed.
- * Only rules that hold for nearly every backend are checked, plus clashes with the folder's
- * listing as cached; the adapter has the final say.
+ * Only rules that hold for nearly every backend are checked, then the backend's own (`check`, the
+ * adapter's `checkName`), then clashes with the folder's listing as cached; the adapter has the
+ * final say.
  */
 export const nameProblem = (
     name: string,
     kind: EntryKind,
     siblings: FileEntry[] | undefined,
     text: FileManagerLocaleText,
-    /** The entry being renamed, which can't clash with itself. */
-    selfId?: string,
+    {
+        selfId,
+        check,
+    }: {
+        /** The entry being renamed, which can't clash with itself. */
+        selfId?: string;
+        /** The backend's own rules, giving its message for a name it won't take. */
+        check?: (name: string) => string | null | undefined;
+    } = {},
 ) => {
     if (name === "." || name === "..") {
         return text.nameReserved(isolate(name), kind);
@@ -23,6 +31,12 @@ export const nameProblem = (
 
     if (name.includes("/")) {
         return text.nameHasSlash(kind);
+    }
+
+    const refused = check?.(name);
+
+    if (refused) {
+        return isolate(refused);
     }
 
     const clash = siblings?.find((entry) => entry.name === name && entry.id !== selfId);

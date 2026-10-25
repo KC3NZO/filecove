@@ -15,6 +15,7 @@ export type {
     ListResult,
     MeasureOptions,
     MediaInfo,
+    NameCheck,
     OperationOptions,
     PropertiesOptions,
     PropertyField,

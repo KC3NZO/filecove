@@ -35,6 +35,7 @@ export type {
     MainMenuItem,
     MeasureOptions,
     MediaInfo,
+    NameCheck,
     OperationOptions,
     PreviewerProps,
     PreviewerReads,

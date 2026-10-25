@@ -52,7 +52,37 @@ interface MockAdapterOptions {
      * top of the latency, as a backend's signed links on another origin would be.
      */
     downloadUrls?: Record<string, { url: string; delay?: number }>;
+    /** Names are held to Windows' rules, as a server sharing its folders over SMB would hold them. */
+    windowsNames?: boolean;
 }
+
+// Windows refuses these characters, and control characters, anywhere in a name.
+const WINDOWS_FORBIDDEN = /[\\/:*?"<>|\u0000-\u001f]/;
+// Device names, with any extension ("con.txt" too), whatever their case.
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+
+/** Why Windows wouldn't take a name, or undefined when it would. */
+const windowsNameProblem = (name: string) => {
+    const forbidden = WINDOWS_FORBIDDEN.exec(name)?.[0];
+
+    if (forbidden) {
+        return forbidden < " " ? "Names can't contain control characters." : `Names can't contain "${forbidden}".`;
+    }
+
+    if (WINDOWS_RESERVED.test(name)) {
+        return `"${name.split(".")[0]}" is reserved by Windows.`;
+    }
+
+    if (/[. ]$/.test(name)) {
+        return "Names can't end with a dot or a space.";
+    }
+
+    if (name.length > 255) {
+        return "Names can be 255 characters at most.";
+    }
+
+    return undefined;
+};
 
 /** How each mock adapter adds a file behind the file manager's back (`addElsewhere`). */
 const backDoors = new WeakMap<FileAdapter, (folderId: string) => string | null>();
@@ -321,11 +351,12 @@ const toEntry = (parentPath: string, node: MockNode, locked: boolean): FileEntry
  * renamed folder's id changes along with every id below it. Large folders are listed in pages,
  * with the offset of the next one as the cursor. Files and folders marked `fails` refuse to be
  * listed, read, renamed, deleted or written to, and those marked `readOnly`, with everything in
- * them, say so in their permissions and refuse to be changed.
+ * them, say so in their permissions and refuse to be changed. With `windowsNames`, names Windows
+ * wouldn't take are refused, and said so as they're typed (`checkName`).
  */
 export const createMockAdapter = (
     roots: Record<string, MockNode[]>,
-    { latency = [250, 700], pageSize = 2500, downloadUrls = {} }: MockAdapterOptions = {},
+    { latency = [250, 700], pageSize = 2500, downloadUrls = {}, windowsNames = false }: MockAdapterOptions = {},
 ): FileAdapter => {
     const folders = new Map<string, MockNode>();
 
@@ -403,6 +434,15 @@ export const createMockAdapter = (
         }
 
         return node;
+    };
+
+    /** Refuses a name the backend's rules don't allow, as `checkName` says before it's sent. */
+    const ensureAllowed = (name: string) => {
+        const problem = windowsNames ? windowsNameProblem(name) : undefined;
+
+        if (problem) {
+            throw new Error(problem);
+        }
     };
 
     const ensureFree = (parent: MockNode, name: string, except?: MockNode) => {
@@ -707,10 +747,14 @@ export const createMockAdapter = (
                 return totals;
             }),
 
+        // Held to Windows' rules when asked, which `createFolder`, `rename` and `upload` enforce too.
+        checkName: windowsNames ? (name) => windowsNameProblem(name) : undefined,
+
         createFolder: (parentId, name, { signal }) =>
             respond(signal, () => {
                 const parent = writableAt(parentId);
 
+                ensureAllowed(name);
                 ensureFree(parent, name);
 
                 const node = folder(name, new Date().toISOString(), []);
@@ -725,6 +769,7 @@ export const createMockAdapter = (
             respond(signal, () => {
                 const { parentId, parent, node } = locateChangeable(entry);
 
+                ensureAllowed(name);
                 ensureFree(parent, name, node);
                 node.name = name;
 
@@ -788,6 +833,7 @@ export const createMockAdapter = (
             Promise.resolve()
                 .then(() => {
                     writableAt(folderId);
+                    ensureAllowed(file.name);
 
                     if (/fail/i.test(file.name)) {
                         throw new Error(`The server refused "${file.name}".`);

@@ -119,7 +119,15 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
     useEffect(() => () => controller.current?.abort(), []);
 
     const trimmed = name.trim();
-    const problem = trimmed ? nameProblem(trimmed, kind, state?.entries, text, entry?.id) : undefined;
+    const { adapter } = request;
+    // The backend's own rules, which an unchanged name is left out of, since it has that name already.
+    const check =
+        adapter.checkName && trimmed !== entry?.name
+            ? (candidate: string) => adapter.checkName?.(candidate, { kind, parentId: parent.id, entry })
+            : undefined;
+    const problem = trimmed
+        ? nameProblem(trimmed, kind, state?.entries, text, { selfId: entry?.id, check })
+        : undefined;
     // A new folder's name is checked against all of the folder, so it waits for the whole listing,
     // unless that failed, when the adapter has the say. A renamed entry's folder is listed already.
     const waiting = !entry && state?.status !== "error" && (!state?.entries || !!state.partial);
@@ -162,7 +170,7 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
         }
     }, [typed, name]);
 
-    const refresh = () => onChanged(request.adapter, [parent.id]);
+    const refresh = () => onChanged(adapter, [parent.id]);
 
     // Cancelling can't undo a change the backend has already made, so the folder is listed again.
     const close = () => {

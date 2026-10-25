@@ -158,6 +158,16 @@ export interface OperationOptions {
     signal: AbortSignal;
 }
 
+/** Passed to `checkName`: what the name is for. */
+export interface NameCheck {
+    /** Whether the name is for a file or a folder. */
+    kind: FileEntry["kind"];
+    /** The folder the entry is created or renamed in. */
+    parentId: string;
+    /** The entry being renamed, or undefined for a new folder. */
+    entry?: FileEntry;
+}
+
 /**
  * What to do with an entry whose name the destination folder already has:
  *
@@ -393,6 +403,16 @@ export interface FileAdapter {
      * message to the user.
      */
     rename?(entry: FileEntry, name: string, options: OperationOptions): Promise<FileEntry>;
+    /**
+     * Says why the backend won't take a name, for New folder and Rename to show under the field as
+     * it's typed, with the button disabled, rather than after it's pressed: e.g. Windows' `\:*?"<>|`,
+     * reserved names such as "CON", or a length limit. Return the message, in the user's language as
+     * action labels are, or nothing when the name is fine. `name` is trimmed, and is never empty,
+     * ".", ".." or holding "/", which the file manager refuses itself. It runs on every keystroke,
+     * so it must be synchronous and quick. Without it, only those rules and the folder's listed
+     * names are checked; either way `createFolder` and `rename` have the final say.
+     */
+    checkName?(name: string, check: NameCheck): string | null | undefined;
     /**
      * Copies entries, folders with everything in them, into `targetId`. The entries share a
      * parent. It runs in the background while the user browses, shown in a panel once it takes a

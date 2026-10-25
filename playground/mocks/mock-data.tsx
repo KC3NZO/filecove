@@ -39,105 +39,111 @@ const datasets: MockNode[] = Array.from({ length: 5_000 }, (_, index) => {
     return folder(name, modified, [file(`${name}.parquet`, 40_000 + index * 13, modified)]);
 });
 
-/** One backend serving two unrelated project roots, as in "/server/project/a" and "/server/project/b". */
-export const serverAdapter = createMockAdapter({
-    "/server/project/a": [
-        folder(".github", "2026-09-30T11:02", [
-            folder("workflows", "2026-09-30T11:02", [file("ci.yml", 1_204, "2026-09-30T11:02")]),
-        ]),
-        folder("docs", "2026-10-02T13:27", [
-            file("architecture.pdf", 811_000, "2026-10-01T12:26", "application/pdf"),
-            file("CHANGELOG.md", 6_120, "2026-10-17T17:40"),
-            // Can't be read, to show the preview's error state.
-            { ...file("contract.pdf", 412_000, "2026-10-08T15:12", "application/pdf"), fails: true },
-        ]),
-        folder("public", "2026-08-21T10:05", [
-            folder("images", "2026-08-21T10:05", [
-                file("hero.png", 1_400_000, "2026-08-21T10:05", "image/png"),
-                file("logo.svg", 3_800, "2026-08-02T18:13", "image/svg+xml"),
+/**
+ * One backend serving two unrelated project roots, as in "/server/project/a" and "/server/project/b",
+ * sharing its folders over SMB, so names are held to Windows' rules.
+ */
+export const serverAdapter = createMockAdapter(
+    {
+        "/server/project/a": [
+            folder(".github", "2026-09-30T11:02", [
+                folder("workflows", "2026-09-30T11:02", [file("ci.yml", 1_204, "2026-09-30T11:02")]),
             ]),
-            file("favicon.svg", 1_100, "2026-07-03T19:21", "image/svg+xml"),
-            file("robots.txt", 68, "2026-07-03T19:21", "text/plain"),
-        ]),
-        { ...folder("restricted", "2026-10-11T08:00", []), fails: true },
-        // "Documents": names in Arabic and Hebrew, mixed with Latin, or starting and ending with
-        // punctuation, to try text running both ways, with `?rtl` and without.
-        folder("مستندات", "2026-10-20T09:30", [
-            folder("صور", "2026-10-20T09:30", [
-                file("غلاف (نهائي).png", 940_000, "2026-10-20T09:30", "image/png"),
+            folder("docs", "2026-10-02T13:27", [
+                file("architecture.pdf", 811_000, "2026-10-01T12:26", "application/pdf"),
+                file("CHANGELOG.md", 6_120, "2026-10-17T17:40"),
+                // Can't be read, to show the preview's error state.
+                { ...file("contract.pdf", 412_000, "2026-10-08T15:12", "application/pdf"), fails: true },
             ]),
-            file("تقرير الربع الثالث.pdf", 318_000, "2026-10-19T11:05", "application/pdf"),
-            file("סיכום פגישה.md", 2_400, "2026-10-18T16:20"),
-            file("ملاحظات (2).txt", 820, "2026-10-17T10:12", "text/plain"),
-            file("Q3 تقرير.xlsx", 64_000, "2026-10-16T08:45"),
-            file("(draft) roadmap.md", 1_900, "2026-10-15T14:30"),
-        ]),
-        folder("src", "2026-10-17T18:08", [
-            folder("assets", "2026-10-12T16:40", []),
-            folder("components", "2026-10-17T18:08", [
-                file("header.tsx", 2_480, "2026-10-17T18:08"),
-                file("file-list.tsx", 5_930, "2026-10-17T17:51"),
-                file("sidebar.tsx", 4_310, "2026-10-16T09:15"),
+            folder("public", "2026-08-21T10:05", [
+                folder("images", "2026-08-21T10:05", [
+                    file("hero.png", 1_400_000, "2026-08-21T10:05", "image/png"),
+                    file("logo.svg", 3_800, "2026-08-02T18:13", "image/svg+xml"),
+                ]),
+                file("favicon.svg", 1_100, "2026-07-03T19:21", "image/svg+xml"),
+                file("robots.txt", 68, "2026-07-03T19:21", "text/plain"),
             ]),
-            folder("hooks", "2026-10-09T14:12", [file("use-folder.ts", 1_120, "2026-10-09T14:12")]),
-            file("app.tsx", 640, "2026-10-17T18:01"),
-            file("main.tsx", 280, "2026-07-03T19:21"),
-        ]),
-        file(".gitignore", 253, "2026-07-03T20:50"),
-        file("bun.lock", 96_400, "2026-10-17T17:58"),
-        file("index.html", 412, "2026-07-18T14:22", "text/html"),
-        file("package.json", 1_100, "2026-10-17T17:58", "application/json"),
-        file("README.md", 2_200, "2026-09-04T08:31"),
-        file("tsconfig.json", 119, "2026-07-03T19:21", "application/json"),
-        file("vite.config.ts", 171, "2026-07-03T19:21"),
-        file("a-very-long-file-name-that-should-truncate-gracefully-in-every-layout.md", 400, "2026-07-14T22:44"),
-    ],
-    "/server/project/b": [
-        folder("archive", "2026-10-01T09:00", archive),
-        folder("datasets", "2026-10-05T12:00", datasets),
-        folder("cmd", "2026-09-12T10:30", [
-            folder("server", "2026-09-12T10:30", [file("main.go", 2_950, "2026-09-12T10:30")]),
-        ]),
-        folder("internal", "2026-10-15T16:02", [
-            folder("handlers", "2026-10-15T16:02", [file("files.go", 8_420, "2026-10-15T16:02")]),
-            folder("store", "2026-10-03T11:47", [file("postgres.go", 11_300, "2026-10-03T11:47")]),
-        ]),
-        folder("logs", "2026-10-17T03:00", logs),
-        // Read-only, as the backend's permissions say: copied out, never changed.
-        {
-            ...folder("migrations", "2026-08-28T09:10", [
-                file("001_init.sql", 3_400, "2026-07-11T09:10"),
-                file("002_add_sharing.sql", 1_250, "2026-08-28T09:10"),
+            { ...folder("restricted", "2026-10-11T08:00", []), fails: true },
+            // "Documents": names in Arabic and Hebrew, mixed with Latin, or starting and ending with
+            // punctuation, to try text running both ways, with `?rtl` and without.
+            folder("مستندات", "2026-10-20T09:30", [
+                folder("صور", "2026-10-20T09:30", [
+                    file("غلاف (نهائي).png", 940_000, "2026-10-20T09:30", "image/png"),
+                ]),
+                file("تقرير الربع الثالث.pdf", 318_000, "2026-10-19T11:05", "application/pdf"),
+                file("סיכום פגישה.md", 2_400, "2026-10-18T16:20"),
+                file("ملاحظات (2).txt", 820, "2026-10-17T10:12", "text/plain"),
+                file("Q3 تقرير.xlsx", 64_000, "2026-10-16T08:45"),
+                file("(draft) roadmap.md", 1_900, "2026-10-15T14:30"),
             ]),
-            readOnly: true,
-        },
-        file("docker-compose.yml", 860, "2026-09-02T13:00"),
-        file("Dockerfile", 540, "2026-09-02T13:00"),
-        file("go.mod", 310, "2026-10-15T16:02"),
-        file("go.sum", 24_900, "2026-10-15T16:02"),
-        file("README.md", 3_100, "2026-09-20T18:44"),
-    ],
-    "/shared/design": [
-        folder("brand", "2026-06-30T12:00", [
-            file("colors.pdf", 220_000, "2026-06-30T12:00", "application/pdf"),
-            file("logo.svg", 3_800, "2026-06-30T12:00", "image/svg+xml"),
-        ]),
-        // Fonts on jsDelivr, so they need the network, as the videos do.
-        folder("fonts", "2026-10-21T09:12", [
-            file("Inter-Regular.woff2", 23_664, "2026-10-21T09:12", "font/woff2"),
-            file("Inter-Regular.woff", 30_696, "2026-10-21T09:12", "font/woff"),
-            file("Lobster-Regular.ttf", 406_076, "2026-10-21T09:10", "font/ttf"),
-            file("NotoNaskhArabic-Regular.woff2", 53_536, "2026-10-21T09:08", "font/woff2"),
-        ]),
-        folder("mockups", "2026-10-16T14:54", [
-            file("home.png", 1_820_000, "2026-10-16T14:54", "image/png"),
-            file("settings.png", 1_310_000, "2026-10-14T10:20", "image/png"),
-            // A format the browser can't draw, which has a thumbnail all the same.
-            file("print-proof.tiff", 9_400_000, "2026-10-13T16:02", "image/tiff"),
-        ]),
-        folder("archive", "2025-12-01T09:00", []),
-    ],
-});
+            folder("src", "2026-10-17T18:08", [
+                folder("assets", "2026-10-12T16:40", []),
+                folder("components", "2026-10-17T18:08", [
+                    file("header.tsx", 2_480, "2026-10-17T18:08"),
+                    file("file-list.tsx", 5_930, "2026-10-17T17:51"),
+                    file("sidebar.tsx", 4_310, "2026-10-16T09:15"),
+                ]),
+                folder("hooks", "2026-10-09T14:12", [file("use-folder.ts", 1_120, "2026-10-09T14:12")]),
+                file("app.tsx", 640, "2026-10-17T18:01"),
+                file("main.tsx", 280, "2026-07-03T19:21"),
+            ]),
+            file(".gitignore", 253, "2026-07-03T20:50"),
+            file("bun.lock", 96_400, "2026-10-17T17:58"),
+            file("index.html", 412, "2026-07-18T14:22", "text/html"),
+            file("package.json", 1_100, "2026-10-17T17:58", "application/json"),
+            file("README.md", 2_200, "2026-09-04T08:31"),
+            file("tsconfig.json", 119, "2026-07-03T19:21", "application/json"),
+            file("vite.config.ts", 171, "2026-07-03T19:21"),
+            file("a-very-long-file-name-that-should-truncate-gracefully-in-every-layout.md", 400, "2026-07-14T22:44"),
+        ],
+        "/server/project/b": [
+            folder("archive", "2026-10-01T09:00", archive),
+            folder("datasets", "2026-10-05T12:00", datasets),
+            folder("cmd", "2026-09-12T10:30", [
+                folder("server", "2026-09-12T10:30", [file("main.go", 2_950, "2026-09-12T10:30")]),
+            ]),
+            folder("internal", "2026-10-15T16:02", [
+                folder("handlers", "2026-10-15T16:02", [file("files.go", 8_420, "2026-10-15T16:02")]),
+                folder("store", "2026-10-03T11:47", [file("postgres.go", 11_300, "2026-10-03T11:47")]),
+            ]),
+            folder("logs", "2026-10-17T03:00", logs),
+            // Read-only, as the backend's permissions say: copied out, never changed.
+            {
+                ...folder("migrations", "2026-08-28T09:10", [
+                    file("001_init.sql", 3_400, "2026-07-11T09:10"),
+                    file("002_add_sharing.sql", 1_250, "2026-08-28T09:10"),
+                ]),
+                readOnly: true,
+            },
+            file("docker-compose.yml", 860, "2026-09-02T13:00"),
+            file("Dockerfile", 540, "2026-09-02T13:00"),
+            file("go.mod", 310, "2026-10-15T16:02"),
+            file("go.sum", 24_900, "2026-10-15T16:02"),
+            file("README.md", 3_100, "2026-09-20T18:44"),
+        ],
+        "/shared/design": [
+            folder("brand", "2026-06-30T12:00", [
+                file("colors.pdf", 220_000, "2026-06-30T12:00", "application/pdf"),
+                file("logo.svg", 3_800, "2026-06-30T12:00", "image/svg+xml"),
+            ]),
+            // Fonts on jsDelivr, so they need the network, as the videos do.
+            folder("fonts", "2026-10-21T09:12", [
+                file("Inter-Regular.woff2", 23_664, "2026-10-21T09:12", "font/woff2"),
+                file("Inter-Regular.woff", 30_696, "2026-10-21T09:12", "font/woff"),
+                file("Lobster-Regular.ttf", 406_076, "2026-10-21T09:10", "font/ttf"),
+                file("NotoNaskhArabic-Regular.woff2", 53_536, "2026-10-21T09:08", "font/woff2"),
+            ]),
+            folder("mockups", "2026-10-16T14:54", [
+                file("home.png", 1_820_000, "2026-10-16T14:54", "image/png"),
+                file("settings.png", 1_310_000, "2026-10-14T10:20", "image/png"),
+                // A format the browser can't draw, which has a thumbnail all the same.
+                file("print-proof.tiff", 9_400_000, "2026-10-13T16:02", "image/tiff"),
+            ]),
+            folder("archive", "2025-12-01T09:00", []),
+        ],
+    },
+    { windowsNames: true },
+);
 
 /** A second, unrelated backend, used by one section only. */
 const mediaAdapter = createMockAdapter(
