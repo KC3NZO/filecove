@@ -1,10 +1,11 @@
-import { Fragment, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties, DragEvent, FocusEvent, KeyboardEvent, Ref } from "react";
 
 import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
+import { useForkRef } from "@mui/material/utils";
 
 import { DragContext } from "../../../contexts/drag-context";
 import { useLocale } from "../../../hooks/use-locale";
@@ -13,12 +14,21 @@ import { useTreeSelection } from "../../../hooks/use-tree-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualRows } from "../../../hooks/use-virtual-rows";
 import { folderKey } from "../../../store/folder-store";
-import { HEADER_HEIGHT, SIDEBAR_WIDTH, rootWide } from "../../../styles/layout";
+import {
+    HEADER_HEIGHT,
+    RESIZE_STEP,
+    SIDEBAR_MAX_WIDTH,
+    SIDEBAR_MIN_WIDTH,
+    SIDEBAR_WIDTH,
+    rootWide,
+} from "../../../styles/layout";
 import { focusOutline, forcedColors, forcedPressed } from "../../../styles/mixins";
 import { focusLost, isRtl, scrollParent } from "../../../utils/dom";
 import { focusTreeItem, isTypingKey, matchName } from "../../../utils/keyboard";
+import { clampWidth } from "../../../utils/resize";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
+import ResizeEdge from "../resize-edge";
 import TreeRowItem, { GuideLine } from "./location-item";
 import MainMenu from "./main-menu";
 
@@ -59,6 +69,14 @@ interface SidebarProps {
      * while it's collapsed, leaving it hidden once the drag ends.
      */
     peek: boolean;
+    /** The docked sidebar's width, in px, which it's narrower than while the content needs the room. */
+    width: number;
+    /** The width a double click on the docked sidebar's edge puts back. */
+    defaultWidth: number;
+    /** How wide the docked sidebar can be made now, in px, beside the content and the docked properties. */
+    widest: () => number;
+    /** The user resized the docked sidebar, by its edge, to `width`. */
+    onWidthChange: (width: number) => void;
     /** What the open search searches, or null; the magnifier at the top is for searching everywhere. */
     searchScope: SearchScope | null;
     /** Whether any section can be searched everywhere, without which the magnifier isn't there. */
@@ -87,6 +105,8 @@ const sidebarSx: SxProps<Theme> = (theme) => ({
     flexShrink: 0,
     bgcolor: "background.default",
     outline: "none",
+    // Only a docked sidebar's edge resizes it.
+    '& > [role="separator"]': { display: "none" },
 
     // Collapsed: an overlay drawer that slides in over the content from the start side, the left
     // or, right to left, the right. It stays inside the file manager rather than portalling to
@@ -113,11 +133,15 @@ const sidebarSx: SxProps<Theme> = (theme) => ({
         visibility: "visible",
     },
 
-    // Docked beside the content, unless it's hidden.
+    // Docked beside the content, unless it's hidden, as wide as the user made it
+    // (`--sidebar-width`), and narrower, down to its least width, while the content needs the room
+    // (the main part's `min-width`).
     [rootWide]: {
         position: "relative",
         zIndex: "auto",
-        width: SIDEBAR_WIDTH,
+        flexShrink: 1,
+        width: `var(--sidebar-width, ${SIDEBAR_WIDTH}px)`,
+        minWidth: SIDEBAR_MIN_WIDTH,
         boxShadow: "none",
         translate: "none",
         visibility: "visible",
@@ -130,6 +154,8 @@ const sidebarSx: SxProps<Theme> = (theme) => ({
             width: `min(${SIDEBAR_WIDTH + 32}px, 85%)`,
             boxShadow: 8,
         },
+        '& > [role="separator"]': { display: "block" },
+        '&[data-hidden="true"][data-peek="true"] > [role="separator"]': { display: "none" },
     },
 });
 
@@ -243,6 +269,10 @@ const Sidebar = ({
     open,
     hidden,
     peek,
+    width,
+    defaultWidth,
+    widest,
+    onWidthChange,
     searchScope,
     canSearchEverywhere,
     onToggle,
@@ -262,6 +292,10 @@ const Sidebar = ({
     const typeAhead = useTypeAhead();
     const drag = useContext(DragContext);
     const { text, sameLetters } = useLocale();
+    const sidebarRef = useRef<HTMLDivElement>(null);
+    const forkedRef = useForkRef(sidebarRef, ref);
+    const sidebarId = useId();
+    const asked = clampWidth(width, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
     const treeRef = useRef<HTMLDivElement | null>(null);
     const [focusInside, setFocusInside] = useState(false);
     // The row that has the focus, or had it last, which gets it back when the tree is tabbed to.
@@ -407,8 +441,14 @@ const Sidebar = ({
 
     // Escape in the main menu, which portals out of the sidebar but still bubbles here through
     // React's tree, only closes the menu.
+    // Escape that calls off a drag of the edge is the edge's.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-        if (event.key === "Escape" && event.target instanceof Node && event.currentTarget.contains(event.target)) {
+        if (
+            event.key === "Escape" &&
+            !event.defaultPrevented &&
+            event.target instanceof Node &&
+            event.currentTarget.contains(event.target)
+        ) {
             onClose();
         }
     };
@@ -544,9 +584,11 @@ const Sidebar = ({
         // the keys work anywhere in the file manager, F6 goes on to the content, and the overlay
         // stays open.
         <Box
-            ref={ref}
+            ref={forkedRef}
+            id={sidebarId}
             tabIndex={-1}
             sx={sidebarSx}
+            style={{ "--sidebar-width": `${asked}px` } as CSSProperties}
             data-open={open}
             data-hidden={hidden}
             data-peek={peek}
@@ -643,6 +685,21 @@ const Sidebar = ({
                         })}
                 </Box>
             </Box>
+            {/* Only there, by CSS, while the sidebar docks and isn't peeking over the content. */}
+            <ResizeEdge
+                target={sidebarRef}
+                label={text.resizeSidebar}
+                controls={sidebarId}
+                placement="end"
+                width={asked}
+                defaultWidth={defaultWidth}
+                min={SIDEBAR_MIN_WIDTH}
+                max={SIDEBAR_MAX_WIDTH}
+                step={RESIZE_STEP}
+                cssVar="--sidebar-width"
+                widest={widest}
+                onChange={onWidthChange}
+            />
         </Box>
     );
 };

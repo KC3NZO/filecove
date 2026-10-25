@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { CSSProperties, FocusEvent, KeyboardEvent, PointerEvent, Ref } from "react";
+import type { CSSProperties, FocusEvent, KeyboardEvent, Ref } from "react";
 
 import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
@@ -12,17 +12,17 @@ import {
     PROPERTIES_MAX_WIDTH,
     PROPERTIES_MIN_WIDTH,
     PROPERTIES_WIDTH,
-    PROPERTIES_WIDTH_STEP,
+    RESIZE_STEP,
     rootExtraWide,
 } from "../../styles/layout";
-import { forcedColors } from "../../styles/mixins";
 import { runToolbarShortcut, toolbarGroups } from "../../utils/action-groups";
 import { groupByFolder, selectionRequest } from "../../utils/groups";
 import { joinIsolated } from "../../utils/bidi";
-import { isRtl } from "../../utils/dom";
 import { folderOf } from "../../utils/navigation";
+import { clampWidth } from "../../utils/resize";
 import { typesInField } from "../../utils/shortcut";
 import PropertiesPanel from "../properties/properties-panel";
+import ResizeEdge from "./resize-edge";
 
 import type { PropertiesCache } from "../../store/properties-cache";
 import type {
@@ -71,21 +71,6 @@ interface PropertiesPaneProps {
     onFocusOut: (to: Node) => void;
     /** It docked, or no longer does, as the space it's in changed size. */
     onDockedChange: (docked: boolean) => void;
-}
-
-/** A drag of the docked panel's edge under way. */
-interface EdgeDrag {
-    pointerId: number;
-    /** Where the pointer went down, from the viewport's left. */
-    startX: number;
-    /** The width shown as it went down. */
-    from: number;
-    /** The widest it can go, as the content leaves it room. */
-    widest: number;
-    /** Whether the panel docks on the left, so dragging right widens it. */
-    rtl: boolean;
-    /** The width it's dragged to so far. */
-    width: number;
 }
 
 const NO_ITEMS: PropertiesItem[] = [];
@@ -154,52 +139,10 @@ const clipSx: SxProps<Theme> = {
     overflow: "hidden",
 };
 
-// The docked panel's edge, which resizes it: a strip over the gap between the content and the
-// panel, wider on a touch screen, showing a grip as it's pointed at, held, dragged or focused.
-const edgeSx: SxProps<Theme> = {
-    position: "absolute",
-    zIndex: 1,
-    top: 0,
-    bottom: 0,
-    insetInlineStart: -9,
-    width: 12,
-    cursor: "col-resize",
-    touchAction: "none",
-    userSelect: "none",
-    outline: "none",
-    "@media (hover: none)": { insetInlineStart: -14, width: 22 },
-    "&::after": {
-        content: '""',
-        position: "absolute",
-        top: "50%",
-        insetInlineStart: "calc(50% - 2px)",
-        width: 4,
-        height: 48,
-        translate: "0 -50%",
-        borderRadius: 2,
-        bgcolor: "text.disabled",
-        opacity: 0,
-        transition: "opacity 150ms, height 150ms",
-    },
-    "&:hover::after": { opacity: 1 },
-    '&:focus-visible::after, &[data-dragging="true"]::after': {
-        opacity: 1,
-        height: 72,
-        bgcolor: "primary.main",
-    },
-    [forcedColors]: {
-        "&::after": { backgroundColor: "CanvasText" },
-        '&:focus-visible::after, &[data-dragging="true"]::after': { backgroundColor: "Highlight" },
-    },
-};
-
-/** A width within the docked panel's limits, and no wider than `widest`. */
-const fitWidth = (width: number, widest: number) =>
-    Math.round(Math.max(PROPERTIES_MIN_WIDTH, Math.min(width, widest, PROPERTIES_MAX_WIDTH)));
-
 /**
- * How wide the docked pane can be: what its row leaves it beside the least width of what else is
- * in it (the content's `min-width`), within its own limits.
+ * How wide the docked pane can be made: what its row leaves it beside the least width of what else
+ * is in it (the content's `min-width`), within its own limits. The sidebar is outside the row, so
+ * its width is already out of it.
  */
 const widestOf = (pane: HTMLElement) => {
     const row = pane.parentElement;
@@ -214,7 +157,7 @@ const widestOf = (pane: HTMLElement) => {
         .filter((child) => child !== pane)
         .reduce((sum, child) => sum + (parseFloat(getComputedStyle(child).minWidth) || 0), 0);
 
-    return fitWidth(row.clientWidth - margins - beside, PROPERTIES_MAX_WIDTH);
+    return clampWidth(row.clientWidth - margins - beside, PROPERTIES_MIN_WIDTH, PROPERTIES_MAX_WIDTH);
 };
 
 /** Where a folder is, as a search's results show it: the section, then the folders below its root. */
@@ -261,64 +204,11 @@ const PropertiesPane = ({
     const visible = docked ? shown : open;
     const onDockedChangeRef = useRef(onDockedChange);
     const paneId = useId();
-    const edgeRef = useRef<HTMLDivElement>(null);
-    const drag = useRef<EdgeDrag | null>(null);
-    // The widest the docked panel can be beside the content, read as the space it's in changes size.
-    const [widest, setWidest] = useState(PROPERTIES_MAX_WIDTH);
-    // The width asked for, within the panel's limits, and the width shown, narrower while the
-    // content needs the room, which CSS works out from the content's `min-width` as well.
-    const asked = fitWidth(width, PROPERTIES_MAX_WIDTH);
-    const shownWidth = fitWidth(width, widest);
-    const askedRef = useRef(asked);
-    const shownWidthRef = useRef(shownWidth);
+    const asked = clampWidth(width, PROPERTIES_MIN_WIDTH, PROPERTIES_MAX_WIDTH);
     const edgeShown = docked && shown;
 
     useLayoutEffect(() => {
         onDockedChangeRef.current = onDockedChange;
-        askedRef.current = asked;
-        shownWidthRef.current = shownWidth;
-    });
-
-    // Shows the docked panel at `width` while its edge is dragged, without rendering anything.
-    const showWidth = (width: number) => {
-        paneRef.current?.style.setProperty("--properties-width", `${width}px`);
-        edgeRef.current?.setAttribute("aria-valuenow", String(width));
-    };
-
-    // Ends a drag of the edge: the width it was dragged to is asked for, and until a controlled
-    // width comes back with it, or if it never does, the width given shows again.
-    const endDrag = (commit: boolean) => {
-        const current = drag.current;
-
-        if (!current) {
-            return;
-        }
-
-        drag.current = null;
-
-        const edge = edgeRef.current;
-
-        if (edge) {
-            delete edge.dataset.dragging;
-
-            if (edge.hasPointerCapture(current.pointerId)) {
-                edge.releasePointerCapture(current.pointerId);
-            }
-        }
-
-        paneRef.current?.style.setProperty("--properties-width", `${askedRef.current}px`);
-        edge?.setAttribute("aria-valuenow", String(shownWidthRef.current));
-
-        if (commit && current.width !== Math.round(current.from)) {
-            onWidthChange(current.width);
-        }
-    };
-
-    // The edge going while it's dragged, as the panel hides or stops docking, calls the drag off.
-    useLayoutEffect(() => {
-        if (!edgeShown) {
-            endDrag(false);
-        }
     });
 
     useLayoutEffect(() => {
@@ -335,7 +225,6 @@ const PropertiesPane = ({
             const nowDocked = getComputedStyle(pane).position !== "absolute";
 
             setDocked(nowDocked);
-            setWidest(widestOf(pane));
 
             if (wasDocked !== undefined && nowDocked !== wasDocked) {
                 onDockedChangeRef.current(nowDocked);
@@ -476,103 +365,7 @@ const PropertiesPane = ({
         }
     };
 
-    // The edge is dragged with the mouse, a pen or a finger, the panel following the pointer. A press
-    // on it doesn't take the focus from where it is.
-    const handleEdgePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-        const pane = paneRef.current;
-
-        if (!pane || event.button !== 0 || drag.current) {
-            return;
-        }
-
-        event.preventDefault();
-        event.currentTarget.setPointerCapture(event.pointerId);
-        event.currentTarget.dataset.dragging = "true";
-
-        const from = pane.getBoundingClientRect().width;
-
-        drag.current = {
-            pointerId: event.pointerId,
-            startX: event.clientX,
-            from,
-            widest: widestOf(pane),
-            rtl: isRtl(pane),
-            width: Math.round(from),
-        };
-    };
-
-    // The edge is on the panel's start side, so it widens as the pointer goes towards the start.
-    const handleEdgePointerMove = (event: PointerEvent<HTMLDivElement>) => {
-        const current = drag.current;
-
-        if (!current || current.pointerId !== event.pointerId) {
-            return;
-        }
-
-        const moved = event.clientX - current.startX;
-
-        current.width = fitWidth(current.from + (current.rtl ? moved : -moved), current.widest);
-        showWidth(current.width);
-    };
-
-    const handleEdgePointerUp = (event: PointerEvent<HTMLDivElement>) => {
-        if (drag.current?.pointerId === event.pointerId) {
-            endDrag(true);
-        }
-    };
-
-    // A drag the browser takes over, as for a gesture of its own, is called off.
-    const handleEdgePointerCancel = (event: PointerEvent<HTMLDivElement>) => {
-        if (drag.current?.pointerId === event.pointerId) {
-            endDrag(false);
-        }
-    };
-
-    // The arrow keys move the edge the way they point, a step at a time, and Home and End make the
-    // panel as narrow and as wide as it goes. Escape calls a drag off, and otherwise goes back to the
-    // content, as anywhere in the panel.
-    const handleEdgeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-        const pane = paneRef.current;
-
-        if (event.key === "Escape" && drag.current) {
-            event.preventDefault();
-            endDrag(false);
-
-            return;
-        }
-
-        if (!pane || drag.current || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
-            return;
-        }
-
-        const most = widestOf(pane);
-        const now = fitWidth(width, most);
-        const towardsStart = isRtl(pane) ? "ArrowRight" : "ArrowLeft";
-        const towardsEnd = isRtl(pane) ? "ArrowLeft" : "ArrowRight";
-        let next: number;
-
-        if (event.key === towardsStart) {
-            next = now + PROPERTIES_WIDTH_STEP;
-        } else if (event.key === towardsEnd) {
-            next = now - PROPERTIES_WIDTH_STEP;
-        } else if (event.key === "Home") {
-            next = PROPERTIES_MIN_WIDTH;
-        } else if (event.key === "End") {
-            next = most;
-        } else {
-            return;
-        }
-
-        event.preventDefault();
-        next = fitWidth(next, most);
-
-        if (next !== now) {
-            onWidthChange(next);
-        }
-    };
-
-    // A double click puts the width back to where it started.
-    const handleEdgeDoubleClick = () => onWidthChange(fitWidth(defaultWidth, PROPERTIES_MAX_WIDTH));
+    const widestPane = () => (paneRef.current ? widestOf(paneRef.current) : PROPERTIES_MAX_WIDTH);
 
     const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
         const to = event.relatedTarget;
@@ -594,24 +387,19 @@ const PropertiesPane = ({
             onBlur={handleBlur}
         >
             {edgeShown && (
-                <Box
-                    ref={edgeRef}
-                    role="separator"
-                    tabIndex={0}
-                    aria-orientation="vertical"
-                    aria-label={text.resizeProperties}
-                    aria-controls={paneId}
-                    aria-valuenow={shownWidth}
-                    aria-valuemin={PROPERTIES_MIN_WIDTH}
-                    aria-valuemax={widest}
-                    sx={edgeSx}
-                    onPointerDown={handleEdgePointerDown}
-                    onPointerMove={handleEdgePointerMove}
-                    onPointerUp={handleEdgePointerUp}
-                    onPointerCancel={handleEdgePointerCancel}
-                    onLostPointerCapture={handleEdgePointerCancel}
-                    onKeyDown={handleEdgeKeyDown}
-                    onDoubleClick={handleEdgeDoubleClick}
+                <ResizeEdge
+                    target={paneRef}
+                    label={text.resizeProperties}
+                    controls={paneId}
+                    placement="start"
+                    width={asked}
+                    defaultWidth={defaultWidth}
+                    min={PROPERTIES_MIN_WIDTH}
+                    max={PROPERTIES_MAX_WIDTH}
+                    step={RESIZE_STEP}
+                    cssVar="--properties-width"
+                    widest={widestPane}
+                    onChange={onWidthChange}
                 />
             )}
             {visible && (

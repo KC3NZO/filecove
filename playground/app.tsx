@@ -125,6 +125,7 @@ const App = () => {
     const [sort, setSort] = useStoredState<SortOrder>("sort", { key: "relevance", direction: "desc" });
     const [showHidden, setShowHidden] = useStoredState("showHidden", false);
     const [sidebarHidden, setSidebarHidden] = useStoredState("sidebarHidden", false);
+    const [sidebarWidth, setSidebarWidth] = useStoredState("sidebarWidth", 248);
     const [propertiesOpen, setPropertiesOpen] = useStoredState("propertiesOpen", false);
     const [propertiesWidth, setPropertiesWidth] = useStoredState("propertiesWidth", 300);
     // The section the playground opens in starts expanded, as it does when the file manager keeps it.
@@ -231,6 +232,7 @@ const App = () => {
               defaultSort: sort,
               defaultShowHidden: showHidden,
               defaultSidebarHidden: sidebarHidden,
+              defaultSidebarWidth: sidebarWidth,
               defaultPropertiesOpen: propertiesOpen,
               defaultPropertiesWidth: propertiesWidth,
               defaultExpandedFolders: expandedFolders,
@@ -249,6 +251,8 @@ const App = () => {
               onShowHiddenChange: setShowHidden,
               sidebarHidden,
               onSidebarHiddenChange: setSidebarHidden,
+              sidebarWidth,
+              onSidebarWidthChange: setSidebarWidth,
               propertiesOpen,
               onPropertiesOpenChange: setPropertiesOpen,
               propertiesWidth,

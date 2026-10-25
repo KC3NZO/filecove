@@ -90,9 +90,10 @@ interface Copied {
 
 // The sides of the square the panel asks the adapter's thumbnail for, in rem, smallest first: the
 // smallest as wide as the panel's body, about the width it has docked at first or as the overlay,
-// and larger ones as a resized panel is wider, a step at a time, so a panel being resized doesn't
-// ask again for every pixel. The grid's smaller one shows until the picture has loaded.
-const PICTURE_SIZES: readonly number[] = [18, 28, 40];
+// and a larger one as a resized panel is wider, up to the widest it can be made (480px less the
+// body's padding is 28rem), so a panel being resized doesn't ask again for every pixel. The grid's
+// smaller one shows until the picture has loaded.
+const PICTURE_SIZES: readonly number[] = [18, 28];
 
 /** How many of the host's actions with icons show as buttons in the narrow header. */
 const INLINE_ACTIONS = 2;

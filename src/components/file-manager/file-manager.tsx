@@ -31,9 +31,13 @@ import { createFolderStore, folderKey, keyFolder } from "../../store/folder-stor
 import { createPropertiesCache } from "../../store/properties-cache";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
 import {
-    PROPERTIES_CONTENT_ROOM,
+    CONTENT_ROOM,
+    PROPERTIES_MIN_WIDTH,
     PROPERTIES_WIDTH,
     ROOT_CONTAINER,
+    SIDEBAR_MAX_WIDTH,
+    SIDEBAR_MIN_WIDTH,
+    SIDEBAR_WIDTH,
     VIEW_CONTAINER,
     rootExtraWide,
     rootWide,
@@ -56,6 +60,7 @@ import { groupedEntries, requestGroups, selectionRequest } from "../../utils/gro
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
 import { allows, entriesAllow, entriesMoving, folderMoving, folderWritable, replaceable } from "../../utils/permissions";
+import { clampWidth } from "../../utils/resize";
 import { importsFrom } from "../../utils/sections";
 import { sameSearch } from "../../utils/search";
 import { sameIds } from "../../utils/sets";
@@ -282,6 +287,20 @@ interface BaseProps extends RootAttributes {
      */
     onSidebarHiddenChange?: (sidebarHidden: boolean) => void;
     /**
+     * How wide the docked sidebar is, in px, for a consumer that keeps it, from 200 to 360. It's
+     * narrower while the content beside it needs the room, and the overlay shown where there's no
+     * room to dock it isn't resized.
+     */
+    sidebarWidth?: number;
+    /** How wide the docked sidebar is at first, when the file manager keeps it; 248 when omitted. */
+    defaultSidebarWidth?: number;
+    /**
+     * Told when the user resizes the docked sidebar by its edge: as a drag of it ends, a step at a
+     * time with the arrow keys on it, with Home and End, or put back to `defaultSidebarWidth` (or
+     * 248) with a double click.
+     */
+    onSidebarWidthChange?: (sidebarWidth: number) => void;
+    /**
      * Whether the properties panel shows beside the content while there's room to dock it, for a
      * consumer that keeps it. It shows the content's selection, or the open folder while nothing is
      * selected, and follows the selection. Narrower, it opens over the content instead, with
@@ -296,7 +315,7 @@ interface BaseProps extends RootAttributes {
      */
     onPropertiesOpenChange?: (propertiesOpen: boolean) => void;
     /**
-     * How wide the docked properties panel is, in px, for a consumer that keeps it, from 240 to 640.
+     * How wide the docked properties panel is, in px, for a consumer that keeps it, from 240 to 480.
      * It's narrower while the content beside it needs the room, and the overlay shown where there's
      * no room to dock isn't resized.
      */
@@ -605,12 +624,34 @@ const propertiesBackdropSx: SxProps<Theme> = {
     [rootExtraWide]: { display: "none" },
 };
 
-const mainSx: SxProps<Theme> = {
+// What the content keeps beside the docked panels, with the margins around it: its own end margin,
+// and the start one too while the sidebar doesn't dock beside it, which takes it otherwise.
+const contentRoom = (theme: Theme, sidebarHidden: boolean) =>
+    `calc(${CONTENT_ROOM}px + ${theme.spacing(sidebarHidden ? 1.5 : 0.75)})`;
+
+// The main part is where the docked panels give way: the sidebar shrinks, down to its least width,
+// before the content has less than it needs, and with the properties docked beside it, before
+// they have less than theirs. The properties give way first, inside it (`columnSx`, and the
+// properties' own `min-width`), so whichever of the two was made wider, both can't reach their
+// widest unless there's room for them and the content. The pane's margin is its end one.
+const mainSx: SxProps<Theme> = (theme) => ({
     display: "flex",
     flexDirection: "column",
     flex: 1,
     minWidth: 0,
-};
+    [rootWide]: {
+        minWidth: contentRoom(theme, false),
+        '[data-sidebar-hidden="true"] &': { minWidth: contentRoom(theme, true) },
+    },
+    [rootExtraWide]: {
+        '&[data-properties-shown="true"]': {
+            minWidth: `calc(${contentRoom(theme, false)} + ${PROPERTIES_MIN_WIDTH}px + ${theme.spacing(0.75)})`,
+            '[data-sidebar-hidden="true"] &': {
+                minWidth: `calc(${contentRoom(theme, true)} + ${PROPERTIES_MIN_WIDTH}px + ${theme.spacing(0.75)})`,
+            },
+        },
+    },
+});
 
 // Under the header bar: the content with the panels under it, and the docked properties beside
 // them. Not positioned, so the properties' overlay covers the file manager from top to bottom, as
@@ -621,18 +662,16 @@ const bodySx: SxProps<Theme> = {
     minHeight: 0,
 };
 
-// Beside the docked properties, the content keeps room for the list's size and date columns, with
-// its margins: the properties narrow first, and the pane reads how far from this `min-width`.
+// Beside the docked panels, the content keeps room for the list's size and date columns, with its
+// margins: the properties narrow first, and the panes read how far from this `min-width` they can go.
 const columnSx: SxProps<Theme> = (theme) => ({
     display: "flex",
     flexDirection: "column",
     flex: 1,
     minWidth: 0,
-    [rootExtraWide]: {
-        minWidth: `calc(${PROPERTIES_CONTENT_ROOM}px + ${theme.spacing(0.75)})`,
-        '[data-sidebar-hidden="true"] &': {
-            minWidth: `calc(${PROPERTIES_CONTENT_ROOM}px + ${theme.spacing(1.5)})`,
-        },
+    [rootWide]: {
+        minWidth: contentRoom(theme, false),
+        '[data-sidebar-hidden="true"] &': { minWidth: contentRoom(theme, true) },
     },
 });
 
@@ -724,6 +763,9 @@ const FileManager = ({
     sidebarHidden: sidebarHiddenProp,
     defaultSidebarHidden = false,
     onSidebarHiddenChange,
+    sidebarWidth: sidebarWidthProp,
+    defaultSidebarWidth = SIDEBAR_WIDTH,
+    onSidebarWidthChange,
     propertiesOpen: propertiesOpenProp,
     defaultPropertiesOpen = false,
     onPropertiesOpenChange,
@@ -927,6 +969,13 @@ const FileManager = ({
         defaultValue: defaultSidebarHidden,
         onChange: onSidebarHiddenChange,
     });
+    // How wide the docked sidebar is, as the user drags its edge.
+    const [sidebarWidth, setSidebarWidth] = useSetting({
+        name: "sidebarWidth",
+        value: sidebarWidthProp,
+        defaultValue: defaultSidebarWidth,
+        onChange: onSidebarWidthChange,
+    });
     // Whether the docked properties show, with Alt+Enter or the view menu. Collapsed, they show as an
     // overlay instead, while `propertiesOverlay`.
     const [propertiesOpen, setPropertiesOpen] = useSetting({
@@ -1020,6 +1069,7 @@ const FileManager = ({
     // What had the focus when the properties' overlay opened, which gets it back as the overlay closes.
     const propertiesOpener = useRef<HTMLElement | null>(null);
     const sidebarRef = useRef<HTMLDivElement>(null);
+    const columnRef = useRef<HTMLDivElement>(null);
     const sidebarButtonRef = useRef<HTMLButtonElement>(null);
     // What had the focus when the overlay sidebar opened, which gets it back as the overlay closes.
     const sidebarOpener = useRef<HTMLElement | null>(null);
@@ -1570,6 +1620,28 @@ const FileManager = ({
         observer.observe(frame);
 
         return () => observer.disconnect();
+    }, []);
+
+    // How wide the docked sidebar can be made: what the frame leaves it beside the content's least
+    // width and the docked properties as they are, so dragging it never squeezes either. A sidebar
+    // wider than that, as it was made when the properties were narrower, is made narrower by CSS.
+    const widestSidebar = useCallback(() => {
+        const frame = sidebarRef.current?.parentElement;
+        const column = columnRef.current;
+        const pane = paneRef.current;
+
+        if (!frame || !column) {
+            return SIDEBAR_MAX_WIDTH;
+        }
+
+        const docked = pane && !overlays(pane) && pane.offsetWidth > 0;
+        const taken = docked ? pane.offsetWidth + (parseFloat(getComputedStyle(pane).marginInlineEnd) || 0) : 0;
+
+        return clampWidth(
+            frame.clientWidth - (parseFloat(getComputedStyle(column).minWidth) || 0) - taken,
+            SIDEBAR_MIN_WIDTH,
+            SIDEBAR_MAX_WIDTH,
+        );
     }, []);
 
     // Asks the field to take the focus once it's there, when what opens it is applied by a later render.
@@ -3638,6 +3710,10 @@ const FileManager = ({
                                             open={sidebarOpen}
                                             hidden={sidebarHidden}
                                             peek={sidebarForDrag === "peek"}
+                                            width={sidebarWidth}
+                                            defaultWidth={defaultSidebarWidth}
+                                            widest={widestSidebar}
+                                            onWidthChange={setSidebarWidth}
                                             searchScope={searchScope}
                                             canSearchEverywhere={canSearchEverywhere}
                                             onToggle={toggleExpanded}
@@ -3652,7 +3728,7 @@ const FileManager = ({
                                             mainMenu={mainMenu}
                                             onShowShortcuts={showShortcuts}
                                         />
-                                        <Box sx={mainSx}>
+                                        <Box sx={mainSx} data-properties-shown={propertiesOpen}>
                                             <HeaderBar
                                                 pathBar={
                                                     section && searchScope ? (
@@ -3714,7 +3790,7 @@ const FileManager = ({
                                                 sidebarButtonRef={sidebarButtonRef}
                                             />
                                             <Box sx={bodySx}>
-                                                <Box sx={columnSx}>
+                                                <Box ref={columnRef} sx={columnSx}>
                                                     <Box ref={panelRef} sx={panelSx}>
                                                         {/* A search everywhere's results show in the folder's place
                                                             while something is typed. The folder stays mounted

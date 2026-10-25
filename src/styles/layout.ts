@@ -41,21 +41,30 @@ export const GRID_SIZES: readonly GridSize[] = [
 ];
 export const GRID_START = 1;
 
+/** The docked sidebar's width, in px, until the user resizes it. */
 export const SIDEBAR_WIDTH = 248;
+/** How narrow and how wide the docked sidebar can be made, in px. */
+export const SIDEBAR_MIN_WIDTH = 200;
+export const SIDEBAR_MAX_WIDTH = 360;
 
 /** The docked properties' width, in px, until the user resizes them. */
 export const PROPERTIES_WIDTH = 300;
 /** How narrow and how wide the docked properties can be made, in px. */
 export const PROPERTIES_MIN_WIDTH = 240;
-export const PROPERTIES_MAX_WIDTH = 640;
-/** How far the arrow keys move the docked properties' edge, in px. */
-export const PROPERTIES_WIDTH_STEP = 16;
+export const PROPERTIES_MAX_WIDTH = 480;
+
+/** How far the arrow keys move a docked panel's edge, in px. */
+export const RESIZE_STEP = 16;
+
 /**
- * The room the docked properties leave the content view at least, in px, so it keeps the list's
- * size and date columns (`viewMedium`). The margins around the content and the properties come on
- * top of it, which the pane adds as it docks.
+ * The room the content view keeps at least beside the docked panels, in px, so it keeps the list's
+ * size and date columns (`viewMedium`). The margins around the content come on top of it, which
+ * the frame adds. The panels give way before the content does: the properties first, then the
+ * sidebar (see "Resizing the docked panels" in `file-manager.md`). With both panels at their
+ * widest the content still has its room in a root 1400px wide: 360 + 480 for the panels, 540 for
+ * the content and 12 for the margins between them.
  */
-export const PROPERTIES_CONTENT_ROOM = 540;
+export const CONTENT_ROOM = 540;
 
 /** Shared by the sidebar header and the main header bar so the two line up. */
 export const HEADER_HEIGHT = 52;
