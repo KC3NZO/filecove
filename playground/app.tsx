@@ -126,6 +126,7 @@ const App = () => {
     const [showHidden, setShowHidden] = useStoredState("showHidden", false);
     const [sidebarHidden, setSidebarHidden] = useStoredState("sidebarHidden", false);
     const [propertiesOpen, setPropertiesOpen] = useStoredState("propertiesOpen", false);
+    const [propertiesWidth, setPropertiesWidth] = useStoredState("propertiesWidth", 300);
     // The section the playground opens in starts expanded, as it does when the file manager keeps it.
     const [expandedFolders, setExpandedFolders] = useStoredState<SectionFolder[]>("expandedFolders", () =>
         shownSections
@@ -231,6 +232,7 @@ const App = () => {
               defaultShowHidden: showHidden,
               defaultSidebarHidden: sidebarHidden,
               defaultPropertiesOpen: propertiesOpen,
+              defaultPropertiesWidth: propertiesWidth,
               defaultExpandedFolders: expandedFolders,
               defaultSearchExcludedSections: searchExcluded,
           }
@@ -249,6 +251,8 @@ const App = () => {
               onSidebarHiddenChange: setSidebarHidden,
               propertiesOpen,
               onPropertiesOpenChange: setPropertiesOpen,
+              propertiesWidth,
+              onPropertiesWidthChange: setPropertiesWidth,
               expandedFolders,
               onExpandedFoldersChange: setExpandedFolders,
               search,

@@ -526,6 +526,8 @@ export interface FileManagerLocaleText
     propertiesShown: string;
     /** Read to screen readers as Alt+Enter hides the docked properties, when the focus wasn't in them. */
     propertiesHidden: string;
+    /** Names the docked properties' edge, which resizes them, for screen readers. */
+    resizeProperties: string;
 
     // Preview
     previous: string;
@@ -591,6 +593,8 @@ export interface FileManagerLocaleText
     shortcutToggleSidebar: string;
     /** Alt+Enter, showing and hiding the properties. */
     shortcutToggleProperties: string;
+    /** The arrow keys on the docked properties' edge, which resize them. */
+    shortcutResizeProperties: string;
     /** F6, between the sidebar tree, the content and the docked properties. */
     shortcutSwitchPane: string;
     shortcutExpand: string;

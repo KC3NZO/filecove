@@ -47,6 +47,11 @@ interface ShortcutRow {
     combos: Combo[];
     /** Said in place of keys, for what isn't one key, such as typing a name. */
     hint?: string;
+    /**
+     * False for keys that work where the consumer's shortcuts don't run, such as on the docked
+     * properties' edge, which stay listed in a section that yields.
+     */
+    yields?: false;
 }
 
 interface ShortcutSection {
@@ -85,6 +90,7 @@ const ownSections = ({ text, rtl, canSearchEverywhere, choosesSections, canPrevi
                 { label: text.keyboardShortcuts, combos: [["Ctrl", "?"]] },
                 { label: text.shortcutToggleHidden, combos: [["Ctrl", "H"]] },
                 { label: text.shortcutToggleProperties, combos: [["Alt", "Enter"]] },
+                { label: text.shortcutResizeProperties, combos: [[start], [end]], yields: false },
                 // In the content only, so the browser's own zoom still works elsewhere.
                 { label: text.zoomIn, combos: [["Ctrl", "+"]] },
                 { label: text.zoomOut, combos: [["Ctrl", "-"]] },
@@ -345,6 +351,10 @@ const ShortcutsDialog = ({
         const shown = own.flatMap((section) => {
             const rows = section.yields
                 ? section.rows.flatMap((row) => {
+                      if (row.yields === false) {
+                          return [row];
+                      }
+
                       const combos = row.combos.filter((combo) => !taken.has(comboId(combo)));
 
                       return combos.length > 0 || row.hint ? [{ ...row, combos }] : [];

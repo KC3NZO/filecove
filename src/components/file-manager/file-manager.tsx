@@ -30,7 +30,14 @@ import { useWheelZoom } from "../../hooks/use-wheel-zoom";
 import { createFolderStore, folderKey, keyFolder } from "../../store/folder-store";
 import { createPropertiesCache } from "../../store/properties-cache";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
-import { ROOT_CONTAINER, VIEW_CONTAINER, rootExtraWide, rootWide } from "../../styles/layout";
+import {
+    PROPERTIES_CONTENT_ROOM,
+    PROPERTIES_WIDTH,
+    ROOT_CONTAINER,
+    VIEW_CONTAINER,
+    rootExtraWide,
+    rootWide,
+} from "../../styles/layout";
 import { withSx } from "../../styles/sx";
 import { toolbarGroups, visibleActionGroups } from "../../utils/action-groups";
 import { isolate, joinIsolated } from "../../utils/bidi";
@@ -288,6 +295,20 @@ interface BaseProps extends RootAttributes {
      * the panel's close button or `ActionContext.properties`.
      */
     onPropertiesOpenChange?: (propertiesOpen: boolean) => void;
+    /**
+     * How wide the docked properties panel is, in px, for a consumer that keeps it, from 240 to 640.
+     * It's narrower while the content beside it needs the room, and the overlay shown where there's
+     * no room to dock isn't resized.
+     */
+    propertiesWidth?: number;
+    /** How wide the docked properties are at first, when the file manager keeps it; 300 when omitted. */
+    defaultPropertiesWidth?: number;
+    /**
+     * Told when the user resizes the docked properties by their edge: as a drag of it ends, a step at
+     * a time with the arrow keys on it, with Home and End, or put back to `defaultPropertiesWidth` (or
+     * 300) with a double click.
+     */
+    onPropertiesWidthChange?: (propertiesWidth: number) => void;
     /**
      * Folders expanded in the sidebar tree, for a consumer that keeps them, e.g. across reloads. A
      * section's own row is its root folder. Only the chevrons, Right and Left on a row, and a drag
@@ -600,12 +621,20 @@ const bodySx: SxProps<Theme> = {
     minHeight: 0,
 };
 
-const columnSx: SxProps<Theme> = {
+// Beside the docked properties, the content keeps room for the list's size and date columns, with
+// its margins: the properties narrow first, and the pane reads how far from this `min-width`.
+const columnSx: SxProps<Theme> = (theme) => ({
     display: "flex",
     flexDirection: "column",
     flex: 1,
     minWidth: 0,
-};
+    [rootExtraWide]: {
+        minWidth: `calc(${PROPERTIES_CONTENT_ROOM}px + ${theme.spacing(0.75)})`,
+        '[data-sidebar-hidden="true"] &': {
+            minWidth: `calc(${PROPERTIES_CONTENT_ROOM}px + ${theme.spacing(1.5)})`,
+        },
+    },
+});
 
 // Docked, the sidebar takes the panels' margin on its side, the start; hidden, they take it back.
 const besideSidebar = {
@@ -698,6 +727,9 @@ const FileManager = ({
     propertiesOpen: propertiesOpenProp,
     defaultPropertiesOpen = false,
     onPropertiesOpenChange,
+    propertiesWidth: propertiesWidthProp,
+    defaultPropertiesWidth = PROPERTIES_WIDTH,
+    onPropertiesWidthChange,
     expandedFolders: expandedFoldersProp,
     defaultExpandedFolders,
     onExpandedFoldersChange,
@@ -902,6 +934,13 @@ const FileManager = ({
         value: propertiesOpenProp,
         defaultValue: defaultPropertiesOpen,
         onChange: onPropertiesOpenChange,
+    });
+    // How wide the docked properties are, as the user drags their edge.
+    const [propertiesWidth, setPropertiesWidth] = useSetting({
+        name: "propertiesWidth",
+        value: propertiesWidthProp,
+        defaultValue: defaultPropertiesWidth,
+        onChange: onPropertiesWidthChange,
     });
     const [propertiesOverlay, setPropertiesOverlay] = useState(false);
     // What the properties show in place of the selection, as `ActionContext.properties` asked, until
@@ -3789,6 +3828,9 @@ const FileManager = ({
                                                     subject={propertiesSubject}
                                                     shown={propertiesOpen}
                                                     open={propertiesOverlay}
+                                                    width={propertiesWidth}
+                                                    defaultWidth={defaultPropertiesWidth}
+                                                    onWidthChange={setPropertiesWidth}
                                                     changes={searchVersion}
                                                     showHidden={showHidden}
                                                     cache={propertiesCache}

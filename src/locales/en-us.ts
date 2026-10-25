@@ -227,6 +227,7 @@ export const enUS: FileManagerLocaleText = {
     showProperties: "Show properties",
     propertiesShown: "Properties shown",
     propertiesHidden: "Properties hidden",
+    resizeProperties: "Resize properties",
 
     previous: "Previous",
     next: "Next",
@@ -267,6 +268,7 @@ export const enUS: FileManagerLocaleText = {
     shortcutPasteFiles: "Upload files from the clipboard",
     shortcutToggleSidebar: "Show or hide the sidebar",
     shortcutToggleProperties: "Show or hide the properties",
+    shortcutResizeProperties: "Resize the properties, on their edge",
     shortcutSwitchPane: "Switch between the sidebar, the content and the properties",
     shortcutExpand: "Expand a folder",
     shortcutCollapse: "Collapse a folder",

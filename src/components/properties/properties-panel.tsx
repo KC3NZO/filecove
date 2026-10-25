@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import Box from "@mui/material/Box";
@@ -54,6 +54,8 @@ interface RowProps {
 
 interface PictureProps {
     item: PropertiesItem;
+    /** The side of the square asked of the adapter, in rem. */
+    size: number;
 }
 
 interface SpinnerProps {
@@ -86,9 +88,11 @@ interface Copied {
     id: number;
 }
 
-// The side of the square the panel asks the adapter's thumbnail for, in rem: about the width the
-// panel's body has, docked or as the overlay. The grid's smaller one shows until this has loaded.
-const PICTURE_SIZE = 17;
+// The sides of the square the panel asks the adapter's thumbnail for, in rem, smallest first: the
+// smallest as wide as the panel's body, about the width it has docked at first or as the overlay,
+// and larger ones as a resized panel is wider, a step at a time, so a panel being resized doesn't
+// ask again for every pixel. The grid's smaller one shows until the picture has loaded.
+const PICTURE_SIZES: readonly number[] = [18, 28, 40];
 
 /** How many of the host's actions with icons show as buttons in the narrow header. */
 const INLINE_ACTIONS = 2;
@@ -150,16 +154,17 @@ const heroSx: SxProps<Theme> = {
     textAlign: "center",
 };
 
-// The picture fills the panel's width, and is never taller than it is wide, shrunk to fit and
-// never stretched past the width. A smaller thumbnail standing in while the larger loads is drawn
-// at the same size, so the swap changes only its sharpness.
+// The picture fills the panel's width, and is never taller than it is wide, shrunk to fit. A
+// smaller thumbnail standing in while the larger loads is drawn at the same size, so the swap
+// changes only its sharpness.
 const pictureSx: SxProps<Theme> = {
     alignSelf: "stretch",
+    containerType: "inline-size",
     "& > img": {
         display: "block",
         width: "100%",
         height: "auto",
-        maxHeight: `${PICTURE_SIZE}rem`,
+        maxHeight: "100cqi",
         objectFit: "contain",
         borderRadius: 1,
     },
@@ -247,8 +252,8 @@ const Row = ({ label, children }: RowProps) => (
 );
 
 /** The file's thumbnail, large, once it has loaded, or else its type icon. */
-const Picture = ({ item }: PictureProps) => {
-    const thumbnail = useThumbnail(item.entry, item.adapter, "grid", PICTURE_SIZE);
+const Picture = ({ item, size }: PictureProps) => {
+    const thumbnail = useThumbnail(item.entry, item.adapter, "grid", size);
 
     if (thumbnail) {
         return (
@@ -375,6 +380,8 @@ const PropertiesPanel = ({
     const cache = given ?? own;
     const { details, totals, retryDetails, retryTotals } = useProperties(items, { cache, changes, showHidden });
     const rootRef = useRef<HTMLElement>(null);
+    const bodyRef = useRef<HTMLDivElement>(null);
+    const [pictureSize, setPictureSize] = useState(PICTURE_SIZES[0]);
     const titleId = useId();
     const [copied, setCopied] = useState<Copied | null>(null);
 
@@ -383,6 +390,28 @@ const PropertiesPanel = ({
             rootRef.current?.focus();
         }
     }, [takeFocus]);
+
+    // The picture asked for follows the body's width, as the panel is resized.
+    useLayoutEffect(() => {
+        const body = bodyRef.current;
+
+        if (!body) {
+            return;
+        }
+
+        const measure = () => {
+            const style = getComputedStyle(body);
+            const width = body.clientWidth - parseFloat(style.paddingInlineStart) - parseFloat(style.paddingInlineEnd);
+            const rem = width / (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16);
+
+            setPictureSize(PICTURE_SIZES.find((size) => size >= rem) ?? PICTURE_SIZES[PICTURE_SIZES.length - 1]);
+        };
+        const observer = new ResizeObserver(measure);
+
+        observer.observe(body);
+
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         if (!copied) {
@@ -584,7 +613,7 @@ const PropertiesPanel = ({
         body = (
             <>
                 <Box sx={heroSx}>
-                    {single ? <Picture item={single} /> : <Icon name="copy" color="action" sx={severalSx} />}
+                    {single ? <Picture item={single} size={pictureSize} /> : <Icon name="copy" color="action" sx={severalSx} />}
                     <Typography component="p" sx={nameSx}>
                         {entry ? <bdi>{entry.name}</bdi> : text.propertiesItems(items.length)}
                     </Typography>
@@ -624,7 +653,9 @@ const PropertiesPanel = ({
                     <Icon name="close" fontSize="small" />
                 </TooltipIconButton>
             </Box>
-            <Box sx={bodySx}>{body}</Box>
+            <Box ref={bodyRef} sx={bodySx}>
+                {body}
+            </Box>
             <Box role="status" sx={visuallyHiddenSx}>
                 {copied && <span key={copied.id}>{copied.message}</span>}
             </Box>
