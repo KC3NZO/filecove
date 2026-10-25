@@ -98,7 +98,7 @@ What's left in the features already built, what packaging needs before a release
 ### Interface polish
 - [x] **new:** No tooltips anywhere. Icon-only buttons (back, search, view, menus, zoom) only have screen-reader labels. *Done 2026-10-23: every icon-only button is a `TooltipIconButton` showing its label, but the list rows' ⋮, which is hidden from screen readers.*
 - [x] **new:** Nothing handles Windows High Contrast mode (`forced-colors`). Selection, hover, cut and drop markers are background colours, which that mode removes, so selected files look like all the others. *Done 2026-10-23: selections show in the system's `Highlight`, as do pressed buttons, the open search tab and progress bars, menus and tooltips get an edge, and the cut and drop markers already had outlines. Hover shows nothing for now.*
-- [ ] **new:** Back and forward have no history list (GNOME shows one on right-click).
+- [x] **new:** Back and forward have no history list (GNOME shows one on right-click). *Done 2026-10-25: right-clicking, the menu key or a long-press on either button lists the places it leads to, nearest first, and picking one goes straight there.*
 
 ## B. Packaging (before any release)
 - [ ] `package.json` is private and uses the repo's name. React, MUI and Emotion are dependencies when they should be peer dependencies.
