@@ -42,7 +42,7 @@ The list and the grid show a file's thumbnail in place of its type icon when the
 - The `img` has `pointer-events: none` and `draggable={false}`, so a press, right-click or drag reaches the row or tile rather than the picture: no "Save image as", and no picture dragged in place of the entry.
 - `alt=""`, since the name is beside it.
 - The views pass the folder's adapter down (`FileViewProps.adapter`). The drag preview passes no `view`, so it keeps the icon; a picture not yet decoded wouldn't make it into the drag image.
-- The properties panel shows the grid's thumbnail (`useThumbnail` with the grid's view and its starting size, `GRID_SIZES[GRID_START]`), grown to fill a slightly larger box, so it asks the adapter for nothing more, unless the grid was only ever zoomed out, and may look slightly soft, unless the grid was zoomed in (see `properties.md`).
+- The properties panel shows a large picture across its width: the grid's view at `PICTURE_SIZE` (17rem), larger than any grid zoom (10.5rem at most), so it asks the adapter again at that size, the smaller thumbnail showing until it has loaded and staying if it fails. The cache then serves the grid from the larger one (see `properties.md`).
 - The preview shows the grid's thumbnail the same way: in the file's place while it loads, under the spinner, sized as the image will be when the listing says its size (`FileEntry.media`); as a video's poster; and, larger, for a file it has no preview of, such as a TIFF, in place of the type icon (see "While a file loads" in `preview.md`). Text, fonts and audio don't ask for one.
 
 ## The playground

@@ -44,7 +44,7 @@ What a listing brings (`FileEntry`) is shown with nothing more of the adapter, s
 
 `components/properties/properties-panel.tsx` takes `PropertiesItem`s (`types/properties.ts`: the entry, its adapter, its location written out, a folder's count from its own listing, and its Rename and "Open item location", when it has them), and knows nothing of sections or the file manager, so the media manager can use it. It's an `aside` named by its title, focusable (`tabIndex={-1}`), ringed on `:focus-visible`.
 
-- **One entry:** its picture, the grid's thumbnail (`useThumbnail` with the grid's view and size, so nothing more is asked of the adapter; a little smaller than its box, so it may look slightly soft) or else its type icon, its name, Rename… and "Open item location" when given, then rows: Type (with the MIME type, `propertiesTypeWithMime`), Size ("4.2 MB (4,213,045 bytes)", `formatBytes`, from 1 kB up) or Contents, Location, Modified, Created, Dimensions and Duration, then the backend's groups, each under its title, set apart by a rule.
+- **One entry:** its picture, a large thumbnail across the panel's width (`useThumbnail` with the grid's view and `PICTURE_SIZE`, 17rem, about the body's width, docked or as the overlay; never taller than wide, shrunk to fit, with the smaller grid thumbnail standing in, drawn at the same size, while the larger loads) or else its type icon, its name, Rename… and "Open item location" when given, then rows: Type (with the MIME type, `propertiesTypeWithMime`), Size ("4.2 MB (4,213,045 bytes)", `formatBytes`, from 1 kB up) or Contents, Location, Modified, Created, Dimensions and Duration, then the backend's groups, each under its title, set apart by a rule.
 - **Contents:** one folder's totals ("12 files and 3 folders, totalling 4.5 MB", "Empty"), with a spinner while counting, showing how many entries it holds meanwhile; or how many it holds without `measure`. Several entries: files alone add up at once from their own sizes; with folders, the selected files are added to the totals and the selected folders counted among the folders; without `measure`, "2 files and 1 folder" (`propertiesKinds`). A count that fails shows the adapter's message, or `propertiesCountFailed`, with Try again.
 - **Several entries:** the copy icon, "3 items", Contents, and the Location when they share one, or "Several folders". No backend groups, which are one entry's.
 - **None:** "Select an item to see its properties", as for a search everywhere with nothing selected.
@@ -81,4 +81,4 @@ The mock adapter's `properties` makes the rest up from each entry's name: a crea
 
 ## Not yet
 
-Editing fields (`updateProperties`, designed with the media manager's contract), tabs (activity, versions, sharing), a picture larger than the grid's thumbnail, and resizing the docked panel.
+Editing fields (`updateProperties`, designed with the media manager's contract), tabs (activity, versions, sharing), and resizing the docked panel.

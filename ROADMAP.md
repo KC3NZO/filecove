@@ -63,7 +63,8 @@ What's left in the features already built, what packaging needs before a release
 ### Properties
 - [ ] Editing fields (an adapter `updateProperties`, for the media manager's alt text and caption; fields already carry an `id` for it), designed with the media manager's contract.
 - [x] The app's own actions in the panel's header, designed together with the preview's. *Done 2026-10-24: `propertiesActions`, for its entries or the folder it shows, through the same `ToolbarActions` as the preview's, two as buttons, their shortcuts working in the panel.*
-- [ ] Tabs (activity, versions, sharing), a picture larger than the grid's thumbnail, and resizing the docked panel.
+- [ ] Tabs (activity, versions, sharing) and resizing the docked panel.
+- [x] A picture larger than the grid's thumbnail in the properties panel. *Done 2026-10-25: it fills the panel's width, asked of the adapter at 17rem in the grid's view, with the grid's smaller thumbnail standing in, at the same size, while it loads.*
 
 ### Thumbnails
 - [x] A thumbnail in the preview while the file loads. (The sidebar tree and the Move/Copy picker show only folders, so they have no thumbnails to show.) *Done 2026-10-24: the grid's thumbnail stands where the file will be, under the spinner, sized as the image will be when the listing says; it's a video's poster, and the picture of a file with no preview, such as a TIFF.*
