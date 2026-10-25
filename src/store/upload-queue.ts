@@ -14,7 +14,7 @@ import type {
     UploadStatus,
 } from "../types";
 
-/** How many calls to the adapter run at once, files sent and folders made; the rest wait their turn. */
+/** How many calls to the adapter run at once by default, files sent and folders made; the rest wait their turn. */
 const MAX_ACTIVE = 3;
 
 /** How often, at most, the folders uploads ended in are reported, in ms. */
@@ -226,7 +226,7 @@ const statusOf = (job: Job): UploadStatus => {
  * Files and folders waiting to be uploaded, being uploaded, or done with, independent of any view,
  * so uploads carry on in the background while the user browses. Each file is its own call to the
  * adapter, and so is each folder of a folder uploaded, made before what goes in it, with
- * `MAX_ACTIVE` calls running at once. The item list is replaced, never mutated, so
+ * `MAX_ACTIVE` calls running at once unless `setMaxActive` says otherwise. The item list is replaced, never mutated, so
  * `useSyncExternalStore` can compare it by identity.
  *
  * `onChanged` is told the folders that calls reaching the adapter ended in, done, failed or
@@ -241,6 +241,7 @@ export const createUploadQueue = (
     let items: UploadItem[] = [];
     let nextId = 1;
     let active = 0;
+    let maxActive = MAX_ACTIVE;
     const jobs = new Map<number, Job>();
     const listeners = new Set<() => void>();
 
@@ -580,7 +581,7 @@ export const createUploadQueue = (
     // Starts steps that can, in the order their uploads were added, while there are free slots.
     const pump = () => {
         for (const job of jobs.values()) {
-            while (active < MAX_ACTIVE && job.next < job.ready.length) {
+            while (active < maxActive && job.next < job.ready.length) {
                 start(job, job.ready[job.next]);
                 job.next += 1;
             }
@@ -590,7 +591,7 @@ export const createUploadQueue = (
                 job.next = 0;
             }
 
-            if (active >= MAX_ACTIVE) {
+            if (active >= maxActive) {
                 break;
             }
         }
@@ -825,6 +826,16 @@ export const createUploadQueue = (
             }
 
             show(job);
+            pump();
+            notify();
+        },
+
+        /**
+         * Sets how many calls to the adapter run at once, `MAX_ACTIVE` when omitted. A higher count
+         * starts those waiting at once; a lower one lets those under way finish.
+         */
+        setMaxActive(count = MAX_ACTIVE) {
+            maxActive = count;
             pump();
             notify();
         },

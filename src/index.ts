@@ -21,6 +21,7 @@ export type {
     FileContent,
     FileEntry,
     FileManagerApi,
+    FileManagerLimits,
     FileManagerLocaleText,
     FileManagerLocation,
     FileManagerSearch,

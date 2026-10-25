@@ -42,6 +42,7 @@ export type {
     TransferLocaleText,
     UploadLocaleText,
 } from "./locale";
+export type { FileManagerLimits } from "./limits";
 export type { MainMenuGroup, MainMenuItem } from "./main-menu";
 export type {
     EntryGroup,

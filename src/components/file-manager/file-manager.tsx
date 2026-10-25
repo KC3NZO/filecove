@@ -58,6 +58,7 @@ import {
 } from "../../utils/files";
 import { groupedEntries, requestGroups, selectionRequest } from "../../utils/groups";
 import { isHidden } from "../../utils/hidden";
+import { countLimit, delayLimit } from "../../utils/limits";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
 import { allows, entriesAllow, entriesMoving, folderMoving, folderWritable, replaceable } from "../../utils/permissions";
 import { clampWidth } from "../../utils/resize";
@@ -113,6 +114,7 @@ import type {
     FileAdapter,
     FileEntry,
     FileManagerApi,
+    FileManagerLimits,
     FileManagerLocaleText,
     FileManagerLocation,
     FileManagerSearch,
@@ -213,6 +215,15 @@ interface BaseProps extends RootAttributes {
      * elsewhere to `apiRef.refresh`. Changes made through the file manager show either way.
      */
     relistAfter?: number;
+    /**
+     * How much the file manager does at once and keeps, for a backend that takes more, or less,
+     * than the defaults: uploads, downloads, copies and moves, and thumbnails asked for at once,
+     * thumbnails and listings kept while nothing shows them, and how long the typing stops before
+     * a search everywhere. Each is left to its default when omitted, and a change takes effect at
+     * once: more at once starts what's waiting, less lets what's under way finish, and fewer kept
+     * drops what's beyond them.
+     */
+    limits?: FileManagerLimits;
     /**
      * Where the file manager is, for a consumer that keeps it, e.g. in the URL. Every change, the
      * user's and the file manager's own, is asked for through `onLocationChange`. A location in a
@@ -745,6 +756,7 @@ const FileManager = ({
     mainMenu = NO_MAIN_MENU,
     title,
     relistAfter = 0,
+    limits,
     location: locationProp,
     defaultLocation,
     onLocationChange,
@@ -807,6 +819,22 @@ const FileManager = ({
 
     useEffect(() => () => store.abortAll(), [store]);
     useEffect(() => () => thumbnails.clear(), [thumbnails]);
+
+    // The consumer's limits, each a number, so a new object of the same limits every render changes
+    // nothing. They're set in layout effects, before the parts' own effects first ask for anything.
+    const uploadLimit = countLimit(limits?.uploads, 1);
+    const downloadLimit = countLimit(limits?.downloads, 1);
+    const transferLimit = countLimit(limits?.transfers, 1);
+    const thumbnailLimit = countLimit(limits?.thumbnails, 1);
+    const keptThumbnails = countLimit(limits?.keptThumbnails, 0);
+    const keptEntries = countLimit(limits?.keptEntries, 0);
+    const searchDelay = delayLimit(limits?.searchDelay);
+
+    useLayoutEffect(() => store.setMaxKept(keptEntries), [store, keptEntries]);
+    useLayoutEffect(
+        () => thumbnails.setLimits(thumbnailLimit, keptThumbnails),
+        [thumbnails, thumbnailLimit, keptThumbnails],
+    );
 
     // A single section is handled as one group of one, so only the sidebar needs to tell them apart.
     const sections = useMemo<SectionGroup[]>(
@@ -1045,6 +1073,9 @@ const FileManager = ({
     // (`handleTransferEnded`), which it's handed once that's made.
     const transferEnded = useRef<TransferEnded | null>(null);
     const transfers = useTransferQueue((item, outcome, items) => transferEnded.current?.(item, outcome, items));
+
+    useLayoutEffect(() => transfers.queue.setMaxActive(transferLimit), [transfers.queue, transferLimit]);
+
     const shownTransfers = useMemo(() => transfers.items.filter((item) => item.shown), [transfers.items]);
     // The entries moves under way are moving, which are marked and left alone until they end. Made
     // afresh only as moves start and end, not with every bit of progress.
@@ -2145,6 +2176,9 @@ const FileManager = ({
     // Downloads are prepared in the background while the user browses, and the panel shows those
     // that take a moment or need the user. A folder's hidden files go along only while they show.
     const downloads = useDownloadQueue();
+
+    useLayoutEffect(() => downloads.queue.setMaxActive(downloadLimit), [downloads.queue, downloadLimit]);
+
     const shownDownloads = useMemo(() => downloads.items.filter((item) => item.shown), [downloads.items]);
 
     const askDownload = useCallback(
@@ -2428,6 +2462,9 @@ const FileManager = ({
     // in are listed again like any other change. The file manager provides its locale rather than
     // reading it, so the queue is handed its text for a folder kept beside a file.
     const uploads = useUploadQueue(relist, localeValue.text.keptBothName);
+
+    useLayoutEffect(() => uploads.queue.setMaxActive(uploadLimit), [uploads.queue, uploadLimit]);
+
 
     // What uploads just put in folders, for the folder view to highlight once it shows them.
     const [arrivals, setArrivals] = useState(NO_ARRIVALS);
@@ -3801,6 +3838,7 @@ const FileManager = ({
                                                                 targets={searchedTargets}
                                                                 query={searchedFor}
                                                                 version={searchVersion}
+                                                                delay={searchDelay}
                                                                 view={view}
                                                                 zoom={zoom[view]}
                                                                 sort={sort}

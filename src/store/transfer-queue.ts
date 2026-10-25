@@ -8,7 +8,7 @@ import type {
     TransferOptions,
 } from "../types";
 
-/** How many copies and moves the adapter carries out at once; the rest wait their turn. */
+/** How many copies and moves the adapter carries out at once by default; the rest wait their turn. */
 const MAX_ACTIVE = 3;
 
 /** How long a copy or move may take before the panel shows it, in ms, so a quick one is never shown. */
@@ -41,7 +41,7 @@ const call = ({ kind, adapter, entries, target }: TransferItem, options: Transfe
 /**
  * Copies and moves waiting their turn, being carried out by the adapter, or failed, independent of
  * any view, so they carry on while the user browses. Each is one call to the adapter, with
- * `MAX_ACTIVE` running at once, and one asked to wait for another (`after`) starting once that one
+ * `MAX_ACTIVE` running at once unless `setMaxActive` says otherwise, and one asked to wait for another (`after`) starting once that one
  * has ended, however it did. One that's done or cancelled leaves the queue; a failed one stays
  * until it's forgotten. The item list is replaced, never mutated, so `useSyncExternalStore` can
  * compare it by identity.
@@ -59,6 +59,7 @@ export const createTransferQueue = (
     const controllers = new Map<number, AbortController>();
     const timers = new Map<number, number>();
     const listeners = new Set<() => void>();
+    let maxActive = MAX_ACTIVE;
 
     const notify = () => listeners.forEach((listener) => listener());
 
@@ -173,7 +174,7 @@ export const createTransferQueue = (
     // Starts waiting copies and moves, in the order they were asked for, while there are free slots,
     // each after the one it waits for has ended.
     const pump = () => {
-        let free = MAX_ACTIVE - controllers.size;
+        let free = maxActive - controllers.size;
 
         for (const item of items) {
             if (free <= 0) {
@@ -260,6 +261,16 @@ export const createTransferQueue = (
                 remove(id);
                 notify();
             }
+        },
+
+        /**
+         * Sets how many copies and moves run at once, `MAX_ACTIVE` when omitted. A higher count starts those
+         * waiting at once; a lower one lets those under way finish.
+         */
+        setMaxActive(count = MAX_ACTIVE) {
+            maxActive = count;
+            pump();
+            notify();
         },
 
         /** Forgets every failed copy and move, leaving those waiting or under way. */

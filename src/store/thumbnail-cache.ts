@@ -1,9 +1,9 @@
 import type { FileAdapter, FileEntry, ViewMode } from "../types";
 
-/** How many thumbnails are asked for and loaded at once; the rest wait their turn. */
+/** How many thumbnails are asked for and loaded at once by default; the rest wait their turn. */
 const MAX_ACTIVE = 6;
 
-/** How many thumbnails are kept once nothing shows them, those shown longest ago going first. */
+/** How many thumbnails are kept by default once nothing shows them, those shown longest ago going first. */
 const MAX_KEPT = 1000;
 
 /** A file's thumbnail for one view. */
@@ -60,6 +60,7 @@ const loadImage = (url: string, signal: AbortSignal) =>
  * while an entry rendered wants one, `MAX_ACTIVE` at a time. Only the entries in or near view are
  * rendered, so only theirs are asked for, and one scrolled away before it came is aborted. Those
  * that came are kept, up to `MAX_KEPT` that nothing shows, so scrolling back shows them at once.
+ * `setLimits` changes both.
  */
 export const createThumbnailCache = () => {
     // Least recently wanted first.
@@ -70,6 +71,8 @@ export const createThumbnailCache = () => {
     const listeners = new Map<string, Set<() => void>>();
     const adapterIds = new WeakMap<FileAdapter, number>();
     let nextAdapterId = 1;
+    let maxActive = MAX_ACTIVE;
+    let maxKept = MAX_KEPT;
 
     // Sections sharing an adapter share ids, so they share thumbnails too.
     const keyOf = (adapter: FileAdapter, view: ViewMode, entryId: string) => {
@@ -162,7 +165,7 @@ export const createThumbnailCache = () => {
     // Asks for waiting thumbnails, in the order they were wanted, while there are free slots.
     const pump = () => {
         for (const key of queue) {
-            if (loading.size >= MAX_ACTIVE) {
+            if (loading.size >= maxActive) {
                 break;
             }
 
@@ -176,9 +179,9 @@ export const createThumbnailCache = () => {
         }
     };
 
-    // Forgets the thumbnails beyond `MAX_KEPT` that nothing shows, those wanted longest ago first.
+    // Forgets the thumbnails beyond `maxKept` that nothing shows, those wanted longest ago first.
     const evict = () => {
-        let excess = slots.size - MAX_KEPT;
+        let excess = slots.size - maxKept;
 
         for (const [key, slot] of slots) {
             if (excess <= 0) {
@@ -295,6 +298,18 @@ export const createThumbnailCache = () => {
                     evict();
                 });
             };
+        },
+
+        /**
+         * Sets how many thumbnails are asked for at once and how many are kept that nothing shows,
+         * `MAX_ACTIVE` and `MAX_KEPT` when omitted. A higher count asks for those waiting at once,
+         * and a lower one lets those on their way come, and forgets what's beyond it.
+         */
+        setLimits(active = MAX_ACTIVE, kept = MAX_KEPT) {
+            maxActive = active;
+            maxKept = kept;
+            pump();
+            evict();
         },
 
         /** Stops every request and forgets every thumbnail, e.g. on unmount. The cache can still be used afterwards. */

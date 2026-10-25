@@ -19,7 +19,7 @@ import {
     serverAdapter,
 } from "./mocks/mock-data";
 import { previewers } from "./mocks/mock-previewers";
-import { lateSections, locale, relistAfter, single, uncontrolled } from "./options";
+import { lateSections, limits, locale, relistAfter, single, uncontrolled } from "./options";
 
 import type {
     FileEntry,
@@ -275,6 +275,7 @@ const App = () => {
         mainMenu,
         locale,
         relistAfter,
+        limits,
         apiRef,
         sx: fileManagerSx,
         onSelectionChange: handleSelectionChange,

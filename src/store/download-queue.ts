@@ -2,7 +2,7 @@ import { prepareDownload, saveFile } from "../utils/download";
 
 import type { DownloadItem, EntriesInFolder, FileAdapter, FileEntry } from "../types";
 
-/** How many downloads the adapter prepares at once; the rest wait their turn. */
+/** How many downloads the adapter prepares at once by default; the rest wait their turn. */
 const MAX_ACTIVE = 3;
 
 /** How long a download may take before the panel shows it, in ms, so a quick one starts with nothing shown. */
@@ -24,7 +24,7 @@ const sameEntries = (item: DownloadItem, adapter: FileAdapter, entries: readonly
 /**
  * Downloads waiting to be prepared, being prepared by the adapter, or needing the user, independent
  * of any view, so they carry on while the user browses. Each is one call to the adapter, with
- * `MAX_ACTIVE` running at once, and leaves the queue once the browser has the file, whose own
+ * `MAX_ACTIVE` running at once unless `setMaxActive` says otherwise, and leaves the queue once the browser has the file, whose own
  * downloads show it from there. The item list is replaced, never mutated, so
  * `useSyncExternalStore` can compare it by identity.
  */
@@ -34,6 +34,7 @@ export const createDownloadQueue = () => {
     const controllers = new Map<number, AbortController>();
     const timers = new Map<number, number>();
     const listeners = new Set<() => void>();
+    let maxActive = MAX_ACTIVE;
 
     const notify = () => listeners.forEach((listener) => listener());
 
@@ -134,7 +135,7 @@ export const createDownloadQueue = () => {
 
     // Starts waiting downloads, in the order they were asked for, while there are free slots.
     const pump = () => {
-        let free = MAX_ACTIVE - controllers.size;
+        let free = maxActive - controllers.size;
 
         for (const item of items) {
             if (free <= 0) {
@@ -237,6 +238,16 @@ export const createDownloadQueue = () => {
                 remove(id);
                 notify();
             }
+        },
+
+        /**
+         * Sets how many downloads are prepared at once, `MAX_ACTIVE` when omitted. A higher count starts those
+         * waiting at once; a lower one lets those under way finish.
+         */
+        setMaxActive(count = MAX_ACTIVE) {
+            maxActive = count;
+            pump();
+            notify();
         },
 
         /** Forgets every failed and ready download, leaving those waiting or being prepared. */

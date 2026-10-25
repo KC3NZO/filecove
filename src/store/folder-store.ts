@@ -7,7 +7,7 @@ import type { EntryPermissions, FileAdapter, FileEntry, FolderState } from "../t
 const PAGE_INTERVAL = 500;
 
 /**
- * How many entries are kept in the listings nothing shows, those shown longest ago going first. Each
+ * How many entries are kept by default in the listings nothing shows, those shown longest ago going first. Each
  * listing counts as one more than its entries, so empty folders count too.
  */
 const MAX_KEPT = 20_000;
@@ -95,7 +95,8 @@ const withUnchanged = (before: FileEntry[] | undefined, listed: FileEntry[]) => 
  * `useSyncExternalStore` can compare a single folder's state by identity.
  *
  * Listings are kept once listed, so a folder opened again shows at once, and `open` lists it again
- * in the background. Those nothing shows are dropped beyond `MAX_KEPT` entries.
+ * in the background. Those nothing shows are dropped beyond `MAX_KEPT` entries, or as many as
+ * `setMaxKept` says.
  */
 export const createFolderStore = () => {
     const states = new Map<string, FolderState>();
@@ -110,6 +111,7 @@ export const createFolderStore = () => {
     const listeners = new Set<() => void>();
     // Counts the changes, for a view that reads many listings at once.
     let version = 0;
+    let maxKept = MAX_KEPT;
 
     const notify = () => {
         version += 1;
@@ -160,7 +162,7 @@ export const createFolderStore = () => {
     };
 
     /**
-     * Drops the listings nothing shows beyond `MAX_KEPT` entries, those shown longest ago first.
+     * Drops the listings nothing shows beyond `maxKept` entries, those shown longest ago first.
      * A listing only goes once no listing kept is found below it, through the folders it lists, so
      * `cachedTree` still finds every listing below a folder that changes.
      */
@@ -174,7 +176,7 @@ export const createFolderStore = () => {
             }
         });
 
-        if (kept <= MAX_KEPT) {
+        if (kept <= maxKept) {
             return;
         }
 
@@ -199,11 +201,11 @@ export const createFolderStore = () => {
 
         // Dropping a listing can leave the one it's in with nothing kept below it, so it's gone
         // through again until enough has gone or nothing more can.
-        while (kept > MAX_KEPT && going) {
+        while (kept > maxKept && going) {
             going = false;
 
             for (const key of recent) {
-                if (kept <= MAX_KEPT) {
+                if (kept <= maxKept) {
                     break;
                 }
 
@@ -507,6 +509,15 @@ export const createFolderStore = () => {
             if (dropped) {
                 notify();
             }
+        },
+
+        /**
+         * Sets how many entries are kept in the listings nothing shows, `MAX_KEPT` when omitted,
+         * dropping what's beyond a lower count at once.
+         */
+        setMaxKept(count = MAX_KEPT) {
+            maxKept = count;
+            evict();
         },
 
         /**

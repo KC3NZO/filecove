@@ -4,7 +4,7 @@ import { resultKey } from "../utils/search";
 
 import type { FileAdapter, SearchHit, SearchTarget, SectionSearch } from "../types";
 
-/** How long the typing has to stop for before a search everywhere runs, in ms. */
+/** How long the typing has to stop for before a search everywhere runs by default, in ms. */
 const SEARCH_DELAY = 300;
 
 /**
@@ -24,12 +24,18 @@ const NO_SEARCHES: ReadonlyMap<string, SectionSearch> = new Map();
 const NO_HITS: SearchHit[] = [];
 
 /**
- * Searches every target's section for `query`, with its adapter's `search`, a moment after the
+ * Searches every target's section for `query`, with its adapter's `search`, `delay` ms after the
  * typing stops, and again whenever `showHidden` or `version` changes, page after page until the
  * last. Each section is searched on its own, so one that's slow or fails holds up none of the
  * others. A section searched again keeps showing what it found before until its first page comes.
  */
-export const useSearch = (targets: readonly SearchTarget[], query: string, showHidden: boolean, version: number) => {
+export const useSearch = (
+    targets: readonly SearchTarget[],
+    query: string,
+    showHidden: boolean,
+    version: number,
+    delay = SEARCH_DELAY,
+) => {
     const [searches, setSearches] = useState(NO_SEARCHES);
     const runs = useRef(new Map<string, Run>());
 
@@ -149,10 +155,10 @@ export const useSearch = (targets: readonly SearchTarget[], query: string, showH
         });
         markSearching(due.map((target) => target.section.id));
 
-        const timer = setTimeout(() => due.forEach((target) => start(target, askedOf(target))), SEARCH_DELAY);
+        const timer = setTimeout(() => due.forEach((target) => start(target, askedOf(target))), delay);
 
         return () => clearTimeout(timer);
-    }, [targets, askedOf, start, update, markSearching]);
+    }, [targets, askedOf, start, update, markSearching, delay]);
 
     useEffect(() => {
         const current = runs.current;

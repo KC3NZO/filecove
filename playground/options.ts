@@ -1,3 +1,5 @@
+import type { FileManagerLimits } from "../src";
+
 // The playground's switches, read from the URL once, and combined as needed (`?rtl&locale=ar-EG`).
 const params = new URLSearchParams(window.location.search);
 
@@ -51,6 +53,23 @@ const relistParam = params.get("relistAfter");
 
 export const relistAfter =
     relistParam !== null && !Number.isNaN(Number(relistParam)) ? Number(relistParam) : undefined;
+
+/**
+ * `?limits=uploads:1,thumbnails:2`: the file manager's `limits`, each `key:number` of
+ * `FileManagerLimits` (`uploads`, `downloads`, `transfers`, `thumbnails`, `keptThumbnails`,
+ * `keptEntries`, `searchDelay`), `Infinity` for no limit. The defaults when left out. One upload or
+ * copy at a time shows the rest waiting in their panels, and `keptEntries:0` drops every listing
+ * once nothing shows it, so a folder opened again is listed afresh.
+ */
+export const limits: FileManagerLimits | undefined = params.has("limits")
+    ? Object.fromEntries(
+          (params.get("limits") ?? "")
+              .split(",")
+              .map((pair) => pair.split(":"))
+              .filter(([key, value]) => key && value && !Number.isNaN(Number(value)))
+              .map(([key, value]) => [key.trim(), Number(value)]),
+      )
+    : undefined;
 
 /**
  * `?lateSections`: the sections come 3 s after the page opens, as an app getting them from its

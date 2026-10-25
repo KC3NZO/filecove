@@ -66,6 +66,8 @@ interface SearchResultsProps {
     query: string;
     /** Changes whenever the file manager changes something, which searches again. */
     version: number;
+    /** How long the typing has to stop for before the sections are searched, in ms; `useSearch`'s when omitted. */
+    delay?: number;
     view: ViewMode;
     /** How far the view is zoomed, in steps from the size it starts at. */
     zoom: number;
@@ -179,6 +181,7 @@ const SearchResults = ({
     targets,
     query,
     version,
+    delay,
     view,
     zoom,
     sort,
@@ -192,7 +195,7 @@ const SearchResults = ({
     onShortcut,
     onSelectionChange,
 }: SearchResultsProps) => {
-    const { searches, retry } = useSearch(targets, query, showHidden, version);
+    const { searches, retry } = useSearch(targets, query, showHidden, version, delay);
     const cut = useContext(CutContext);
     const drag = useContext(DragContext);
     const moving = useContext(MovingContext);
