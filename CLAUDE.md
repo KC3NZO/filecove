@@ -52,7 +52,7 @@ Opening a file goes to the optional `onOpenFile(entry, context)`, or to the buil
 
 The optional `localeText` and `locale` set the component's own text, and the language numbers, sizes, dates and the order of names follow (see `locale.md`).
 
-The rest are optional, and MUI-like (see `props.md`): the location, the view, the order, hidden files, the hidden sidebar, the docked properties and their width, the tree's expanded folders, the content's selection, the search and each view's zoom can each be controlled (`location` / `defaultLocation` / `onLocationChange`, and so on), `apiRef` takes a `FileManagerApi` (navigate, back, forward, refresh, reveal, focus, download, actionContext, search, closeSearch, showShortcuts), `mainMenu` fills the sidebar's ☰ menu above its own "Keyboard shortcuts" (see `file-manager.md`), and the root takes `sx`, `ref` and the `div`'s own attributes. Props may change after mounting, `sections` and `adapter` included.
+The rest are optional, and MUI-like (see `props.md`): the location, the view, the order, hidden files, the hidden sidebar and its width, the docked properties and their width, the tree's expanded folders, the content's selection, the search and each view's zoom can each be controlled (`location` / `defaultLocation` / `onLocationChange`, and so on), `apiRef` takes a `FileManagerApi` (navigate, back, forward, refresh, reveal, focus, download, actionContext, search, closeSearch, showShortcuts), `mainMenu` fills the sidebar's ☰ menu above its own "Keyboard shortcuts" (see `file-manager.md`), and the root takes `sx`, `ref` and the `div`'s own attributes. Props may change after mounting, `sections` and `adapter` included.
 
 ## Conventions
 

@@ -55,7 +55,7 @@ To use a MUI component not used yet, read its source in `node_modules/@mui/mater
 
 ## What mirrors
 
-- The sidebar docks on the right, and its overlay slides in from the right. The tree indents from the right, with its chevrons and guide lines on the right and the section toggles on the left.
+- The sidebar docks on the right, and its overlay slides in from the right. Its edge is on its left (`insetInlineEnd`), widening it as it's dragged left, and Left and Right on it swap so it moves the way the arrow points, as the properties' do. The tree indents from the right, with its chevrons and guide lines on the right and the section toggles on the left.
 - The properties dock on the left, and their overlay slides in from the left (`--closed-shift`, as the sidebar's). Their edge is on their right (`insetInlineStart`), widening them as it's dragged right, and Left and Right on it swap so it moves the way the arrow points; a drag is measured on the screen from the pointer's `clientX`, the way read with `isRtl`.
 - Icons that point the way the text runs are mirrored in `Icon` (`MIRRORED`): back and forward, the chevrons, `move` and `selectMode`, as Material mirrors them (it has `DriveFileMoveRtl` and `ChecklistRtl`). A consumer's overrides of those names are mirrored too. Mirroring is `scale: -1 1` under `:dir(rtl)`, so the tree's chevrons still turn with `rotate`, the other way round (`--chevron-turn`), to point down.
 - The path bar reads from the root on the right. Its scroller is a reversed flex row, which lines the track up with its end and starts scrolled there, so a long path shows its last folders either way, with no `direction` trick, which would have turned the path round.
