@@ -1,4 +1,5 @@
 import { memo } from "react";
+import type { CSSProperties } from "react";
 
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
@@ -27,6 +28,7 @@ import { joinIsolated } from "../../../utils/bidi";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
 import { SORT_LABELS, toggleSortKey } from "../../../utils/sort";
+import { listIconSize } from "../../../utils/zoom";
 import Icon from "../../icons/icon";
 import ItemIcon from "./item-icon";
 
@@ -48,6 +50,8 @@ interface FileRowProps
     index: number;
     /** How many entries the folder lists. */
     count: number;
+    /** The side of the icon or thumbnail beside the name, in rem, as the zoom has it. */
+    iconSize: number;
     /** How far down the listbox the row sits, in px. */
     top: number;
     /** Whether the row has the view's Tab stop. */
@@ -63,7 +67,8 @@ interface FileRowProps
 
 // `--columns` holds the tracks shared by the header and every row. It grows with the view:
 // name and menu button, then size and modified, then type as well. A search everywhere's results
-// have a Location column after the name, sharing its room.
+// have a Location column after the name, sharing its room. `--icon-size`, set in `style`, is the
+// icon's side as the zoom has it, which the rows grow with.
 // Text can't be selected anywhere in the list, or Shift-click would select it across rows.
 const listSx: SxProps<Theme> = {
     "--columns": "minmax(0, 1fr) 2.5rem",
@@ -114,7 +119,7 @@ const rowsSx: SxProps<Theme> = {
 };
 
 // Placed at its line by `top`, set in `style`. Every row is as tall, since the list measures one
-// for them all.
+// for them all: room for the icon, or narrow, for the size and date folded under the name too.
 const rowSx: SxProps<Theme> = (theme) => ({
     position: "absolute",
     insetInline: 0,
@@ -122,7 +127,7 @@ const rowSx: SxProps<Theme> = (theme) => ({
     gridTemplateColumns: "var(--columns)",
     alignItems: "center",
     columnGap: 2,
-    minHeight: 52,
+    minHeight: "max(52px, calc(var(--icon-size) + 16px))",
     px: 1.5,
     borderRadius: 2,
     cursor: "default",
@@ -139,7 +144,7 @@ const rowSx: SxProps<Theme> = (theme) => ({
     },
     "@media (hover: none)": { "& [data-menu-button]": { opacity: 1 } },
     // A row scrolled into view stops below the sticky column header rather than under it.
-    [viewMedium]: { minHeight: 44, scrollMarginTop: "3rem" },
+    [viewMedium]: { minHeight: "calc(var(--icon-size) + 16px)", scrollMarginTop: "3rem" },
     ...cutMarker,
     ...arrivedMarker(theme),
     ...focusVisibleRing,
@@ -158,9 +163,9 @@ const nameCellSx: SxProps<Theme> = {
     "& > svg": { flexShrink: 0 },
 };
 
-// Lines the label up with the file names: 1.75rem icon plus the 12px gap.
+// Lines the label up with the file names: the icon plus the 12px gap.
 const nameHeaderSx: SxProps<Theme> = {
-    paddingInlineStart: 5,
+    paddingInlineStart: "calc(var(--icon-size) + 12px)",
 };
 
 // The arrow goes before the label here, so the label stays flush with the dates, aligned to the end.
@@ -268,6 +273,7 @@ const FileRow = memo(
         origin,
         index,
         count,
+        iconSize,
         top,
         focused,
         selected,
@@ -321,7 +327,7 @@ const FileRow = memo(
                 <Box sx={nameCellSx}>
                     <ItemIcon
                         entry={origin?.entry ?? entry}
-                        size={1.75}
+                        size={iconSize}
                         adapter={origin?.adapter ?? adapter}
                         view="list"
                     />
@@ -383,6 +389,7 @@ const FileList = ({
     entries,
     origins,
     lines,
+    zoom,
     label,
     focusId,
     selectedIds,
@@ -400,9 +407,10 @@ const FileList = ({
     onSortChange,
 }: FileViewProps) => {
     const { text } = useLocale();
+    const iconSize = listIconSize(zoom);
 
     return (
-        <Box sx={listSx} data-located={!!origins}>
+        <Box sx={listSx} style={{ "--icon-size": `${iconSize}rem` } as CSSProperties} data-located={!!origins}>
             <Box sx={headerRowSx} role="group" aria-label={text.sortBy}>
                 <ColumnHeader sortKey="name" sort={sort} sx={nameHeaderSx} onSortChange={onSortChange} />
                 {origins && <Box>{text.searchLocation}</Box>}
@@ -429,6 +437,7 @@ const FileList = ({
                             origin={origins?.[index]}
                             index={index}
                             count={entries.length}
+                            iconSize={iconSize}
                             top={index * lines.pitch}
                             focused={entry.id === focusId}
                             selected={selectedIds.has(entry.id)}

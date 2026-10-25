@@ -1,5 +1,6 @@
-import { useContext, useState } from "react";
+import { useContext, useId, useState } from "react";
 
+import Box from "@mui/material/Box";
 import Checkbox from "@mui/material/Checkbox";
 import Divider from "@mui/material/Divider";
 import ListItemIcon from "@mui/material/ListItemIcon";
@@ -9,22 +10,27 @@ import Menu from "@mui/material/Menu";
 import type { MenuProps } from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Radio from "@mui/material/Radio";
+import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
 import { insetLabelSx } from "../../../styles/direction";
-import { menuPaperSx } from "../../../styles/mixins";
+import { forcedColors, forcedEdge, menuPaperSx } from "../../../styles/mixins";
 import { isRtl } from "../../../utils/dom";
-import { formatShortcut } from "../../../utils/shortcut";
+import { ZOOM_ARIA_SHORTCUTS, formatShortcut } from "../../../utils/shortcut";
 import { SORT_KEYS, SORT_LABELS, withSortKey } from "../../../utils/sort";
+import { canZoom, zoomScale } from "../../../utils/zoom";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 
-import type { SortDirection, SortOrder } from "../../../types";
+import type { SortDirection, SortOrder, ViewMode, ViewZoom, ZoomStep } from "../../../types";
 
 interface ViewMenuProps {
+    /** The view shown, which the zoom items zoom. */
+    view: ViewMode;
+    zoom: ViewZoom;
     sort: SortOrder;
     showHidden: boolean;
     /** Whether the docked sidebar is hidden. */
@@ -35,6 +41,8 @@ interface ViewMenuProps {
     propertiesOpen: boolean;
     /** Whether the properties dock at the moment, read as the menu opens. */
     propertiesDocked: () => boolean;
+    /** Zooms the view shown a step in or out, or back to its start. */
+    onZoom: (step: ZoomStep) => void;
     onSortChange: (sort: SortOrder) => void;
     onToggleHidden: () => void;
     onToggleSidebar: () => void;
@@ -46,6 +54,7 @@ interface ViewMenuProps {
 const PROPERTIES_KEYS = ["Alt", "Enter"];
 
 const DIRECTIONS: readonly SortDirection[] = ["asc", "desc"];
+
 
 const slotProps: MenuProps["slotProps"] = {
     paper: { sx: menuPaperSx },
@@ -86,19 +95,59 @@ const shortcutSx: SxProps<Theme> = {
     color: "text.secondary",
 };
 
+// The zoom row under its subheader, across the menu: Zoom out, the size, which puts it back, and
+// Zoom in, as browsers' menus have it.
+const zoomRowSx: SxProps<Theme> = {
+    display: "flex",
+    alignItems: "center",
+    gap: 0.5,
+    px: 1,
+    pb: 0.5,
+};
+
+// Menu items, so the arrow keys reach them, shaped as round icon buttons.
+const zoomButtonSx: SxProps<Theme> = {
+    justifyContent: "center",
+    width: 32,
+    height: 32,
+    minHeight: 0,
+    p: 0,
+    borderRadius: "50%",
+};
+
+const zoomValueSx: SxProps<Theme> = {
+    flex: 1,
+    justifyContent: "center",
+    minWidth: "3.5rem",
+    height: 32,
+    minHeight: 0,
+    px: 1,
+    borderRadius: 4,
+    fontVariantNumeric: "tabular-nums",
+};
+
+// As `TooltipIconButton`'s: forced colors drop the tooltip's background.
+const tooltipSlotProps = (dir: "ltr" | "rtl" | undefined) => ({
+    popper: { dir },
+    tooltip: { sx: { [forcedColors]: forcedEdge } },
+});
+
 /**
  * The header's view options: how the content is sorted, whether hidden files show, while the
- * sidebar docks, whether it shows, and whether the properties show, docked, or else opening them
- * over the content. It stays open while options change, so the key and the direction can both be
- * picked in one go.
+ * sidebar docks, whether it shows, whether the properties show, docked, or else opening them over
+ * the content, and zooming the view shown. It stays open while options change, so the key and the
+ * direction can both be picked in one go, and the view zoomed by several steps.
  */
 const ViewMenu = ({
+    view,
+    zoom,
     sort,
     showHidden,
     sidebarHidden,
     sidebarDocked,
     propertiesOpen,
     propertiesDocked,
+    onZoom,
     onSortChange,
     onToggleHidden,
     onToggleSidebar,
@@ -112,8 +161,10 @@ const ViewMenu = ({
     // Read so too: docked properties are shown and hidden here, and otherwise opened over the content.
     const [propertiesDock, setPropertiesDock] = useState(false);
     const [rtl, setRtl] = useState(false);
-    const { text } = useLocale();
+    const { text, formatPercent } = useLocale();
     const dir = useContext(DirectionContext);
+    const percent = formatPercent(zoomScale(zoom, view));
+    const zoomId = useId();
     const keyLabels = SORT_LABELS[sort.key](text);
 
     return (
@@ -248,6 +299,48 @@ const ViewMenu = ({
                         </Typography>
                     </MenuItem>
                 )}
+                <Divider />
+                <ListSubheader id={zoomId} sx={subheaderSx}>
+                    {text.zoom}
+                </ListSubheader>
+                <Box component="li" role="group" aria-labelledby={zoomId} sx={zoomRowSx}>
+                    <Tooltip title={text.zoomOut} arrow enterDelay={500} slotProps={tooltipSlotProps(dir)}>
+                        <MenuItem
+                            component="div"
+                            disabled={!canZoom(zoom, view, -1)}
+                            aria-label={text.zoomOut}
+                            aria-keyshortcuts={ZOOM_ARIA_SHORTCUTS[-1]}
+                            sx={zoomButtonSx}
+                            onClick={() => onZoom(-1)}
+                        >
+                            <Icon name="zoomOut" fontSize="small" />
+                        </MenuItem>
+                    </Tooltip>
+                    <Tooltip title={text.zoomReset} arrow enterDelay={500} slotProps={tooltipSlotProps(dir)}>
+                        <MenuItem
+                            component="div"
+                            disabled={!canZoom(zoom, view, 0)}
+                            aria-label={text.zoomResetFrom(percent)}
+                            aria-keyshortcuts={ZOOM_ARIA_SHORTCUTS[0]}
+                            sx={zoomValueSx}
+                            onClick={() => onZoom(0)}
+                        >
+                            {percent}
+                        </MenuItem>
+                    </Tooltip>
+                    <Tooltip title={text.zoomIn} arrow enterDelay={500} slotProps={tooltipSlotProps(dir)}>
+                        <MenuItem
+                            component="div"
+                            disabled={!canZoom(zoom, view, 1)}
+                            aria-label={text.zoomIn}
+                            aria-keyshortcuts={ZOOM_ARIA_SHORTCUTS[1]}
+                            sx={zoomButtonSx}
+                            onClick={() => onZoom(1)}
+                        >
+                            <Icon name="zoomIn" fontSize="small" />
+                        </MenuItem>
+                    </Tooltip>
+                </Box>
             </Menu>
         </>
     );

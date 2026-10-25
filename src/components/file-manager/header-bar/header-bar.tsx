@@ -11,7 +11,7 @@ import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 import ViewMenu from "./view-menu";
 
-import type { SearchScope, SortOrder, ViewMode } from "../../../types";
+import type { SearchScope, SortOrder, ViewMode, ViewZoom, ZoomStep } from "../../../types";
 
 interface HeaderBarProps {
     /** Centre slot, the path bar, or the search field while searching. */
@@ -21,6 +21,7 @@ interface HeaderBarProps {
     /** Whether a folder is open, which the folder search and selection mode need. */
     hasFolder: boolean;
     view: ViewMode;
+    zoom: ViewZoom;
     sort: SortOrder;
     showHidden: boolean;
     /** Whether touch selection mode is on. */
@@ -40,6 +41,8 @@ interface HeaderBarProps {
     onBack: () => void;
     onForward: () => void;
     onToggleView: () => void;
+    /** Zooms the view shown a step in or out, or back to its start. */
+    onZoom: (step: ZoomStep) => void;
     onSortChange: (sort: SortOrder) => void;
     onToggleHidden: () => void;
     onToggleSelecting: () => void;
@@ -161,6 +164,7 @@ const HeaderBar = ({
     canGoForward,
     hasFolder,
     view,
+    zoom,
     sort,
     showHidden,
     selecting,
@@ -173,6 +177,7 @@ const HeaderBar = ({
     onBack,
     onForward,
     onToggleView,
+    onZoom,
     onSortChange,
     onToggleHidden,
     onToggleSelecting,
@@ -251,12 +256,15 @@ const HeaderBar = ({
                     <Icon name={view === "list" ? "gridView" : "listView"} fontSize="small" />
                 </TooltipIconButton>
                 <ViewMenu
+                    view={view}
+                    zoom={zoom}
                     sort={sort}
                     showHidden={showHidden}
                     sidebarHidden={sidebarHidden}
                     sidebarDocked={sidebarDocked}
                     propertiesOpen={propertiesOpen}
                     propertiesDocked={propertiesDocked}
+                    onZoom={onZoom}
                     onSortChange={onSortChange}
                     onToggleHidden={onToggleHidden}
                     onToggleSidebar={onToggleSidebar}

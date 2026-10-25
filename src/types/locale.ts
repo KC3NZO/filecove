@@ -241,6 +241,17 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     showHiddenFiles: string;
     /** Ctrl+H, shown beside "Show hidden files" as the language's keyboards name it ("Strg+H" in German). */
     showHiddenFilesShortcut: string;
+    /**
+     * The view menu's zoom row, between its label and the buttons zooming out (`zoomOut`) and in
+     * (`zoomIn`, both shared with the preview), and the name screen readers hear for the row.
+     */
+    zoom: string;
+    /** Ctrl+0, and the tooltip of the view menu's percentage, putting the list's or the grid's zoom back to its start. */
+    zoomReset: string;
+    /** The view menu's percentage for screen readers, with the size already formatted ("150%"). */
+    zoomResetFrom: (percent: string) => string;
+    /** Read to screen readers as the content zooms, with the size already formatted ("150%"). */
+    zoomChanged: (percent: string) => string;
     /** The path bar's name for screen readers. */
     path: string;
     folderMenu: string;
@@ -440,6 +451,7 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     previewLoadFailed: string;
     /** Why a text file couldn't be read, when its URL answered with an error. */
     serverError: (status: number, statusText: string) => string;
+    /** The preview's zoom buttons and keys, and the view menu's, which zoom the content. */
     zoomIn: string;
     zoomOut: string;
     zoomFit: string;

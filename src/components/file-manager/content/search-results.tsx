@@ -63,6 +63,8 @@ interface SearchResultsProps {
     /** Changes whenever the file manager changes something, which searches again. */
     version: number;
     view: ViewMode;
+    /** How far the view is zoomed, in steps from the size it starts at. */
+    zoom: number;
     sort: SortOrder;
     showHidden: boolean;
     hasActions: boolean;
@@ -178,6 +180,7 @@ const SearchResults = ({
     query,
     version,
     view,
+    zoom,
     sort,
     showHidden,
     hasActions,
@@ -351,6 +354,21 @@ const SearchResults = ({
             marquee.surfaceRef.current?.parentElement?.scrollTo({ top: 0 });
         }
     }, [shownFor, marquee.surfaceRef]);
+
+    // Zooming with the focus in the results keeps the focused one in view, as in a folder.
+    const zoomedFrom = useRef(zoom);
+
+    useEffect(() => {
+        if (zoomedFrom.current === zoom) {
+            return;
+        }
+
+        zoomedFrom.current = zoom;
+
+        if (focusWithin.current && focusId !== null) {
+            pendingScroll.current = { id: focusId, focus: false };
+        }
+    }, [zoom, focusId]);
 
     // Scrolls to the result asked for once it's rendered and the results are in their places.
     useEffect(() => {
@@ -764,6 +782,7 @@ const SearchResults = ({
                 entries={entries}
                 origins={origins}
                 lines={lines}
+                zoom={zoom}
                 label={tabTarget?.section.label ?? text.searchResults}
                 focusId={focusId}
                 selectedIds={selectedIds}

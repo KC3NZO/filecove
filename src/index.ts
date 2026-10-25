@@ -58,4 +58,5 @@ export type {
     TransferOptions,
     UploadOptions,
     ViewMode,
+    ViewZoom,
 } from "./types";

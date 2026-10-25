@@ -13,6 +13,7 @@ import { useLocale } from "../../hooks/use-locale";
 import { useProperties } from "../../hooks/use-properties";
 import { useThumbnail } from "../../hooks/use-thumbnail";
 import { createPropertiesCache } from "../../store/properties-cache";
+import { GRID_SIZES, GRID_START } from "../../styles/layout";
 import { focusOutline, visuallyHiddenSx } from "../../styles/mixins";
 import { isolate, joinIsolated } from "../../utils/bidi";
 import ToolbarActions from "../buttons/toolbar-actions";
@@ -86,9 +87,10 @@ interface Copied {
     id: number;
 }
 
-// The size the grid asks thumbnails for, in rem, so the panel shows the one the grid has, and asks
-// the adapter for nothing more.
-const GRID_THUMBNAIL = 3.5;
+// The size the grid asks thumbnails for at its start, in rem, so the panel shows the one the grid
+// has, or a larger one it kept zoomed in, and asks the adapter for nothing more unless the grid
+// was only ever zoomed out.
+const GRID_THUMBNAIL = GRID_SIZES[GRID_START].icon;
 
 /** How many of the host's actions with icons show as buttons in the narrow header. */
 const INLINE_ACTIONS = 2;

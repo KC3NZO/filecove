@@ -1,4 +1,5 @@
 import { memo } from "react";
+import type { CSSProperties } from "react";
 
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -19,6 +20,7 @@ import {
 } from "../../../styles/mixins";
 import { pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
+import { gridSize } from "../../../utils/zoom";
 import ItemIcon from "./item-icon";
 
 import type { EntryOrigin, FileEntry, FileViewProps } from "../../../types";
@@ -31,6 +33,8 @@ interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "o
     index: number;
     /** How many entries the folder lists. */
     count: number;
+    /** The side of the icon or thumbnail, in rem, as the zoom has it. */
+    iconSize: number;
     /** How far down the listbox the tile's line sits, in px. */
     top: number;
     /** The grid column the tile goes in, from 0. */
@@ -55,14 +59,15 @@ const gridSx: SxProps<Theme> = {
 
 // Only the tiles in or near view are rendered, each placed at its line and in its column, and the
 // listbox is as tall as all the lines (`useVirtualLines`). The columns are still the grid's own,
-// as many as fit, which the hook reads.
+// as many as fit, which the hook reads, as narrow as the zoom lets them be (`--column` and
+// `--wide-column`, set in `style`).
 const tilesSx: SxProps<Theme> = {
     position: "relative",
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(6.5rem, 1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(var(--column), 1fr))",
     gap: 0.5,
     [viewMedium]: {
-        gridTemplateColumns: "repeat(auto-fill, minmax(7.5rem, 1fr))",
+        gridTemplateColumns: "repeat(auto-fill, minmax(var(--wide-column), 1fr))",
         gap: 1,
     },
 };
@@ -115,6 +120,7 @@ const FileTile = memo(
         origin,
         index,
         count,
+        iconSize,
         top,
         column,
         focused,
@@ -160,7 +166,12 @@ const FileTile = memo(
                 }
             }}
         >
-            <ItemIcon entry={origin?.entry ?? entry} size={3.5} adapter={origin?.adapter ?? adapter} view="grid" />
+            <ItemIcon
+                entry={origin?.entry ?? entry}
+                size={iconSize}
+                adapter={origin?.adapter ?? adapter}
+                view="grid"
+            />
             <Typography variant="body2" sx={nameSx}>
                 <bdi>{entry.name}</bdi>
             </Typography>
@@ -177,6 +188,7 @@ const FileGrid = ({
     entries,
     origins,
     lines,
+    zoom,
     label,
     focusId,
     selectedIds,
@@ -189,44 +201,47 @@ const FileGrid = ({
     onSelect,
     onOpen,
     onMenu,
-}: FileViewProps) => (
-    <Box sx={gridSx}>
-        <Box
-            ref={lines.ref}
-            sx={tilesSx}
-            style={{ height: lines.height }}
-            role="listbox"
-            aria-label={label}
-            aria-multiselectable
-        >
-            {lines.indexes.map((index) => {
-                const entry = entries[index];
+}: FileViewProps) => {
+    const size = gridSize(zoom);
+    const style = {
+        height: lines.height,
+        "--column": `${size.column}rem`,
+        "--wide-column": `${size.wideColumn}rem`,
+    } as CSSProperties;
 
-                return (
-                    <FileTile
-                        key={entry.id}
-                        entry={entry}
-                        origin={origins?.[index]}
-                        index={index}
-                        count={entries.length}
-                        top={Math.floor(index / lines.columns) * lines.pitch}
-                        column={index % lines.columns}
-                        focused={entry.id === focusId}
-                        selected={selectedIds.has(entry.id)}
-                        cut={cutIds.has(entry.id)}
-                        arrived={!!arrivedIds?.has(entry.id)}
-                        adapter={adapter}
-                        draggable={draggable}
-                        dragged={draggedIds.has(entry.id)}
-                        dropTarget={dropTargetId === entry.id}
-                        onSelect={onSelect}
-                        onOpen={onOpen}
-                        onMenu={onMenu}
-                    />
-                );
-            })}
+    return (
+        <Box sx={gridSx}>
+            <Box ref={lines.ref} sx={tilesSx} style={style} role="listbox" aria-label={label} aria-multiselectable>
+                {lines.indexes.map((index) => {
+                    const entry = entries[index];
+
+                    return (
+                        <FileTile
+                            key={entry.id}
+                            entry={entry}
+                            origin={origins?.[index]}
+                            index={index}
+                            count={entries.length}
+                            iconSize={size.icon}
+                            top={Math.floor(index / lines.columns) * lines.pitch}
+                            column={index % lines.columns}
+                            focused={entry.id === focusId}
+                            selected={selectedIds.has(entry.id)}
+                            cut={cutIds.has(entry.id)}
+                            arrived={!!arrivedIds?.has(entry.id)}
+                            adapter={adapter}
+                            draggable={draggable}
+                            dragged={draggedIds.has(entry.id)}
+                            dropTarget={dropTargetId === entry.id}
+                            onSelect={onSelect}
+                            onOpen={onOpen}
+                            onMenu={onMenu}
+                        />
+                    );
+                })}
+            </Box>
         </Box>
-    </Box>
-);
+    );
+};
 
 export default FileGrid;

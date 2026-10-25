@@ -72,6 +72,10 @@ export const enUS: FileManagerLocaleText = {
     viewOptions: "View options",
     showHiddenFiles: "Show hidden files",
     showHiddenFilesShortcut: "Ctrl+H",
+    zoom: "Zoom",
+    zoomReset: "Reset zoom",
+    zoomResetFrom: (percent) => `${percent}, reset zoom`,
+    zoomChanged: (percent) => `Zoom ${percent}`,
     path: "Path",
     folderMenu: "Folder menu",
 

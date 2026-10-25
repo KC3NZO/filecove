@@ -4,6 +4,28 @@ import type { SelectModifiers } from "./selection";
 
 export type ViewMode = "list" | "grid";
 
+/**
+ * How far each view is zoomed, in steps from the size it starts at: 1 is a step larger, with
+ * bigger icons and thumbnails, and -1 a step smaller. The list goes from -1 to 2 and the grid from
+ * -1 to 3; a value beyond that is taken as the nearest end.
+ */
+export interface ViewZoom {
+    list: number;
+    grid: number;
+}
+
+/** A step of zooming: in (1), out (-1), or back to the size a view starts at (0). Internal. */
+export type ZoomStep = -1 | 0 | 1;
+
+/** The grid's sizes at one zoom step, in rem. Internal. */
+export interface GridSize {
+    /** The side of an entry's icon or thumbnail. */
+    icon: number;
+    /** The narrowest a column may be, and from `viewMedium` up. */
+    column: number;
+    wideColumn: number;
+}
+
 /** Which way the file manager's text runs, as the `dir` on or above it sets it. Internal. */
 export type TextDirection = "ltr" | "rtl";
 
@@ -97,6 +119,8 @@ export interface FileViewProps {
     origins?: readonly EntryOrigin[];
     /** Which of them to render, and where. */
     lines: VirtualLines;
+    /** How far the view is zoomed, in steps from the size it starts at (see `ViewZoom`). */
+    zoom: number;
     /** Names the list of entries for screen readers: the folder's name. */
     label: string;
     /** The entry that takes focus when the view is tabbed to, and that the arrow keys move from. */

@@ -27,7 +27,13 @@ import { usePreviewContents } from "../../../hooks/use-preview-contents";
 import { useSwipe } from "../../../hooks/use-swipe";
 import { useThumbnail } from "../../../hooks/use-thumbnail";
 import { folderKey } from "../../../store/folder-store";
-import { PREVIEW_HEADER_CONTAINER, previewHeaderMedium, previewHeaderWide } from "../../../styles/layout";
+import {
+    GRID_SIZES,
+    GRID_START,
+    PREVIEW_HEADER_CONTAINER,
+    previewHeaderMedium,
+    previewHeaderWide,
+} from "../../../styles/layout";
 import { dialogPaperSx, focusOutline, visuallyHiddenSx } from "../../../styles/mixins";
 import { runToolbarShortcut } from "../../../utils/action-groups";
 import { isolate, joinIsolated } from "../../../utils/bidi";
@@ -145,8 +151,9 @@ interface OutputProps extends PreviewerProps {
     previewer: FilePreviewer;
 }
 
-// The size the grid asks thumbnails for, in rem, so the preview shows the one the grid has.
-const GRID_THUMBNAIL = 3.5;
+// The size the grid asks thumbnails for at its start, in rem, so the preview shows the one the grid
+// has, or a larger one it kept zoomed in.
+const GRID_THUMBNAIL = GRID_SIZES[GRID_START].icon;
 
 /** The sizes a font's sample is shown at, in px. */
 const FONT_SIZES = [12, 18, 24, 36, 48, 72];

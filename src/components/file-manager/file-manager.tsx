@@ -24,6 +24,7 @@ import { useSetting } from "../../hooks/use-setting";
 import { useStableSet } from "../../hooks/use-stable-set";
 import { useTextDirection } from "../../hooks/use-text-direction";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
+import { useWheelZoom } from "../../hooks/use-wheel-zoom";
 import { createFolderStore, folderKey, keyFolder } from "../../store/folder-store";
 import { createPropertiesCache } from "../../store/properties-cache";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
@@ -47,9 +48,18 @@ import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "
 import { importsFrom } from "../../utils/sections";
 import { sameSearch } from "../../utils/search";
 import { sameIds } from "../../utils/sets";
-import { matchesShortcut, pastes, pressedKeys, pressesKey, showsShortcuts, typesInField } from "../../utils/shortcut";
+import {
+    matchesShortcut,
+    pastes,
+    pressedKeys,
+    pressesKey,
+    showsShortcuts,
+    typesInField,
+    zoomStep,
+} from "../../utils/shortcut";
 import { previewable } from "../../utils/preview";
 import { DEFAULT_SORT, entryComparator, sameSort } from "../../utils/sort";
+import { DEFAULT_ZOOM, canZoom, sameZoom, zoomScale, zoomedBy } from "../../utils/zoom";
 import DownloadPanel from "../downloads/download-panel";
 import UploadPanel from "../uploads/upload-panel";
 import Announcer from "./announcer";
@@ -109,6 +119,8 @@ import type {
     TreeReveal,
     UploadItem,
     ViewMode,
+    ViewZoom,
+    ZoomStep,
 } from "../../types";
 import type { MenuState } from "./context-menu/context-menu";
 import type { DeleteDialogState, DeleteRequest } from "./dialogs/delete-dialog";
@@ -204,6 +216,19 @@ interface BaseProps extends RootAttributes {
     defaultView?: ViewMode;
     /** Told the view the user switches to, with the header's button. */
     onViewChange?: (view: ViewMode) => void;
+    /**
+     * How far the list and the grid are each zoomed, in steps from the size they start at, for a
+     * consumer that keeps it. Zooming in makes icons, thumbnails and rows or tiles larger, and the
+     * text stays as it is.
+     */
+    zoom?: ViewZoom;
+    /** The zoom at first, when the file manager keeps it; both views at their start (0) when omitted. */
+    defaultZoom?: ViewZoom;
+    /**
+     * Told the zoom the user picks, with Ctrl+plus, Ctrl+minus and Ctrl+0 (⌘ on macOS) or Ctrl+wheel
+     * in the content, which then zoom it rather than the page, or with the view options menu.
+     */
+    onZoomChange?: (zoom: ViewZoom) => void;
     /**
      * The content's order, for a consumer that keeps it. Kept across folders. The sidebar tree and
      * the "Move to…" and "Copy to…" picker always go by name.
@@ -603,6 +628,9 @@ const FileManager = ({
     view: viewProp,
     defaultView = "list",
     onViewChange,
+    zoom: zoomProp,
+    defaultZoom = DEFAULT_ZOOM,
+    onZoomChange,
     sort: sortProp,
     defaultSort = DEFAULT_SORT,
     onSortChange,
@@ -796,6 +824,14 @@ const FileManager = ({
         value: viewProp,
         defaultValue: defaultView,
         onChange: onViewChange,
+    });
+    // Each view's own, as in GNOME Files, kept across folders.
+    const [zoom, setZoom] = useSetting({
+        name: "zoom",
+        value: zoomProp,
+        defaultValue: defaultZoom,
+        onChange: onZoomChange,
+        equal: sameZoom,
     });
     // Kept across folders, as the view is.
     const [sort, setSort] = useSetting({
@@ -1726,6 +1762,7 @@ const FileManager = ({
 
         const others = event.ctrlKey || event.metaKey || event.shiftKey;
         const plain = !others && !event.altKey;
+        const zooms = zoomStep(event);
         let handled = true;
 
         if (event.key === "F6" && !event.ctrlKey && !event.metaKey && !event.altKey) {
@@ -1754,6 +1791,9 @@ const FileManager = ({
             (!event.shiftKey || canSearchEverywhere)
         ) {
             openSearch(event.shiftKey ? "everywhere" : "folder");
+        } else if (zooms !== null && panelRef.current?.contains(event.target)) {
+            // Only in the content, so the browser's own zoom still works from anywhere else.
+            zoomContent(zooms);
         } else if (event.altKey && !others && event.key === "Enter") {
             toggleProperties();
         } else if (event.altKey && !others && event.key === (direction === "rtl" ? "ArrowRight" : "ArrowLeft")) {
@@ -1770,6 +1810,26 @@ const FileManager = ({
     };
 
     const toggleView = useCallback(() => setView(view === "list" ? "grid" : "list"), [view, setView]);
+
+    // Zooms the view shown a step in or out, or back to its start, and says how large it is now,
+    // which only shows otherwise.
+    const zoomContent = useCallback(
+        (step: ZoomStep) => {
+            if (!canZoom(zoom, view, step)) {
+                return;
+            }
+
+            const next = zoomedBy(zoom, view, step);
+
+            setZoom(next);
+            announce(localeValue.text.zoomChanged(localeValue.formatPercent(zoomScale(next, view))));
+        },
+        [zoom, view, setZoom, announce, localeValue],
+    );
+
+    // Ctrl+wheel and a touchpad's pinch over the content zoom it rather than the page.
+    useWheelZoom(panelRef, zoomContent);
+
     const toggleHidden = useCallback(() => setShowHidden(!showHidden), [showHidden, setShowHidden]);
     const closeMenu = useCallback(() => setMenu((prev) => prev && { ...prev, open: false }), []);
     const setSelecting = useCallback((on: boolean) => setSelectingKey(on ? openKey : null), [openKey]);
@@ -3069,6 +3129,7 @@ const FileManager = ({
                                             canGoForward={canGoForward}
                                             hasFolder={!!section}
                                             view={view}
+                                            zoom={zoom}
                                             sort={sort}
                                             showHidden={showHidden}
                                             selecting={selecting}
@@ -3081,6 +3142,7 @@ const FileManager = ({
                                             onBack={goBack}
                                             onForward={goForward}
                                             onToggleView={toggleView}
+                                            onZoom={zoomContent}
                                             onSortChange={setSort}
                                             onToggleHidden={toggleHidden}
                                             onToggleSelecting={toggleSelecting}
@@ -3105,6 +3167,7 @@ const FileManager = ({
                                                             query={searchedFor}
                                                             version={searchVersion}
                                                             view={view}
+                                                            zoom={zoom[view]}
                                                             sort={sort}
                                                             showHidden={showHidden}
                                                             hasActions={hasActions}
@@ -3126,6 +3189,7 @@ const FileManager = ({
                                                                 section={section}
                                                                 trail={place.trail}
                                                                 view={view}
+                                                                zoom={zoom[view]}
                                                                 sort={sort}
                                                                 showHidden={showHidden}
                                                                 query={searchScope === "folder" ? query : ""}

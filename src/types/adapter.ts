@@ -242,8 +242,10 @@ export interface ThumbnailOptions {
     view: ViewMode;
     /**
      * The side of the square the thumbnail is fitted into, in device pixels (CSS pixels times
-     * `devicePixelRatio`), for a backend that makes thumbnails to order. A larger picture is shrunk
-     * to fit and a smaller one is shown as it is, never stretched.
+     * `devicePixelRatio`), for a backend that makes thumbnails to order, or picks the nearest larger
+     * size it keeps. It grows as the view is zoomed in, and the file is asked about again then; a
+     * larger thumbnail already given serves a view zoomed out. A larger picture is shrunk to fit and
+     * a smaller one is shown as it is, never stretched.
      */
     size: number;
 }

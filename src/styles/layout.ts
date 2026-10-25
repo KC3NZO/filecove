@@ -1,3 +1,5 @@
+import type { GridSize } from "../types";
+
 /*
  * The file manager lays itself out from its own width rather than the viewport's, so it
  * behaves the same full-screen, in a split pane or inside a dialog. Two named containers
@@ -21,6 +23,23 @@ export const rootExtraWide = `@container ${ROOT_CONTAINER} (min-width: 1100px)`;
 export const viewMedium = `@container ${VIEW_CONTAINER} (min-width: 540px)`;
 /** Content view fits every column. */
 export const viewWide = `@container ${VIEW_CONTAINER} (min-width: 760px)`;
+
+/*
+ * The content's sizes at each zoom step, smallest first, in rem; zoom 0 is `LIST_START` and
+ * `GRID_START`, and the others are 75%, 150%, 200% and 300% of it, as the view menu shows them.
+ * The list's is the icon or thumbnail beside each name, which its rows grow with. The grid's
+ * columns leave a tile's name room for a few words beside a small icon, and hug a large one.
+ */
+export const LIST_ICON_SIZES: readonly number[] = [1.3125, 1.75, 2.625, 3.5];
+export const LIST_START = 1;
+export const GRID_SIZES: readonly GridSize[] = [
+    { icon: 2.625, column: 5.5, wideColumn: 6.5 },
+    { icon: 3.5, column: 6.5, wideColumn: 7.5 },
+    { icon: 5.25, column: 7.5, wideColumn: 9 },
+    { icon: 7, column: 9, wideColumn: 11 },
+    { icon: 10.5, column: 12.5, wideColumn: 14.5 },
+];
+export const GRID_START = 1;
 
 export const SIDEBAR_WIDTH = 248;
 

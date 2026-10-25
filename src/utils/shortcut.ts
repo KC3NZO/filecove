@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 
-import type { FileManagerLocaleText } from "../types";
+import type { FileManagerLocaleText, ZoomStep } from "../types";
 
 const LATIN = /^[a-z0-9]$/;
 
@@ -61,6 +61,38 @@ export const matchesShortcut = (event: KeyboardEvent, shortcut: string, key: str
  */
 export const showsShortcuts = (event: KeyboardEvent) =>
     event.ctrlKey && !event.metaKey && !event.altKey && (pressesKey(event, "?") || pressesKey(event, "؟"));
+
+// The keys that zoom the content with Ctrl: in ("+", or "=" beside it on a US layout), out, and back.
+const ZOOM_KEYS: Partial<Record<string, ZoomStep>> = { "+": 1, "=": 1, "-": -1, "0": 0 };
+
+/**
+ * The zoom step a key press asks of the content: Ctrl+plus (or Ctrl+=, beside it on a US layout)
+ * in, Ctrl+minus out, Ctrl+0 back to the view's start, ⌘ on macOS, as browsers zoom a page. Plus
+ * and minus wherever the layout has them, Shift or not, and 0 the key printed with it on any
+ * layout, so AZERTY's counts without Shift. Null for any other press.
+ */
+export const zoomStep = (event: KeyboardEvent): ZoomStep | null => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+        return null;
+    }
+
+    for (const key of pressedKeys(event)) {
+        const step = ZOOM_KEYS[key];
+
+        if (step !== undefined) {
+            return step;
+        }
+    }
+
+    return null;
+};
+
+/** The keys of each zoom step, as `aria-keyshortcuts` names them, "+" being "Plus". */
+export const ZOOM_ARIA_SHORTCUTS: Record<ZoomStep, string> = {
+    1: "Control+Plus Meta+Plus",
+    [-1]: "Control+- Meta+-",
+    0: "Control+0 Meta+0",
+};
 
 /**
  * Whether a key press comes from a field the user types in, where a shortcut without Ctrl or Alt,

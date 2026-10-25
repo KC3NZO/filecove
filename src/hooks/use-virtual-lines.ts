@@ -1,3 +1,6 @@
+import { useRef } from "react";
+import type { RefObject } from "react";
+
 import { gridColumns } from "../utils/dom";
 import { shownSpan, useScrollMeasure } from "./use-scroll-measure";
 
@@ -16,6 +19,16 @@ interface Measure {
     last: number;
 }
 
+/**
+ * The entry at the panel's top as the lines changed size, or how many a line holds, and how far
+ * down its line the top was, from 0 to 1, to put it back there once the list is as tall as the new
+ * lines make it.
+ */
+interface Anchor {
+    index: number;
+    fraction: number;
+}
+
 /** A box in viewport coordinates. */
 type Rect = Pick<DOMRectReadOnly, "left" | "top" | "right" | "bottom">;
 
@@ -27,13 +40,27 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 const sameMeasure = (a: Measure, b: Measure) =>
     a.columns === b.columns && a.height === b.height && a.pitch === b.pitch && a.first === b.first && a.last === b.last;
 
+/** How far the panel's top is down the list, in px; negative while the list starts below it. */
+const scrolledPast = ({ list, scroller }: ScrollTarget) =>
+    scroller ? scroller.getBoundingClientRect().top + scroller.clientTop - list.getBoundingClientRect().top : 0;
+
 /**
  * Measures the lines of `count` entries: how many entries a line holds from the list's column
  * tracks, how tall it is from the first entry rendered, the row gap between lines, and which
  * lines are in or near the panel.
+ *
+ * Lines that change size, or the number a line holds, as zooming or the panel resizing does, keep
+ * the entry at the panel's top where it was: it's noted against the `previous` measure as `anchor`,
+ * and scrolled back to on the measure after, once the list has been rendered as tall as the new
+ * lines make it, so the panel can scroll that far.
  */
-const measure = (target: ScrollTarget, count: number): Measure => {
-    const { list } = target;
+const measure = (
+    target: ScrollTarget,
+    count: number,
+    previous: Measure,
+    anchor: RefObject<Anchor | null>,
+): Measure => {
+    const { list, scroller } = target;
     const entry = list.firstElementChild;
     const columns = gridColumns(list);
     const height = entry ? entry.getBoundingClientRect().height : 0;
@@ -43,6 +70,23 @@ const measure = (target: ScrollTarget, count: number): Measure => {
     // Hidden, the list has nothing to measure, and only its first line is rendered until it shows.
     if (height === 0) {
         return { columns, height, pitch: 0, first: 0, last: 0 };
+    }
+
+    if (scroller && previous.pitch > 0 && (previous.pitch !== pitch || previous.columns !== columns)) {
+        const offset = scrolledPast(target);
+
+        anchor.current =
+            offset > 0
+                ? {
+                      index: Math.floor(offset / previous.pitch) * previous.columns,
+                      fraction: (offset % previous.pitch) / previous.pitch,
+                  }
+                : null;
+    } else if (scroller && anchor.current) {
+        const { index, fraction } = anchor.current;
+
+        anchor.current = null;
+        scroller.scrollTop += (Math.floor(index / columns) + fraction) * pitch - scrolledPast(target);
     }
 
     const span = shownSpan(target);
@@ -74,8 +118,15 @@ const measure = (target: ScrollTarget, count: number): Measure => {
  * rendered.
  */
 export const useVirtualLines = (count: number, keep: number[]) => {
+    // The measure last made, rendered or about to be, which the next is compared with.
+    const lastMeasure = useRef(UNMEASURED);
+    const anchor = useRef<Anchor | null>(null);
     const { ref, target, measured, settled } = useScrollMeasure(
-        (scrollTarget) => measure(scrollTarget, count),
+        (scrollTarget) => {
+            lastMeasure.current = measure(scrollTarget, count, lastMeasure.current, anchor);
+
+            return lastMeasure.current;
+        },
         UNMEASURED,
         sameMeasure,
     );

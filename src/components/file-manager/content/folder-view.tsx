@@ -59,6 +59,8 @@ interface FolderViewProps {
     section: Section;
     trail: FolderRef[];
     view: ViewMode;
+    /** How far the view is zoomed, in steps from the size it starts at. */
+    zoom: number;
     sort: SortOrder;
     /** Whether hidden entries are listed with the rest. */
     showHidden: boolean;
@@ -203,6 +205,7 @@ const FolderView = ({
     section,
     trail,
     view,
+    zoom,
     sort,
     showHidden,
     query,
@@ -397,6 +400,22 @@ const FolderView = ({
             pendingScroll.current = { id: focusId, focus: false };
         }
     }, [searchKey, focusId, marquee.surfaceRef]);
+
+    // Zooming keeps the entry at the panel's top there (`useVirtualLines`), and with the focus in
+    // the view, the focused entry in view too, as Ctrl+plus and Ctrl+minus zoom from there.
+    const zoomedFrom = useRef(zoom);
+
+    useEffect(() => {
+        if (zoomedFrom.current === zoom) {
+            return;
+        }
+
+        zoomedFrom.current = zoom;
+
+        if (focusWithin.current && focusId !== null) {
+            pendingScroll.current = { id: focusId, focus: false };
+        }
+    }, [zoom, focusId]);
 
     // Waits for the refreshed listing, which arrives after the entry was created or renamed. The
     // entry takes the focus too while the view has it, or is to take it.
@@ -1051,6 +1070,7 @@ const FolderView = ({
             <ContentView
                 entries={entries}
                 lines={lines}
+                zoom={zoom}
                 label={folder.name}
                 focusId={focusId}
                 selectedIds={selectedIds}

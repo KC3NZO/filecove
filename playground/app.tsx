@@ -31,6 +31,7 @@ import type {
     SelectionDetails,
     SortOrder,
     ViewMode,
+    ViewZoom,
 } from "../src";
 
 interface Selection {
@@ -120,6 +121,7 @@ const App = () => {
     const apiRef = useRef<FileManagerApi>(null);
     const [location, setLocation] = useHashLocation(shownSections);
     const [view, setView] = useStoredState<ViewMode>("view", "list");
+    const [zoom, setZoom] = useStoredState<ViewZoom>("zoom", { list: 0, grid: 0 });
     const [sort, setSort] = useStoredState<SortOrder>("sort", { key: "name", direction: "asc" });
     const [showHidden, setShowHidden] = useStoredState("showHidden", false);
     const [sidebarHidden, setSidebarHidden] = useStoredState("sidebarHidden", false);
@@ -218,6 +220,7 @@ const App = () => {
         ? {
               defaultLocation: location,
               defaultView: view,
+              defaultZoom: zoom,
               defaultSort: sort,
               defaultShowHidden: showHidden,
               defaultSidebarHidden: sidebarHidden,
@@ -230,6 +233,8 @@ const App = () => {
               onLocationChange: setLocation,
               view,
               onViewChange: setView,
+              zoom,
+              onZoomChange: setZoom,
               sort,
               onSortChange: setSort,
               showHidden,

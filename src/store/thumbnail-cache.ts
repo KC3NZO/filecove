@@ -8,9 +8,12 @@ const MAX_KEPT = 1000;
 
 /** A file's thumbnail for one view. */
 interface Slot {
-    /** Shown in place of the icon once the picture has loaded; null until then, or when there's none. */
+    /**
+     * Shown in place of the icon once the picture has loaded; null until then, or when there's
+     * none. While a larger one is asked for, the smaller one already here.
+     */
     url: string | null;
-    /** Made for a blob, and revoked as the slot goes. */
+    /** Made for a blob, and revoked as `url` gives way to another or the slot goes. */
     objectUrl: string | null;
     /** The file's size and date modified when it was asked for, so a changed file is asked for again. */
     version: string;
@@ -20,6 +23,7 @@ interface Slot {
     adapter: FileAdapter;
     entry: FileEntry;
     view: ViewMode;
+    /** The largest size wanted, which the picture is, or is being asked for at. */
     size: number;
     controller: AbortController | null;
 }
@@ -96,6 +100,8 @@ export const createThumbnailCache = () => {
     const start = (key: string, slot: Slot) => {
         const controller = new AbortController();
         const { signal } = controller;
+        // Made for a blob, and revoked here unless the slot takes it.
+        let objectUrl: string | null = null;
 
         slot.status = "loading";
         slot.controller = controller;
@@ -113,31 +119,40 @@ export const createThumbnailCache = () => {
 
                 const url = content.url === undefined ? URL.createObjectURL(content.blob) : content.url;
 
-                // Kept at once, so it's revoked whatever happens next.
                 if (content.blob) {
-                    slot.objectUrl = url;
+                    objectUrl = url;
                 }
 
                 await loadImage(url, signal);
 
                 return url;
             })
-            // A thumbnail that fails leaves the icon, with nothing to tell the user.
+            // A thumbnail that fails leaves the icon, or the smaller picture, with nothing to tell the user.
             .catch(() => null)
             .then((url) => {
-                // Dropped meanwhile, which revoked whatever it had made.
-                if (!loading.delete(slot)) {
-                    return;
+                // Dropped meanwhile, or asked for again at a larger size.
+                const current = slot.controller === controller && loading.delete(slot);
+
+                if (objectUrl && (!current || !url)) {
+                    URL.revokeObjectURL(objectUrl);
                 }
 
-                if (!url && slot.objectUrl) {
-                    URL.revokeObjectURL(slot.objectUrl);
-                    slot.objectUrl = null;
+                if (!current) {
+                    return;
                 }
 
                 slot.status = "done";
                 slot.controller = null;
-                slot.url = url;
+
+                if (url) {
+                    if (slot.objectUrl) {
+                        URL.revokeObjectURL(slot.objectUrl);
+                    }
+
+                    slot.url = url;
+                    slot.objectUrl = objectUrl;
+                }
+
                 pump();
                 evict();
                 notify(key);
@@ -201,8 +216,9 @@ export const createThumbnailCache = () => {
 
         /**
          * Asks for a file's thumbnail for a view, `size` device pixels square, unless it's kept or
-         * on its way. Returns the function to call once the entry no longer shows it, which stops
-         * a request no other entry is waiting on.
+         * on its way, at that size or larger. One kept smaller, as a view zoomed in wants, is asked
+         * for again at this size, and shows meanwhile. Returns the function to call once the entry
+         * no longer shows it, which stops a request no other entry is waiting on.
          */
         want(adapter: FileAdapter, entry: FileEntry, view: ViewMode, size: number) {
             const key = keyOf(adapter, view, entry.id);
@@ -218,6 +234,20 @@ export const createThumbnailCache = () => {
             if (slot) {
                 // Moved to the end, as the most recently wanted.
                 slots.delete(key);
+
+                // A file with none has none at any size.
+                if (size > slot.size && (slot.status !== "done" || slot.url)) {
+                    slot.size = size;
+                    slot.entry = entry;
+
+                    if (slot.status !== "queued") {
+                        slot.controller?.abort();
+                        slot.controller = null;
+                        loading.delete(slot);
+                        slot.status = "queued";
+                        queue.add(key);
+                    }
+                }
             } else {
                 slot = {
                     url: null,

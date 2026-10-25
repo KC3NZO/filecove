@@ -85,6 +85,10 @@ const ownSections = ({ text, rtl, canSearchEverywhere, choosesSections, canPrevi
                 { label: text.keyboardShortcuts, combos: [["Ctrl", "?"]] },
                 { label: text.shortcutToggleHidden, combos: [["Ctrl", "H"]] },
                 { label: text.shortcutToggleProperties, combos: [["Alt", "Enter"]] },
+                // In the content only, so the browser's own zoom still works elsewhere.
+                { label: text.zoomIn, combos: [["Ctrl", "+"]] },
+                { label: text.zoomOut, combos: [["Ctrl", "-"]] },
+                { label: text.zoomReset, combos: [["Ctrl", "0"]] },
                 { label: text.shortcutContextMenu, combos: [["ContextMenu"], ["Shift", "F10"]] },
                 ...(canUpload
                     ? [{ label: text.shortcutPasteFiles, combos: [["Ctrl", "V"], ["Shift", "Insert"]] }]
