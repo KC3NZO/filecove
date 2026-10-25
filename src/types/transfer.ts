@@ -34,3 +34,9 @@ export interface TransferItem {
     /** Why it failed, as the adapter said, to show beside it. */
     error?: string;
 }
+
+/**
+ * Ids of the entries the moves in the transfer queue are moving, waiting or under way, by the
+ * adapter serving them, so every view marks them and nothing else is done to them meanwhile.
+ */
+export type MovingIds = ReadonlyMap<FileAdapter, ReadonlySet<string>>;

@@ -19,6 +19,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useData, useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
+import { useMovingIds } from "../../../hooks/use-moving-ids";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { dialogActionsSx } from "../../../styles/direction";
@@ -27,7 +28,7 @@ import { isolate } from "../../../utils/bidi";
 import { isHidden } from "../../../utils/hidden";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { folderLeft, folderOf } from "../../../utils/navigation";
-import { folderWritable, lockedFolder } from "../../../utils/permissions";
+import { folderMoving, folderWritable, lockedFolder } from "../../../utils/permissions";
 import { nameOrder } from "../../../utils/sort";
 import { findClashes, mergedFolders } from "../../../utils/transfer";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
@@ -111,10 +112,15 @@ interface PickerItem {
     name: string;
     /** The section the row opens, on the list of sections. */
     section?: Section;
-    /** One of the entries being copied or moved, which can't be opened. */
+    /**
+     * One of the entries being copied or moved, or a folder a move under way is moving, which
+     * can't be opened.
+     */
     disabled?: boolean;
     /** A folder nothing can be put in, shown with a lock, which can be gone through but not chosen. */
     locked?: boolean;
+    /** A folder a move under way is moving, which says so. */
+    moving?: boolean;
 }
 
 const NO_MENU: OpenMenu = () => false;
@@ -274,12 +280,17 @@ const TransferDialog = ({
                 .sort(nameOrder(locale)),
         [state?.entries, showHidden, locale],
     );
-    const movingIds = useMemo(() => new Set(entries.map((entry) => entry.id)), [entries]);
+    const pickedIds = useMemo(() => new Set(entries.map((entry) => entry.id)), [entries]);
+    // Folders moves under way are moving, which take nothing in meanwhile. The sections offered
+    // share the entries' adapter.
+    const movingIds = useMovingIds(section);
     // All of the folder has come, not just some of its pages, so its names can be checked for clashes.
     const listed = !!state?.entries && !state.partial;
     const failed = state?.status === "error";
-    // Read as the folder's listing comes, which may bring its own permissions.
-    const readOnly = place !== null && !folderWritable(store, target, place.trail);
+    // Read as the folder's listing comes, which may bring its own permissions. A folder being moved
+    // says so rather than that it's read-only.
+    const moving = place !== null && folderMoving(target, place.trail, movingIds);
+    const readOnly = place !== null && !folderWritable(store, target, place.trail, movingIds);
 
     // Ids are unique within an adapter, so the same folder is the same id whichever section shows it.
     const sameFolder = place !== null && targetFolder.id === sourceId;
@@ -310,10 +321,11 @@ const TransferDialog = ({
                 : (folders ?? []).map((folder) => ({
                       id: folder.id,
                       name: folder.name,
-                      disabled: movingIds.has(folder.id),
+                      disabled: pickedIds.has(folder.id) || movingIds.has(folder.id),
                       locked: lockedFolder(folder),
+                      moving: movingIds.has(folder.id),
                   })),
-        [choosingSection, destinations, folders, movingIds],
+        [choosingSection, destinations, folders, pickedIds, movingIds],
     );
 
     // The rows that can be opened. The row last focused has the Tab stop, or else the first.
@@ -575,7 +587,9 @@ const TransferDialog = ({
                                     sx={rowSx}
                                     disabled={item.disabled}
                                     tabIndex={item.id === tabStop ? 0 : -1}
-                                    aria-description={item.locked ? text.folderLocked : undefined}
+                                    aria-description={
+                                        item.moving ? text.entryMoving : item.locked ? text.folderLocked : undefined
+                                    }
                                     data-row-id={item.id}
                                     onClick={() => openItem(item)}
                                 >
@@ -680,7 +694,7 @@ const TransferDialog = ({
                     <DialogActions sx={dialogActionsSx}>
                         {readOnly && (
                             <Typography id={readOnlyId} variant="body2" sx={readOnlySx}>
-                                {text.pickerReadOnly}
+                                {moving ? text.pickerMoving : text.pickerReadOnly}
                             </Typography>
                         )}
                         <Button color="inherit" onClick={onClose}>

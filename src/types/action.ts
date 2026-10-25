@@ -16,12 +16,22 @@ export interface ActionContext {
     folder: FolderRef;
     section: Section;
     /**
-     * Whether nothing in `folder` can be changed: the section is `readOnly`, or the folder's
-     * permissions refuse writing (`EntryPermissions.write`). Creating, uploading, pasting, renaming,
-     * moving out and deleting are missing then; an action of the app's own that changes the folder,
-     * such as "Compress…" or "New file", can hide with `visible: (context) => !context.readOnly`.
+     * Whether nothing in `folder` can be changed: the section is `readOnly`, the folder's
+     * permissions refuse writing (`EntryPermissions.write`), or a move under way is moving it
+     * (`moving`). Creating, uploading, pasting, renaming, moving out and deleting are missing then;
+     * an action of the app's own that changes the folder, such as "Compress…" or "New file", can
+     * hide with `visible: (context) => !context.readOnly`.
      */
     readOnly: boolean;
+    /**
+     * Whether a move the file manager has under way, or waiting its turn, is moving `entries`, or
+     * `folder` with everything in it, so their ids may soon name nothing. They show faded until it
+     * ends, and renaming, copying, cutting, moving and deleting them are missing meanwhile, as are
+     * dragging them and pasting them when they were cut or copied before; opening, previewing,
+     * downloading and the properties stay. An action of the app's own working on them, such as
+     * "Compress…", can hide with `visible: (context) => !context.moving`.
+     */
+    moving: boolean;
     /** Lists `folder` again, e.g. after the action changed its contents. */
     refresh: () => void;
     /** Opens a folder entry of `folder` in the file manager. */

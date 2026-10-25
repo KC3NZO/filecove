@@ -191,7 +191,13 @@ const App = () => {
         if (here?.createFolder) {
             here.createFolder();
         } else {
-            setNotice({ open: true, message: here?.readOnly ? "This folder is read-only" : "No folder can be made here" });
+            const message = here?.moving
+                ? "This folder is being moved"
+                : here?.readOnly
+                  ? "This folder is read-only"
+                  : "No folder can be made here";
+
+            setNotice({ open: true, message });
         }
     };
 

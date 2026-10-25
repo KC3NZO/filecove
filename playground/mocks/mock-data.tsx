@@ -394,8 +394,9 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 label: "Compress…",
                 icon: <FolderZipOutlined />,
                 target: "selection",
-                // The archive goes beside the entries, which a read-only folder can't take.
-                visible: (context) => !context.readOnly,
+                // The archive goes beside the entries, which a read-only folder can't take, and is
+                // made of them, which a move under way is taking elsewhere.
+                visible: (context) => !context.readOnly && !context.moving,
                 onSelect: (context) => notify(`Compress ${names(context)}`),
             },
         ],
@@ -497,8 +498,9 @@ export const createPreviewActions = (notify: (message: string) => void): ActionG
             {
                 id: "edit",
                 label: "Open in editor",
-                // Only for a file that can be written, as an editor saves it.
-                visible: (context) => context.entries.every((entry) => entry.permissions?.write !== false),
+                // Only for a file that can be written, as an editor saves it, and isn't being moved.
+                visible: (context) =>
+                    !context.moving && context.entries.every((entry) => entry.permissions?.write !== false),
                 onSelect: (context) => {
                     context.closePreview?.();
                     notify(`Open ${names(context)} in an editor`);

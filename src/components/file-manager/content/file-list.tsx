@@ -19,13 +19,14 @@ import {
     forcedColors,
     forcedSelected,
     hoverBackground,
+    movingMarker,
     selectedBackground,
     selectedHoverBackground,
     stripeBackground,
     visuallyHiddenSx,
 } from "../../../styles/mixins";
 import { joinIsolated } from "../../../utils/bidi";
-import { lockedFolder } from "../../../utils/permissions";
+import { drawnState } from "../../../utils/permissions";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
 import { SORT_LABELS, toggleSortKey } from "../../../utils/sort";
@@ -59,6 +60,8 @@ interface FileRowProps
     focused: boolean;
     selected: boolean;
     cut: boolean;
+    /** Being moved by a move under way, itself or with a folder it's in. */
+    moving: boolean;
     /** Whether the entry was just uploaded, and is highlighted for a moment. */
     arrived: boolean;
     dragged: boolean;
@@ -147,6 +150,7 @@ const rowSx: SxProps<Theme> = (theme) => ({
     // A row scrolled into view stops below the sticky column header rather than under it.
     [viewMedium]: { minHeight: "calc(var(--icon-size) + 16px)", scrollMarginTop: "3rem" },
     ...cutMarker,
+    ...movingMarker,
     ...arrivedMarker(theme),
     ...focusVisibleRing,
     ...dragMarkers(theme),
@@ -279,6 +283,7 @@ const FileRow = memo(
         focused,
         selected,
         cut,
+        moving,
         arrived,
         adapter,
         draggable,
@@ -300,8 +305,8 @@ const FileRow = memo(
                 // Only some rows are rendered, so each says where it is among all of them.
                 aria-setsize={count}
                 aria-posinset={index + 1}
-                // Its lock is only drawn.
-                aria-description={lockedFolder(origin?.entry ?? entry) ? text.folderLocked : undefined}
+                // Its lock and its fading while it's moved are only drawn.
+                aria-description={drawnState(text, origin?.entry ?? entry, moving)}
                 tabIndex={focused ? 0 : -1}
                 // The whole row is the entry's: it's dragged by any part, and a marquee only starts from
                 // the empty space around the rows.
@@ -311,6 +316,7 @@ const FileRow = memo(
                 data-striped={index % 2 === 0}
                 data-selected={selected}
                 data-cut={cut}
+                data-moving={moving}
                 data-arrived={arrived}
                 data-dragged={dragged}
                 data-drop-target={dropTarget}
@@ -397,6 +403,7 @@ const FileList = ({
     focusId,
     selectedIds,
     cutIds,
+    movingIds,
     arrivedIds,
     adapter,
     draggable,
@@ -445,6 +452,7 @@ const FileList = ({
                             focused={entry.id === focusId}
                             selected={selectedIds.has(entry.id)}
                             cut={cutIds.has(entry.id)}
+                            moving={movingIds.has(entry.id)}
                             arrived={!!arrivedIds?.has(entry.id)}
                             adapter={adapter}
                             draggable={draggable}

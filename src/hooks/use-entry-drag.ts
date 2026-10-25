@@ -79,7 +79,8 @@ const speedAt = (offset: number) => (offset < EDGE ? Math.ceil(((EDGE - Math.max
  * it is, for files dragged in from outside.
  *
  * Entries `movable` says can't be moved out of their folder are copied, with no key held, and
- * entries that can be neither moved nor copied aren't dragged at all.
+ * entries that can be neither moved nor copied aren't dragged at all, nor are those `held` says
+ * are tied up meanwhile, as entries a move under way is moving are.
  *
  * A mouse drag is the browser's own. Its image is taken from `previewRef`'s element, which the
  * caller renders while `preview` is set, for a single frame.
@@ -97,6 +98,7 @@ export const useEntryDrag = (
     dropInto: DropInto,
     uploadInto: DragContextValue["uploadInto"],
     movable: (dragged: DraggedEntries) => boolean,
+    held: (dragged: DraggedEntries) => boolean,
     rootRef: RefObject<HTMLElement | null>,
 ) => {
     const previewRef = useRef<HTMLDivElement>(null);
@@ -117,14 +119,14 @@ export const useEntryDrag = (
         setDragged(null);
     }, []);
 
-    // What a drag picks up, unless its entries can be neither moved nor copied.
+    // What a drag picks up, unless its entries are held up, or can be neither moved nor copied.
     const take = useCallback(
         ({ section, trail, entries }: DragSource): DraggedEntries | null => {
             const taken = { section, adapter: section.adapter ?? adapter, trail, entries };
 
-            return taken.adapter.copy || movable(taken) ? taken : null;
+            return !held(taken) && (taken.adapter.copy || movable(taken)) ? taken : null;
         },
-        [adapter, movable],
+        [adapter, movable, held],
     );
 
     // Mouse only: a touch press scrolls or, held, selects, and a touch drag is `touch`'s.

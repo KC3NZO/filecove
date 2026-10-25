@@ -17,6 +17,7 @@ import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
 import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
+import { useMovingIds } from "../../../hooks/use-moving-ids";
 import { useSelection } from "../../../hooks/use-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
@@ -27,6 +28,7 @@ import { isHidden } from "../../../utils/hidden";
 import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { belowElement, insideElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
+import { folderMoving } from "../../../utils/permissions";
 import { holdsTerms, searchTerms } from "../../../utils/search";
 import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import { sameIds } from "../../../utils/sets";
@@ -235,6 +237,7 @@ const FolderView = ({
     // again in the background, which may bring entries the listing saved doesn't have yet.
     const listingSettled = state?.status === "error" || (state?.status === "ready" && !state.checking);
     const cutIds = useCutIds(section);
+    const movingIds = useMovingIds(section);
     const draggedIds = useDraggedIds(section);
     const data = useContext(DataContext);
     const drag = useContext(DragContext);
@@ -277,6 +280,13 @@ const FolderView = ({
                 ? shown.filter((entry) => holdsTerms(foldedNames.get(entry.id) ?? "", terms))
                 : shown,
         [shown, foldedNames, terms],
+    );
+
+    // Everything in a folder being moved goes with it, so it's all marked as being moved.
+    const folderMoved = folderMoving(section, trail, movingIds);
+    const movedHere = useMemo(
+        () => (folderMoved ? new Set(state?.entries?.map((entry) => entry.id)) : movingIds),
+        [folderMoved, state?.entries, movingIds],
     );
 
     // Where each entry is listed, to find entries by id without searching a large folder.
@@ -1075,6 +1085,7 @@ const FolderView = ({
                 focusId={focusId}
                 selectedIds={selectedIds}
                 cutIds={cutIds}
+                movingIds={movedHere}
                 arrivedIds={arrivedIds}
                 adapter={adapter}
                 draggable={draggable}

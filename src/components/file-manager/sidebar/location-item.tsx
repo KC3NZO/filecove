@@ -22,6 +22,7 @@ import { useDropTarget } from "../../../hooks/use-drop-target";
 import { useData } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
 import { useLongPress } from "../../../hooks/use-long-press";
+import { useMovingIds } from "../../../hooks/use-moving-ids";
 import { folderKey } from "../../../store/folder-store";
 import {
     cutMarker,
@@ -30,6 +31,7 @@ import {
     forcedColors,
     forcedSelected,
     hoverBackground,
+    movingMarker,
     selectedBackground,
     selectedHoverBackground,
 } from "../../../styles/mixins";
@@ -37,7 +39,7 @@ import { isRtl } from "../../../utils/dom";
 import { isMenuKey } from "../../../utils/keyboard";
 import { belowElement, pointerPosition, pressPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
-import { lockedFolder } from "../../../utils/permissions";
+import { drawnState, entriesMoving, folderMoving, lockedFolder } from "../../../utils/permissions";
 import { selectModifiers } from "../../../utils/selection";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
@@ -120,7 +122,10 @@ interface TreeItemProps {
     /** Where the row goes, and whether it expands. */
     row: SectionRow | FolderRow;
     icon: ReactNode;
-    /** Read after its name, for what its icon shows besides, such as a read-only folder's lock. */
+    /**
+     * Read after its name, for what only its look shows, such as a read-only folder's lock, or its
+     * fading while it's moved.
+     */
     description?: string;
     /** Part of the tree's selection. */
     selected: boolean;
@@ -128,6 +133,8 @@ interface TreeItemProps {
     open: boolean;
     /** Cut to the clipboard, and not pasted yet. */
     cut?: boolean;
+    /** Being moved by a move under way, itself or with a folder it's in. */
+    moving?: boolean;
     /** Can be dragged, taking its folder along. */
     draggable?: boolean;
     /** Its folder is among the entries being dragged. */
@@ -186,6 +193,7 @@ const rowSx: SxProps<Theme> = (theme) => ({
     // The open folder keeps its accent text when the selection moves to other folders.
     '&[data-open="true"]': { color: "primary.main" },
     ...cutMarker,
+    ...movingMarker,
     '[role="treeitem"]:focus-visible > &': focusOutline,
     ...dragMarkers(theme),
     // The open folder's accent text, then the selection over it.
@@ -327,6 +335,7 @@ const TreeItem = ({
     selected,
     open,
     cut = false,
+    moving = false,
     draggable = false,
     dragged = false,
     dropTarget,
@@ -433,6 +442,7 @@ const TreeItem = ({
                 data-selected={selected}
                 data-open={open}
                 data-cut={cut}
+                data-moving={moving}
                 data-dragged={dragged}
                 data-drop-target={dropTarget}
                 onPointerDownCapture={(event) => {
@@ -532,11 +542,13 @@ const FolderItem = memo(
     }: FolderItemProps) => {
         const { id: key, section, entry, parentTrail, trail, siblings, siblingKeys, expandable, expanded } = row;
         const cutIds = useCutIds(section);
+        const movingIds = useMovingIds(section);
         const draggedIds = useDraggedIds(section);
         const data = useContext(DataContext);
         const drag = useContext(DragContext);
         const { text } = useLocale();
         const locked = lockedFolder(entry);
+        const moving = entriesMoving(section, parentTrail, [entry], movingIds);
 
         // A drag moves or copies, so it needs an adapter that does one or the other.
         const adapter = section.adapter ?? data?.adapter;
@@ -620,10 +632,11 @@ const FolderItem = memo(
                         <FolderTypeIcon folderName={entry.name} size="1.125rem" />
                     </LockedIcon>
                 }
-                description={locked ? text.folderLocked : undefined}
+                description={drawnState(text, entry, moving)}
                 selected={selected}
                 open={key === openKey}
                 cut={cutIds.has(entry.id)}
+                moving={moving}
                 draggable={draggable}
                 dragged={draggedIds.has(entry.id)}
                 dropTarget={drop.dropKey !== null}
@@ -660,6 +673,10 @@ const SectionItem = memo(
     }: SectionItemProps) => {
         const { id: key, section, expandable, expanded } = row;
         const drag = useContext(DragContext);
+        const movingIds = useMovingIds(section);
+        const { text } = useLocale();
+        // A section is rooted in a folder of its adapter's, which a move may be moving.
+        const moving = folderMoving(section, ROOT_TRAIL, movingIds);
 
         // Dropped onto, the entries go into the root. Its row isn't an entry, so it's never dragged.
         const drop = useDropTarget({
@@ -692,6 +709,8 @@ const SectionItem = memo(
                 variant="section"
                 row={row}
                 icon={<IconSlot icon={section.icon ?? "folder"} />}
+                description={moving ? text.entryMoving : undefined}
+                moving={moving}
                 selected={selection ? selection.ids.has(key) : key === openKey}
                 open={key === openKey}
                 dropTarget={drop.dropKey !== null}

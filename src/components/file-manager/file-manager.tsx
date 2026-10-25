@@ -12,6 +12,7 @@ import { DataContext } from "../../contexts/data-context";
 import { DirectionContext } from "../../contexts/direction-context";
 import { DragContext } from "../../contexts/drag-context";
 import { LocaleContext } from "../../contexts/locale-context";
+import { MovingContext } from "../../contexts/moving-context";
 import { useAnnouncer } from "../../hooks/use-announcer";
 import { useClipboardFollow } from "../../hooks/use-clipboard-follow";
 import { carriesFiles } from "../../hooks/use-drop-target";
@@ -46,7 +47,7 @@ import {
 } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
-import { allows, entriesAllow, folderWritable } from "../../utils/permissions";
+import { allows, entriesAllow, entriesMoving, folderMoving, folderWritable } from "../../utils/permissions";
 import { importsFrom } from "../../utils/sections";
 import { sameSearch } from "../../utils/search";
 import { sameIds } from "../../utils/sets";
@@ -61,6 +62,7 @@ import {
 } from "../../utils/shortcut";
 import { previewable } from "../../utils/preview";
 import { DEFAULT_SORT, entryComparator, sameSort } from "../../utils/sort";
+import { isMoving, movingIds, movingThrough } from "../../utils/transfer";
 import { DEFAULT_ZOOM, canZoom, sameZoom, zoomScale, zoomedBy } from "../../utils/zoom";
 import DownloadPanel from "../downloads/download-panel";
 import TransferPanel from "../transfers/transfer-panel";
@@ -416,6 +418,9 @@ interface UploadPlace {
      */
     name?: string;
 }
+
+/** What's done as a copy or move in the transfer queue ends. */
+type TransferEnded = (item: TransferItem, outcome: TransferOutcome, items: TransferItem[]) => void;
 
 /** What a copy or move in the transfer queue is of, and where it goes, for when it ends. */
 interface TransferPlace {
@@ -911,6 +916,19 @@ const FileManager = ({
     const { announcement, announce } = useAnnouncer(() => (previewing?.open ? "preview" : "root"));
     // A folder just created, which the sidebar tree scrolls to once it shows its row.
     const [treeReveal, setTreeReveal] = useState<TreeReveal | null>(null);
+    // Copies and moves run in the background while the user browses, a few at once, and the panel
+    // shows those that take a moment or failed. What one ending does needs much made further down
+    // (`handleTransferEnded`), which it's handed once that's made.
+    const transferEnded = useRef<TransferEnded | null>(null);
+    const transfers = useTransferQueue((item, outcome, items) => transferEnded.current?.(item, outcome, items));
+    const shownTransfers = useMemo(() => transfers.items.filter((item) => item.shown), [transfers.items]);
+    // The entries moves under way are moving, which are marked and left alone until they end. Made
+    // afresh only as moves start and end, not with every bit of progress.
+    const movesKey = transfers.items
+        .filter(isMoving)
+        .map((item) => item.id)
+        .join(" ");
+    const moving = useMemo(() => movingIds(transfers.items), [movesKey]);
     // The browser's file picker, and where the files picked with it go.
     const pickerRef = useRef<HTMLInputElement>(null);
     const pickedInto = useRef<((dropped: DroppedFiles) => void) | null>(null);
@@ -1999,10 +2017,10 @@ const FileManager = ({
     // checked, or tries a failed copy or move again (`retrying`).
     const offerPaste = useCallback(
         (pasted: Clipboard, target: Section, trail: FolderRef[], retrying?: number) =>
-            !pasting?.open && canPaste(pasted, target.adapter ?? adapter, target, trail, store)
+            !pasting?.open && canPaste(pasted, target.adapter ?? adapter, target, trail, store, moving)
                 ? () => askPaste({ clipboard: pasted, section: target, trail, retrying })
                 : undefined,
-        [adapter, store, pasting?.open, askPaste],
+        [adapter, store, moving, pasting?.open, askPaste],
     );
 
     // A drop is pasted like the clipboard, with the dragged entries as a clipboard of their own, so
@@ -2016,8 +2034,23 @@ const FileManager = ({
     // couldn't go anywhere (`canPaste`).
     const movable = useCallback(
         (dragged: DraggedEntries) =>
-            !!dragged.adapter.move && entriesAllow(store, dragged.section, dragged.trail, dragged.entries, "move"),
-        [store],
+            !!dragged.adapter.move &&
+            entriesAllow(
+                store,
+                dragged.section,
+                dragged.trail,
+                dragged.entries,
+                "move",
+                movingThrough(moving, dragged.adapter),
+            ),
+        [store, moving],
+    );
+
+    // Entries a move under way is moving aren't dragged, as they can't be pasted anywhere either.
+    const heldUp = useCallback(
+        (dragged: DraggedEntries) =>
+            entriesMoving(dragged.section, dragged.trail, dragged.entries, movingThrough(moving, dragged.adapter)),
+        [moving],
     );
 
     // Uploads into the folder at `trail`, when its section and adapter take uploads, the folder can
@@ -2026,11 +2059,14 @@ const FileManager = ({
         (target: Section, trail: FolderRef[]) => {
             const served = target.adapter ?? adapter;
 
-            return served.upload && takesUploads(target) && folderWritable(store, target, trail) && !uploadCheck?.open
+            return served.upload &&
+                takesUploads(target) &&
+                folderWritable(store, target, trail, movingThrough(moving, served)) &&
+                !uploadCheck?.open
                 ? (dropped: DroppedFiles) => askUpload({ section: target, adapter: served, trail, dropped })
                 : undefined;
         },
-        [adapter, store, uploadCheck?.open, askUpload],
+        [adapter, store, moving, uploadCheck?.open, askUpload],
     );
 
     // A drag of files none of which the section can take (`acceptUploads`) shows the no-drop cursor.
@@ -2050,7 +2086,9 @@ const FileManager = ({
             const served = target.adapter ?? adapter;
             const ownFirst =
                 clipboard &&
-                (clipboard.lookup ? clipboard.adapter === served : canPaste(clipboard, served, target, trail, store));
+                (clipboard.lookup
+                    ? clipboard.adapter === served
+                    : canPaste(clipboard, served, target, trail, store, moving));
             const upload = ownFirst ? undefined : offerUpload(target, trail);
 
             if (!upload || !event.clipboardData.types.includes("Files")) {
@@ -2064,7 +2102,7 @@ const FileManager = ({
                 upload(pasted);
             }
         },
-        [adapter, store, clipboard, offerUpload],
+        [adapter, store, moving, clipboard, offerUpload],
     );
 
     // Only opens from a click or key press, which an action's `onSelect` runs in. It offers the
@@ -2098,7 +2136,7 @@ const FileManager = ({
         }
     };
 
-    const drag = useEntryDrag(adapter, dropInto, uploadInto, movable, rootRef);
+    const drag = useEntryDrag(adapter, dropInto, uploadInto, movable, heldUp, rootRef);
     const dragging = !!drag.context.dragged;
 
     // Shows the sidebar for the drag under way, unless it shows already, leaving the overlay open
@@ -2514,10 +2552,9 @@ const FileManager = ({
         [relistTransferred, handleMoved, announceTransfer, announce, localeValue],
     );
 
-    // Copies and moves run in the background while the user browses, a few at once, and the panel
-    // shows those that take a moment or failed.
-    const transfers = useTransferQueue(handleTransferEnded);
-    const shownTransfers = useMemo(() => transfers.items.filter((item) => item.shown), [transfers.items]);
+    useLayoutEffect(() => {
+        transferEnded.current = handleTransferEnded;
+    });
 
     // Forgets a failed copy or move, and what it was of.
     const forgetTransfer = useCallback(
@@ -2592,7 +2629,8 @@ const FileManager = ({
     );
 
     // A failed copy or move can be tried again while both its sections are there, served as they
-    // were, and neither of its folders has gone (see `revise`).
+    // were, neither of its folders has gone (see `revise`), and no move under way is moving its
+    // entries or the folder they'd go into, which would refuse the paste.
     const canRetryTransfer = useCallback(
         (item: TransferItem) => {
             const transfer = transferPlaces.current.get(item.id);
@@ -2601,17 +2639,21 @@ const FileManager = ({
                 return false;
             }
 
-            const from = sectionsById.get(transfer.request.clipboard.section.id);
-            const into = sectionsById.get(transfer.request.section.id);
+            const { clipboard: pasted, section: target, trail } = transfer.request;
+            const from = sectionsById.get(pasted.section.id);
+            const into = sectionsById.get(target.id);
+            const busy = movingThrough(moving, item.adapter);
 
             return (
                 !!from &&
                 !!into &&
                 (from.adapter ?? adapter) === item.adapter &&
-                (into.adapter ?? adapter) === item.adapter
+                (into.adapter ?? adapter) === item.adapter &&
+                !entriesMoving(from, pasted.trail, pasted.entries, busy) &&
+                !folderMoving(into, trail, busy)
             );
         },
-        [sectionsById, adapter],
+        [sectionsById, adapter, moving],
     );
 
     // Tries a failed copy or move again as a paste, so the destination's names are checked again,
@@ -2816,10 +2858,16 @@ const FileManager = ({
             const transferTo = (kind: TransferRequest["kind"]) => () =>
                 askDestination({ ...base, kind, entries, destinations });
 
-            // What the folder and the entries' own permissions allow.
-            const writable = folderWritable(store, menuSection, trail);
+            // What the folder and the entries' own permissions allow, while no move under way is
+            // moving them, or the folder.
+            const busy = movingThrough(moving, folderAdapter);
+            const entriesBusy = entriesMoving(menuSection, trail, entries, busy);
+            const writable = folderWritable(store, menuSection, trail, busy);
             const permits = (what: "rename" | "move" | "delete") =>
-                writable && entries.length > 0 && entries.every((entry) => allows(what, entry.permissions));
+                writable &&
+                !entriesBusy &&
+                entries.length > 0 &&
+                entries.every((entry) => allows(what, entry.permissions));
 
             // Pastes into the folder at `pasteTrail`, when what was cut or copied can go there.
             const pasteTo = (pasteTrail: FolderRef[]) =>
@@ -2857,6 +2905,7 @@ const FileManager = ({
                 folder: menuFolder,
                 section: menuSection,
                 readOnly: !writable,
+                moving: entriesBusy,
                 refresh: () => {
                     store.load(folderKey(menuSection.id, menuFolder.id), folderAdapter, menuFolder.id, true);
                     setSearchVersion((count) => count + 1);
@@ -2870,7 +2919,7 @@ const FileManager = ({
                     folderAdapter.createFolder &&
                     entries.length === 1 &&
                     only.kind === "folder" &&
-                    folderWritable(store, menuSection, [...trail, { id: only.id, name: only.name }])
+                    folderWritable(store, menuSection, [...trail, { id: only.id, name: only.name }], busy)
                         ? () =>
                               askName({
                                   ...base,
@@ -2883,7 +2932,10 @@ const FileManager = ({
                         ? () => askName({ ...base, kind: "rename", entry: entries[0] })
                         : undefined,
                 copyTo:
-                    folderAdapter.copy && entries.length > 0 && destinations.some((candidate) => !candidate.readOnly)
+                    folderAdapter.copy &&
+                    entries.length > 0 &&
+                    !entriesBusy &&
+                    destinations.some((candidate) => !candidate.readOnly)
                         ? transferTo("copy")
                         : undefined,
                 moveTo: folderAdapter.move && permits("move") ? transferTo("move") : undefined,
@@ -2895,7 +2947,7 @@ const FileManager = ({
                           }
                         : undefined,
                 copy:
-                    folderAdapter.copy && entries.length > 0
+                    folderAdapter.copy && entries.length > 0 && !entriesBusy
                         ? () => {
                               setClipboard({ ...base, kind: "copy", entries });
                               announce(localeValue.text.clipboardCopied(entries.length, isolate(only.name)));
@@ -2961,6 +3013,7 @@ const FileManager = ({
         [
             adapter,
             store,
+            moving,
             goTo,
             askName,
             askDestination,
@@ -3250,380 +3303,386 @@ const FileManager = ({
             <DirectionContext value={direction}>
                 <DataContext value={data}>
                     <CutContext value={cut}>
-                        <DragContext value={drag.context}>
-                            {/* The consumer's handlers run first, so one can take an event before the
-                                file manager does, e.g. a key press, by calling `preventDefault`. */}
-                            {/* Focusable but not tabbable, so a press on its empty space, such as the
-                                header's, keeps the focus in here rather than dropping it to the page,
-                                where the keys handled below would never come. */}
-                            <Box
-                                tabIndex={-1}
-                                {...rootAttributes}
-                                ref={rootElementRef}
-                                sx={rootStyle}
-                                onPointerDownCapture={(event) => {
-                                    onPointerDownCapture?.(event);
-                                    drag.onPointerDownCapture(event);
-                                }}
-                                onDragEnter={(event) => {
-                                    onDragEnter?.(event);
-                                    refuseFiles(event);
-                                }}
-                                onDragOver={(event) => {
-                                    onDragOver?.(event);
-                                    refuseFiles(event);
-                                }}
-                                onDragLeave={(event) => {
-                                    onDragLeave?.(event);
+                        <MovingContext value={moving}>
+                            <DragContext value={drag.context}>
+                                {/* The consumer's handlers run first, so one can take an event before the
+                                    file manager does, e.g. a key press, by calling `preventDefault`. */}
+                                {/* Focusable but not tabbable, so a press on its empty space, such as the
+                                    header's, keeps the focus in here rather than dropping it to the page,
+                                    where the keys handled below would never come. */}
+                                <Box
+                                    tabIndex={-1}
+                                    {...rootAttributes}
+                                    ref={rootElementRef}
+                                    sx={rootStyle}
+                                    onPointerDownCapture={(event) => {
+                                        onPointerDownCapture?.(event);
+                                        drag.onPointerDownCapture(event);
+                                    }}
+                                    onDragEnter={(event) => {
+                                        onDragEnter?.(event);
+                                        refuseFiles(event);
+                                    }}
+                                    onDragOver={(event) => {
+                                        onDragOver?.(event);
+                                        refuseFiles(event);
+                                    }}
+                                    onDragLeave={(event) => {
+                                        onDragLeave?.(event);
 
-                                    // Files dragged in from outside that leave the file manager
-                                    // take the sidebar shown for them away.
-                                    if (
-                                        carriesFiles(event) &&
-                                        !(
-                                            event.relatedTarget instanceof Node &&
-                                            event.currentTarget.contains(event.relatedTarget)
-                                        )
-                                    ) {
+                                        // Files dragged in from outside that leave the file manager
+                                        // take the sidebar shown for them away.
+                                        if (
+                                            carriesFiles(event) &&
+                                            !(
+                                                event.relatedTarget instanceof Node &&
+                                                event.currentTarget.contains(event.relatedTarget)
+                                            )
+                                        ) {
+                                            endSidebarForDrag();
+                                        }
+                                    }}
+                                    onDrop={(event) => {
+                                        onDrop?.(event);
+                                        refuseFiles(event);
+                                        drag.end();
                                         endSidebarForDrag();
-                                    }
-                                }}
-                                onDrop={(event) => {
-                                    onDrop?.(event);
-                                    refuseFiles(event);
-                                    drag.end();
-                                    endSidebarForDrag();
-                                }}
-                                onDragEnd={(event) => {
-                                    onDragEnd?.(event);
-                                    drag.end();
-                                }}
-                                onKeyDown={(event) => {
-                                    onKeyDown?.(event);
-                                    handleKeyDown(event);
-                                }}
-                            >
-                                <Box sx={frameSx} data-sidebar-hidden={sidebarHidden}>
-                                    <Backdrop
-                                        open={sidebarOpen}
-                                        sx={backdropSx}
-                                        style={dragging || sidebarForDrag ? PASS_THROUGH : undefined}
-                                        onClick={closeSidebar}
-                                    />
-                                    <Backdrop
-                                        open={propertiesOverlay}
-                                        sx={propertiesBackdropSx}
-                                        onClick={closePropertiesOverlay}
-                                    />
-                                    <Sidebar
-                                        ref={sidebarRef}
-                                        title={title ?? localeValue.text.sidebarTitle}
-                                        groups={sections}
-                                        single={singleSection}
-                                        expanded={expanded}
-                                        showHidden={showHidden}
-                                        openKey={openKey}
-                                        reveal={treeReveal}
-                                        open={sidebarOpen}
-                                        hidden={sidebarHidden}
-                                        peek={sidebarForDrag === "peek"}
-                                        searchScope={searchScope}
-                                        canSearchEverywhere={canSearchEverywhere}
-                                        onToggle={toggleExpanded}
-                                        onRevealed={clearTreeReveal}
-                                        onExpand={expand}
-                                        onNavigate={navigateFromSidebar}
-                                        onOpenMenu={openMenu}
-                                        onShortcut={runShortcut}
-                                        onPasteFiles={pasteFiles}
-                                        onClose={closeSidebar}
-                                        onSearchEverywhere={searchEverywhere}
-                                        mainMenu={mainMenu}
-                                        onShowShortcuts={showShortcuts}
-                                    />
-                                    <Box sx={mainSx}>
-                                        <HeaderBar
-                                            pathBar={
-                                                section && searchScope ? (
-                                                    <SearchField
-                                                        scope={searchScope}
-                                                        query={query}
-                                                        folderName={folderOf(section, place.trail).name}
-                                                        groups={searchGroups}
-                                                        excluded={excludedSections}
-                                                        inputRef={searchInputRef}
-                                                        onQueryChange={changeQuery}
-                                                        onExcludedChange={setSearchExcluded}
-                                                        onClose={closeSearch}
-                                                        onDismiss={stopSearching}
-                                                        onFocusContent={focusFromSearch}
-                                                    />
-                                                ) : section ? (
-                                                    <PathBar
-                                                        section={section}
-                                                        trail={place.trail}
-                                                        hasActions={hasActions}
-                                                        onNavigate={goTo}
-                                                        onOpenMenu={openMenu}
-                                                    />
-                                                ) : (
-                                                    <span />
-                                                )
-                                            }
-                                            canGoBack={canGoBack}
-                                            canGoForward={canGoForward}
-                                            hasFolder={!!section}
-                                            view={view}
-                                            zoom={zoom}
-                                            sort={sort}
+                                    }}
+                                    onDragEnd={(event) => {
+                                        onDragEnd?.(event);
+                                        drag.end();
+                                    }}
+                                    onKeyDown={(event) => {
+                                        onKeyDown?.(event);
+                                        handleKeyDown(event);
+                                    }}
+                                >
+                                    <Box sx={frameSx} data-sidebar-hidden={sidebarHidden}>
+                                        <Backdrop
+                                            open={sidebarOpen}
+                                            sx={backdropSx}
+                                            style={dragging || sidebarForDrag ? PASS_THROUGH : undefined}
+                                            onClick={closeSidebar}
+                                        />
+                                        <Backdrop
+                                            open={propertiesOverlay}
+                                            sx={propertiesBackdropSx}
+                                            onClick={closePropertiesOverlay}
+                                        />
+                                        <Sidebar
+                                            ref={sidebarRef}
+                                            title={title ?? localeValue.text.sidebarTitle}
+                                            groups={sections}
+                                            single={singleSection}
+                                            expanded={expanded}
                                             showHidden={showHidden}
-                                            selecting={selecting}
+                                            openKey={openKey}
+                                            reveal={treeReveal}
+                                            open={sidebarOpen}
+                                            hidden={sidebarHidden}
+                                            peek={sidebarForDrag === "peek"}
                                             searchScope={searchScope}
                                             canSearchEverywhere={canSearchEverywhere}
-                                            sidebarHidden={sidebarHidden}
-                                            sidebarDocked={sidebarDocked}
-                                            propertiesOpen={propertiesOpen}
-                                            propertiesDocked={propertiesDocked}
-                                            onBack={goBack}
-                                            onForward={goForward}
-                                            onToggleView={toggleView}
-                                            onZoom={zoomContent}
-                                            onSortChange={setSort}
-                                            onToggleHidden={toggleHidden}
-                                            onToggleSelecting={toggleSelecting}
-                                            onSearch={toggleSearch}
-                                            onShowSidebar={showSidebar}
-                                            onDragShowSidebar={showSidebarForDrag}
-                                            onToggleSidebar={toggleDocked}
-                                            onToggleProperties={toggleDockedProperties}
-                                            onOpenProperties={openPropertiesOverlay}
-                                            sidebarButtonRef={sidebarButtonRef}
+                                            onToggle={toggleExpanded}
+                                            onRevealed={clearTreeReveal}
+                                            onExpand={expand}
+                                            onNavigate={navigateFromSidebar}
+                                            onOpenMenu={openMenu}
+                                            onShortcut={runShortcut}
+                                            onPasteFiles={pasteFiles}
+                                            onClose={closeSidebar}
+                                            onSearchEverywhere={searchEverywhere}
+                                            mainMenu={mainMenu}
+                                            onShowShortcuts={showShortcuts}
                                         />
-                                        <Box sx={bodySx}>
-                                            <Box sx={columnSx}>
-                                                <Box ref={panelRef} sx={panelSx}>
-                                                    {/* A search everywhere's results show in the folder's place
-                                                        while something is typed. The folder stays mounted
-                                                        under them, hidden, so it comes back as it was, its
-                                                        selection included. */}
-                                                    {showsResults && (
-                                                        <SearchResults
-                                                            targets={searchedTargets}
-                                                            query={searchedFor}
-                                                            version={searchVersion}
-                                                            view={view}
-                                                            zoom={zoom[view]}
-                                                            sort={sort}
-                                                            showHidden={showHidden}
-                                                            hasActions={hasActions}
-                                                            takeFocus={focusContent}
-                                                            onSortChange={setSort}
-                                                            onNavigate={goTo}
-                                                            onOpenFile={openFile}
-                                                            onOpenMenu={openMenu}
-                                                            onShortcut={runShortcut}
-                                                            onSelectionChange={handleResultSelection}
+                                        <Box sx={mainSx}>
+                                            <HeaderBar
+                                                pathBar={
+                                                    section && searchScope ? (
+                                                        <SearchField
+                                                            scope={searchScope}
+                                                            query={query}
+                                                            folderName={folderOf(section, place.trail).name}
+                                                            groups={searchGroups}
+                                                            excluded={excludedSections}
+                                                            inputRef={searchInputRef}
+                                                            onQueryChange={changeQuery}
+                                                            onExcludedChange={setSearchExcluded}
+                                                            onClose={closeSearch}
+                                                            onDismiss={stopSearching}
+                                                            onFocusContent={focusFromSearch}
                                                         />
-                                                    )}
-                                                    {/* Keyed by folder, so each opens at the top with nothing
-                                                        selected. */}
-                                                    <Box key={openKey ?? undefined} sx={viewSx} hidden={showsResults}>
-                                                        {!section && <NoSections />}
-                                                        {section && (
-                                                            <FolderView
-                                                                section={section}
-                                                                trail={place.trail}
+                                                    ) : section ? (
+                                                        <PathBar
+                                                            section={section}
+                                                            trail={place.trail}
+                                                            hasActions={hasActions}
+                                                            onNavigate={goTo}
+                                                            onOpenMenu={openMenu}
+                                                        />
+                                                    ) : (
+                                                        <span />
+                                                    )
+                                                }
+                                                canGoBack={canGoBack}
+                                                canGoForward={canGoForward}
+                                                hasFolder={!!section}
+                                                view={view}
+                                                zoom={zoom}
+                                                sort={sort}
+                                                showHidden={showHidden}
+                                                selecting={selecting}
+                                                searchScope={searchScope}
+                                                canSearchEverywhere={canSearchEverywhere}
+                                                sidebarHidden={sidebarHidden}
+                                                sidebarDocked={sidebarDocked}
+                                                propertiesOpen={propertiesOpen}
+                                                propertiesDocked={propertiesDocked}
+                                                onBack={goBack}
+                                                onForward={goForward}
+                                                onToggleView={toggleView}
+                                                onZoom={zoomContent}
+                                                onSortChange={setSort}
+                                                onToggleHidden={toggleHidden}
+                                                onToggleSelecting={toggleSelecting}
+                                                onSearch={toggleSearch}
+                                                onShowSidebar={showSidebar}
+                                                onDragShowSidebar={showSidebarForDrag}
+                                                onToggleSidebar={toggleDocked}
+                                                onToggleProperties={toggleDockedProperties}
+                                                onOpenProperties={openPropertiesOverlay}
+                                                sidebarButtonRef={sidebarButtonRef}
+                                            />
+                                            <Box sx={bodySx}>
+                                                <Box sx={columnSx}>
+                                                    <Box ref={panelRef} sx={panelSx}>
+                                                        {/* A search everywhere's results show in the folder's place
+                                                            while something is typed. The folder stays mounted
+                                                            under them, hidden, so it comes back as it was, its
+                                                            selection included. */}
+                                                        {showsResults && (
+                                                            <SearchResults
+                                                                targets={searchedTargets}
+                                                                query={searchedFor}
+                                                                version={searchVersion}
                                                                 view={view}
                                                                 zoom={zoom[view]}
                                                                 sort={sort}
                                                                 showHidden={showHidden}
-                                                                query={searchScope === "folder" ? query : ""}
                                                                 hasActions={hasActions}
-                                                                selecting={selecting}
-                                                                busy={busy}
-                                                                takeFocus={focusContent && !showsResults}
-                                                                revealId={revealId}
-                                                                arrivals={arrivals}
-                                                                selectedIds={
-                                                                    selectionControlled ? selectedIdSet : undefined
-                                                                }
-                                                                defaultSelectedIds={
-                                                                    initialSelection?.key === openKey
-                                                                        ? initialSelection.ids
-                                                                        : undefined
-                                                                }
-                                                                onSelectionChange={handleSelectionChange}
-                                                                onSelectingChange={setSelecting}
+                                                                takeFocus={focusContent}
                                                                 onSortChange={setSort}
                                                                 onNavigate={goTo}
                                                                 onOpenFile={openFile}
                                                                 onOpenMenu={openMenu}
                                                                 onShortcut={runShortcut}
-                                                                onPasteFiles={pasteFiles}
-                                                                onRevealed={handleRevealed}
-                                                                onRevealUnmatched={closeSearch}
-                                                                onArrived={handleArrived}
+                                                                onSelectionChange={handleResultSelection}
                                                             />
                                                         )}
+                                                        {/* Keyed by folder, so each opens at the top with nothing
+                                                            selected. */}
+                                                        <Box
+                                                            key={openKey ?? undefined}
+                                                            sx={viewSx}
+                                                            hidden={showsResults}
+                                                        >
+                                                            {!section && <NoSections />}
+                                                            {section && (
+                                                                <FolderView
+                                                                    section={section}
+                                                                    trail={place.trail}
+                                                                    view={view}
+                                                                    zoom={zoom[view]}
+                                                                    sort={sort}
+                                                                    showHidden={showHidden}
+                                                                    query={searchScope === "folder" ? query : ""}
+                                                                    hasActions={hasActions}
+                                                                    selecting={selecting}
+                                                                    busy={busy}
+                                                                    takeFocus={focusContent && !showsResults}
+                                                                    revealId={revealId}
+                                                                    arrivals={arrivals}
+                                                                    selectedIds={
+                                                                        selectionControlled ? selectedIdSet : undefined
+                                                                    }
+                                                                    defaultSelectedIds={
+                                                                        initialSelection?.key === openKey
+                                                                            ? initialSelection.ids
+                                                                            : undefined
+                                                                    }
+                                                                    onSelectionChange={handleSelectionChange}
+                                                                    onSelectingChange={setSelecting}
+                                                                    onSortChange={setSort}
+                                                                    onNavigate={goTo}
+                                                                    onOpenFile={openFile}
+                                                                    onOpenMenu={openMenu}
+                                                                    onShortcut={runShortcut}
+                                                                    onPasteFiles={pasteFiles}
+                                                                    onRevealed={handleRevealed}
+                                                                    onRevealUnmatched={closeSearch}
+                                                                    onArrived={handleArrived}
+                                                                />
+                                                            )}
+                                                        </Box>
                                                     </Box>
+                                                    {shownTransfers.length > 0 && (
+                                                        <Box sx={taskPanelSx}>
+                                                            <TransferPanel
+                                                                items={shownTransfers}
+                                                                onCancel={transfers.queue.cancel}
+                                                                onRetry={retryTransfer}
+                                                                canRetry={canRetryTransfer}
+                                                                onCancelAll={transfers.queue.cancelAll}
+                                                                onClear={clearTransfers}
+                                                            />
+                                                        </Box>
+                                                    )}
+                                                    {shownDownloads.length > 0 && (
+                                                        <Box sx={taskPanelSx}>
+                                                            <DownloadPanel
+                                                                items={shownDownloads}
+                                                                onCancel={downloads.queue.cancel}
+                                                                onRetry={downloads.queue.retry}
+                                                                onSave={downloads.queue.save}
+                                                                onCancelAll={downloads.queue.cancelAll}
+                                                                onClear={downloads.queue.clear}
+                                                            />
+                                                        </Box>
+                                                    )}
+                                                    {uploads.items.length > 0 && (
+                                                        <Box sx={taskPanelSx}>
+                                                            <UploadPanel
+                                                                items={uploads.items}
+                                                                onCancel={uploads.queue.cancel}
+                                                                onRetry={uploads.queue.retry}
+                                                                onShow={showUpload}
+                                                                canShow={canShowUpload}
+                                                                onCancelAll={uploads.queue.cancelAll}
+                                                                onClear={clearUploads}
+                                                            />
+                                                        </Box>
+                                                    )}
                                                 </Box>
-                                                {shownTransfers.length > 0 && (
-                                                    <Box sx={taskPanelSx}>
-                                                        <TransferPanel
-                                                            items={shownTransfers}
-                                                            onCancel={transfers.queue.cancel}
-                                                            onRetry={retryTransfer}
-                                                            canRetry={canRetryTransfer}
-                                                            onCancelAll={transfers.queue.cancelAll}
-                                                            onClear={clearTransfers}
-                                                        />
-                                                    </Box>
-                                                )}
-                                                {shownDownloads.length > 0 && (
-                                                    <Box sx={taskPanelSx}>
-                                                        <DownloadPanel
-                                                            items={shownDownloads}
-                                                            onCancel={downloads.queue.cancel}
-                                                            onRetry={downloads.queue.retry}
-                                                            onSave={downloads.queue.save}
-                                                            onCancelAll={downloads.queue.cancelAll}
-                                                            onClear={downloads.queue.clear}
-                                                        />
-                                                    </Box>
-                                                )}
-                                                {uploads.items.length > 0 && (
-                                                    <Box sx={taskPanelSx}>
-                                                        <UploadPanel
-                                                            items={uploads.items}
-                                                            onCancel={uploads.queue.cancel}
-                                                            onRetry={uploads.queue.retry}
-                                                            onShow={showUpload}
-                                                            canShow={canShowUpload}
-                                                            onCancelAll={uploads.queue.cancelAll}
-                                                            onClear={clearUploads}
-                                                        />
-                                                    </Box>
-                                                )}
+                                                <PropertiesPane
+                                                    ref={paneRef}
+                                                    subject={propertiesSubject}
+                                                    shown={propertiesOpen}
+                                                    open={propertiesOverlay}
+                                                    changes={searchVersion}
+                                                    showHidden={showHidden}
+                                                    cache={propertiesCache}
+                                                    takeFocus={focusProperties}
+                                                    actions={propertiesActions}
+                                                    contextFor={contextFor}
+                                                    onClose={closeProperties}
+                                                    onEscape={handlePropertiesEscape}
+                                                    onFocusOut={handlePropertiesFocusOut}
+                                                    onDockedChange={handlePropertiesDocking}
+                                                />
                                             </Box>
-                                            <PropertiesPane
-                                                ref={paneRef}
-                                                subject={propertiesSubject}
-                                                shown={propertiesOpen}
-                                                open={propertiesOverlay}
-                                                changes={searchVersion}
-                                                showHidden={showHidden}
-                                                cache={propertiesCache}
-                                                takeFocus={focusProperties}
-                                                actions={propertiesActions}
-                                                contextFor={contextFor}
-                                                onClose={closeProperties}
-                                                onEscape={handlePropertiesEscape}
-                                                onFocusOut={handlePropertiesFocusOut}
-                                                onDockedChange={handlePropertiesDocking}
-                                            />
                                         </Box>
                                     </Box>
-                                </Box>
-                                <Announcer announcement={announcement?.region === "root" ? announcement : null} />
-                                <ContextMenu menu={menu} onClose={closeMenu} />
-                                {naming && (
-                                    <NameDialog
-                                        key={`name:${naming.id}`}
-                                        open={naming.open}
-                                        request={naming.request}
-                                        onClose={closeNaming}
-                                        onChanged={relist}
-                                        onDone={handleNamed}
-                                    />
-                                )}
-                                {transfer && (
-                                    <TransferDialog
-                                        key={`transfer:${transfer.id}`}
-                                        open={transfer.open}
-                                        request={transfer.request}
-                                        showHidden={showHidden}
-                                        onClose={closeTransfer}
-                                        onChanged={relist}
-                                        onStart={handleTransferStart}
-                                        onFolderCreated={handleFolderCreated}
-                                    />
-                                )}
-                                {deleting && (
-                                    <DeleteDialog
-                                        key={`delete:${deleting.id}`}
-                                        open={deleting.open}
-                                        request={deleting.request}
-                                        onClose={closeDelete}
-                                        onChanged={relist}
-                                        onDone={handleDeleted}
-                                    />
-                                )}
-                                {pasting && (
-                                    <PasteDialog
-                                        key={`paste:${pasting.id}`}
-                                        open={pasting.open}
-                                        request={pasting.request}
-                                        onClose={closePaste}
-                                        onStart={handlePasteStart}
-                                    />
-                                )}
-                                {uploadCheck && (
-                                    <UploadDialog
-                                        key={`upload:${uploadCheck.id}`}
-                                        open={uploadCheck.open}
-                                        request={uploadCheck.request}
-                                        onClose={closeUploadCheck}
-                                        onUpload={startUpload}
-                                    />
-                                )}
-                                {previewing && (
-                                    <PreviewDialog
-                                        key={`preview:${previewing.id}`}
-                                        open={previewing.open}
-                                        request={previewing.request}
-                                        disableRestoreFocus={previewing.fromContent}
-                                        previewers={previewers}
-                                        actionsFor={previewActionsFor}
-                                        announcement={announcement?.region === "preview" ? announcement : null}
-                                        onClose={closePreview}
-                                        onClosed={handlePreviewClosed}
-                                        onStep={handlePreviewStep}
-                                        onDownload={handlePreviewDownload}
-                                    />
-                                )}
-                                <ShortcutsDialog
-                                    open={shortcutsOpen}
-                                    actions={actions}
-                                    previewActions={previewActions}
-                                    propertiesActions={propertiesActions}
-                                    mainMenu={mainMenu}
-                                    canSearchEverywhere={canSearchEverywhere}
-                                    choosesSections={searchTargets.length > 1}
-                                    canPreview={canPreview}
-                                    canUpload={canUpload}
-                                    onClose={closeShortcuts}
-                                    onClosed={handleShortcutsClosed}
-                                />
-                                <input
-                                    ref={pickerRef}
-                                    type="file"
-                                    multiple
-                                    style={pickerStyle}
-                                    onChange={handlePicked}
-                                />
-                                {drag.preview &&
-                                    createPortal(
-                                        <DragPreview
-                                            ref={drag.previewRef}
-                                            entry={drag.preview.entry}
-                                            count={drag.preview.count}
-                                            touch={drag.preview.touch}
-                                            effect={drag.effect}
-                                        />,
-                                        document.body,
+                                    <Announcer announcement={announcement?.region === "root" ? announcement : null} />
+                                    <ContextMenu menu={menu} onClose={closeMenu} />
+                                    {naming && (
+                                        <NameDialog
+                                            key={`name:${naming.id}`}
+                                            open={naming.open}
+                                            request={naming.request}
+                                            onClose={closeNaming}
+                                            onChanged={relist}
+                                            onDone={handleNamed}
+                                        />
                                     )}
-                            </Box>
-                        </DragContext>
+                                    {transfer && (
+                                        <TransferDialog
+                                            key={`transfer:${transfer.id}`}
+                                            open={transfer.open}
+                                            request={transfer.request}
+                                            showHidden={showHidden}
+                                            onClose={closeTransfer}
+                                            onChanged={relist}
+                                            onStart={handleTransferStart}
+                                            onFolderCreated={handleFolderCreated}
+                                        />
+                                    )}
+                                    {deleting && (
+                                        <DeleteDialog
+                                            key={`delete:${deleting.id}`}
+                                            open={deleting.open}
+                                            request={deleting.request}
+                                            onClose={closeDelete}
+                                            onChanged={relist}
+                                            onDone={handleDeleted}
+                                        />
+                                    )}
+                                    {pasting && (
+                                        <PasteDialog
+                                            key={`paste:${pasting.id}`}
+                                            open={pasting.open}
+                                            request={pasting.request}
+                                            onClose={closePaste}
+                                            onStart={handlePasteStart}
+                                        />
+                                    )}
+                                    {uploadCheck && (
+                                        <UploadDialog
+                                            key={`upload:${uploadCheck.id}`}
+                                            open={uploadCheck.open}
+                                            request={uploadCheck.request}
+                                            onClose={closeUploadCheck}
+                                            onUpload={startUpload}
+                                        />
+                                    )}
+                                    {previewing && (
+                                        <PreviewDialog
+                                            key={`preview:${previewing.id}`}
+                                            open={previewing.open}
+                                            request={previewing.request}
+                                            disableRestoreFocus={previewing.fromContent}
+                                            previewers={previewers}
+                                            actionsFor={previewActionsFor}
+                                            announcement={announcement?.region === "preview" ? announcement : null}
+                                            onClose={closePreview}
+                                            onClosed={handlePreviewClosed}
+                                            onStep={handlePreviewStep}
+                                            onDownload={handlePreviewDownload}
+                                        />
+                                    )}
+                                    <ShortcutsDialog
+                                        open={shortcutsOpen}
+                                        actions={actions}
+                                        previewActions={previewActions}
+                                        propertiesActions={propertiesActions}
+                                        mainMenu={mainMenu}
+                                        canSearchEverywhere={canSearchEverywhere}
+                                        choosesSections={searchTargets.length > 1}
+                                        canPreview={canPreview}
+                                        canUpload={canUpload}
+                                        onClose={closeShortcuts}
+                                        onClosed={handleShortcutsClosed}
+                                    />
+                                    <input
+                                        ref={pickerRef}
+                                        type="file"
+                                        multiple
+                                        style={pickerStyle}
+                                        onChange={handlePicked}
+                                    />
+                                    {drag.preview &&
+                                        createPortal(
+                                            <DragPreview
+                                                ref={drag.previewRef}
+                                                entry={drag.preview.entry}
+                                                count={drag.preview.count}
+                                                touch={drag.preview.touch}
+                                                effect={drag.effect}
+                                            />,
+                                            document.body,
+                                        )}
+                                </Box>
+                            </DragContext>
+                        </MovingContext>
                     </CutContext>
                 </DataContext>
             </DirectionContext>

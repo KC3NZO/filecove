@@ -16,11 +16,12 @@ import {
     forcedColors,
     forcedSelected,
     hoverBackground,
+    movingMarker,
     selectedBackground,
     selectedHoverBackground,
 } from "../../../styles/mixins";
 import { pointerPosition } from "../../../utils/menu-position";
-import { lockedFolder } from "../../../utils/permissions";
+import { drawnState } from "../../../utils/permissions";
 import { selectModifiers } from "../../../utils/selection";
 import { gridSize } from "../../../utils/zoom";
 import ItemIcon from "./item-icon";
@@ -45,6 +46,8 @@ interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "o
     focused: boolean;
     selected: boolean;
     cut: boolean;
+    /** Being moved by a move under way, itself or with a folder it's in. */
+    moving: boolean;
     /** Whether the entry was just uploaded, and is highlighted for a moment. */
     arrived: boolean;
     dragged: boolean;
@@ -94,6 +97,7 @@ const tileSx: SxProps<Theme> = (theme) => ({
     '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
     "& > svg": { flexShrink: 0 },
     ...cutMarker,
+    ...movingMarker,
     ...arrivedMarker(theme),
     ...focusVisibleRing,
     ...dragMarkers(theme),
@@ -128,6 +132,7 @@ const FileTile = memo(
         focused,
         selected,
         cut,
+        moving,
         arrived,
         adapter,
         draggable,
@@ -149,14 +154,15 @@ const FileTile = memo(
                 // Only some tiles are rendered, so each says where it is among all of them.
                 aria-setsize={count}
                 aria-posinset={index + 1}
-                // Its lock is only drawn.
-                aria-description={lockedFolder(origin?.entry ?? entry) ? text.folderLocked : undefined}
+                // Its lock and its fading while it's moved are only drawn.
+                aria-description={drawnState(text, origin?.entry ?? entry, moving)}
                 tabIndex={focused ? 0 : -1}
                 draggable={draggable}
                 data-entry-id={entry.id}
                 data-no-marquee
                 data-selected={selected}
                 data-cut={cut}
+                data-moving={moving}
                 data-arrived={arrived}
                 data-dragged={dragged}
                 data-drop-target={dropTarget}
@@ -201,6 +207,7 @@ const FileGrid = ({
     focusId,
     selectedIds,
     cutIds,
+    movingIds,
     arrivedIds,
     adapter,
     draggable,
@@ -236,6 +243,7 @@ const FileGrid = ({
                             focused={entry.id === focusId}
                             selected={selectedIds.has(entry.id)}
                             cut={cutIds.has(entry.id)}
+                            moving={movingIds.has(entry.id)}
                             arrived={!!arrivedIds?.has(entry.id)}
                             adapter={adapter}
                             draggable={draggable}

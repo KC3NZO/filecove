@@ -10,6 +10,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { CutContext } from "../../../contexts/cut-context";
 import { DragContext } from "../../../contexts/drag-context";
+import { MovingContext } from "../../../contexts/moving-context";
 import { useDropTarget } from "../../../hooks/use-drop-target";
 import { useLocale } from "../../../hooks/use-locale";
 import { useLongPress } from "../../../hooks/use-long-press";
@@ -27,10 +28,12 @@ import { isHidden } from "../../../utils/hidden";
 import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { belowElement, pressPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
+import { entriesMoving } from "../../../utils/permissions";
 import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import { pressesKey } from "../../../utils/shortcut";
 import { resultKey } from "../../../utils/search";
 import { entryComparator } from "../../../utils/sort";
+import { movingThrough } from "../../../utils/transfer";
 import Icon from "../../icons/icon";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
@@ -195,6 +198,7 @@ const SearchResults = ({
     const { searches, retry } = useSearch(targets, query, showHidden, version);
     const cut = useContext(CutContext);
     const drag = useContext(DragContext);
+    const moving = useContext(MovingContext);
     const locale = useLocale();
     const { text } = locale;
     const idPrefix = useId();
@@ -254,6 +258,18 @@ const SearchResults = ({
     );
     const cutKeys = useMemo(() => marked(cut), [marked, cut]);
     const draggedKeys = useMemo(() => marked(drag?.dragged), [marked, drag?.dragged]);
+    // Results being moved, themselves or with a folder they're in.
+    const movingKeys = useMemo(
+        () =>
+            new Set(
+                hits
+                    .filter((hit) =>
+                        entriesMoving(hit.section, hit.trail, [hit.entry], movingThrough(moving, hit.adapter)),
+                    )
+                    .map((hit) => hit.key),
+            ),
+        [hits, moving],
+    );
     const draggable = targets.some((target) => !!(target.adapter.move || target.adapter.copy));
 
     const { selection, selectedIds, selected, select, replace, selectAll, clear } = useSelection(entries);
@@ -787,6 +803,7 @@ const SearchResults = ({
                 focusId={focusId}
                 selectedIds={selectedIds}
                 cutIds={cutKeys}
+                movingIds={movingKeys}
                 adapter={undefined}
                 draggable={draggable}
                 draggedIds={draggedKeys}

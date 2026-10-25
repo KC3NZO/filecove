@@ -53,6 +53,18 @@ export const cutMarker = {
 };
 
 /**
+ * Marks a row or tile whose entry a move under way is moving, itself or with a folder it's in,
+ * until the move ends: its contents fade, as a cut entry's do, without the outline, and the pointer
+ * over it shows it's busy. Keyed off `data-moving`. Spread after `cutMarker`, whose fade it shares.
+ */
+export const movingMarker = {
+    '&[data-moving="true"]': {
+        cursor: "progress",
+        "& > *": { opacity: 0.45 },
+    },
+};
+
+/**
  * Marks rows or tiles while entries are dragged: the dragged ones fade, as cut ones do, and the
  * folder they'd be dropped into takes the selection's color inside an accent outline. Keyed off
  * `data-dragged` and `data-drop-target`. Spread last into the `sx` object, so the drop target wins

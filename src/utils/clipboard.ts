@@ -1,15 +1,18 @@
 import { folderOf } from "./navigation";
-import { entriesAllow, folderWritable } from "./permissions";
+import { entriesAllow, entriesMoving, folderWritable } from "./permissions";
 import { importsFrom } from "./sections";
+import { movingThrough } from "./transfer";
 
 import type { FolderStore } from "../store/folder-store";
-import type { Clipboard, FileAdapter, FileEntry, FolderRef, Section } from "../types";
+import type { Clipboard, FileAdapter, FileEntry, FolderRef, MovingIds, Section } from "../types";
 
 /**
  * Whether the clipboard can be pasted into the folder at `trail`: only through the adapter its
  * entries came from, into a section that takes entries from theirs and a folder that can change
  * (`folderWritable`), never into one of them or below one, when cut, not into their own folder,
- * nor when they can't be moved out of it (`entriesAllow`), and not while they're looked for again.
+ * nor when they can't be moved out of it (`entriesAllow`), not while a move under way is moving
+ * them (`entriesMoving`, by `moving`), whose ids may name nothing once it's done, and not while
+ * they're looked for again.
  */
 export const canPaste = (
     clipboard: Clipboard,
@@ -17,15 +20,19 @@ export const canPaste = (
     section: Section,
     trail: FolderRef[],
     store: FolderStore,
+    moving: MovingIds,
 ) => {
+    const busy = movingThrough(moving, adapter);
+
     if (
         clipboard.lookup ||
         clipboard.adapter !== adapter ||
         !(clipboard.kind === "cut" ? adapter.move : adapter.copy) ||
         !importsFrom(section, clipboard.section) ||
-        !folderWritable(store, section, trail) ||
+        !folderWritable(store, section, trail, busy) ||
+        entriesMoving(clipboard.section, clipboard.trail, clipboard.entries, busy) ||
         (clipboard.kind === "cut" &&
-            !entriesAllow(store, clipboard.section, clipboard.trail, clipboard.entries, "move"))
+            !entriesAllow(store, clipboard.section, clipboard.trail, clipboard.entries, "move", busy))
     ) {
         return false;
     }

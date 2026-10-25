@@ -56,7 +56,7 @@ export type { FilePreviewer, PreviewerProps, PreviewerReads } from "./previewer"
 export type { CountTarget, PropertiesItem, PropertiesSubject, Requested, SubjectEntry } from "./properties";
 export type { FileManagerSearch, SearchHit, SearchScope, SearchTarget, SectionSearch } from "./search";
 export type { FolderRef, Section, SectionFolder, SectionGroup, SectionImports } from "./section";
-export type { TransferItem, TransferKind, TransferStatus } from "./transfer";
+export type { MovingIds, TransferItem, TransferKind, TransferStatus } from "./transfer";
 export type { EntrySelection, SelectionDetails, SelectModifiers, TreeSelection, TreeTarget } from "./selection";
 export type {
     DroppedFiles,

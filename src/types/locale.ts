@@ -396,11 +396,19 @@ export interface FileManagerLocaleText
     pickerFolders: (folderName: string) => string;
     /** Beside the picker's disabled "Copy here" or "Move here", in a folder nothing can be put in. */
     pickerReadOnly: string;
+    /** Beside the picker's disabled "Copy here" or "Move here", in a folder a move under way is moving. */
+    pickerMoving: string;
     /**
      * Read to screen readers after the name of a folder nothing can be put in, which shows a lock
      * (`EntryPermissions.write` false), in the list, the grid, the sidebar tree and the picker.
      */
     folderLocked: string;
+    /**
+     * Read to screen readers after the name of an entry a move under way is moving, itself or with
+     * a folder it's in, which shows faded until the move ends, in the list, the grid, the sidebar
+     * tree and the picker. It's read in place of `folderLocked`.
+     */
+    entryMoving: string;
     /** The title of a paste asking about names the folder already has. */
     copyTitle: (count: number, name: string) => string;
     moveTitle: (count: number, name: string) => string;

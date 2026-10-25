@@ -1,4 +1,6 @@
-import type { Clash, FileEntry } from "../types";
+import type { Clash, FileAdapter, FileEntry, MovingIds, TransferItem } from "../types";
+
+const NONE: ReadonlySet<string> = new Set();
 
 /**
  * The names of `entries`, or of files and folders being uploaded, that a folder's listing already
@@ -26,3 +28,24 @@ export const mergedFolders = (entries: readonly FileEntry[], listing: FileEntry[
 
     return (listing ?? []).filter((entry) => entry.kind === "folder" && names.has(entry.name)).map((entry) => entry.id);
 };
+
+/** Whether a copy or move is a move still to end, waiting or under way; a failed one has stopped. */
+export const isMoving = (item: TransferItem) => item.kind === "move" && item.status !== "failed";
+
+/** The entries the moves among `items` are moving, by the adapter serving them (`isMoving`). */
+export const movingIds = (items: readonly TransferItem[]): MovingIds => {
+    const moving = new Map<FileAdapter, Set<string>>();
+
+    items.filter(isMoving).forEach(({ adapter, entries }) => {
+        const ids = moving.get(adapter) ?? new Set<string>();
+
+        entries.forEach((entry) => ids.add(entry.id));
+        moving.set(adapter, ids);
+    });
+
+    return moving;
+};
+
+/** The ids of the entries being moved through `adapter`. */
+export const movingThrough = (moving: MovingIds, adapter: FileAdapter | undefined) =>
+    (adapter && moving.get(adapter)) || NONE;

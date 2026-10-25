@@ -128,6 +128,11 @@ export interface FileViewProps {
     selectedIds: ReadonlySet<string>;
     /** Entries cut to the clipboard, shown faded until they're pasted. */
     cutIds: ReadonlySet<string>;
+    /**
+     * Entries a move under way is moving, themselves or with a folder they're in, shown faded until
+     * it ends.
+     */
+    movingIds: ReadonlySet<string>;
     /** Entries just uploaded, highlighted for a moment; none among a search's results. */
     arrivedIds?: ReadonlySet<string>;
     /** The folder's adapter, which may give its files thumbnails. */
