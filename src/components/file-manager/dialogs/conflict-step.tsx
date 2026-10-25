@@ -1,5 +1,6 @@
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
+import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../../hooks/use-locale";
 import { isolate } from "../../../utils/bidi";
@@ -17,6 +18,11 @@ interface ConflictChoicesProps {
     pending: ConflictPolicy | null;
     onChoose: (conflict: ConflictPolicy) => void;
 }
+
+const messageSx: SxProps<Theme> = {
+    color: "text.primary",
+    fontWeight: 600,
+};
 
 /**
  * What Replace would do to the clashes: replace a file with a file, merge a folder into a folder,
@@ -46,7 +52,7 @@ export const ConflictMessage = ({ clashes, folderName }: ConflictMessageProps) =
 
     return (
         <>
-            <Typography color="text.primary" fontWeight={600}>
+            <Typography sx={messageSx}>
                 {text.conflictMessage(clashes.length, isolate(clashes[0].name), isolate(folderName))}
             </Typography>
             <Typography variant="body2" color="text.secondary">

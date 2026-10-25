@@ -229,6 +229,10 @@ const readOnlySx: SxProps<Theme> = {
     color: "text.secondary",
 };
 
+const locationsTitleSx: SxProps<Theme> = {
+    fontWeight: 600,
+};
+
 const isFolder = (entry: FileEntry) => entry.kind === "folder";
 
 /**
@@ -656,7 +660,7 @@ const TransferDialog = ({
                                         onOpenMenu={NO_MENU}
                                     />
                                 ) : (
-                                    <Typography variant="body2" fontWeight={600}>
+                                    <Typography variant="body2" sx={locationsTitleSx}>
                                         {text.pickerLocations}
                                     </Typography>
                                 )}
