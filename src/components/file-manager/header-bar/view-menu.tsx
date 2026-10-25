@@ -20,18 +20,20 @@ import { insetLabelSx } from "../../../styles/direction";
 import { forcedColors, forcedEdge, menuPaperSx } from "../../../styles/mixins";
 import { isRtl } from "../../../utils/dom";
 import { ZOOM_ARIA_SHORTCUTS, formatShortcut } from "../../../utils/shortcut";
-import { SORT_KEYS, SORT_LABELS, withSortKey } from "../../../utils/sort";
+import { SORT_KEYS, SORT_LABELS, folderSort, withSortKey } from "../../../utils/sort";
 import { canZoom, zoomScale } from "../../../utils/zoom";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 
-import type { SortDirection, SortOrder, ViewMode, ViewZoom, ZoomStep } from "../../../types";
+import type { SortDirection, SortKey, SortOrder, ViewMode, ViewZoom, ZoomStep } from "../../../types";
 
 interface ViewMenuProps {
     /** The view shown, which the zoom items zoom. */
     view: ViewMode;
     zoom: ViewZoom;
     sort: SortOrder;
+    /** Whether a search everywhere's results show, which can be ordered by relevance. */
+    resultsShown: boolean;
     showHidden: boolean;
     /** Whether the docked sidebar is hidden. */
     sidebarHidden: boolean;
@@ -54,6 +56,8 @@ interface ViewMenuProps {
 const PROPERTIES_KEYS = ["Alt", "Enter"];
 
 const DIRECTIONS: readonly SortDirection[] = ["asc", "desc"];
+
+const SORT_KEYS_WITH_RELEVANCE: readonly SortKey[] = ["relevance", ...SORT_KEYS];
 
 
 const slotProps: MenuProps["slotProps"] = {
@@ -142,6 +146,7 @@ const ViewMenu = ({
     view,
     zoom,
     sort,
+    resultsShown,
     showHidden,
     sidebarHidden,
     sidebarDocked,
@@ -165,7 +170,10 @@ const ViewMenu = ({
     const dir = useContext(DirectionContext);
     const percent = formatPercent(zoomScale(zoom, view));
     const zoomId = useId();
-    const keyLabels = SORT_LABELS[sort.key](text);
+    // Folders have no relevance, and are by name instead.
+    const order = resultsShown ? sort : folderSort(sort);
+    const keys = resultsShown ? SORT_KEYS_WITH_RELEVANCE : SORT_KEYS;
+    const keyLabels = SORT_LABELS[order.key](text);
 
     return (
         <>
@@ -191,39 +199,40 @@ const ViewMenu = ({
                 onClose={() => setAnchor(null)}
             >
                 <ListSubheader sx={subheaderSx}>{text.sortBy}</ListSubheader>
-                {SORT_KEYS.map((key) => (
+                {keys.map((key) => (
                     <MenuItem
                         key={key}
                         role="menuitemradio"
-                        aria-checked={key === sort.key}
-                        onClick={() => onSortChange(withSortKey(sort, key))}
+                        aria-checked={key === order.key}
+                        onClick={() => onSortChange(withSortKey(order, key))}
                     >
                         <ListItemIcon>
-                            <Radio size="small" checked={key === sort.key} tabIndex={-1} disableRipple sx={controlSx} />
+                            <Radio size="small" checked={key === order.key} tabIndex={-1} disableRipple sx={controlSx} />
                         </ListItemIcon>
                         <ListItemText>{SORT_LABELS[key](text).label}</ListItemText>
                     </MenuItem>
                 ))}
-                <Divider />
-                {DIRECTIONS.map((direction) => (
-                    <MenuItem
-                        key={direction}
-                        role="menuitemradio"
-                        aria-checked={direction === sort.direction}
-                        onClick={() => onSortChange({ key: sort.key, direction })}
-                    >
-                        <ListItemIcon>
-                            <Radio
-                                size="small"
-                                checked={direction === sort.direction}
-                                tabIndex={-1}
-                                disableRipple
-                                sx={controlSx}
-                            />
-                        </ListItemIcon>
-                        <ListItemText>{keyLabels[direction]}</ListItemText>
-                    </MenuItem>
-                ))}
+                {order.key !== "relevance" && <Divider />}
+                {order.key !== "relevance" &&
+                    DIRECTIONS.map((direction) => (
+                        <MenuItem
+                            key={direction}
+                            role="menuitemradio"
+                            aria-checked={direction === order.direction}
+                            onClick={() => onSortChange({ key: order.key, direction })}
+                        >
+                            <ListItemIcon>
+                                <Radio
+                                    size="small"
+                                    checked={direction === order.direction}
+                                    tabIndex={-1}
+                                    disableRipple
+                                    sx={controlSx}
+                                />
+                            </ListItemIcon>
+                            <ListItemText>{keyLabels[direction]}</ListItemText>
+                        </MenuItem>
+                    ))}
                 <Divider />
                 <MenuItem
                     role="menuitemcheckbox"

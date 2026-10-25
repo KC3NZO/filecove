@@ -122,7 +122,7 @@ const App = () => {
     const [location, setLocation] = useHashLocation(shownSections);
     const [view, setView] = useStoredState<ViewMode>("view", "list");
     const [zoom, setZoom] = useStoredState<ViewZoom>("zoom", { list: 0, grid: 0 });
-    const [sort, setSort] = useStoredState<SortOrder>("sort", { key: "name", direction: "asc" });
+    const [sort, setSort] = useStoredState<SortOrder>("sort", { key: "relevance", direction: "desc" });
     const [showHidden, setShowHidden] = useStoredState("showHidden", false);
     const [sidebarHidden, setSidebarHidden] = useStoredState("sidebarHidden", false);
     const [propertiesOpen, setPropertiesOpen] = useStoredState("propertiesOpen", false);

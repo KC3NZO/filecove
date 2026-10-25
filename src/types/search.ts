@@ -48,4 +48,6 @@ export interface SearchHit {
     /** Trail to the folder it's in, below the section's root. */
     trail: FolderRef[];
     entry: FileEntry;
+    /** The adapter's own score for it, when it ranks its matches. */
+    score?: number;
 }

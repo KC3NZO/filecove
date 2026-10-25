@@ -47,6 +47,7 @@ export const enUS: FileManagerLocaleText = {
     sortSize: "Size",
     sortType: "Type",
     sortModified: "Modified",
+    sortRelevance: "Relevance",
     sortAToZ: "A to Z",
     sortZToA: "Z to A",
     sortSmallestFirst: "Smallest first",

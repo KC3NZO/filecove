@@ -83,11 +83,11 @@ export const useSearch = (targets: readonly SearchTarget[], query: string, showH
                             return;
                         }
 
-                        result?.matches.forEach(({ entry, trail }) => {
+                        result?.matches.forEach(({ entry, trail, score }) => {
                             const key = resultKey(section.id, entry.id);
 
                             if (!found.has(key)) {
-                                found.set(key, { key, section, adapter, trail, entry });
+                                found.set(key, { key, section, adapter, trail, entry, score });
                             }
                         });
 

@@ -244,6 +244,7 @@ export interface FileManagerLocaleText
     sortSize: string;
     sortType: string;
     sortModified: string;
+    sortRelevance: string;
     sortAToZ: string;
     sortZToA: string;
     sortSmallestFirst: string;

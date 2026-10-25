@@ -138,6 +138,13 @@ export interface SearchMatch {
      * parses ids, so this is how it shows where the entry is, opens its folder and acts on it there.
      */
     trail: FolderRef[];
+    /**
+     * How well the entry answers the query, higher being better, for the backend that ranks its
+     * matches itself. The results ordered by relevance go by it when it's there, and by how the
+     * name answers what's typed when it's not. Scores are compared across sections, so adapters
+     * searched together should share a scale.
+     */
+    score?: number;
 }
 
 /** An object rather than a bare array, so fields can be added later without a breaking change. */

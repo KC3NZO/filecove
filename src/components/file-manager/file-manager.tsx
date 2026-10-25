@@ -62,7 +62,7 @@ import {
     zoomStep,
 } from "../../utils/shortcut";
 import { previewable } from "../../utils/preview";
-import { DEFAULT_SORT, entryComparator, sameSort } from "../../utils/sort";
+import { RELEVANCE_SORT, entryComparator, folderSort, sameSort } from "../../utils/sort";
 import { isMoving, movingIds, movingThrough, sharesNames } from "../../utils/transfer";
 import { DEFAULT_ZOOM, canZoom, sameZoom, zoomScale, zoomedBy } from "../../utils/zoom";
 import DownloadPanel from "../downloads/download-panel";
@@ -245,7 +245,11 @@ interface BaseProps extends RootAttributes {
      * the "Move to…" and "Copy to…" picker always go by name.
      */
     sort?: SortOrder;
-    /** The order at first, when the file manager keeps it; name, A to Z, when omitted. */
+    /**
+     * The order at first, when the file manager keeps it; relevance when omitted, which orders a
+     * search everywhere's results by how well their names answer what's typed and folders by name,
+     * A to Z.
+     */
     defaultSort?: SortOrder;
     /** Told the order the user picks, in the view options menu or the list's column headers. */
     onSortChange?: (sort: SortOrder) => void;
@@ -683,7 +687,7 @@ const FileManager = ({
     defaultZoom = DEFAULT_ZOOM,
     onZoomChange,
     sort: sortProp,
-    defaultSort = DEFAULT_SORT,
+    defaultSort = RELEVANCE_SORT,
     onSortChange,
     showHidden: showHiddenProp,
     defaultShowHidden = false,
@@ -3644,6 +3648,7 @@ const FileManager = ({
                                                 view={view}
                                                 zoom={zoom}
                                                 sort={sort}
+                                                resultsShown={showsResults}
                                                 showHidden={showHidden}
                                                 selecting={selecting}
                                                 searchScope={searchScope}
@@ -3709,7 +3714,7 @@ const FileManager = ({
                                                                     trail={place.trail}
                                                                     view={view}
                                                                     zoom={zoom[view]}
-                                                                    sort={sort}
+                                                                    sort={folderSort(sort)}
                                                                     showHidden={showHidden}
                                                                     query={searchScope === "folder" ? query : ""}
                                                                     hasActions={hasActions}

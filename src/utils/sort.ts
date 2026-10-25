@@ -2,6 +2,9 @@ import type { FileEntry, FileManagerLocaleText, Locale, SortDirection, SortKey, 
 
 type Comparator = (a: FileEntry, b: FileEntry) => number;
 
+/** The keys an entry is compared by; "relevance" ranks search results and compares no entries. */
+type FieldKey = Exclude<SortKey, "relevance">;
+
 interface SortKeyLabels {
     /** The list column's label, which the view menu uses too. */
     label: string;
@@ -20,6 +23,7 @@ const INITIAL_DIRECTIONS: Record<SortKey, SortDirection> = {
     size: "desc",
     type: "asc",
     modified: "desc",
+    relevance: "desc",
 };
 
 /** How the list's column and the view menu name each key, and each of its directions. */
@@ -28,9 +32,22 @@ export const SORT_LABELS: Record<SortKey, (text: FileManagerLocaleText) => SortK
     size: (text) => ({ label: text.sortSize, asc: text.sortSmallestFirst, desc: text.sortLargestFirst }),
     type: (text) => ({ label: text.sortType, asc: text.sortAToZ, desc: text.sortZToA }),
     modified: (text) => ({ label: text.sortModified, asc: text.sortOldestFirst, desc: text.sortNewestFirst }),
+    // Has one direction, best first, which the menu doesn't offer to change.
+    relevance: (text) => ({ label: text.sortRelevance, asc: text.sortRelevance, desc: text.sortRelevance }),
 };
 
-export const DEFAULT_SORT: SortOrder = { key: "name", direction: "asc" };
+/** An order of the keys entries are compared by. */
+type FolderOrder = SortOrder & { key: FieldKey };
+
+export const DEFAULT_SORT: FolderOrder = { key: "name", direction: "asc" };
+
+/** What the file manager starts with: relevance for a search's results, and name A to Z in folders. */
+export const RELEVANCE_SORT: SortOrder = { key: "relevance", direction: "desc" };
+
+/** The order folders go by: relevance means nothing in a folder, which is by name, A to Z. */
+export const folderSort = (sort: SortOrder): FolderOrder => (isFolderOrder(sort) ? sort : DEFAULT_SORT);
+
+const isFolderOrder = (sort: SortOrder): sort is FolderOrder => sort.key !== "relevance";
 
 /** Whether two orders are the same, by key and direction. */
 export const sameSort = (a: SortOrder, b: SortOrder) => a.key === b.key && a.direction === b.direction;
@@ -39,7 +56,7 @@ export const sameSort = (a: SortOrder, b: SortOrder) => a.key === b.key && a.dir
 const sizeOf = (entry: FileEntry) => (entry.kind === "folder" ? entry.childCount : entry.size) ?? -1;
 
 // Each one ascending, names and types in the locale's order. Unknown dates sort as the oldest.
-const comparators = (locale: Locale): Record<SortKey, Comparator> => ({
+const comparators = (locale: Locale): Record<FieldKey, Comparator> => ({
     name: (a, b) => locale.compareNames(a.name, b.name),
     size: (a, b) => sizeOf(a) - sizeOf(b),
     type: (a, b) => locale.compareNames(locale.describeType(a), locale.describeType(b)),
@@ -50,7 +67,8 @@ const comparators = (locale: Locale): Record<SortKey, Comparator> => ({
  * Folders first in either direction, then by the key in natural order, so "file2" sorts before
  * "file10". Ties fall back to the name A to Z, so entries of one size or type stay easy to scan.
  */
-export const entryComparator = ({ key, direction }: SortOrder, locale: Locale): Comparator => {
+export const entryComparator = (sort: SortOrder, locale: Locale): Comparator => {
+    const { key, direction } = folderSort(sort);
     const compareBy = comparators(locale);
     const compare = compareBy[key];
     const sign = direction === "asc" ? 1 : -1;

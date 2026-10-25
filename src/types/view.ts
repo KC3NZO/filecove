@@ -29,7 +29,12 @@ export interface GridSize {
 /** Which way the file manager's text runs, as the `dir` on or above it sets it. Internal. */
 export type TextDirection = "ltr" | "rtl";
 
-export type SortKey = "name" | "size" | "type" | "modified";
+/**
+ * What an order goes by. "relevance" ranks a search everywhere's results by how well their names
+ * answer what's typed, best first (its direction is ignored); anywhere else it stands for name,
+ * A to Z.
+ */
+export type SortKey = "name" | "size" | "type" | "modified" | "relevance";
 
 export type SortDirection = "asc" | "desc";
 

@@ -32,7 +32,7 @@ import { folderOf } from "../../../utils/navigation";
 import { entriesMoving } from "../../../utils/permissions";
 import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import { pressesKey } from "../../../utils/shortcut";
-import { resultKey } from "../../../utils/search";
+import { relevanceOf, resultKey, searchTerms } from "../../../utils/search";
 import { entryComparator } from "../../../utils/sort";
 import { movingThrough } from "../../../utils/transfer";
 import Icon from "../../icons/icon";
@@ -214,15 +214,30 @@ const SearchResults = ({
 
     const shownTargets = useMemo(() => (tabTarget ? [tabTarget] : targets), [tabTarget, targets]);
 
-    // Sorted as a folder is, hidden entries left out while they don't show, by what the adapter
-    // says of the entry itself; what's in a hidden folder is the adapter's to leave out.
+    // Sorted as a folder is, or by relevance (folders among the files, the adapter's score when it
+    // gives one, else how the name answers the words, ties by name), hidden entries left out while
+    // they don't show, by what the adapter says of the entry itself; what's in a hidden folder is
+    // the adapter's to leave out.
     const hits = useMemo(() => {
         const found = shownTargets.flatMap((target) => searches.get(target.section.id)?.matches ?? NO_HITS);
         const listed = showHidden ? found : found.filter((hit) => !isHidden(hit.entry));
+
+        if (sort.key === "relevance") {
+            const terms = searchTerms(query, locale.foldLetters);
+            const scored = listed.map((hit) => ({
+                hit,
+                score: hit.score ?? relevanceOf(locale.foldLetters(hit.entry.name), terms),
+            }));
+
+            return scored
+                .sort((a, b) => b.score - a.score || locale.compareNames(a.hit.entry.name, b.hit.entry.name))
+                .map(({ hit }) => hit);
+        }
+
         const compare = entryComparator(sort, locale);
 
         return listed.sort((a, b) => compare(a.entry, b.entry));
-    }, [shownTargets, searches, showHidden, sort, locale]);
+    }, [shownTargets, searches, showHidden, sort, query, locale]);
 
     // The views go by the results' keys, since entries of different sections may share ids, and
     // show each result's own entry, adapter and location from `origins`. Inside a section's tab,
