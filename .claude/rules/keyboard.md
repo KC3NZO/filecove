@@ -79,7 +79,7 @@ The list and the grid are each a `listbox` (`aria-multiselectable`, named by the
 
 A search everywhere's results (see "Searching everywhere" in `file-manager.md`) are a `listbox` as a folder's are, named by the open tab's section or "Search results", with the same roving focus, keys, type-ahead and `status` regions, and the count of results heard once they've come. The focus handling is a copy of the folder view's, without the parts tied to a folder (going up, reveals, a controlled selection).
 
-- The menu key opens the focused result's menu, for the selection when it's in one folder; there's no folder menu. Shortcuts run only for such a selection.
+- The menu key opens the focused result's menu, for the selection when the result is in it, by folder when it's in several, of one section or more (see "Acting on several folders" in `file-manager.md`); there's no folder menu. Shortcuts run for the selection, and for one from several folders only those of actions marked `acrossFolders`.
 - `takeFocus` goes to the results while they show, and not to the folder view hidden under them, so Down or Enter in the search field goes on to them.
 - The tabs are one tab stop, the open tab's (roving `tabIndex`). Left and Right move to the next or previous tab and open it, swapped when the strip computes as right to left, and Home and End go to the first and last, as a `tablist` with automatic activation does. Each tab is named by its section, then its count ("12 results") or that it couldn't be searched, from visually hidden text, the visible count `aria-hidden`, and the view below is the open tab's `tabpanel`.
 

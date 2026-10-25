@@ -69,7 +69,7 @@ What's loaded is kept by `previewKey` (the id, size and date modified), so a fil
 
 ### The app's actions
 
-`FileManager`'s optional `previewActions` (`ActionGroup[]`) are actions for the file shown, built as the context menu's are: `previewActionsFor` in `file-manager.tsx` asks `contextFor` for the one file in its folder (`target` "selection", with `inResults` for a search's results), and `toolbarGroups` (`utils/action-groups.ts`) binds the visible ones to it as `ToolbarGroup`s (`types/menu.ts`, internal). In that context:
+`FileManager`'s optional `previewActions` (`ActionGroup[]`) are actions for the file shown, built as the context menu's are: `previewActionsFor` in `file-manager.tsx` asks `contextFor` for the one file shown in its own folder (`target` "selection", with `inResults` for a search's results), and `toolbarGroups` (`utils/action-groups.ts`) binds the visible ones to it as `ToolbarGroup`s (`types/menu.ts`, internal). In that context:
 
 - `preview` is missing, since it's previewing already, and `closePreview` is there, for an action taking the user elsewhere, such as an editor of the app's own, which the preview, a modal with its focus trap, would otherwise stay over.
 - `open` calls `onOpenFile` and closes the preview unless it returned false; `openLocation` closes it first; `properties` closes it handing the focus over (`handedOff`, so `handlePreviewClosed` doesn't take it to the content), and the panel takes it.
@@ -137,8 +137,9 @@ Loading shows a spinner (see "While a file loads"). An adapter's rejection, the 
 
 ## Stepping through files
 
-A single file steps through the files of the view it's listed in, in the content's order, starting at it: the content passes its sorted entries as `MenuRequest.listing`, and only the content has one. Hidden files are not among them while they're not shown. Several entries step through the files among them. Folders are skipped.
+A single file steps through the files of the view it's listed in, in the content's order, starting at it: the content passes its sorted entries as `MenuRequest.listing`, and only the content has one. Hidden files are not among them while they're not shown. Several entries step through the files among them, from one folder or, for a search's results, several, of one section or more. Folders are skipped.
 
+- The request is its `files`, each a `PreviewFile` (`dialogs/preview-dialog.tsx`: the entry, its section, its adapter and its folder's trail), so each is loaded through its own adapter (`usePreviewContents`' `adapterOf`), planned by it, follows its own folder's listing, and binds the header's actions and Download to its own place (`actionsFor`, `onStep`, `onDownload` take the file).
 - Stepping through the folder, the content's selection follows the file shown (`follow`, `handlePreviewStep`, through `reveal`), as in GNOME's and macOS's previewers. Stepping through a selection leaves it as it was.
 - The arrow buttons, or Left and Right (swapped in RTL) except in a player, which seeks with them, and on a zoomed image, which pans with them. Home and End go to the first and last, except in the text and a font's specimen, which they scroll. There's no wrapping round.
 - A step by a button or a key slides the file in from the side it lies on, 48px and fading in over 200 ms, as a swipe's does (`useSwipe`'s `slide`).
@@ -148,9 +149,9 @@ A single file steps through the files of the view it's listed in, in the content
 
 ### Following changes
 
-The files follow their folder's listing (`useLiveEntries`): once a listing of the folder newer than the one they were taken from has come (`Baseline`, reset whenever the request's files change), each file is the listing's entry of its id, and a file no longer there is dropped. So a file renamed keeping its id, changed, or deleted or moved meanwhile, by an action in the header or elsewhere, shows as it is or goes, while a file a listing hasn't caught up with, as a search everywhere may find, isn't dropped for it. A rename to a new id, a delete and a move made through the file manager change the request's files at once too (`changePreview`, from `handleNamed`, `handleDeleted` and `handleMoved`).
+The files follow their folders' listings (`useLiveFiles`): once a listing of a file's folder newer than the one it was taken from has come (`Baseline`, the listings by folder key, reset whenever the request's files change), the file is that listing's entry of its id, and a file no longer there is dropped. So a file renamed keeping its id, changed, or deleted or moved meanwhile, by an action in the header or elsewhere, shows as it is or goes, while a file a listing hasn't caught up with, as a search everywhere may find, isn't dropped for it. A rename to a new id, a delete and a move made through the file manager change the request's files at once too (`changePreview`, from `handleNamed`, `handleDeleted` and `handleMoved`, changing the files of the adapter that changed).
 
-The file shown is kept by its id and its place (`Shown`): when it goes, the file now in its place shows, or the one before it at the end, the selection following it as a step does; with none left, the preview closes, showing the last files as it fades out.
+The file shown is kept by its id, its adapter and its place (`Shown`): when it goes, the file now in its place shows, or the one before it at the end, the selection following it as a step does; with none left, the preview closes, showing the last files as it fades out.
 
 ## Keys and focus
 
