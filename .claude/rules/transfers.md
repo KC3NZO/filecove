@@ -22,7 +22,7 @@ The same `copy(entries, targetId, options)` and `move(...)` as ever: one call pe
 
 ## Handing off
 
-- **The picker** (`dialogs/transfer-dialog.tsx`): "Copy here" / "Move here", or a choice in its clash step, calls `onStart(request, destination, conflict, skipped, mergedIds)` and the file manager closes it. There's no spinner and no error in it any more. Its `onChanged` is only for the New folder button's name dialog.
+- **The picker** (`dialogs/transfer-dialog.tsx`): "Copy here" / "Move here", or a choice in its clash step, calls `onStart(request, destination, conflict, skipped, mergedIds)` and the file manager closes it. A folder that can't change isn't chosen (see "Permissions" in `file-manager.md`). There's no spinner and no error in it any more. Its `onChanged` is only for the New folder button's name dialog.
 - **Pasting and dropping** (`dialogs/paste-dialog.tsx`): it lists the target if it isn't cached, looks for clashes, and only shows to ask about them, then calls `onStart(request, conflict, skipped, mergedIds)`. Cancel just closes. A drop is a paste of the dragged entries (see "Drag and drop" in `file-manager.md`).
 - `skipped` are the names the user chose to skip, for the announcement, and `mergedIds` the folders a Replace or Merge merges others into (`mergedFolders`, `utils/transfer.ts`, with `findClashes`), read from the listing as the choice is made, to list them again all the way down once it ends.
 - One paste is checked at a time (`offerPaste`'s `!pasting?.open`), as one upload is, but a paste or drop no longer waits for the copies and moves under way.
