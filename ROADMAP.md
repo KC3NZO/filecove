@@ -68,7 +68,6 @@ What's left in the features already built, what packaging needs before a release
 
 ### Thumbnails
 - [x] A thumbnail in the preview while the file loads. (The sidebar tree and the Move/Copy picker show only folders, so they have no thumbnails to show.) *Done 2026-10-24: the grid's thumbnail stands where the file will be, under the spinner, sized as the image will be when the listing says; it's a video's poster, and the picture of a file with no preview, such as a TIFF.*
-- [ ] Square cropping, and a frame around pictures.
 
 ### Search
 - [x] Acting on a selection that spans several folders. *Done 2026-10-25: a search's selection is acted on whole, by folder, of one section or several: copying, moving, cutting, copying to the clipboard, dragging, deleting, downloading, previewing and the properties, each folder's adapter asked for its entries. `ActionContext.byFolder` gives the app each section, folder and entries, and only actions marked `acrossFolders` are offered for such a selection. Entries already in the destination stay there on a move, and names shared among them are asked about as clashes, their copies or moves running one after another so each settles against the last (see "Acting on several folders" in `file-manager.md`).*

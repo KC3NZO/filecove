@@ -48,7 +48,3 @@ The list and the grid show a file's thumbnail in place of its type icon when the
 ## The playground
 
 The mock adapter's `thumbnail` makes thumbnails from the same made-up pictures as its contents (`thumbnailSource` in `mock-content.ts`): the landscapes without the name, for pictures the browser can't draw too (TIFF, HEIC, PSD, as Design assets' `print-proof.tiff`), the logos, and a page drawn for PDFs. Uploaded pictures use their own bytes. Each is shrunk to `size` as a PNG on a canvas (`shrink`), as a backend making them to order would. Files with none answer null at once, and the rest take the simulated latency. `archive` mixes PNGs, SVGs and PDFs among its 10,000 files, for scrolling through many, and `docs/contract.pdf` fails and keeps its icon.
-
-## Not yet
-
-Cropping to a square, and a frame around pictures, which would need telling transparent ones, such as logos, apart.
