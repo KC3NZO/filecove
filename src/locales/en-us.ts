@@ -7,6 +7,8 @@ const entries = (count: number, name: string) => (count === 1 ? `“${name}”` 
 
 const files = (count: number) => (count === 1 ? "1 file" : `${count} files`);
 
+const items = (count: number) => (count === 1 ? "1 item" : `${count} items`);
+
 const downloads = (count: number) => (count === 1 ? "a download" : `${count} downloads`);
 
 const folders = (count: number) => (count === 1 ? "1 folder" : `${count} folders`);
@@ -142,10 +144,8 @@ export const enUS: FileManagerLocaleText = {
     pickerFolders: (folderName) => `Folders in ${folderName}`,
     copyTitle: (count, name) => `Copy ${entries(count, name)}`,
     moveTitle: (count, name) => `Move ${entries(count, name)}`,
-    copyFailedTitle: (count, name) => `Couldn't copy ${entries(count, name)}`,
-    moveFailedTitle: (count, name) => `Couldn't move ${entries(count, name)}`,
-    copyFailed: (count) => `Couldn't copy ${itOrThem(count)}.`,
-    moveFailed: (count) => `Couldn't move ${itOrThem(count)}.`,
+    copyFailedNotice: (count, name, folderName) => `Couldn't copy ${entries(count, name)} to “${folderName}”`,
+    moveFailedNotice: (count, name, folderName) => `Couldn't move ${entries(count, name)} to “${folderName}”`,
     copyDone: (count, name, folderName) => `Copied ${entries(count, name)} to “${folderName}”`,
     moveDone: (count, name, folderName) => `Moved ${entries(count, name)} to “${folderName}”`,
     clipboardCut: (count, name) => `Cut ${entries(count, name)}, ready to paste`,
@@ -328,6 +328,39 @@ export const enUS: FileManagerLocaleText = {
     downloadCancel: (count, name) => `Cancel downloading ${entries(count, name)}`,
     downloadRetry: (count, name) => `Download ${entries(count, name)} again`,
     downloadSave: (count, name) => `Download ${entries(count, name)}`,
+
+    transfers: "Copying and moving",
+    transfersActive: (copying, moving) => {
+        if (copying > 0 && moving > 0) {
+            return `Copying ${items(copying)} and moving ${items(moving)}`;
+        }
+
+        return copying > 0 ? `Copying ${items(copying)}` : `Moving ${items(moving)}`;
+    },
+    transfersFailed: (copying, moving) => {
+        if (copying > 0 && moving > 0) {
+            return `Couldn't copy ${items(copying)} or move ${items(moving)}`;
+        }
+
+        return copying > 0 ? `Couldn't copy ${items(copying)}` : `Couldn't move ${items(moving)}`;
+    },
+    transfersFailedCount: (count) => `${count} failed`,
+    transferProgress: (done, total) => `${done} of ${total}`,
+    transfersHide: "Hide the copies and moves",
+    transfersShow: "Show the copies and moves",
+    transfersCancelAll: "Cancel every copy and move",
+    transfersClose: "Close",
+    transferItems: (count) => `${count} items`,
+    transferCopyQueued: (folderName) => `Waiting to copy to “${folderName}”`,
+    transferMoveQueued: (folderName) => `Waiting to move to “${folderName}”`,
+    transferCopying: (folderName) => `Copying to “${folderName}”`,
+    transferMoving: (folderName) => `Moving to “${folderName}”`,
+    transferCopyFailed: (count) => `Couldn't copy ${itOrThem(count)}.`,
+    transferMoveFailed: (count) => `Couldn't move ${itOrThem(count)}.`,
+    transferCopyCancel: (count, name) => `Cancel copying ${entries(count, name)}`,
+    transferMoveCancel: (count, name) => `Cancel moving ${entries(count, name)}`,
+    transferCopyRetry: (count, name) => `Copy ${entries(count, name)} again`,
+    transferMoveRetry: (count, name) => `Move ${entries(count, name)} again`,
 
     properties: "Properties",
     propertiesClose: "Close the properties",

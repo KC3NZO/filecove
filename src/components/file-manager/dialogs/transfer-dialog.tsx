@@ -19,7 +19,6 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
-import { findClashes, mergedFolders, useTransfer } from "../../../hooks/use-transfer";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { dialogActionsSx } from "../../../styles/direction";
@@ -29,6 +28,7 @@ import { isHidden } from "../../../utils/hidden";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { folderLeft, folderOf } from "../../../utils/navigation";
 import { nameOrder } from "../../../utils/sort";
+import { findClashes, mergedFolders } from "../../../utils/transfer";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
@@ -79,16 +79,23 @@ interface TransferDialogProps {
     showHidden: boolean;
     onClose: () => void;
     /**
-     * Called whenever the adapter may have changed folders, done, failed or cancelled, with their
-     * ids, to list them again wherever they're shown, and after a "replace", the ids of the folders
-     * entries were merged into, which may have changed all the way down.
+     * Called whenever the picker's New folder button may have changed folders, with their ids, to
+     * list them again wherever they're shown.
      */
-    onChanged: (adapter: FileAdapter, folderIds: string[], mergedIds?: string[]) => void;
+    onChanged: (adapter: FileAdapter, folderIds: string[]) => void;
     /**
-     * Called once the adapter has copied or moved the entries into `destination`, with the names of
-     * those it was told to skip, as the folder had them.
+     * Called once a destination is chosen and there's nothing left to ask, with the choice that
+     * settles names it already has, the names of the entries to skip, as the folder had them, and
+     * after a "replace", the ids of the folders entries are merged into, which may change all the
+     * way down. The adapter then copies or moves them in the background.
      */
-    onDone: (request: TransferRequest, destination: FileManagerLocation, skipped: string[]) => void;
+    onStart: (
+        request: TransferRequest,
+        destination: FileManagerLocation,
+        conflict: ConflictPolicy,
+        skipped: string[],
+        mergedIds: string[],
+    ) => void;
     /**
      * Called with a folder made with the picker's New folder button, as the adapter returned it,
      * and the id of the folder it was made in.
@@ -210,7 +217,8 @@ const isFolder = (entry: FileEntry) => entry.kind === "folder";
  * Asks where to copy or move entries, then has the adapter do it. It browses folders only, across
  * the sections the adapter serves that take entries from theirs, starting in the entries' own
  * folder. The entries themselves can't be opened, so a folder can never go into itself. Names the
- * destination already has are settled in a second step: replace or merge, keep both, or skip.
+ * destination already has are settled in a second step: replace or merge, keep both, or skip. Then
+ * it closes, and the copy or move runs in the background, shown in the transfer panel.
  *
  * The list of folders is one stop in the tab order, focused once the dialog has faded in. The
  * arrows, Home, End, PageUp and PageDown move between the rows that can be opened, and typing
@@ -228,7 +236,7 @@ const TransferDialog = ({
     showHidden,
     onClose,
     onChanged,
-    onDone,
+    onStart,
     onFolderCreated,
 }: TransferDialogProps) => {
     const { kind, section, adapter, trail, entries, destinations } = request;
@@ -260,18 +268,6 @@ const TransferDialog = ({
     // Ids are unique within an adapter, so the same folder is the same id whichever section shows it.
     const sameFolder = place !== null && targetFolder.id === sourceId;
     const title = (kind === "copy" ? text.copyToTitle : text.moveToTitle)(entries.length, isolate(entries[0].name));
-
-    // The adapter can't undo a change it has made, so both folders are listed again however it
-    // ended, and folders a Replace or Merge may have merged others into are listed again all the
-    // way down.
-    const refresh = (conflict: ConflictPolicy) =>
-        onChanged(
-            adapter,
-            kind === "move" ? [targetFolder.id, sourceId] : [targetFolder.id],
-            conflict === "replace" ? mergedFolders(entries, state?.entries) : undefined,
-        );
-
-    const { pending, failure, run: start, cancel, clearFailure } = useTransfer(request, refresh);
 
     const typeAhead = useTypeAhead();
     const listRef = useRef<HTMLUListElement | null>(null);
@@ -366,10 +362,6 @@ const TransferDialog = ({
     // takes the focus again. Going up, the folder left through gets the Tab stop and is scrolled
     // to, as in the content, by whichever route.
     const go = (next: FileManagerLocation | null) => {
-        if (pending) {
-            return;
-        }
-
         const active = document.activeElement;
         const left = place && next ? folderLeft(place, next) : undefined;
 
@@ -382,11 +374,10 @@ const TransferDialog = ({
         pendingScroll.current = stop !== null;
         setFocusId(stop);
         setPlace(next);
-        clearFailure();
     };
 
     // The listing is complete first, so the name starts unused and clashes are caught as it's typed.
-    const canCreate = !!adapter.createFolder && !!place && listed && !pending;
+    const canCreate = !!adapter.createFolder && !!place && listed;
 
     const askName = () => {
         if (place && canCreate) {
@@ -500,22 +491,18 @@ const TransferDialog = ({
         }
     };
 
+    // Folders a Replace or Merge merges others into are listed again all the way down once it ends.
+    // The picker closes as it starts, so a second click while it fades out starts nothing.
     const run = (conflict: ConflictPolicy) => {
-        if (!place) {
-            return;
+        if (place && open) {
+            onStart(
+                request,
+                place,
+                conflict,
+                conflict === "skip" ? (conflicts ?? []).map((clash) => clash.name) : [],
+                conflict === "replace" ? mergedFolders(entries, state?.entries) : [],
+            );
         }
-
-        const destination = place;
-
-        start(targetFolder.id, conflict).then((outcome) => {
-            if (outcome === "done") {
-                const skipped = conflict === "skip" ? (conflicts ?? []).map((clash) => clash.name) : [];
-
-                onDone(request, destination, skipped);
-            } else if (outcome === "failed") {
-                setConflicts(null);
-            }
-        });
     };
 
     // Copying into the entries' own folder clashes with every one of them, and only makes sense as
@@ -528,11 +515,6 @@ const TransferDialog = ({
         } else {
             run("keepBoth");
         }
-    };
-
-    const close = () => {
-        cancel();
-        onClose();
     };
 
     let body: ReactNode;
@@ -621,7 +603,7 @@ const TransferDialog = ({
 
     return (
         <>
-            <Dialog dir={dir} open={open} fullWidth maxWidth="sm" slotProps={slotProps} onClose={close}>
+            <Dialog dir={dir} open={open} fullWidth maxWidth="sm" slotProps={slotProps} onClose={onClose}>
                 <DialogTitle>{title}</DialogTitle>
                 <DialogContent sx={contentSx}>
                     {!conflicts && (
@@ -657,17 +639,11 @@ const TransferDialog = ({
                         </Box>
                     )}
                     {body}
-                    {failure && (
-                        <Typography variant="body2" color="error">
-                            {failure}
-                        </Typography>
-                    )}
                 </DialogContent>
                 {conflicts ? (
                     <DialogActions sx={dialogActionsSx}>
                         <Button
                             color="inherit"
-                            disabled={!!pending}
                             onClick={() => {
                                 // The list comes back in place of this button, so it takes the focus.
                                 pendingFocus.current = true;
@@ -677,11 +653,11 @@ const TransferDialog = ({
                             {text.back}
                         </Button>
                         <Box sx={spacerSx} />
-                        <ConflictChoices clashes={conflicts} pending={pending} onChoose={run} />
+                        <ConflictChoices clashes={conflicts} pending={null} onChoose={run} />
                     </DialogActions>
                 ) : (
                     <DialogActions sx={dialogActionsSx}>
-                        <Button color="inherit" onClick={close}>
+                        <Button color="inherit" onClick={onClose}>
                             {text.cancel}
                         </Button>
                         {/* The folder's names are checked for clashes, so it can't be chosen before they've
@@ -689,7 +665,6 @@ const TransferDialog = ({
                         <Button
                             variant="contained"
                             disabled={!place || !loaded || (kind === "move" && sameFolder)}
-                            loading={!!pending}
                             onClick={confirm}
                         >
                             {kind === "copy" ? text.copyHere : text.moveHere}

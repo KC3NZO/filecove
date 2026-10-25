@@ -14,6 +14,7 @@ import type {
     PropertyGroup,
     SearchMatch,
     SearchResult,
+    TransferOptions,
 } from "../../src";
 import type { ZipItem } from "./mock-zip";
 
@@ -85,6 +86,12 @@ const DOWNLOAD_SPEED = 2_000_000;
 /** Shortest and longest simulated fetch of a file to download, in ms, so a small one is too quick to show. */
 const DOWNLOAD_TIME: [min: number, max: number] = [300, 8000];
 
+/** Simulated speed of copying, and of moving between roots, in bytes per second. */
+const COPY_SPEED = 8_000_000;
+
+/** Shortest and longest simulated copy, in ms, so a small one is too quick to show, and a large one ends. */
+const COPY_TIME: [min: number, max: number] = [250, 10_000];
+
 export const folder = (name: string, modified: string, children: MockNode[]): MockNode => ({ name, modified, children });
 
 export const file = (name: string, size: number, modified: string, mimeType?: string): MockNode => ({
@@ -109,6 +116,17 @@ const MARKS = /\p{M}/gu;
 const fold = (text: string) => text.toLowerCase().normalize("NFKD").replace(MARKS, "");
 
 const clone = (node: MockNode): MockNode => ({ ...node, children: node.children?.map(clone) });
+
+/** How many bytes a file is, or everything in a folder. */
+const sizeOf = (node: MockNode): number =>
+    node.children ? node.children.reduce((sum, child) => sum + sizeOf(child), 0) : (node.size ?? 0);
+
+/** Something below a folder that can't be read, which stops a copy of it partway. */
+const unreadableIn = (node: MockNode): MockNode | undefined =>
+    node.children?.reduce<MockNode | undefined>(
+        (found, child) => found ?? (child.fails ? child : unreadableIn(child)),
+        undefined,
+    );
 
 /** A number made from a text, the same for the same text, for properties made up from names. */
 const hashOf = (text: string) => [...text].reduce((hash, char) => (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0, 7);
@@ -199,8 +217,8 @@ const wait = (signal: AbortSignal, ms: number) =>
     });
 
 /**
- * Simulates moving `size` bytes over `duration` ms, an upload or a download being prepared,
- * reporting progress as it goes, and rejects as soon as `signal` aborts.
+ * Simulates moving `size` bytes over `duration` ms, an upload, a download being prepared or a
+ * copy, reporting progress as it goes, and rejects as soon as `signal` aborts.
  */
 const transfer = (
     signal: AbortSignal,
@@ -429,6 +447,38 @@ export const createMockAdapter = (
 
     const clashes = (target: MockNode, node: MockNode) => !!target.children?.some((child) => child.name === node.name);
 
+    /**
+     * Copies or moves entries into a folder at `COPY_SPEED`, reporting how far it has got, as a
+     * backend copying the bytes would. Something below an entry that can't be read stops it halfway
+     * through that entry, with the entries before it done, as a backend failing partway leaves them.
+     * `put` puts each entry where it goes once its bytes have come.
+     */
+    const carry = async (
+        entries: FileEntry[],
+        targetId: string,
+        { signal, conflict, onProgress }: TransferOptions,
+        put: (target: MockNode, located: ReturnType<typeof locate>) => void,
+    ) => {
+        const target = folderAt(targetId);
+        const located = entries.map(locate).filter(({ node }) => !(conflict === "skip" && clashes(target, node)));
+        const sizes = located.map(({ node }) => sizeOf(node));
+        const total = sizes.reduce((sum, size) => sum + size, 0);
+        const stuckAt = located.findIndex(({ node }) => unreadableIn(node));
+        const done = stuckAt < 0 ? located : located.slice(0, stuckAt);
+        const reached =
+            stuckAt < 0 ? total : sizes.slice(0, stuckAt).reduce((sum, size) => sum + size, 0) + sizes[stuckAt] / 2;
+        const duration = clamp((total / COPY_SPEED) * 1000, COPY_TIME);
+
+        await transfer(signal, reached, total > 0 ? (duration * reached) / total : duration, (loaded) =>
+            onProgress(loaded, total),
+        );
+        done.forEach((item) => put(target, item));
+
+        if (stuckAt >= 0) {
+            throw new Error(`Couldn't read “${unreadableIn(located[stuckAt].node)?.name}”.`);
+        }
+    };
+
     // The root a path is below, which says who owns it.
     const rootOf = (path: string) =>
         Object.keys(roots).find((root) => path === root || path.startsWith(root === "/" ? "/" : `${root}/`)) ?? "/";
@@ -630,38 +680,41 @@ export const createMockAdapter = (
                 return toEntry(parentId, node);
             }),
 
-        copy: (entries, targetId, { signal, conflict }) =>
-            respond(signal, () => {
+        copy: (entries, targetId, options) =>
+            carry(entries, targetId, options, (target, { node }) =>
+                insert(target, targetId, clone(node), options.conflict),
+            ),
+
+        // Within a root, a move only renames, at once; between roots, the bytes go as a copy's do.
+        move: (entries, targetId, options) => {
+            const { signal, conflict } = options;
+            const into = entries.find((entry) => targetId === entry.id || targetId.startsWith(`${entry.id}/`));
+
+            if (into) {
+                return Promise.reject(new Error(`"${into.name}" can't go into itself.`));
+            }
+
+            const put = (target: MockNode, { parentId, parent, node }: ReturnType<typeof locate>) => {
+                detach(parent, parentId, node);
+                insert(target, targetId, node, conflict);
+            };
+
+            if (entries.some((entry) => rootOf(entry.id) !== rootOf(targetId))) {
+                return carry(entries, targetId, options, put);
+            }
+
+            return respond(signal, () => {
                 const target = folderAt(targetId);
 
                 entries.forEach((entry) => {
-                    const { node } = locate(entry);
+                    const located = locate(entry);
 
-                    if (!(conflict === "skip" && clashes(target, node))) {
-                        insert(target, targetId, clone(node), conflict);
+                    if (located.parent !== target && !(conflict === "skip" && clashes(target, located.node))) {
+                        put(target, located);
                     }
                 });
-            }),
-
-        move: (entries, targetId, { signal, conflict }) =>
-            respond(signal, () => {
-                const target = folderAt(targetId);
-
-                entries.forEach((entry) => {
-                    const { parentId, parent, node } = locate(entry);
-
-                    if (targetId === entry.id || targetId.startsWith(`${entry.id}/`)) {
-                        throw new Error(`"${entry.name}" can't go into itself.`);
-                    }
-
-                    if (parent === target || (conflict === "skip" && clashes(target, node))) {
-                        return;
-                    }
-
-                    detach(parent, parentId, node);
-                    insert(target, targetId, node, conflict);
-                });
-            }),
+            });
+        },
 
         delete: (entries, { signal }) =>
             respond(signal, () => {

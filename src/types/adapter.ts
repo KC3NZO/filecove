@@ -147,6 +147,12 @@ export interface TransferOptions extends OperationOptions {
      * beside it (see `ConflictPolicy`).
      */
     conflict: ConflictPolicy;
+    /**
+     * Reports how much has been copied or moved, in bytes, e.g. from a server saying how far a copy
+     * has got. Calling it is optional; without it the transfer shows as under way with no figure, as
+     * a move that only renames on the backend would.
+     */
+    onProgress: (loaded: number, total: number) => void;
 }
 
 /** Passed to `upload`. */
@@ -354,14 +360,15 @@ export interface FileAdapter {
     rename?(entry: FileEntry, name: string, options: OperationOptions): Promise<FileEntry>;
     /**
      * Copies entries, folders with everything in them, into `targetId`. The entries share a
-     * parent. Without it, the file manager has no way to copy. Reject with an `Error` to show its
-     * message to the user.
+     * parent. It runs in the background while the user browses, shown in a panel once it takes a
+     * moment, and several may run at once. Without it, the file manager has no way to copy. Reject
+     * with an `Error` to show its message to the user.
      */
     copy?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<void>;
     /**
      * Moves entries into `targetId`; never into themselves, nor into the folder they're in. The
-     * entries share a parent. Without it, the file manager has no way to move. Reject with an
-     * `Error` to show its message to the user.
+     * entries share a parent. It runs in the background as `copy` does. Without it, the file manager
+     * has no way to move. Reject with an `Error` to show its message to the user.
      */
     move?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<void>;
     /**

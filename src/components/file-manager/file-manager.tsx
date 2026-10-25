@@ -23,6 +23,7 @@ import type { ReviseLocation } from "../../hooks/use-location-history";
 import { useSetting } from "../../hooks/use-setting";
 import { useStableSet } from "../../hooks/use-stable-set";
 import { useTextDirection } from "../../hooks/use-text-direction";
+import { useTransferQueue } from "../../hooks/use-transfer-queue";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { useWheelZoom } from "../../hooks/use-wheel-zoom";
 import { createFolderStore, folderKey, keyFolder } from "../../store/folder-store";
@@ -61,6 +62,7 @@ import { previewable } from "../../utils/preview";
 import { DEFAULT_SORT, entryComparator, sameSort } from "../../utils/sort";
 import { DEFAULT_ZOOM, canZoom, sameZoom, zoomScale, zoomedBy } from "../../utils/zoom";
 import DownloadPanel from "../downloads/download-panel";
+import TransferPanel from "../transfers/transfer-panel";
 import UploadPanel from "../uploads/upload-panel";
 import Announcer from "./announcer";
 import FolderView from "./content/folder-view";
@@ -116,12 +118,14 @@ import type {
     SelectionDetails,
     SortOrder,
     ToolbarGroup,
+    TransferItem,
     TreeReveal,
     UploadItem,
     ViewMode,
     ViewZoom,
     ZoomStep,
 } from "../../types";
+import type { TransferOutcome } from "../../store/transfer-queue";
 import type { MenuState } from "./context-menu/context-menu";
 import type { DeleteDialogState, DeleteRequest } from "./dialogs/delete-dialog";
 import type { NameDialogState, NameRequest } from "./dialogs/name-dialog";
@@ -411,6 +415,21 @@ interface UploadPlace {
     name?: string;
 }
 
+/** What a copy or move in the transfer queue is of, and where it goes, for when it ends. */
+interface TransferPlace {
+    /**
+     * The entries, where they are and where they go, as a paste: the entries cut for a move. The
+     * trails are rewritten with the history's, to try it again where they are now.
+     */
+    request: PasteRequest;
+    /** The names of the entries the user chose to skip, as the folder had them. */
+    skipped: string[];
+    /** The folders a Replace or Merge merges others into, listed again all the way down as it ends. */
+    merged: string[];
+    /** Whether it can be tried again: false once a folder in either trail has gone (see `revise`). */
+    retriable: boolean;
+}
+
 /** `defaultSelectedIds`, for the folder the file manager opened in, until another opens. */
 interface InitialSelection {
     key: string | null;
@@ -595,8 +614,8 @@ const viewSx: SxProps<Theme> = {
     overflowY: "auto",
 };
 
-// The download and upload panels are further inset panels under the content, so they never cover
-// the files.
+// The transfer, download and upload panels are further inset panels under the content, so they
+// never cover the files.
 const taskPanelSx: SxProps<Theme> = {
     marginInline: 0.75,
     mb: 0.75,
@@ -734,17 +753,43 @@ const FileManager = ({
     // folder deleted above it or its section gone back to its root, is gone, so the upload can't be
     // shown any more.
     const uploadPlaces = useRef(new Map<number, UploadPlace>());
+    // What each copy and move in the transfer queue is of, by its id. Its places are rewritten the
+    // same way, so one that fails can be tried again where its folders are now, until either trail
+    // is cut short.
+    const transferPlaces = useRef(new Map<number, TransferPlace>());
 
     const revise = useCallback(
         (update: ReviseLocation) => {
+            // A place rewritten keeping each of its steps, or else null.
+            const followed = (location: FileManagerLocation) => {
+                const now = update(location, false);
+
+                return now && now.trail.length === location.trail.length ? now : null;
+            };
+
             reviseHistory(update);
             uploadPlaces.current.forEach((upload, id) => {
-                const location = update(upload.location, false);
+                const location = followed(upload.location);
 
-                if (location && location.trail.length === upload.location.trail.length) {
+                if (location) {
                     upload.location = location;
                 } else {
                     uploadPlaces.current.delete(id);
+                }
+            });
+            transferPlaces.current.forEach((transfer) => {
+                const { clipboard, section: target, trail } = transfer.request;
+                const from = followed({ sectionId: clipboard.section.id, trail: clipboard.trail });
+                const to = followed({ sectionId: target.id, trail });
+
+                if (from && to) {
+                    transfer.request = {
+                        clipboard: { ...clipboard, trail: from.trail },
+                        section: target,
+                        trail: to.trail,
+                    };
+                } else {
+                    transfer.retriable = false;
                 }
             });
         },
@@ -1208,9 +1253,9 @@ const FileManager = ({
         [clipboard],
     );
 
-    // Folders a running paste changes, whose view shows a progress bar meanwhile, in any section
-    // showing them: the one it goes into, the one listing that folder (where it was dropped onto,
-    // or pasted into from its menu), and, for a move, the one the entries leave.
+    // Folders a paste being checked changes, whose view shows a progress bar meanwhile (`busy`), in
+    // any section showing them: the one it goes into, the one listing that folder (where it was
+    // dropped onto, or pasted into from its menu), and, for a move, the one the entries leave.
     const pasteIds = useMemo(() => {
         if (!pasting?.open) {
             return null;
@@ -1225,9 +1270,6 @@ const FileManager = ({
 
         return { adapter: pasted.adapter, ids };
     }, [pasting]);
-
-    const busy =
-        !!folder && !!pasteIds && pasteIds.adapter === (section?.adapter ?? adapter) && pasteIds.ids.has(folder.id);
 
     // A reveal may be waiting for its folder to open.
     const revealId = reveal?.key === openKey ? reveal.id : undefined;
@@ -1951,11 +1993,12 @@ const FileManager = ({
         [openKey],
     );
 
-    // Pastes `pasted` into the folder at `trail`, when it can go there and no other paste is running.
+    // Pastes `pasted` into the folder at `trail`, when it can go there and no other paste is being
+    // checked, or tries a failed copy or move again (`retrying`).
     const offerPaste = useCallback(
-        (pasted: Clipboard, target: Section, trail: FolderRef[]) =>
+        (pasted: Clipboard, target: Section, trail: FolderRef[], retrying?: number) =>
             !pasting?.open && canPaste(pasted, target.adapter ?? adapter, target, trail)
-                ? () => askPaste({ clipboard: pasted, section: target, trail })
+                ? () => askPaste({ clipboard: pasted, section: target, trail, retrying })
                 : undefined,
         [adapter, pasting?.open, askPaste],
     );
@@ -2414,42 +2457,221 @@ const FileManager = ({
         [announce, localeValue],
     );
 
-    const handleTransferred = useCallback(
-        (request: TransferRequest, destination: FileManagerLocation, skipped: string[]) => {
-            const target = sectionsById.get(destination.sectionId);
+    // As a copy or move ends, what it may have changed is listed again, however it ended, since the
+    // adapter can't undo what it has done: the destination, the source after a move, and after a
+    // Replace or Merge, the folders merged into, all the way down. Once it's done, moved entries leave
+    // the cache, the clipboard and the preview (`handleMoved`), and it's announced. A failure stays in
+    // the panel to be tried again, and is announced unless the panel was showing already, since a
+    // panel just shown isn't read out, while its title is once it shows.
+    const handleTransferEnded = useCallback(
+        (item: TransferItem, outcome: TransferOutcome, items: TransferItem[]) => {
+            const transfer = transferPlaces.current.get(item.id);
+            const { kind, adapter: served, entries, source, target } = item;
 
-            closeTransfer();
-
-            if (request.kind === "move") {
-                handleMoved(request.adapter, request.entries, destination);
+            if (outcome !== "failed") {
+                transferPlaces.current.delete(item.id);
             }
 
-            if (target) {
-                announceTransfer(request.kind, request.entries, skipped, folderOf(target, destination.trail));
+            // Cancelled while it waited, it never reached the adapter.
+            if (outcome === "cancelled" && item.status === "queued") {
+                return;
+            }
+
+            relistTransferred(
+                served,
+                kind === "move" ? [target.id, source.id] : [target.id],
+                item.conflict === "replace" ? transfer?.merged : undefined,
+            );
+
+            if (outcome === "done") {
+                if (kind === "move" && transfer) {
+                    const { section: into, trail } = transfer.request;
+
+                    handleMoved(served, entries, { sectionId: into.id, trail });
+                }
+
+                announceTransfer(kind, entries, transfer?.skipped ?? [], target);
+            } else if (outcome === "failed" && !items.some((other) => other.shown && other.id !== item.id)) {
+                announce(
+                    (kind === "copy" ? localeValue.text.copyFailedNotice : localeValue.text.moveFailedNotice)(
+                        entries.length,
+                        isolate(entries[0].name),
+                        isolate(target.name),
+                    ),
+                );
             }
         },
-        [closeTransfer, handleMoved, announceTransfer, sectionsById],
+        [relistTransferred, handleMoved, announceTransfer, announce, localeValue],
     );
 
-    // A cut is pasted once, so its entries leave the clipboard, as do entries moved by a drop; a
-    // copy can be pasted again.
-    const handlePasted = useCallback(
-        ({ clipboard: pasted, section: target, trail }: PasteRequest, skipped: string[]) => {
-            closePaste();
+    // Copies and moves run in the background while the user browses, a few at once, and the panel
+    // shows those that take a moment or failed.
+    const transfers = useTransferQueue(handleTransferEnded);
+    const shownTransfers = useMemo(() => transfers.items.filter((item) => item.shown), [transfers.items]);
+
+    // Forgets a failed copy or move, and what it was of.
+    const forgetTransfer = useCallback(
+        (id: number) => {
+            transfers.queue.forget(id);
+            transferPlaces.current.delete(id);
+        },
+        [transfers.queue],
+    );
+
+    // A copy or move asked for, by the picker, a paste or a drop, once its names are settled. A cut
+    // leaves the clipboard as its paste starts, so it isn't pasted twice while it runs; a copy can be
+    // pasted again. One that fails is tried again from the panel, and goes from it as the new one
+    // starts.
+    const startTransfer = useCallback(
+        (request: PasteRequest, conflict: ConflictPolicy, skipped: string[], merged: string[]) => {
+            const { clipboard: pasted, section: target, trail, retrying } = request;
+
+            if (retrying !== undefined) {
+                forgetTransfer(retrying);
+            }
+
+            const id = transfers.queue.add(
+                pasted.kind === "cut" ? "move" : "copy",
+                pasted.adapter,
+                pasted.entries,
+                folderOf(pasted.section, pasted.trail),
+                folderOf(target, trail),
+                conflict,
+            );
+
+            transferPlaces.current.set(id, { request, skipped, merged, retriable: true });
 
             if (pasted.kind === "cut") {
-                handleMoved(pasted.adapter, pasted.entries, { sectionId: target.id, trail });
+                setClipboard((prev) => (prev === pasted ? null : prev));
+            }
+        },
+        [transfers.queue, forgetTransfer],
+    );
+
+    // The picker's destination is one of the sections it was opened with, as a dialog finishes with
+    // the sections it was opened for.
+    const handleTransferStart = useCallback(
+        (
+            { kind, section: from, adapter: served, trail, entries, destinations }: TransferRequest,
+            destination: FileManagerLocation,
+            conflict: ConflictPolicy,
+            skipped: string[],
+            merged: string[],
+        ) => {
+            const target = destinations.find((candidate) => candidate.id === destination.sectionId) ?? from;
+            const pasted: Clipboard = {
+                kind: kind === "move" ? "cut" : "copy",
+                section: from,
+                adapter: served,
+                trail,
+                entries,
+            };
+
+            closeTransfer();
+            startTransfer({ clipboard: pasted, section: target, trail: destination.trail }, conflict, skipped, merged);
+        },
+        [closeTransfer, startTransfer],
+    );
+
+    const handlePasteStart = useCallback(
+        (request: PasteRequest, conflict: ConflictPolicy, skipped: string[], merged: string[]) => {
+            closePaste();
+            startTransfer(request, conflict, skipped, merged);
+        },
+        [closePaste, startTransfer],
+    );
+
+    // A failed copy or move can be tried again while both its sections are there, served as they
+    // were, and neither of its folders has gone (see `revise`).
+    const canRetryTransfer = useCallback(
+        (item: TransferItem) => {
+            const transfer = transferPlaces.current.get(item.id);
+
+            if (!transfer?.retriable) {
+                return false;
             }
 
-            announceTransfer(
-                pasted.kind === "cut" ? "move" : "copy",
-                pasted.entries,
-                skipped,
-                folderOf(target, trail),
+            const from = sectionsById.get(transfer.request.clipboard.section.id);
+            const into = sectionsById.get(transfer.request.section.id);
+
+            return (
+                !!from &&
+                !!into &&
+                (from.adapter ?? adapter) === item.adapter &&
+                (into.adapter ?? adapter) === item.adapter
             );
         },
-        [closePaste, handleMoved, announceTransfer],
+        [sectionsById, adapter],
     );
+
+    // Tries a failed copy or move again as a paste, so the destination's names are checked again,
+    // since part of it may have gone through, and the user chooses afresh; it stays in the panel
+    // until the new one starts, as the user may cancel. Only the entries their folder still lists
+    // go, when it's listed, so a move doesn't ask again for what it moved. With none left, there's
+    // nothing to try again, and it's forgotten.
+    const retryTransfer = useCallback(
+        (item: TransferItem) => {
+            const transfer = transferPlaces.current.get(item.id);
+            const from = transfer && sectionsById.get(transfer.request.clipboard.section.id);
+            const into = transfer && sectionsById.get(transfer.request.section.id);
+
+            if (!transfer || !from || !into || !canRetryTransfer(item)) {
+                return;
+            }
+
+            const { clipboard: pasted, trail } = transfer.request;
+            const listed = store.get(folderKey(from.id, folderOf(from, pasted.trail).id))?.entries;
+            const listedIds = listed && new Set(listed.map((entry) => entry.id));
+            const entries = listedIds ? pasted.entries.filter((entry) => listedIds.has(entry.id)) : pasted.entries;
+            if (entries.length === 0) {
+                forgetTransfer(item.id);
+            } else {
+                offerPaste({ ...pasted, section: from, entries }, into, trail, item.id)?.();
+            }
+        },
+        [sectionsById, canRetryTransfer, store, offerPaste, forgetTransfer],
+    );
+
+    // Forgets every failed copy and move, and what they were of.
+    const clearTransfers = useCallback(() => {
+        transfers.queue.clear();
+
+        const kept = new Set(transfers.queue.getItems().map((item) => item.id));
+
+        transferPlaces.current.forEach((_, id) => !kept.has(id) && transferPlaces.current.delete(id));
+    }, [transfers.queue]);
+
+    // Folders a copy or move changes show their progress bar while it waits or runs, in any section
+    // showing them: the one it goes into, the one listing that folder (where it was dropped onto, or
+    // pasted into from its menu), and, for a move, the one the entries leave. So do those of a paste
+    // while its names are checked.
+    const busy = useMemo(() => {
+        const served = section?.adapter ?? adapter;
+
+        if (!folder) {
+            return false;
+        }
+
+        if (pasteIds?.adapter === served && pasteIds.ids.has(folder.id)) {
+            return true;
+        }
+
+        return transfers.items.some((item) => {
+            const transfer = transferPlaces.current.get(item.id);
+
+            if (item.status === "failed" || item.adapter !== served) {
+                return false;
+            }
+
+            const above = transfer && folderOf(transfer.request.section, transfer.request.trail.slice(0, -1));
+
+            return (
+                item.target.id === folder.id ||
+                above?.id === folder.id ||
+                (item.kind === "move" && item.source.id === folder.id)
+            );
+        });
+    }, [section, adapter, folder, pasteIds, transfers.items]);
 
     // Deleted folders go from the cache (`dropFolders`), and places inside one, in the history too,
     // end at the folder that held it, in every section showing it. Deleted entries leave the clipboard,
@@ -3222,6 +3444,18 @@ const FileManager = ({
                                                         )}
                                                     </Box>
                                                 </Box>
+                                                {shownTransfers.length > 0 && (
+                                                    <Box sx={taskPanelSx}>
+                                                        <TransferPanel
+                                                            items={shownTransfers}
+                                                            onCancel={transfers.queue.cancel}
+                                                            onRetry={retryTransfer}
+                                                            canRetry={canRetryTransfer}
+                                                            onCancelAll={transfers.queue.cancelAll}
+                                                            onClear={clearTransfers}
+                                                        />
+                                                    </Box>
+                                                )}
                                                 {shownDownloads.length > 0 && (
                                                     <Box sx={taskPanelSx}>
                                                         <DownloadPanel
@@ -3286,8 +3520,8 @@ const FileManager = ({
                                         request={transfer.request}
                                         showHidden={showHidden}
                                         onClose={closeTransfer}
-                                        onChanged={relistTransferred}
-                                        onDone={handleTransferred}
+                                        onChanged={relist}
+                                        onStart={handleTransferStart}
                                         onFolderCreated={handleFolderCreated}
                                     />
                                 )}
@@ -3307,8 +3541,7 @@ const FileManager = ({
                                         open={pasting.open}
                                         request={pasting.request}
                                         onClose={closePaste}
-                                        onChanged={relistTransferred}
-                                        onDone={handlePasted}
+                                        onStart={handlePasteStart}
                                     />
                                 )}
                                 {uploadCheck && (

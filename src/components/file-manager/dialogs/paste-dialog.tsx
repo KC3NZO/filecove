@@ -6,20 +6,19 @@ import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
-import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
-import { findClashes, mergedFolders, useTransfer } from "../../../hooks/use-transfer";
 import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { folderOf } from "../../../utils/navigation";
+import { findClashes, mergedFolders } from "../../../utils/transfer";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 
-import type { Clash, Clipboard, ConflictPolicy, FileAdapter, FolderRef, Section } from "../../../types";
+import type { Clash, Clipboard, ConflictPolicy, FolderRef, Section } from "../../../types";
 
 export interface PasteRequest {
     /** What is pasted, as it was when the paste began: the clipboard, or entries dropped onto a folder. */
@@ -28,10 +27,12 @@ export interface PasteRequest {
     section: Section;
     /** Trail to the folder pasted into. */
     trail: FolderRef[];
+    /** The failed copy or move this tries again, by its id in the transfer queue, which goes as this one starts. */
+    retrying?: number;
 }
 
 export interface PasteDialogState {
-    /** False once the paste is over, or while the dialog plays its closing transition. */
+    /** False once the paste has started, or while the dialog plays its closing transition. */
     open: boolean;
     /** Counts pastes, so each one starts afresh. */
     id: number;
@@ -43,16 +44,12 @@ interface PasteDialogProps {
     request: PasteRequest;
     onClose: () => void;
     /**
-     * Called whenever the adapter may have changed folders, done, failed or cancelled, with their
-     * ids, to list them again wherever they're shown, and after a "replace", the ids of the folders
-     * entries were merged into, which may have changed all the way down.
+     * Called once there's nothing left to ask, with the choice that settles names the folder
+     * already has, the names of the entries to skip, as the folder had them, and after a
+     * "replace", the ids of the folders entries are merged into, which may change all the way
+     * down. The adapter then moves or copies them in the background.
      */
-    onChanged: (adapter: FileAdapter, folderIds: string[], mergedIds?: string[]) => void;
-    /**
-     * Called once the adapter has moved or copied the entries, with the names of those it was told
-     * to skip, as the folder had them.
-     */
-    onDone: (request: PasteRequest, skipped: string[]) => void;
+    onStart: (request: PasteRequest, conflict: ConflictPolicy, skipped: string[], mergedIds: string[]) => void;
 }
 
 const slotProps = {
@@ -69,13 +66,15 @@ const spacerSx: SxProps<Theme> = {
     flex: 1,
 };
 
+const NO_CLASHES: Clash[] = [];
+
 /**
- * Pastes what was cut or copied, or dropped onto a folder: the adapter moves or copies it into the
- * folder. Most pastes need nothing from the user, so they run unseen and the dialog only shows to
- * ask about names the folder already has (replace or merge, keep both, or skip) or to report the
- * adapter's error.
+ * Pastes what was cut or copied, or dropped onto a folder: once the folder's names are checked, the
+ * adapter moves or copies it in the background, shown in the transfer panel. Most pastes need
+ * nothing from the user, so the check runs unseen and the dialog only shows to ask about names the
+ * folder already has: replace or merge, keep both, or skip.
  */
-const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogProps) => {
+const PasteDialog = ({ open, request, onClose, onStart }: PasteDialogProps) => {
     const { clipboard, section, trail } = request;
     const { entries } = clipboard;
     const kind = clipboard.kind === "cut" ? "move" : "copy";
@@ -92,26 +91,17 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
     const [checked, setChecked] = useState(false);
     const [conflicts, setConflicts] = useState<Clash[] | null>(null);
 
-    // The adapter can't undo a change it has made, so however it ended, the target is listed again,
-    // and so is the source after a move, and folders a Replace or Merge may have merged others into
-    // are listed again all the way down.
-    const refresh = (conflict: ConflictPolicy) =>
-        onChanged(
-            clipboard.adapter,
-            kind === "move" ? [target.id, sourceId] : [target.id],
-            conflict === "replace" ? mergedFolders(entries, state?.entries) : undefined,
-        );
-
-    const { pending, failure, run, cancel } = useTransfer({ kind, adapter: clipboard.adapter, entries }, refresh);
-
-    const paste = (conflict: ConflictPolicy) => {
-        run(target.id, conflict).then((outcome) => {
-            if (outcome === "done") {
-                onDone(request, conflict === "skip" ? (conflicts ?? []).map((clash) => clash.name) : []);
-            } else if (outcome === "failed") {
-                setConflicts(null);
-            }
-        });
+    // Folders a Replace or Merge merges others into are listed again all the way down once it ends.
+    // The dialog closes as the paste starts, so a second click while it fades out starts nothing.
+    const paste = (conflict: ConflictPolicy, clashes: Clash[]) => {
+        if (open) {
+            onStart(
+                request,
+                conflict,
+                conflict === "skip" ? clashes.map((clash) => clash.name) : [],
+                conflict === "replace" ? mergedFolders(entries, state?.entries) : [],
+            );
+        }
     };
 
     // Once the target's listing is there, it's checked for names the entries share, and with nothing
@@ -130,53 +120,31 @@ const PasteDialog = ({ open, request, onClose, onChanged, onDone }: PasteDialogP
         if (clashes.length > 0) {
             setConflicts(clashes);
         } else {
-            paste("keepBoth");
+            paste("keepBoth", NO_CLASHES);
         }
     }, [checked, listed]);
 
-    const close = () => {
-        cancel();
-        onClose();
-    };
-
-    const askingTitle = kind === "move" ? text.moveTitle : text.copyTitle;
-    const failedTitle = kind === "move" ? text.moveFailedTitle : text.copyFailedTitle;
-    const title = (failure ? failedTitle : askingTitle)(entries.length, isolate(entries[0].name));
+    const title = (kind === "move" ? text.moveTitle : text.copyTitle)(entries.length, isolate(entries[0].name));
 
     return (
-        <Dialog
-            dir={dir}
-            open={open && (!!conflicts || !!failure)}
-            fullWidth
-            maxWidth="xs"
-            slotProps={slotProps}
-            onClose={close}
-        >
+        <Dialog dir={dir} open={open && !!conflicts} fullWidth maxWidth="xs" slotProps={slotProps} onClose={onClose}>
             <DialogTitle>{title}</DialogTitle>
             <DialogContent sx={contentSx}>
-                {failure ? (
-                    <Typography variant="body2" color="error">
-                        {failure}
-                    </Typography>
-                ) : (
-                    conflicts && <ConflictMessage clashes={conflicts} folderName={target.name} />
-                )}
+                {conflicts && <ConflictMessage clashes={conflicts} folderName={target.name} />}
             </DialogContent>
-            {failure ? (
-                <DialogActions sx={dialogActionsSx}>
-                    <Button variant="contained" onClick={close}>
-                        {text.close}
-                    </Button>
-                </DialogActions>
-            ) : (
-                <DialogActions sx={dialogActionsSx}>
-                    <Button color="inherit" disabled={!!pending} onClick={close}>
-                        {text.cancel}
-                    </Button>
-                    <Box sx={spacerSx} />
-                    {conflicts && <ConflictChoices clashes={conflicts} pending={pending} onChoose={paste} />}
-                </DialogActions>
-            )}
+            <DialogActions sx={dialogActionsSx}>
+                <Button color="inherit" onClick={onClose}>
+                    {text.cancel}
+                </Button>
+                <Box sx={spacerSx} />
+                {conflicts && (
+                    <ConflictChoices
+                        clashes={conflicts}
+                        pending={null}
+                        onChoose={(conflict) => paste(conflict, conflicts)}
+                    />
+                )}
+            </DialogActions>
         </Dialog>
     );
 };

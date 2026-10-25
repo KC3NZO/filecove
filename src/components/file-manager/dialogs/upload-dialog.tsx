@@ -12,13 +12,13 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
-import { findClashes } from "../../../hooks/use-transfer";
 import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { acceptsFile, uploadPatterns } from "../../../utils/files";
 import { freeName } from "../../../utils/names";
 import { folderOf } from "../../../utils/navigation";
+import { findClashes } from "../../../utils/transfer";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 
 import type {

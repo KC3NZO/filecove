@@ -111,6 +111,52 @@ export interface DownloadLocaleText {
 }
 
 /**
+ * What the copy and move panel says. Kept apart from the rest, as the upload and download panels'
+ * are, since the panel is meant to be shared with the media manager to come. A copy or move is of
+ * one entry, its `name` given, or of `count` of them, and `folderName` is where it goes.
+ */
+export interface TransferLocaleText {
+    /** The panel's name for screen readers. */
+    transfers: string;
+    /**
+     * The panel's title while copies or moves wait or are under way: how many entries are being
+     * copied, and how many moved. Either may be 0, never both.
+     */
+    transfersActive: (copying: number, moving: number) => string;
+    /**
+     * The panel's title once nothing is under way and some copies or moves failed: how many
+     * entries couldn't be copied, and how many moved. Either may be 0, never both.
+     */
+    transfersFailed: (copying: number, moving: number) => string;
+    /** Under the title, how many entries couldn't be copied or moved, when others are under way. */
+    transfersFailedCount: (count: number) => string;
+    /** How much has been copied or moved of the total, both already formatted, e.g. "1.5 MB" and "4 MB". */
+    transferProgress: (done: string, total: string) => string;
+    transfersHide: string;
+    transfersShow: string;
+    transfersCancelAll: string;
+    transfersClose: string;
+    /** Several entries copied or moved together, named by how many. */
+    transferItems: (count: number) => string;
+    /** A copy's status while it waits for its turn. */
+    transferCopyQueued: (folderName: string) => string;
+    /** A move's status while it waits for its turn. */
+    transferMoveQueued: (folderName: string) => string;
+    /** A copy's status while it's under way, beside how far it has got once the adapter says. */
+    transferCopying: (folderName: string) => string;
+    /** A move's status while it's under way, beside how far it has got once the adapter says. */
+    transferMoving: (folderName: string) => string;
+    /** Why a copy failed, when the adapter didn't say. */
+    transferCopyFailed: (count: number) => string;
+    /** Why a move failed, when the adapter didn't say. */
+    transferMoveFailed: (count: number) => string;
+    transferCopyCancel: (count: number, name: string) => string;
+    transferMoveCancel: (count: number, name: string) => string;
+    transferCopyRetry: (count: number, name: string) => string;
+    transferMoveRetry: (count: number, name: string) => string;
+}
+
+/**
  * What the properties panel says. Kept apart from the rest, as the upload and download panels'
  * are, since the panel is meant to be shared with the media manager to come. The backend's own
  * properties come labelled by the consumer, in their language.
@@ -171,7 +217,8 @@ export interface PropertiesLocaleText {
  * and pluralizes them its own way. Counts come as plain numbers, and `name` is the entry's name,
  * meant for when `count` is 1. `kind` is "file" or "folder".
  */
-export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleText, PropertiesLocaleText {
+export interface FileManagerLocaleText
+    extends UploadLocaleText, DownloadLocaleText, TransferLocaleText, PropertiesLocaleText {
     // Shared
     loading: string;
     cancel: string;
@@ -350,12 +397,13 @@ export interface FileManagerLocaleText extends UploadLocaleText, DownloadLocaleT
     /** The title of a paste asking about names the folder already has. */
     copyTitle: (count: number, name: string) => string;
     moveTitle: (count: number, name: string) => string;
-    copyFailedTitle: (count: number, name: string) => string;
-    moveFailedTitle: (count: number, name: string) => string;
-    /** Why copying failed, when the adapter didn't say. */
-    copyFailed: (count: number) => string;
-    /** Why moving failed, when the adapter didn't say. */
-    moveFailed: (count: number) => string;
+    /**
+     * Read to screen readers as a copy fails while the copy and move panel wasn't showing, since a
+     * panel just shown isn't read out; once it shows, its title says so.
+     */
+    copyFailedNotice: (count: number, name: string, folderName: string) => string;
+    /** Read to screen readers as a move fails while the copy and move panel wasn't showing. */
+    moveFailedNotice: (count: number, name: string, folderName: string) => string;
     /** Read to screen readers once entries are copied, by a paste, a drop or "Copy to…". */
     copyDone: (count: number, name: string, folderName: string) => string;
     /** Read to screen readers once entries are moved, by a paste, a drop or "Move to…". */
