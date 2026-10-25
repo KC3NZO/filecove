@@ -19,6 +19,8 @@ interface LongPressOptions {
     onLongPress: (id: string, press: HeldPress) => void;
     /** The item a press is on; by default an entry, found by its `data-entry-id`. */
     itemAt?: (target: Element) => string | undefined;
+    /** Whether a press on a button counts, for items that are buttons; presses on controls stay taps otherwise. */
+    onButtons?: boolean;
 }
 
 const entryAt = (target: Element) => target.closest<HTMLElement>("[data-entry-id]")?.dataset.entryId;
@@ -30,7 +32,7 @@ const entryAt = (target: Element) => target.closest<HTMLElement>("[data-entry-id
  * dropped, and the click that follows a long-press is swallowed so it doesn't act on the item a
  * second time.
  */
-export const useLongPress = ({ onLongPress, itemAt = entryAt }: LongPressOptions) => {
+export const useLongPress = ({ onLongPress, itemAt = entryAt, onButtons = false }: LongPressOptions) => {
     const endRef = useRef<(() => void) | null>(null);
     const suppressClick = useRef(false);
     const callbacks = useRef({ onLongPress, itemAt });
@@ -51,7 +53,7 @@ export const useLongPress = ({ onLongPress, itemAt = entryAt }: LongPressOptions
             return;
         }
 
-        if (!(event.target instanceof Element) || event.target.closest(IGNORED)) {
+        if (!(event.target instanceof Element) || (!onButtons && event.target.closest(IGNORED))) {
             return;
         }
 
@@ -110,7 +112,7 @@ export const useLongPress = ({ onLongPress, itemAt = entryAt }: LongPressOptions
         window.addEventListener("pointerup", end);
         window.addEventListener("pointercancel", end);
         endRef.current = end;
-    }, []);
+    }, [onButtons]);
 
     const onClickCapture = useCallback((event: MouseEvent) => {
         if (suppressClick.current) {

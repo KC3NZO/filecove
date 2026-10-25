@@ -61,7 +61,7 @@ const pushed = (history: History, place: FileManagerLocation): History => {
     return { places: [...history.places.slice(0, history.index + 1), place], index: history.index + 1 };
 };
 
-const stepped = (history: History, by: -1 | 1): History => {
+const stepped = (history: History, by: number): History => {
     const index = history.index + by;
 
     return index >= 0 && index < history.places.length ? { ...history, index } : history;
@@ -219,6 +219,12 @@ export const useLocationHistory = ({ location, initial, onChange }: LocationHist
 
     const forward = useCallback(() => change("forward", (history) => stepped(history, 1)), [change]);
 
+    /** Goes `by` places back (negative) or forward through the history, for its list. */
+    const go = useCallback(
+        (by: number) => change(by < 0 ? "back" : "forward", (history) => stepped(history, by)),
+        [change],
+    );
+
     /** Rewrites every place, the current one included, e.g. after a folder on their trails was renamed. */
     const revise = useCallback(
         (update: ReviseLocation) => change("replace", (history) => revised(history, update)),
@@ -235,11 +241,15 @@ export const useLocationHistory = ({ location, initial, onChange }: LocationHist
         previous: history.places[history.index - 1] as FileManagerLocation | undefined,
         /** Where `forward` goes, if anywhere. */
         next: history.places[history.index + 1] as FileManagerLocation | undefined,
+        /** Every place visited, oldest first, and which of them is the current one, for the history lists. */
+        places: history.places,
+        index: history.index,
         canGoBack: history.index > 0,
         canGoForward: history.index < history.places.length - 1,
         navigate,
         back,
         forward,
+        go,
         revise,
     };
 };

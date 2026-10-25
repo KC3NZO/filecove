@@ -53,7 +53,7 @@ export type {
     ToolbarAction,
     ToolbarGroup,
 } from "./menu";
-export type { FileManagerLocation, LocationChangeReason } from "./navigation";
+export type { FileManagerLocation, HistoryStop, LocationChangeReason } from "./navigation";
 export type { PreviewContent, PreviewKind, PreviewPlan, TextExcerpt } from "./preview";
 export type { FilePreviewer, PreviewerProps, PreviewerReads } from "./previewer";
 export type { CountTarget, PropertiesItem, PropertiesSubject, Requested, SubjectEntry } from "./properties";

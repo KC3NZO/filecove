@@ -33,7 +33,7 @@ import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { ROOT_CONTAINER, VIEW_CONTAINER, rootExtraWide, rootWide } from "../../styles/layout";
 import { withSx } from "../../styles/sx";
 import { toolbarGroups, visibleActionGroups } from "../../utils/action-groups";
-import { isolate } from "../../utils/bidi";
+import { isolate, joinIsolated } from "../../utils/bidi";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { canDownload, downloadedEntries } from "../../utils/download";
 import {
@@ -107,6 +107,7 @@ import type {
     FilePreviewer,
     FolderRef,
     FolderUpload,
+    HistoryStop,
     LocationChangeReason,
     MainMenuGroup,
     MenuRequest,
@@ -767,11 +768,14 @@ const FileManager = ({
         reason: placeReason,
         previous,
         next,
+        places: historyPlaces,
+        index: historyIndex,
         canGoBack,
         canGoForward,
         navigate,
         back,
         forward,
+        go: goInHistory,
         revise: reviseHistory,
     } = useLocationHistory({
         location: locationProp,
@@ -1403,6 +1407,45 @@ const FileManager = ({
             forward();
         }
     }, [next, leaveFor, forward]);
+
+    // The places back or forward lead to, nearest first, for the lists the header's buttons open,
+    // named by the folder each is at, or by its section at the root.
+    const historyStops = useCallback(
+        (direction: "back" | "forward"): HistoryStop[] => {
+            const sign = direction === "back" ? -1 : 1;
+            const stops: HistoryStop[] = [];
+
+            for (let by = sign; historyPlaces[historyIndex + by]; by += sign) {
+                const { sectionId, trail } = historyPlaces[historyIndex + by];
+                const section = sectionsById.get(sectionId);
+                const names = trail.map((folder) => folder.name);
+
+                stops.push({
+                    by,
+                    label: names.at(-1) ?? section?.label ?? "",
+                    location:
+                        names.length > 0 ? joinIsolated([section?.label ?? "", ...names.slice(0, -1)], " / ") : "",
+                    icon: names.length > 0 ? "folder" : (section?.icon ?? "folder"),
+                });
+            }
+
+            return stops;
+        },
+        [historyPlaces, historyIndex, sectionsById],
+    );
+
+    // Goes straight to a place of the history's lists, as back or forward would after as many steps.
+    const goInHistoryBy = useCallback(
+        (by: number) => {
+            const target = historyPlaces[historyIndex + by];
+
+            if (target) {
+                leaveFor(target);
+                goInHistory(by);
+            }
+        },
+        [historyPlaces, historyIndex, leaveFor, goInHistory],
+    );
 
     // The overlay closes on the place picked in it, so the focus goes on to the content.
     const navigateFromSidebar = useCallback(
@@ -3611,6 +3654,8 @@ const FileManager = ({
                                                 propertiesDocked={propertiesDocked}
                                                 onBack={goBack}
                                                 onForward={goForward}
+                                                historyStops={historyStops}
+                                                onGoInHistory={goInHistoryBy}
                                                 onToggleView={toggleView}
                                                 onZoom={zoomContent}
                                                 onSortChange={setSort}

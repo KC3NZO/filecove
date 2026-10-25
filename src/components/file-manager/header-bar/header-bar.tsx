@@ -1,3 +1,4 @@
+import { useCallback, useState } from "react";
 import type { ReactNode, Ref } from "react";
 
 import Box from "@mui/material/Box";
@@ -5,13 +6,24 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useDragHold } from "../../../hooks/use-drop-target";
 import { useLocale } from "../../../hooks/use-locale";
+import { useLongPress } from "../../../hooks/use-long-press";
 import { HEADER_HEIGHT, rootMedium, rootWide } from "../../../styles/layout";
 import { forcedColors, forcedPressed } from "../../../styles/mixins";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
+import HistoryMenu from "./history-menu";
 import ViewMenu from "./view-menu";
 
-import type { SearchScope, SortOrder, ViewMode, ViewZoom, ZoomStep } from "../../../types";
+import type { HistoryStop, SearchScope, SortOrder, ViewMode, ViewZoom, ZoomStep } from "../../../types";
+
+type HistoryDirection = "back" | "forward";
+
+interface HistoryList {
+    direction: HistoryDirection;
+    anchor: HTMLElement;
+    stops: HistoryStop[];
+    open: boolean;
+}
 
 interface HeaderBarProps {
     /** Centre slot, the path bar, or the search field while searching. */
@@ -40,6 +52,10 @@ interface HeaderBarProps {
     propertiesDocked: () => boolean;
     onBack: () => void;
     onForward: () => void;
+    /** The places back or forward lead to, nearest first, read as their list opens. */
+    historyStops: (direction: HistoryDirection) => HistoryStop[];
+    /** Goes `by` places through the history (negative is back), from its list. */
+    onGoInHistory: (by: number) => void;
     onToggleView: () => void;
     /** Zooms the view shown a step in or out, or back to its start. */
     onZoom: (step: ZoomStep) => void;
@@ -176,6 +192,8 @@ const HeaderBar = ({
     propertiesDocked,
     onBack,
     onForward,
+    historyStops,
+    onGoInHistory,
     onToggleView,
     onZoom,
     onSortChange,
@@ -191,10 +209,39 @@ const HeaderBar = ({
 }: HeaderBarProps) => {
     const { text } = useLocale();
     const sidebarHold = useDragHold(onDragShowSidebar);
+    // Kept after it closes, so the list doesn't empty while it fades out.
+    const [historyList, setHistoryList] = useState<HistoryList | null>(null);
+
+    // The list of places the button leads to, from a right-click, the menu key or a long-press.
+    const openHistory = useCallback(
+        (direction: HistoryDirection, anchor: HTMLElement) => {
+            const stops = historyStops(direction);
+
+            if (stops.length > 0) {
+                setHistoryList({ direction, anchor, stops, open: true });
+            }
+        },
+        [historyStops],
+    );
+
+    const closeHistory = useCallback(() => setHistoryList((list) => list && { ...list, open: false }), []);
+
+    // Touch has no right-click, and iOS never sends `contextmenu` for a long-press.
+    const historyPress = useLongPress({
+        itemAt: (target) => target.closest<HTMLElement>("[data-history]")?.dataset.history,
+        onButtons: true,
+        onLongPress: (direction, press) => {
+            const button = press.element.closest<HTMLElement>("[data-history]");
+
+            if (button) {
+                openHistory(direction as HistoryDirection, button);
+            }
+        },
+    });
 
     return (
         <Box sx={headerSx}>
-            <Box sx={startGroupSx}>
+            <Box sx={startGroupSx} {...historyPress}>
                 <TooltipIconButton
                     ref={sidebarButtonRef}
                     label={text.showSidebar}
@@ -206,13 +253,42 @@ const HeaderBar = ({
                 >
                     <Icon name="menu" fontSize="small" />
                 </TooltipIconButton>
-                <TooltipIconButton label={text.back} disabled={!canGoBack} onClick={onBack}>
+                <TooltipIconButton
+                    label={text.back}
+                    disabled={!canGoBack}
+                    data-history="back"
+                    onClick={onBack}
+                    onContextMenu={(event) => {
+                        event.preventDefault();
+                        openHistory("back", event.currentTarget);
+                    }}
+                >
                     <Icon name="arrowBack" fontSize="small" />
                 </TooltipIconButton>
-                <TooltipIconButton label={text.forward} disabled={!canGoForward} sx={mediumUpSx} onClick={onForward}>
+                <TooltipIconButton
+                    label={text.forward}
+                    disabled={!canGoForward}
+                    data-history="forward"
+                    sx={mediumUpSx}
+                    onClick={onForward}
+                    onContextMenu={(event) => {
+                        event.preventDefault();
+                        openHistory("forward", event.currentTarget);
+                    }}
+                >
                     <Icon name="arrowForward" fontSize="small" />
                 </TooltipIconButton>
             </Box>
+            {historyList && (
+                <HistoryMenu
+                    open={historyList.open}
+                    anchor={historyList.anchor}
+                    label={historyList.direction === "back" ? text.back : text.forward}
+                    stops={historyList.stops}
+                    onPick={onGoInHistory}
+                    onClose={closeHistory}
+                />
+            )}
             <Box sx={pathSlotSx}>
                 <Box sx={pathSx}>{pathBar}</Box>
                 {/* Keeps the focus in an open search's field as it's pressed, which it closes or

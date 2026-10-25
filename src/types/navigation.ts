@@ -1,3 +1,4 @@
+import type { IconSource } from "./icon";
 import type { FolderRef } from "./section";
 
 /**
@@ -23,3 +24,14 @@ export interface FileManagerLocation {
  *   was removed, rooted elsewhere or given another adapter. A URL kept in step is replaced, not pushed.
  */
 export type LocationChangeReason = "navigate" | "back" | "forward" | "replace";
+
+/** Internal: a place on the header's back or forward list: how many steps `by` from the current one (negative back), and how it reads. */
+export interface HistoryStop {
+    by: number;
+    /** The folder's name, or its section's label at the root. */
+    label: string;
+    /** The section and the folders above it, to tell folders of one name apart; empty at the root. */
+    location: string;
+    /** The section's icon at the root, else a folder's. */
+    icon: IconSource;
+}
