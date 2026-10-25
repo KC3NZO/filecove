@@ -75,7 +75,7 @@ What's left in the features already built, what packaging needs before a release
 - [x] Acting on a selection that spans sections. *Done 2026-10-25: results of several sections are grouped by adapter and folder, an entry two sections sharing an adapter both find acted on once; deleting, downloading, previewing and the properties go through each one's own adapter, and copying and moving through their one adapter when they share it (between adapters is "Copying between different adapters" above).*
 - [x] Downloading and previewing a selection from several folders. *Done 2026-10-25: the adapter's optional `downloadAcross(groups, options)` hands entries of several folders over as one file, or without it each folder downloads as its own, and the preview steps through files of several folders and adapters, each following its own folder's listing.*
 - [x] Locations in the grid view. *Done 2026-10-25: a result's tile shows its location under the name in an outlined pill with a folder icon, two lines of text kept as tall as the name's so the tiles are still all one height.*
-- [ ] Ordering results by relevance.
+- [x] Ordering results by relevance. *Done 2026-10-25: a `relevance` sort key, the default, ranks a search everywhere's results by the adapter's optional `SearchMatch.score` or else by how their names answer what's typed; folders go by name as before.*
 
 ### Selection
 - [ ] The sidebar tree has no touch selection mode.

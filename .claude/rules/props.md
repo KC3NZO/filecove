@@ -42,7 +42,7 @@ Eleven pieces of state can each be controlled, as MUI's are: pass the value and 
 | Location | `location` | `defaultLocation`, else the first section's root | `onLocationChange(location, reason)` | the sidebar, the path bar, opening folders, back and forward |
 | View | `view` | `defaultView`, "list" | `onViewChange` | the header's view button |
 | Zoom | `zoom` | `defaultZoom`, `{ list: 0, grid: 0 }` | `onZoomChange` | Ctrl+plus, Ctrl+minus, Ctrl+0 and Ctrl+wheel in the content, the view menu |
-| Order | `sort` | `defaultSort`, name A to Z | `onSortChange` | the view menu, the list's column headers |
+| Order | `sort` | `defaultSort`, relevance (name A to Z in folders) | `onSortChange` | the view menu, the list's column headers |
 | Hidden files | `showHidden` | `defaultShowHidden`, false | `onShowHiddenChange` | Ctrl+H, the view menu |
 | Docked sidebar hidden | `sidebarHidden` | `defaultSidebarHidden`, false | `onSidebarHiddenChange` | F9, the view menu, the header's "Show sidebar" |
 | Docked properties shown | `propertiesOpen` | `defaultPropertiesOpen`, false | `onPropertiesOpenChange` | Alt+Enter, the view menu, the panel's ✕, `ActionContext.properties` |
