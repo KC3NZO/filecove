@@ -195,6 +195,10 @@ export const enUS: FileManagerLocaleText = {
     uploadTypesLeftOut: (count, name, sectionName, types) =>
         `${count === 1 ? `“${name}” is` : `${count} files are`} left out, since “${sectionName}” only takes ` +
         `these types of files: ${types}.`,
+    uploadNamesRefused: (count, name, reason) =>
+        count === 1
+            ? `“${name}” can't be uploaded here: ${reason}`
+            : `${count} items can't be uploaded here, as their names aren't allowed, such as “${name}”: ${reason}`,
     uploadShown: (name, folderName) => `Showing “${name}” in “${folderName}”`,
 
     download: "Download",

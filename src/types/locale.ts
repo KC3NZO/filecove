@@ -479,6 +479,12 @@ export interface FileManagerLocaleText
     /** When files of types the section doesn't take were given with others. `name` is for when `count` is 1. */
     uploadTypesLeftOut: (count: number, name: string, sectionName: string, types: string) => string;
     /**
+     * When the backend's own rules (the adapter's `checkName`) refuse the names of files or folders
+     * given, with others or alone. `name` and `reason` are the first one's, `reason` being the
+     * adapter's message.
+     */
+    uploadNamesRefused: (count: number, name: string, reason: string) => string;
+    /**
      * Read to screen readers as an upload is shown in its folder from the panel, which keeps the
      * focus. `name` is the file's or folder's, `folderName` the folder's it went into.
      */

@@ -76,19 +76,36 @@ const spacerSx: SxProps<Theme> = {
  * Checks files and folders about to be uploaded into a folder before they're queued. Most uploads
  * need nothing from the user, so this runs unseen, and the dialog only shows to ask about names the
  * folder already has (replace or merge, keep both, or skip), or to say that folders, where the
- * adapter can't make any, or files of types the section doesn't take (`acceptUploads`), were left
- * out. What's inside the folders is only read once they're queued.
+ * adapter can't make any, files of types the section doesn't take (`acceptUploads`), or names the
+ * backend refuses (`checkName`), were left out. What's inside the folders is only read once they're
+ * queued.
  */
 const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) => {
     const { section, adapter, trail, dropped } = request;
     const target = folderOf(section, trail);
     const { text, describeAccepted } = useLocale();
     const patterns = uploadPatterns(section);
-    const files = dropped.files.filter((file) => acceptsFile(patterns, file));
     const refused = dropped.files.filter((file) => !acceptsFile(patterns, file));
     // Folders are made with the adapter's `createFolder`, so without it they're left out.
-    const folders = adapter.createFolder ? dropped.folders : [];
     const leftOut = adapter.createFolder ? [] : dropped.folders;
+    // Names the backend's own rules refuse (the adapter's `checkName`) are left out too, with its
+    // message, rather than sent to fail. What's inside folders is checked by the queue as it's read.
+    const misnamed: { name: string; reason: string }[] = [];
+    const named = <T extends { name: string }>(items: T[], kind: FileEntry["kind"]) =>
+        items.filter(({ name }) => {
+            const reason = adapter.checkName?.(name, { kind, parentId: target.id });
+
+            if (reason) {
+                misnamed.push({ name, reason });
+            }
+
+            return !reason;
+        });
+    const files = named(
+        dropped.files.filter((file) => acceptsFile(patterns, file)),
+        "file",
+    );
+    const folders = named(adapter.createFolder ? dropped.folders : [], "folder");
     const types = patterns ? describeAccepted(patterns) : "";
     const dir = useContext(DirectionContext);
 
@@ -163,15 +180,15 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
 
         checked.current = true;
 
-        if (clashes.length > 0 || leftOut.length > 0 || refused.length > 0) {
+        if (clashes.length > 0 || leftOut.length > 0 || refused.length > 0 || misnamed.length > 0) {
             setConflicts(clashes);
         } else {
             upload("keepBoth", clashes);
         }
     }, [listed]);
 
-    // Only folders the adapter can't make, or files of types the section doesn't take, so there's
-    // nothing to upload.
+    // Only folders the adapter can't make, files of types the section doesn't take, or names the
+    // backend refuses, so there's nothing to upload.
     if (files.length === 0 && folders.length === 0) {
         return (
             <Dialog
@@ -183,8 +200,11 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                 onClose={onClose}
             >
                 <DialogTitle>
-                    {refused.length > 0
-                        ? text.uploadFailedTitle(refused.length + leftOut.length, isolate(refused[0].name))
+                    {refused.length + misnamed.length > 0
+                        ? text.uploadFailedTitle(
+                              refused.length + leftOut.length + misnamed.length,
+                              isolate((refused[0] ?? misnamed[0]).name),
+                          )
                         : text.uploadFoldersFailedTitle(leftOut.length, isolate(leftOut[0]?.name ?? ""))}
                 </DialogTitle>
                 <DialogContent sx={contentSx}>
@@ -196,6 +216,15 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                     {refused.length > 0 && (
                         <Typography variant="body2" color="text.secondary">
                             {text.uploadTypesOnly(isolate(section.label), types)}
+                        </Typography>
+                    )}
+                    {misnamed.length > 0 && (
+                        <Typography variant="body2" color="text.secondary">
+                            {text.uploadNamesRefused(
+                                misnamed.length,
+                                isolate(misnamed[0].name),
+                                isolate(misnamed[0].reason),
+                            )}
                         </Typography>
                     )}
                 </DialogContent>
@@ -233,6 +262,15 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                             isolate(refused[0].name),
                             isolate(section.label),
                             types,
+                        )}
+                    </Typography>
+                )}
+                {misnamed.length > 0 && (
+                    <Typography variant="body2" color="text.secondary">
+                        {text.uploadNamesRefused(
+                            misnamed.length,
+                            isolate(misnamed[0].name),
+                            isolate(misnamed[0].reason),
                         )}
                     </Typography>
                 )}

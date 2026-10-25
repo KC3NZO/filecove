@@ -162,9 +162,9 @@ export interface OperationOptions {
 export interface NameCheck {
     /** Whether the name is for a file or a folder. */
     kind: FileEntry["kind"];
-    /** The folder the entry is created or renamed in. */
+    /** The folder the entry is created, renamed or uploaded in. */
     parentId: string;
-    /** The entry being renamed, or undefined for a new folder. */
+    /** The entry being renamed, or undefined for a new folder or an upload. */
     entry?: FileEntry;
 }
 
@@ -404,13 +404,16 @@ export interface FileAdapter {
      */
     rename?(entry: FileEntry, name: string, options: OperationOptions): Promise<FileEntry>;
     /**
-     * Says why the backend won't take a name, for New folder and Rename to show under the field as
-     * it's typed, with the button disabled, rather than after it's pressed: e.g. Windows' `\:*?"<>|`,
-     * reserved names such as "CON", or a length limit. Return the message, in the user's language as
-     * action labels are, or nothing when the name is fine. `name` is trimmed, and is never empty,
-     * ".", ".." or holding "/", which the file manager refuses itself. It runs on every keystroke,
-     * so it must be synchronous and quick. Without it, only those rules and the folder's listed
-     * names are checked; either way `createFolder` and `rename` have the final say.
+     * Says why the backend won't take a name, so it's refused before anything is sent: e.g.
+     * Windows' `\:*?"<>|`, reserved names such as "CON", or a length limit. New folder and Rename
+     * show it under the field as it's typed, with the button disabled; an upload leaves out the
+     * files and folders given whose names it refuses, saying so, and fails those inside uploaded
+     * folders with it, listed under the folder's row, without sending them. Return the message, in
+     * the user's language as action labels are, or nothing when the name is fine. A typed name is
+     * trimmed, and no name is ever empty, ".", ".." or holding "/", which the file manager refuses
+     * itself. It runs on every keystroke, so it must be synchronous and quick. Without it, only
+     * those rules and the folder's listed names are checked; either way `createFolder`, `rename`
+     * and `upload` have the final say.
      */
     checkName?(name: string, check: NameCheck): string | null | undefined;
     /**

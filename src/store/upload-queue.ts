@@ -106,6 +106,18 @@ interface Job {
 
 const messageOf = (error: unknown) => (error instanceof Error && error.message ? error.message : undefined);
 
+/**
+ * Fails a name the backend's own rules refuse (the adapter's `checkName`), with its message, before
+ * anything is sent, as a folder's files and folders aren't checked until they're read.
+ */
+const checkName = (adapter: FileAdapter, name: string, kind: FileEntry["kind"], parentId: string) => {
+    const refused = adapter.checkName?.(name, { kind, parentId });
+
+    if (refused) {
+        throw new Error(refused);
+    }
+};
+
 const countFiles = (folder: FolderStep): number =>
     folder.folders.reduce((count, child) => count + countFiles(child), folder.files.length);
 
@@ -476,6 +488,7 @@ export const createUploadQueue = (
                         throw new Error("Not supported here.");
                     }
 
+                    checkName(adapter, step.name, "folder", targetOf(job, step) as string);
                     step.tried = true;
 
                     const made = await adapter.createFolder(targetOf(job, step) as string, step.name, { signal });
@@ -502,6 +515,7 @@ export const createUploadQueue = (
                     conflict = "keepBoth";
                 }
 
+                checkName(adapter, step.file.name, "file", targetOf(job, step) as string);
                 step.tried = true;
 
                 const sent: FileEntry | void = await adapter.upload(step.file, targetOf(job, step) as string, {
