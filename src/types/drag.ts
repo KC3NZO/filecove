@@ -2,6 +2,7 @@
 
 import type { FileEntry } from "./adapter";
 import type { Clipboard } from "./clipboard";
+import type { EntryGroup } from "./menu";
 import type { FolderRef, Section } from "./section";
 
 /**
@@ -12,11 +13,8 @@ export type DraggedEntries = Omit<Clipboard, "kind">;
 
 /** What a view picks up when a drag starts in it. */
 export interface DragSource {
-    /** The section the entries are dragged from. */
-    section: Section;
-    /** Trail to the folder the entries are in. */
-    trail: FolderRef[];
-    entries: FileEntry[];
+    /** The entries by the folder they're in, with its section: one, or several for a search's results. */
+    parts: EntryGroup[];
     /** The entry the drag started from, which the drag image shows. */
     grabbed: FileEntry;
 }

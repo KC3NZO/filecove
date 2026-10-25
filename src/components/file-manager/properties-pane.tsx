@@ -9,6 +9,7 @@ import { useData } from "../../hooks/use-folder";
 import { folderKey } from "../../store/folder-store";
 import { PROPERTIES_WIDTH, rootExtraWide } from "../../styles/layout";
 import { runToolbarShortcut, toolbarGroups } from "../../utils/action-groups";
+import { groupByFolder, selectionRequest } from "../../utils/groups";
 import { joinIsolated } from "../../utils/bidi";
 import { folderOf } from "../../utils/navigation";
 import { typesInField } from "../../utils/shortcut";
@@ -265,8 +266,8 @@ const PropertiesPane = ({
         // `listings` stands for the listings read through the store.
     }, [visible, subject, store, adapter, contextFor, listings]);
 
-    // The app's actions in the header, for what the panel shows: its entries, which must share a
-    // folder, as the context menu's do, or else the folder it shows.
+    // The app's actions in the header, for what the panel shows: its entries, by folder when they're
+    // in several, as the context menu's are, or else the folder it shows.
     const headerActions = useMemo(() => {
         if (!visible || actions.length === 0 || subject.kind === "none") {
             return NO_TOOLBAR;
@@ -278,25 +279,17 @@ const PropertiesPane = ({
             return toolbarGroups(actions, contextFor({ target: "folder", section, trail, entries: [] }));
         }
 
-        const [first] = subject.entries;
-        const folderId = folderOf(first.section, first.trail).id;
-        const together = subject.entries.every(
-            ({ section, trail }) => section === first.section && folderOf(section, trail).id === folderId,
+        const groups = groupByFolder(
+            subject.entries.map(({ section, trail }, index) => ({
+                section,
+                adapter: section.adapter ?? adapter,
+                trail,
+                entry: items[index].entry,
+            })),
         );
 
-        return together
-            ? toolbarGroups(
-                  actions,
-                  contextFor({
-                      target: "selection",
-                      section: first.section,
-                      trail: first.trail,
-                      entries: items.map((item) => item.entry),
-                      inResults: subject.inResults,
-                  }),
-              )
-            : NO_TOOLBAR;
-    }, [visible, actions, subject, items, contextFor]);
+        return toolbarGroups(actions, contextFor({ ...selectionRequest(groups), inResults: subject.inResults }));
+    }, [visible, actions, subject, items, adapter, contextFor]);
 
     // Escape in a menu or a dialog, which portal out of the pane but still bubble here through
     // React's tree, is theirs, and so are their other keys. The header's actions' shortcuts work

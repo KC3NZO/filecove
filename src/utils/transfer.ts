@@ -1,4 +1,4 @@
-import type { Clash, FileAdapter, FileEntry, MovingIds, TransferItem } from "../types";
+import type { Clash, EntryClash, FileAdapter, FileEntry, MovingIds, TransferItem } from "../types";
 
 const NONE: ReadonlySet<string> = new Set();
 
@@ -20,6 +20,40 @@ export const findClashes = (
         return there ? [{ name, kind, there: there.kind, locked: !replaceable(there) }] : [];
     });
 };
+
+/**
+ * The clashes of entries going into a folder together, in their order: with what its listing has,
+ * as `findClashes` finds them, and else with an entry before them of the same name, as entries
+ * from several folders may share names (`shared`). Those go in after it, so it's there by then.
+ */
+export const entryClashes = (
+    entries: readonly FileEntry[],
+    listing: FileEntry[] | undefined,
+    replaceable: (entry: FileEntry) => boolean,
+): EntryClash[] => {
+    const byName = new Map(listing?.map((entry): [string, FileEntry] => [entry.name, entry]));
+    const before = new Map<string, FileEntry>();
+
+    return entries.flatMap((entry) => {
+        const { name, kind } = entry;
+        const there = byName.get(name);
+        const earlier = before.get(name);
+
+        if (!earlier) {
+            before.set(name, entry);
+        }
+
+        if (there) {
+            return [{ entry, clash: { name, kind, there: there.kind, locked: !replaceable(there) } }];
+        }
+
+        return earlier ? [{ entry, clash: { name, kind, there: earlier.kind, locked: false, shared: true } }] : [];
+    });
+};
+
+/** Whether two of the entries share a name, so they have to go into one folder one after another. */
+export const sharesNames = (entries: readonly FileEntry[]) =>
+    new Set(entries.map((entry) => entry.name)).size < entries.length;
 
 /**
  * Ids of the folders in a folder's listing that a transfer of `entries` into it with "replace"

@@ -431,6 +431,13 @@ export interface FileManagerLocaleText
     // Names a folder already has, when copying, moving or uploading into it
     /** `name` is the one clashing name, meant for when `count` is 1. */
     conflictMessage: (count: number, name: string, folderName: string) => string;
+    /**
+     * In place of `conflictMessage`, when the names clash only with each other, as entries from
+     * several folders going into one may: the first goes in, and the others clash with it.
+     */
+    conflictSharedMessage: (count: number, name: string, folderName: string) => string;
+    /** Beside `conflictMessage`, when some names also clash with each other, as with `conflictSharedMessage`. */
+    conflictSharedToo: (count: number, name: string) => string;
     /** When a file clashes with a file: Replace, Keep both or Skip. `count` is every name that clashes. */
     conflictHint: (count: number) => string;
     /**

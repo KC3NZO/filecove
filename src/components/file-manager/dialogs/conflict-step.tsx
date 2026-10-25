@@ -40,11 +40,16 @@ const sortClashes = (clashes: Clash[]) => {
     };
 };
 
-/** Says which names a copy, move or upload clashes with, and what each choice does to them. */
+/**
+ * Says which names a copy, move or upload clashes with, the folder's or each other's, as entries
+ * from several folders may share names, and what each choice does to them.
+ */
 export const ConflictMessage = ({ clashes, folderName }: ConflictMessageProps) => {
     const { text } = useLocale();
     const { replacing, merging, otherKind, locked } = sortClashes(clashes);
     const replaces = replacing + merging > 0;
+    const there = clashes.filter((clash) => !clash.shared);
+    const shared = clashes.filter((clash) => clash.shared);
 
     let hint: string;
 
@@ -63,8 +68,15 @@ export const ConflictMessage = ({ clashes, folderName }: ConflictMessageProps) =
     return (
         <>
             <Typography sx={messageSx}>
-                {text.conflictMessage(clashes.length, isolate(clashes[0].name), isolate(folderName))}
+                {there.length > 0
+                    ? text.conflictMessage(there.length, isolate(there[0].name), isolate(folderName))
+                    : text.conflictSharedMessage(shared.length, isolate(shared[0].name), isolate(folderName))}
             </Typography>
+            {there.length > 0 && shared.length > 0 && (
+                <Typography variant="body2" color="text.secondary">
+                    {text.conflictSharedToo(shared.length, isolate(shared[0].name))}
+                </Typography>
+            )}
             <Typography variant="body2" color="text.secondary">
                 {hint}
             </Typography>

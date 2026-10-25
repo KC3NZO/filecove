@@ -657,12 +657,12 @@ const FolderView = ({
             setGrabbedId(entry.id);
 
             if (selectedIds.has(entry.id)) {
-                return { section, trail, entries: selected, grabbed: entry };
+                return { parts: [{ section, trail, entries: selected }], grabbed: entry };
             }
 
             select(entry.id);
 
-            return { section, trail, entries: [entry], grabbed: entry };
+            return { parts: [{ section, trail, entries: [entry] }], grabbed: entry };
         });
     };
 
@@ -727,7 +727,7 @@ const FolderView = ({
                 drag?.touch(press, () => {
                     setGrabbedId(entry.id);
 
-                    return { section, trail, entries: carried, grabbed: entry };
+                    return { parts: [{ section, trail, entries: carried }], grabbed: entry };
                 });
             }
         },

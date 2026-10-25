@@ -1,4 +1,4 @@
-import type { DownloadItem, FileAdapter, FileEntry, FolderRef, PreparedDownload } from "../types";
+import type { DownloadContent, DownloadItem, FileAdapter, FileEntry, FolderRef, PreparedDownload } from "../types";
 
 /** How long a blob's object URL is kept once its download has started, while the browser may still be reading it. */
 const REVOKE_AFTER = 60_000;
@@ -18,16 +18,43 @@ export const canDownload = (adapter: FileAdapter, entries: readonly FileEntry[])
     entries.length > 0 &&
     (!!adapter.download || (entries.length === 1 && entries[0].kind === "file" && !!adapter.content));
 
+// What the adapter handed over, as the file to save: a URL under its own name, or its server's,
+// and a blob under its own, its `File`'s, or else `fallback`.
+const named = (handed: DownloadContent, fallback: string): PreparedDownload => {
+    if (handed.url !== undefined) {
+        return { content: { url: handed.url }, name: handed.name ?? "" };
+    }
+
+    const ownName = handed.blob instanceof File ? handed.blob.name : "";
+
+    return { content: { blob: handed.blob }, name: handed.name || ownName || fallback };
+};
+
 /**
  * Asks the adapter for a download's entries as one file to save: a single file from `content` when
- * it has one, and otherwise what `download` hands over. A blob that comes without a name, and
- * isn't a `File`, is named after the entry, or for several, after the folder they're in.
+ * it has one, entries of several folders from `downloadAcross`, and otherwise what `download` hands
+ * over. A blob that comes without a name, and isn't a `File`, is named after the entry, or for
+ * several, after the folder they're in, or the one holding them all.
  */
 export const prepareDownload = async (
-    { adapter, entries, folderName, showHidden }: Pick<DownloadItem, "adapter" | "entries" | "folderName" | "showHidden">,
+    {
+        adapter,
+        entries,
+        groups,
+        folderName,
+        showHidden,
+    }: Pick<DownloadItem, "adapter" | "entries" | "groups" | "folderName" | "showHidden">,
     { signal, onProgress }: { signal: AbortSignal; onProgress: (loaded: number, total: number) => void },
 ): Promise<PreparedDownload> => {
     const [only] = entries;
+
+    if (groups) {
+        if (!adapter.downloadAcross) {
+            throw new Error("Not supported here.");
+        }
+
+        return named(await adapter.downloadAcross(groups, { signal, showHidden, onProgress }), folderName);
+    }
 
     if (entries.length === 1 && only.kind === "file" && adapter.content) {
         return {
@@ -42,14 +69,7 @@ export const prepareDownload = async (
 
     const handed = await adapter.download([...entries], { signal, showHidden, onProgress });
 
-    if (handed.url !== undefined) {
-        return { content: { url: handed.url }, name: handed.name ?? "" };
-    }
-
-    const ownName = handed.blob instanceof File ? handed.blob.name : "";
-    const fallback = entries.length === 1 ? only.name : folderName;
-
-    return { content: { blob: handed.blob }, name: handed.name || ownName || fallback };
+    return named(handed, entries.length === 1 ? only.name : folderName);
 };
 
 /**

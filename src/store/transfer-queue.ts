@@ -41,7 +41,8 @@ const call = ({ kind, adapter, entries, target }: TransferItem, options: Transfe
 /**
  * Copies and moves waiting their turn, being carried out by the adapter, or failed, independent of
  * any view, so they carry on while the user browses. Each is one call to the adapter, with
- * `MAX_ACTIVE` running at once. One that's done or cancelled leaves the queue; a failed one stays
+ * `MAX_ACTIVE` running at once, and one asked to wait for another (`after`) starting once that one
+ * has ended, however it did. One that's done or cancelled leaves the queue; a failed one stays
  * until it's forgotten. The item list is replaced, never mutated, so `useSyncExternalStore` can
  * compare it by identity.
  *
@@ -72,6 +73,13 @@ export const createTransferQueue = (
     };
 
     const find = (id: number) => items.find((item) => item.id === id);
+
+    // Whether a waiting copy or move still waits for the one it comes after, which waits or runs.
+    const waits = (item: TransferItem) => {
+        const before = item.after === undefined ? undefined : find(item.after);
+
+        return !!before && isActive(before);
+    };
 
     const update = (id: number, change: Partial<TransferItem>) => {
         items = items.map((item) => (item.id === id ? { ...item, ...change } : item));
@@ -162,7 +170,8 @@ export const createTransferQueue = (
             );
     };
 
-    // Starts waiting copies and moves, in the order they were asked for, while there are free slots.
+    // Starts waiting copies and moves, in the order they were asked for, while there are free slots,
+    // each after the one it waits for has ended.
     const pump = () => {
         let free = MAX_ACTIVE - controllers.size;
 
@@ -171,7 +180,7 @@ export const createTransferQueue = (
                 break;
             }
 
-            if (item.status === "queued") {
+            if (item.status === "queued" && !waits(item)) {
                 start(item);
                 free -= 1;
             }
@@ -200,8 +209,8 @@ export const createTransferQueue = (
 
         /**
          * Asks `adapter` to copy or move `entries`, which are in `source`, into `target`, settling
-         * names it already has by `conflict`. Returns its id, for a host keeping something of its
-         * own about it.
+         * names it already has by `conflict`, once the one with the id `after` has ended, when
+         * given. Returns its id, for a host keeping something of its own about it.
          */
         add(
             kind: TransferKind,
@@ -210,12 +219,13 @@ export const createTransferQueue = (
             source: FolderRef,
             target: FolderRef,
             conflict: ConflictPolicy,
+            after?: number,
         ) {
             const id = nextId++;
 
             items = [
                 ...items,
-                { id, kind, adapter, entries, source, target, conflict, status: "queued", shown: false },
+                { id, kind, adapter, entries, source, target, conflict, after, status: "queued", shown: false },
             ];
             showLater(id);
             pump();

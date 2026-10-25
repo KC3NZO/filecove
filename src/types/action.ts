@@ -1,4 +1,4 @@
-import type { FileEntry } from "./adapter";
+import type { EntriesInFolder, FileEntry } from "./adapter";
 import type { IconSource } from "./icon";
 import type { FolderRef, Section } from "./section";
 
@@ -8,19 +8,41 @@ import type { FolderRef, Section } from "./section";
  */
 export type ActionTarget = "selection" | "folder";
 
+/** Entries that share a folder, among a selection from several (`ActionContext.byFolder`), with its section. */
+export interface ContextFolder extends EntriesInFolder {
+    /** The section the folder is in, whose adapter serves the entries. */
+    section: Section;
+}
+
 export interface ActionContext {
     target: ActionTarget;
     /** The entries acted on; empty when `target` is "folder". */
     entries: FileEntry[];
-    /** The folder the action happens in: the one right-clicked, or the parent of `entries`. */
+    /**
+     * The folder the action happens in: the one right-clicked, or the parent of `entries`. For
+     * entries in several folders (`byFolder`), the nearest folder of `section` holding those of
+     * them in it.
+     */
     folder: FolderRef;
+    /** The section of `folder`: for entries in several sections (`byFolder`), the first one's. */
     section: Section;
+    /**
+     * The entries by the folder each is in, when they're in several, as a search everywhere's
+     * selection may be, of one section or several; missing while they share `folder`. Only actions
+     * with `acrossFolders` are offered for such a selection. The members below take them as the
+     * whole they are, the file manager asking each folder's adapter for its entries: copying,
+     * moving, cutting and copying to the clipboard, deleting, downloading, previewing and the
+     * properties. Creating, uploading and pasting are missing, as `folder` isn't where the entries
+     * are.
+     */
+    byFolder?: ContextFolder[];
     /**
      * Whether nothing in `folder` can be changed: the section is `readOnly`, the folder's
      * permissions refuse writing (`EntryPermissions.write`), or a move under way is moving it
-     * (`moving`). Creating, uploading, pasting, renaming, moving out and deleting are missing then;
-     * an action of the app's own that changes the folder, such as "Compress…" or "New file", can
-     * hide with `visible: (context) => !context.readOnly`.
+     * (`moving`). With `byFolder`, whether that's so of any of the entries' folders. Creating,
+     * uploading, pasting, renaming, moving out and deleting are missing then; an action of the
+     * app's own that changes the folder, such as "Compress…" or "New file", can hide with
+     * `visible: (context) => !context.readOnly`.
      */
     readOnly: boolean;
     /**
@@ -32,7 +54,7 @@ export interface ActionContext {
      * "Compress…", can hide with `visible: (context) => !context.moving`.
      */
     moving: boolean;
-    /** Lists `folder` again, e.g. after the action changed its contents. */
+    /** Lists `folder` again, or with `byFolder` each of the entries' folders, e.g. after the action changed them. */
     refresh: () => void;
     /** Opens a folder entry of `folder` in the file manager. */
     openFolder: (entry: FileEntry) => void;
@@ -51,10 +73,11 @@ export interface ActionContext {
     openLocation?: () => void;
     /**
      * Shows the files among `entries` in the file manager's preview, one at a time. A single file
-     * steps through the files of the folder it's listed in, in the content's order. Missing when
-     * `entries` holds no files, and when the section's adapter has no `content`, unless one of the
-     * file manager's `previewers` that reads nothing takes one of them. Missing too for an action in
-     * the preview's own header, which is previewing already.
+     * steps through the files of the folder it's listed in, in the content's order; several, from
+     * one folder or many (`byFolder`), through themselves. Missing when `entries` holds no files,
+     * and when their adapter has no `content`, unless one of the file manager's `previewers` that
+     * reads nothing takes one of them. Missing too for an action in the preview's own header, which
+     * is previewing already.
      */
     preview?: () => void;
     /**
@@ -69,6 +92,8 @@ export interface ActionContext {
      * hands over, such as a zip. It's prepared in the background, the file manager's download panel
      * shows it if it takes a moment, and the browser's own downloads show it from there. Missing
      * when the adapter has no `download` and `entries` isn't a single file it has `content` for.
+     * Entries from several folders (`byFolder`) are one file from the adapter's `downloadAcross`,
+     * or else a file per folder; served by several adapters, a file per adapter.
      */
     download?: () => void;
     /**
@@ -102,13 +127,18 @@ export interface ActionContext {
     /**
      * Asks for a destination folder and copies `entries` there, among the folders that aren't
      * read-only. Missing when the section's adapter has no `copy`, there are no entries, or every
-     * section they could go into is `readOnly`.
+     * section they could go into is `readOnly`. Entries from several folders (`byFolder`) sharing a
+     * name are asked about as names the destination has, the first going in first; entries from
+     * sections served by different adapters can't go into one folder, as no copy goes between
+     * adapters.
      */
     copyTo?: () => void;
     /**
      * Asks for a destination folder and moves `entries` there, among the folders that aren't
      * read-only. Missing when the section's adapter has no `move`, there are no entries, or they
-     * can't be moved out: `folder` is read-only, or their permissions say so.
+     * can't be moved out: `folder` is read-only, or their permissions say so. Entries from several
+     * folders (`byFolder`) go as with `copyTo`, and those already in the folder chosen stay where
+     * they are.
      */
     moveTo?: () => void;
     /**
@@ -119,13 +149,14 @@ export interface ActionContext {
     cut?: () => void;
     /**
      * Puts `entries` on the file manager's clipboard to be copied where they're pasted. Missing when
-     * the section's adapter has no `copy`, or there are no entries.
+     * the section's adapter has no `copy`, or there are no entries, as with `copyTo`.
      */
     copy?: () => void;
     /**
      * Asks to confirm, then deletes `entries` for good. Missing when the section's adapter has no
      * `delete`, there are no entries, or they can't be deleted: `folder` is read-only, or their
-     * permissions say so.
+     * permissions say so. Entries from several folders (`byFolder`) are deleted a folder at a time,
+     * each through its own section's adapter.
      */
     delete?: () => void;
     /**
@@ -173,6 +204,13 @@ export interface FileAction {
      * it the action is offered for any number of selected entries, as copy, move or delete are.
      */
     single?: boolean;
+    /**
+     * Offers the action for entries from several folders too, as a search everywhere's selection
+     * may hold (`ActionContext.byFolder`). Without it, the action is left out for them, since
+     * `folder` and `section` aren't where they all are; set it for an action that goes by `entries`
+     * alone or by `byFolder`, or calls the context's own members, which all take them.
+     */
+    acrossFolders?: boolean;
     /** Narrows when it is offered, e.g. to files only or to a single entry. */
     visible?: (context: ActionContext) => boolean;
     disabled?: (context: ActionContext) => boolean;

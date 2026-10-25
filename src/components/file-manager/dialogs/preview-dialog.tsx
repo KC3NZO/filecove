@@ -69,15 +69,23 @@ import type {
 } from "../../../types";
 import type { ImageViewerHandle } from "./image-viewer";
 
-export interface PreviewRequest {
+/** A file the preview steps through, with where it is. */
+export interface PreviewFile {
+    entry: FileEntry;
     section: Section;
     /** The section's adapter. */
     adapter: FileAdapter;
-    /** Trail to the folder the files are in. */
+    /** Trail to the folder the file is in. */
     trail: FolderRef[];
-    /** The files to step through, in order. */
-    entries: FileEntry[];
-    /** Where in `entries` to start. */
+}
+
+export interface PreviewRequest {
+    /**
+     * The files to step through, in order: those of one folder, or for a search's results, of
+     * several, of one section or more.
+     */
+    files: PreviewFile[];
+    /** Where in `files` to start. */
     index: number;
     /**
      * Whether the content's selection follows the file shown, as it does when a single file steps
@@ -108,7 +116,7 @@ interface PreviewDialogProps {
     /** The app's own previewers, tried before the file manager's previews. */
     previewers: readonly FilePreviewer[];
     /** The app's actions for the header (`previewActions`), bound to the file shown. */
-    actionsFor: (request: PreviewRequest, entry: FileEntry) => ToolbarGroup[];
+    actionsFor: (request: PreviewRequest, file: PreviewFile) => ToolbarGroup[];
     /**
      * What the file manager tells screen readers while the preview is open, said from inside it,
      * since the modal hides the rest of the page from them.
@@ -118,9 +126,9 @@ interface PreviewDialogProps {
     /** Called once the dialog has faded out. */
     onClosed: () => void;
     /** Called as the dialog steps to another file, or shows another as the one shown goes. */
-    onStep: (request: PreviewRequest, entry: FileEntry) => void;
+    onStep: (request: PreviewRequest, file: PreviewFile) => void;
     /** Called to save the file shown, from the header's Download button. */
-    onDownload: (request: PreviewRequest, entry: FileEntry) => void;
+    onDownload: (file: PreviewFile) => void;
 }
 
 /** An image's or a video's own size, once it has loaded: 0 for a picture with none, such as some SVGs. */
@@ -130,16 +138,17 @@ interface Dimensions {
     height: number;
 }
 
-/** The file shown, by its id, and where it was, so the one taking its place shows if it goes. */
+/** The file shown, by its id and adapter, and where it was, so the one taking its place shows if it goes. */
 interface Shown {
     id: string;
+    adapter: FileAdapter;
     index: number;
 }
 
-/** The listing the files were last taken as, so only a newer one changes them. */
+/** The listings, by folder key, the files were last taken as, so only a newer one changes them. */
 interface Baseline {
-    entries: FileEntry[];
-    listing: FileEntry[] | undefined;
+    files: PreviewFile[];
+    listings: ReadonlyMap<string, FileEntry[] | undefined>;
 }
 
 interface BoundaryProps {
@@ -196,8 +205,11 @@ const errorMessage = (error: unknown, text: FileManagerLocaleText) => {
 // Some phones' browsers have no PDF viewer, and a frame would show nothing; older ones don't say.
 const showsPdf = () => typeof navigator === "undefined" || navigator.pdfViewerEnabled !== false;
 
-const sameEntries = (a: FileEntry[], b: FileEntry[]) =>
-    a.length === b.length && a.every((entry, index) => entry === b[index]);
+const sameFiles = (a: PreviewFile[], b: PreviewFile[]) =>
+    a.length === b.length && a.every((file, index) => file === b[index]);
+
+/** The store's key of the folder a file is in. */
+const folderKeyOf = ({ section, trail }: PreviewFile) => folderKey(section.id, folderOf(section, trail).id);
 
 // As large as the page allows, up to a size that still reads as a dialog, or all of it while it
 // fills the screen.
@@ -453,37 +465,61 @@ const audioSx: SxProps<Theme> = {
 };
 
 /**
- * The files to step through as their folder's listing has them now, once a listing newer than the
- * one they were taken from has come, so a file renamed, changed, deleted or moved meanwhile, there
- * or by an action in the header, shows as it is or goes. Files a listing hasn't caught up with, as
- * a search everywhere may find, aren't dropped for it.
+ * The files to step through as their folders' listings have them now, once a listing of a folder
+ * newer than the one they were taken from has come, so a file renamed, changed, deleted or moved
+ * meanwhile, there or by an action in the header, shows as it is or goes. Files a listing hasn't
+ * caught up with, as a search everywhere may find, aren't dropped for it.
  */
-const useLiveEntries = (request: PreviewRequest) => {
+const useLiveFiles = (request: PreviewRequest) => {
     const { store } = useData();
     const version = useSyncExternalStore(store.subscribe, store.version);
-    const state = store.get(folderKey(request.section.id, folderOf(request.section, request.trail).id));
-    const listing = state?.status === "ready" && !state.partial ? state.entries : undefined;
-    const [baseline, setBaseline] = useState<Baseline>(() => ({ entries: request.entries, listing }));
+    // Each folder's listing, once all of it has come.
+    const listings = useMemo(() => {
+        const found = new Map<string, FileEntry[] | undefined>();
 
-    if (baseline.entries !== request.entries) {
-        setBaseline({ entries: request.entries, listing });
+        request.files.forEach((file) => {
+            const key = folderKeyOf(file);
+
+            if (!found.has(key)) {
+                const state = store.get(key);
+
+                found.set(key, state?.status === "ready" && !state.partial ? state.entries : undefined);
+            }
+        });
+
+        return found;
+        // `version` stands for the listings read through the store.
+    }, [request.files, store, version]);
+    const [baseline, setBaseline] = useState<Baseline>(() => ({ files: request.files, listings }));
+
+    if (baseline.files !== request.files) {
+        setBaseline({ files: request.files, listings });
     }
 
     return useMemo(() => {
-        if (!listing || listing === baseline.listing) {
-            return request.entries;
-        }
+        const byListing = new Map<FileEntry[], Map<string, FileEntry>>();
+        const now = request.files.flatMap((file) => {
+            const key = folderKeyOf(file);
+            const listing = listings.get(key);
 
-        const byId = new Map(listing.map((entry) => [entry.id, entry]));
-        const now = request.entries.flatMap((entry) => {
-            const listed = byId.get(entry.id);
+            if (!listing || listing === baseline.listings.get(key)) {
+                return [file];
+            }
 
-            return listed?.kind === "file" ? [listed] : [];
+            const byId = byListing.get(listing) ?? new Map(listing.map((entry) => [entry.id, entry]));
+            const listed = byId.get(file.entry.id);
+
+            byListing.set(listing, byId);
+
+            if (listed?.kind !== "file") {
+                return [];
+            }
+
+            return [listed === file.entry ? file : { ...file, entry: listed }];
         });
 
-        return sameEntries(now, request.entries) ? request.entries : now;
-        // `version` stands for the listings read through the store.
-    }, [request.entries, listing, baseline.listing, version]);
+        return sameFiles(now, request.files) ? request.files : now;
+    }, [request.files, listings, baseline.listings]);
 };
 
 /**
@@ -511,28 +547,31 @@ const PreviewDialog = ({
     onStep,
     onDownload,
 }: PreviewDialogProps) => {
-    const { adapter } = request;
     const { text, formatNumber, formatSize, describeDate, describeSize, describeType } = useLocale();
     const dir = useContext(DirectionContext);
 
     // The files as they're listed now, or as they were last, while the preview fades out once
     // none is left.
-    const live = useLiveEntries(request);
+    const live = useLiveFiles(request);
     const [kept, setKept] = useState(live);
 
     if (live.length > 0 && live !== kept) {
         setKept(live);
     }
 
-    const entries = live.length > 0 ? live : kept;
+    const files = live.length > 0 ? live : kept;
+    const entries = useMemo(() => files.map((file) => file.entry), [files]);
+    // Each file's adapter, as the files may come from several sections.
+    const adapters = useMemo(() => new Map(files.map((file) => [file.entry, file.adapter])), [files]);
     const count = entries.length;
 
     const [shown, setShown] = useState<Shown>(() => {
-        const index = Math.min(Math.max(request.index, 0), request.entries.length - 1);
+        const index = Math.min(Math.max(request.index, 0), request.files.length - 1);
+        const { entry, adapter } = request.files[index];
 
-        return { id: request.entries[index].id, index };
+        return { id: entry.id, adapter, index };
     });
-    const found = entries.findIndex((candidate) => candidate.id === shown.id);
+    const found = files.findIndex(({ entry, adapter }) => entry.id === shown.id && adapter === shown.adapter);
     const index = found >= 0 ? found : Math.min(shown.index, count - 1);
     // The way the last step went, where the file loaded ahead lies.
     const [direction, setDirection] = useState<1 | -1>(1);
@@ -545,8 +584,13 @@ const PreviewDialog = ({
     const slideRef = useRef<HTMLDivElement>(null);
     const titleId = useId();
 
-    const entry = entries[index];
-    const planOf = useCallback((file: FileEntry) => planPreview(file, adapter, previewers), [adapter, previewers]);
+    const file = files[index];
+    const { entry, adapter } = file;
+    const adapterOf = useCallback((one: FileEntry) => adapters.get(one) ?? adapter, [adapters, adapter]);
+    const planOf = useCallback(
+        (one: FileEntry) => planPreview(one, adapterOf(one), previewers),
+        [adapterOf, previewers],
+    );
     const plan = planOf(entry);
     const { kind } = plan;
     const size = dimensions?.id === entry.id ? dimensions : null;
@@ -557,7 +601,7 @@ const PreviewDialog = ({
         retry,
         more,
     } = usePreviewContents({
-        adapter,
+        adapterOf,
         entries,
         index,
         // Nothing more is loaded while the preview fades out.
@@ -578,14 +622,16 @@ const PreviewDialog = ({
     // The file shown went, deleted, moved or renamed away, and the one now in its place shows;
     // with none left, the preview closes.
     useEffect(() => {
-        if (entry.id !== shown.id) {
-            onStep(request, entry);
+        const other = entry.id !== shown.id || adapter !== shown.adapter;
+
+        if (other) {
+            onStep(request, file);
         }
 
-        if (entry.id !== shown.id || index !== shown.index) {
-            setShown({ id: entry.id, index });
+        if (other || index !== shown.index) {
+            setShown({ id: entry.id, adapter, index });
         }
-    }, [entry, index, shown, request, onStep]);
+    }, [file, entry, adapter, index, shown, request, onStep]);
 
     useEffect(() => {
         if (open && live.length === 0) {
@@ -681,8 +727,8 @@ const PreviewDialog = ({
     const canStep = (delta: 1 | -1) => index + delta >= 0 && index + delta < count;
 
     const show = (target: number) => {
-        setShown({ id: entries[target].id, index: target });
-        onStep(request, entries[target]);
+        setShown({ id: files[target].entry.id, adapter: files[target].adapter, index: target });
+        onStep(request, files[target]);
     };
 
     // A step by a button or a key slides the file in, as a swipe does.
@@ -718,7 +764,7 @@ const PreviewDialog = ({
     });
 
     // The app's actions for the file shown, and the header's own: Download and Full screen.
-    const appActions = useMemo(() => actionsFor(request, entry), [actionsFor, request, entry]);
+    const appActions = useMemo(() => actionsFor(request, file), [actionsFor, request, file]);
     const headerActions = useMemo((): ToolbarGroup[] => {
         const own: ToolbarGroup = {
             id: "preview",
@@ -732,7 +778,7 @@ const PreviewDialog = ({
                               disabled: false,
                               destructive: false,
                               keep: true,
-                              run: () => onDownload(request, entry),
+                              run: () => onDownload(file),
                           },
                       ]
                     : []),
@@ -750,7 +796,7 @@ const PreviewDialog = ({
         };
 
         return [...appActions, own];
-    }, [appActions, adapter, entry, maximized, text, toggleFullScreen, onDownload, request]);
+    }, [appActions, adapter, entry, file, maximized, text, toggleFullScreen, onDownload]);
 
     // The browser couldn't load the URL, or can't show what it holds.
     const handleMediaError = () => fail(entry, new Error(text.previewMediaFailed));

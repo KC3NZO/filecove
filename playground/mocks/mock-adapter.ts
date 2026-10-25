@@ -469,6 +469,45 @@ export const createMockAdapter = (
     };
 
     /** An entry's node and the folder it is in, to rename, move or delete it: refused when it can't be changed. */
+    // What a download packs for an entry, under `path`: a file, or a folder found by its id, which
+    // is all a folder downloaded from its own menu comes with, and everything in it.
+    const packedEntry = (entry: FileEntry, path: string, showHidden: boolean) =>
+        packed(entry.kind === "folder" ? folderAt(entry.id) : locate(entry).node, path, showHidden);
+
+    // The files and folders a download packs, unless that's more than this server packs at once.
+    const withinLimit = (items: { path: string; node: MockNode }[]) => {
+        if (items.length > DOWNLOAD_LIMIT) {
+            throw new Error(
+                `That's ${items.length} files and folders, more than the ${DOWNLOAD_LIMIT} this server packs at once.`,
+            );
+        }
+
+        return items;
+    };
+
+    // The files' bytes are gathered first, videos fetched, so the bytes reported while packing are
+    // the ones that go in, then packed over a wait that grows with what's in it.
+    const zipped = async (
+        items: { path: string; node: MockNode }[],
+        signal: AbortSignal,
+        onProgress: (loaded: number, total: number) => void,
+    ) => {
+        const gathered = await Promise.all(
+            items.map(
+                async ({ path, node }): Promise<ZipItem> => ({
+                    path,
+                    data: node.children ? null : await bytesOf(node, signal),
+                    modified: node.modified ? new Date(node.modified) : new Date(),
+                }),
+            ),
+        );
+        const size = gathered.reduce((sum, item) => sum + (item.data?.size ?? 0), 0);
+
+        await transfer(signal, size, clamp(gathered.length * PACK_TIME_EACH, PACK_TIME), onProgress);
+
+        return zip(gathered);
+    };
+
     const locateChangeable = (entry: FileEntry) => {
         const located = locate(entry);
 
@@ -904,44 +943,47 @@ export const createMockAdapter = (
         // only its id, which is how a section's root is found. Named after the one entry, or the
         // folder they're in.
         download: (entries, { signal, showHidden, onProgress }) =>
-            respond(signal, () => {
-                const items = entries.flatMap((entry) =>
-                    packed(entry.kind === "folder" ? folderAt(entry.id) : locate(entry).node, entry.name, showHidden),
-                );
-
-                if (items.length > DOWNLOAD_LIMIT) {
-                    throw new Error(
-                        `That's ${items.length} files and folders, more than the ${DOWNLOAD_LIMIT} this server packs at once.`,
-                    );
-                }
-
-                return items;
-            })
-                // The files' bytes are gathered first, videos fetched, so the bytes reported while
-                // packing are the ones that go in.
-                .then((items) =>
-                    Promise.all(
-                        items.map(
-                            async ({ path, node }): Promise<ZipItem> => ({
-                                path,
-                                data: node.children ? null : await bytesOf(node, signal),
-                                modified: node.modified ? new Date(node.modified) : new Date(),
-                            }),
-                        ),
-                    ),
-                )
-                .then((items) => {
-                    const size = items.reduce((sum, item) => sum + (item.data?.size ?? 0), 0);
-
-                    return transfer(signal, size, clamp(items.length * PACK_TIME_EACH, PACK_TIME), onProgress).then(
-                        () => zip(items),
-                    );
-                })
+            respond(signal, () => withinLimit(entries.flatMap((entry) => packedEntry(entry, entry.name, showHidden))))
+                .then((items) => zipped(items, signal, onProgress))
                 .then((blob) => {
                     const [first] = entries;
                     const folderName = parentOf(first.id).split("/").filter(Boolean).pop() ?? "download";
 
                     return { blob, name: `${entries.length === 1 ? first.name : folderName}.zip` };
+                }),
+
+        // Entries of several folders, a search's results, packed as `download` packs a folder's,
+        // each folder's in a folder of its name, numbered when two share one, so files of one name
+        // stay apart. Named after the folder holding them all.
+        downloadAcross: (groups, { signal, showHidden, onProgress }) =>
+            respond(signal, () => {
+                const used = new Map<string, number>();
+
+                return withinLimit(
+                    groups.flatMap(({ folder, entries }) => {
+                        const count = (used.get(folder.name) ?? 0) + 1;
+                        const name = count === 1 ? folder.name : `${folder.name} (${count})`;
+
+                        used.set(folder.name, count);
+
+                        return [
+                            { path: `${name}/`, node: folderAt(folder.id) },
+                            ...entries.flatMap((entry) => packedEntry(entry, `${name}/${entry.name}`, showHidden)),
+                        ];
+                    }),
+                );
+            })
+                .then((items) => zipped(items, signal, onProgress))
+                .then((blob) => {
+                    // Ids are paths, so the folder holding them all is the steps they start with.
+                    const paths = groups.map(({ folder }) => folder.id.split("/").filter(Boolean));
+                    let depth = 0;
+
+                    while (depth < paths[0].length && paths.every((path) => path[depth] === paths[0][depth])) {
+                        depth += 1;
+                    }
+
+                    return { blob, name: `${paths[0][depth - 1] ?? "download"}.zip` };
                 }),
 
         // Made to order, shrunk to the size asked for in either view; a backend keeping a few sizes

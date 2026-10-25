@@ -25,12 +25,13 @@ import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx, focusOutline, focusRing, hoverBackground } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
+import { groupedEntries } from "../../../utils/groups";
 import { isHidden } from "../../../utils/hidden";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { folderLeft, folderOf } from "../../../utils/navigation";
 import { folderMoving, folderWritable, lockedFolder, replaceable } from "../../../utils/permissions";
 import { nameOrder } from "../../../utils/sort";
-import { findClashes, mergedFolders } from "../../../utils/transfer";
+import { entryClashes, mergedFolders } from "../../../utils/transfer";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
@@ -43,6 +44,8 @@ import NameDialog from "./name-dialog";
 import type {
     Clash,
     ConflictPolicy,
+    EntryClash,
+    EntryGroup,
     FileAdapter,
     FileEntry,
     FileManagerLocation,
@@ -57,9 +60,10 @@ export interface TransferRequest {
     section: Section;
     /** The section's adapter, already known to support the request. */
     adapter: FileAdapter;
-    /** Trail to the folder the entries are in. */
+    /** Trail to the folder the picker starts in: the entries', or the nearest holding them all. */
     trail: FolderRef[];
-    entries: FileEntry[];
+    /** The entries by the folder they're in: one, or several for a search's results. */
+    groups: EntryGroup[];
     /**
      * Sections served by the same adapter, the only ones whose ids it understands, that take
      * entries from `section`, which is always among them.
@@ -88,15 +92,15 @@ interface TransferDialogProps {
     onChanged: (adapter: FileAdapter, folderIds: string[]) => void;
     /**
      * Called once a destination is chosen and there's nothing left to ask, with the choice that
-     * settles names it already has, the names of the entries to skip, as the folder had them, and
-     * after a "replace", the ids of the folders entries are merged into, which may change all the
-     * way down. The adapter then copies or moves them in the background.
+     * settles names it already has, the entries to skip, which clash, and after a "replace", the
+     * ids of the folders entries are merged into, which may change all the way down. The adapter
+     * then copies or moves them in the background.
      */
     onStart: (
         request: TransferRequest,
         destination: FileManagerLocation,
         conflict: ConflictPolicy,
-        skipped: string[],
+        skipped: FileEntry[],
         mergedIds: string[],
     ) => void;
     /**
@@ -124,6 +128,8 @@ interface PickerItem {
 }
 
 const NO_MENU: OpenMenu = () => false;
+
+const NO_CLASHES: Clash[] = [];
 
 // Long names are cut short, since every row must be as tall for the list to place them.
 const TEXT_SLOTS = { primary: { noWrap: true } };
@@ -238,10 +244,11 @@ const isFolder = (entry: FileEntry) => entry.kind === "folder";
 /**
  * Asks where to copy or move entries, then has the adapter do it. It browses folders only, across
  * the sections the adapter serves that take entries from theirs, starting in the entries' own
- * folder. The entries themselves can't be opened, so a folder can never go into itself, and a
- * folder that can't change (`folderWritable`) can be gone through but not chosen. Names the
- * destination already has are settled in a second step: replace or merge, keep both, or skip. Then
- * it closes, and the copy or move runs in the background, shown in the transfer panel.
+ * folder, or for a search's results from several, the nearest holding them all. The entries
+ * themselves can't be opened, so a folder can never go into itself, and a folder that can't change
+ * (`folderWritable`) can be gone through but not chosen. Names the destination already has are
+ * settled in a second step: replace or merge, keep both, or skip. Then it closes, and the copy or
+ * move runs in the background, shown in the transfer panel.
  *
  * The list of folders is one stop in the tab order, focused once the dialog has faded in. The
  * arrows, Home, End, PageUp and PageDown move between the rows that can be opened, and typing
@@ -262,16 +269,17 @@ const TransferDialog = ({
     onStart,
     onFolderCreated,
 }: TransferDialogProps) => {
-    const { kind, section, adapter, trail, entries, destinations } = request;
+    const { kind, section, adapter, trail, groups, destinations } = request;
     const { store } = useData();
-    const sourceId = folderOf(section, trail).id;
+    const entries = useMemo(() => groupedEntries(groups), [groups]);
     const locale = useLocale();
     const { text } = locale;
     const dir = useContext(DirectionContext);
 
     // Null on the list of sections, which is only reachable with more than one.
     const [place, setPlace] = useState<FileManagerLocation | null>({ sectionId: section.id, trail });
-    const [conflicts, setConflicts] = useState<Clash[] | null>(null);
+    const [conflicts, setConflicts] = useState<EntryClash[] | null>(null);
+    const clashes = useMemo(() => conflicts?.map(({ clash }) => clash) ?? NO_CLASHES, [conflicts]);
 
     const target = destinations.find((candidate) => candidate.id === place?.sectionId) ?? section;
     const targetFolder = folderOf(target, place?.trail ?? []);
@@ -297,7 +305,13 @@ const TransferDialog = ({
     const readOnly = place !== null && !folderWritable(store, target, place.trail, movingIds);
 
     // Ids are unique within an adapter, so the same folder is the same id whichever section shows it.
-    const sameFolder = place !== null && targetFolder.id === sourceId;
+    // Entries already in the folder clash with themselves: a copy keeps both, and a move leaves them,
+    // so there's nothing to move when they all are.
+    const incoming =
+        place === null
+            ? entries
+            : groupedEntries(groups.filter((group) => folderOf(group.section, group.trail).id !== targetFolder.id));
+    const allThere = place !== null && incoming.length === 0;
     const title = (kind === "copy" ? text.copyToTitle : text.moveToTitle)(entries.length, isolate(entries[0].name));
 
     const typeAhead = useTypeAhead();
@@ -536,8 +550,8 @@ const TransferDialog = ({
                 request,
                 place,
                 conflict,
-                conflict === "skip" ? (conflicts ?? []).map((clash) => clash.name) : [],
-                conflict === "replace" ? mergedFolders(entries, state?.entries, changes) : [],
+                conflict === "skip" ? (conflicts ?? []).map(({ entry }) => entry) : [],
+                conflict === "replace" ? mergedFolders(incoming, state?.entries, changes) : [],
             );
         }
     };
@@ -545,10 +559,10 @@ const TransferDialog = ({
     // Copying into the entries' own folder clashes with every one of them, and only makes sense as
     // a duplicate, so it keeps both without asking.
     const confirm = () => {
-        const clashes = findClashes(entries, state?.entries, changes);
+        const found = entryClashes(incoming, state?.entries, changes);
 
-        if (clashes.length > 0 && !sameFolder) {
-            setConflicts(clashes);
+        if (found.length > 0) {
+            setConflicts(found);
         } else {
             run("keepBoth");
         }
@@ -559,7 +573,7 @@ const TransferDialog = ({
     if (conflicts) {
         body = (
             <Box sx={stateSx}>
-                <ConflictMessage clashes={conflicts} folderName={targetFolder.name} />
+                <ConflictMessage clashes={clashes} folderName={targetFolder.name} />
             </Box>
         );
     } else if (items.length > 0) {
@@ -695,7 +709,7 @@ const TransferDialog = ({
                             {text.back}
                         </Button>
                         <Box sx={spacerSx} />
-                        <ConflictChoices clashes={conflicts} pending={null} onChoose={run} />
+                        <ConflictChoices clashes={clashes} pending={null} onChoose={run} />
                     </DialogActions>
                 ) : (
                     <DialogActions sx={dialogActionsSx}>
@@ -711,7 +725,7 @@ const TransferDialog = ({
                             all come. */}
                         <Button
                             variant="contained"
-                            disabled={!place || !loaded || readOnly || (kind === "move" && sameFolder)}
+                            disabled={!place || !loaded || readOnly || (kind === "move" && allThere)}
                             aria-describedby={readOnly ? readOnlyId : undefined}
                             onClick={confirm}
                         >

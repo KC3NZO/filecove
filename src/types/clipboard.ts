@@ -1,7 +1,7 @@
 // Internal to the package, not exported from the package entry.
 
-import type { FileAdapter, FileEntry } from "./adapter";
-import type { FolderRef, Section } from "./section";
+import type { FileAdapter } from "./adapter";
+import type { EntryGroup } from "./menu";
 
 /**
  * How the clipboard's entries are looked for again after a change that may have left their ids
@@ -19,6 +19,12 @@ export type ClipboardLookup =
      */
     | { by: "id" };
 
+/** The clipboard's entries of one folder, with its section and the trail to it. */
+export interface ClipboardPart extends EntryGroup {
+    /** Set while the entries are looked for again (`useClipboardFollow`); nothing is pasted meanwhile. */
+    lookup?: ClipboardLookup;
+}
+
 /**
  * Entries cut or copied, waiting to be pasted. It lives in the file manager rather than the
  * system clipboard, since entry ids mean nothing outside the adapter they came from.
@@ -26,13 +32,11 @@ export type ClipboardLookup =
 export interface Clipboard {
     /** "cut" moves the entries when they're pasted, "copy" copies them. */
     kind: "cut" | "copy";
-    /** The section the entries were cut or copied in. */
-    section: Section;
-    /** The section's adapter, the only one their ids mean anything to. */
+    /** The adapter serving every part's section, the only one their ids mean anything to. */
     adapter: FileAdapter;
-    /** Trail to the folder the entries are in. */
-    trail: FolderRef[];
-    entries: FileEntry[];
-    /** Set while the entries are looked for again (`useClipboardFollow`); nothing is pasted meanwhile. */
-    lookup?: ClipboardLookup;
+    /**
+     * The entries by the folder they're in: one part, or several for a search's results from
+     * several folders, of one section or more. Never empty, nor is any part.
+     */
+    parts: ClipboardPart[];
 }

@@ -4,7 +4,10 @@ import { matchesShortcut, pressedKeys } from "./shortcut";
 
 import type { ActionContext, ActionGroup, ToolbarGroup } from "../types";
 
-/** The actions that apply to a context, still grouped, with groups left empty dropped. */
+/**
+ * The actions that apply to a context, still grouped, with groups left empty dropped. Entries from
+ * several folders only get those offered `acrossFolders`.
+ */
 export const visibleActionGroups = (groups: ActionGroup[], context: ActionContext): ActionGroup[] =>
     groups
         .map((group) => ({
@@ -13,6 +16,7 @@ export const visibleActionGroups = (groups: ActionGroup[], context: ActionContex
                 (action) =>
                     (!action.target || action.target === context.target) &&
                     (!action.single || context.entries.length <= 1) &&
+                    (!context.byFolder || !!action.acrossFolders) &&
                     (action.visible?.(context) ?? true),
             ),
         }))

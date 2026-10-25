@@ -3,6 +3,7 @@ import type { DragEvent, PointerEvent, RefObject } from "react";
 import { flushSync } from "react-dom";
 
 import { isRtl } from "../utils/dom";
+import { groupedEntries } from "../utils/groups";
 
 import type { DragContextValue } from "../contexts/drag-context";
 import type { DraggedEntries, DragSource, DropEffect, DropInto, FileAdapter, FileEntry } from "../types";
@@ -119,10 +120,18 @@ export const useEntryDrag = (
         setDragged(null);
     }, []);
 
-    // What a drag picks up, unless its entries are held up, or can be neither moved nor copied.
+    // What a drag picks up, unless its entries are held up, or can be neither moved nor copied, or
+    // are served by different adapters, as a search's results of several sections may be, which no
+    // folder could take together, since nothing is copied between adapters.
     const take = useCallback(
-        ({ section, trail, entries }: DragSource): DraggedEntries | null => {
-            const taken = { section, adapter: section.adapter ?? adapter, trail, entries };
+        ({ parts }: DragSource): DraggedEntries | null => {
+            const served = parts[0].section.adapter ?? adapter;
+
+            if (parts.some((part) => (part.section.adapter ?? adapter) !== served)) {
+                return null;
+            }
+
+            const taken = { adapter: served, parts };
 
             return !held(taken) && (taken.adapter.copy || movable(taken)) ? taken : null;
         },
@@ -141,7 +150,8 @@ export const useEntryDrag = (
                 return;
             }
 
-            const { entries, grabbed } = source;
+            const { grabbed } = source;
+            const entries = groupedEntries(source.parts);
 
             // Rendered right away, so the preview is there for the browser to take its picture of.
             flushSync(() => {
@@ -305,7 +315,8 @@ export const useEntryDrag = (
             return;
         }
 
-        const { entries, grabbed } = source;
+        const { grabbed } = source;
+        const count = groupedEntries(source.parts).length;
 
         // The views only take the drag once they've rendered with it, so the drag events start with
         // the next move, frame or resend.
@@ -313,7 +324,7 @@ export const useEntryDrag = (
         touch.copyOnly = !movable(taken);
         touch.effect = touch.copyOnly ? "copy" : "move";
         setDragged(taken);
-        setPreview({ entry: grabbed, count: entries.length, touch: true });
+        setPreview({ entry: grabbed, count, touch: true });
         setEffect(touch.effect);
         touch.frame = requestAnimationFrame(() => scroll(touch));
         touch.timer = window.setInterval(() => sendOver(touch), RESEND_INTERVAL);
@@ -484,7 +495,7 @@ export const useEntryDrag = (
         () =>
             dragged && {
                 adapter: dragged.adapter,
-                ids: new Set(dragged.entries.map((entry) => entry.id)),
+                ids: new Set(groupedEntries(dragged.parts).map((entry) => entry.id)),
                 copyOnly: !movable(dragged),
             },
         [dragged, movable],

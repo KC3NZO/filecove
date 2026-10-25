@@ -1,10 +1,11 @@
-export type { ActionContext, ActionGroup, ActionTarget, FileAction } from "./action";
+export type { ActionContext, ActionGroup, ActionTarget, ContextFolder, FileAction } from "./action";
 export type { FileManagerApi, RefreshOptions } from "./api";
 export type {
     ConflictPolicy,
     ContentOptions,
     DownloadContent,
     DownloadOptions,
+    EntriesInFolder,
     EntryPermissions,
     EntryProperties,
     EntryTotals,
@@ -28,10 +29,10 @@ export type {
     TransferOptions,
     UploadOptions,
 } from "./adapter";
-export type { Clipboard, ClipboardLookup } from "./clipboard";
+export type { Clipboard, ClipboardLookup, ClipboardPart } from "./clipboard";
 export type { DownloadItem, DownloadStatus, PreparedDownload } from "./download";
 export type { DraggedEntries, DragSource, DropEffect, DropInto, DropTarget, HeldPress } from "./drag";
-export type { Clash, FolderState } from "./folder";
+export type { Clash, EntryClash, FolderState } from "./folder";
 export type { IconComponent, IconName, IconOverrides, IconSet, IconSource, IconVariant } from "./icon";
 export type {
     DownloadLocaleText,
@@ -43,6 +44,7 @@ export type {
 } from "./locale";
 export type { MainMenuGroup, MainMenuItem } from "./main-menu";
 export type {
+    EntryGroup,
     MenuPosition,
     MenuRequest,
     OpenMenu,

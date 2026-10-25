@@ -24,6 +24,7 @@ import { VIEW_CONTAINER } from "../../../styles/layout";
 import { focusOutline, forcedBarSx, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
 import { isolate, joinIsolated } from "../../../utils/bidi";
 import { focusLost, isRtl } from "../../../utils/dom";
+import { groupByFolder, selectionRequest } from "../../../utils/groups";
 import { isHidden } from "../../../utils/hidden";
 import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { belowElement, pressPosition } from "../../../utils/menu-position";
@@ -107,10 +108,6 @@ const resultElement = (surface: HTMLElement, key: string) =>
 /** The key of the folder a result is in, to tell whether results share one. */
 const folderOfHit = (hit: SearchHit) => resultKey(hit.section.id, folderOf(hit.section, hit.trail).id);
 
-/** Whether results are all in one folder of one section, which is what an action can take. */
-const inOneFolder = (hits: readonly SearchHit[]) =>
-    hits.length > 0 && hits.every((hit) => folderOfHit(hit) === folderOfHit(hits[0]));
-
 // The content panel's scrolling view, as the folder view has it, with the container queries the
 // list's columns follow.
 const scrollSx: SxProps<Theme> = {
@@ -174,9 +171,9 @@ const stateTitleSx: SxProps<Theme> = {
 /**
  * A search everywhere's results, in the content panel in place of the open folder: every section's
  * together, sorted as a folder is, with where each is in a Location column, and, with several
- * sections searched, a tab for each above them. Results are selected as entries are, but only
- * results of one folder are acted on together, since an action takes entries sharing a folder: a
- * menu opened on a selection spanning folders acts on its result alone, selected first.
+ * sections searched, a tab for each above them. Results are selected as entries are, and acted on
+ * together, by the folder each is in when they're in several (`MenuRequest.groups`), of one
+ * section or more.
  */
 const SearchResults = ({
     targets,
@@ -277,8 +274,6 @@ const SearchResults = ({
         () => selected.flatMap((entry) => hitByKey.get(entry.id) ?? []),
         [selected, hitByKey],
     );
-    // An action takes entries of one folder, so the selection is only acted on as a whole then.
-    const actOnSelection = inOneFolder(selectedHits);
 
     useEffect(() => {
         onSelectionChange(selectedHits);
@@ -287,17 +282,24 @@ const SearchResults = ({
     const typeAhead = useTypeAhead();
 
     // A menu, a shortcut or the preview acts on results of one folder, there, with that folder's
-    // results to step through.
+    // results to step through, or on those of several, by folder. An entry found in two sections
+    // sharing an adapter is acted on once.
     const requestFor = useCallback(
         (acted: SearchHit[]): MenuRequest => {
-            const [first] = acted;
-            const folder = folderOfHit(first);
+            const groups = groupByFolder(acted);
+
+            if (groups.length > 1) {
+                return { ...selectionRequest(groups), inResults: true };
+            }
+
+            const [{ section, trail, entries: own }] = groups;
+            const folder = folderOfHit(acted[0]);
 
             return {
                 target: "selection",
-                section: first.section,
-                trail: first.trail,
-                entries: acted.map((hit) => hit.entry),
+                section,
+                trail,
+                entries: own,
                 listing: hits.filter((hit) => folderOfHit(hit) === folder).map((hit) => hit.entry),
                 inResults: true,
             };
@@ -430,8 +432,8 @@ const SearchResults = ({
         return key === undefined ? undefined : hitByKey.get(key);
     };
 
-    // A drag carries the selection when it starts on a selected result and the selection is in one
-    // folder; otherwise the result is selected and dragged alone.
+    // A drag carries the selection, by folder, when it starts on a selected result; otherwise the
+    // result is selected and dragged alone.
     const handleDragStart = (event: DragEvent) => {
         drag?.start(event, () => {
             const hit = hitAt(event);
@@ -442,13 +444,13 @@ const SearchResults = ({
 
             setGrabbedId(hit.key);
 
-            const carried = selectedIds.has(hit.key) && actOnSelection ? selectedHits : [hit];
+            const carried = selectedIds.has(hit.key) ? selectedHits : [hit];
 
             if (carried.length === 1) {
                 select(hit.key);
             }
 
-            return { section: hit.section, trail: hit.trail, entries: carried.map((one) => one.entry), grabbed: hit.entry };
+            return { parts: groupByFolder(carried), grabbed: hit.entry };
         });
     };
 
@@ -519,8 +521,8 @@ const SearchResults = ({
         [entries, handleOpen, select],
     );
 
-    // The menu of a selected result acts on the whole selection when it's in one folder. Any other
-    // result, or one of a selection spanning folders, is selected alone first.
+    // The menu of a selected result acts on the whole selection. Any other result is selected alone
+    // first.
     const handleEntryMenu = useCallback(
         (position: MenuPosition, entry: FileEntry) => {
             const hit = hitByKey.get(entry.id);
@@ -529,7 +531,7 @@ const SearchResults = ({
                 return false;
             }
 
-            const whole = selectedIds.has(entry.id) && actOnSelection;
+            const whole = selectedIds.has(entry.id);
 
             if (!whole) {
                 select(entry.id);
@@ -537,12 +539,12 @@ const SearchResults = ({
 
             return onOpenMenu(position, requestFor(whole ? selectedHits : [hit]));
         },
-        [hitByKey, selectedIds, actOnSelection, selectedHits, select, onOpenMenu, requestFor],
+        [hitByKey, selectedIds, selectedHits, select, onOpenMenu, requestFor],
     );
 
     // Results have no selection mode, so a long-press opens the result's menu once the finger
     // lifts, as a right-click would. The finger moving on instead drags it, or the selection it's
-    // in when that's in one folder, as a mouse drag does.
+    // in, as a mouse drag does.
     const longPress = useLongPress({
         onLongPress: (key, press) => {
             const hit = hitByKey.get(key);
@@ -553,7 +555,7 @@ const SearchResults = ({
             }
 
             const position = pressPosition(press);
-            const carried = selectedIds.has(key) && actOnSelection ? selectedHits : [hit];
+            const carried = selectedIds.has(key) ? selectedHits : [hit];
             const pick = () => {
                 setGrabbedId(key);
 
@@ -561,12 +563,7 @@ const SearchResults = ({
                     select(key);
                 }
 
-                return {
-                    section: hit.section,
-                    trail: hit.trail,
-                    entries: carried.map((one) => one.entry),
-                    grabbed: hit.entry,
-                };
+                return { parts: groupByFolder(carried), grabbed: hit.entry };
             };
             const movable = !!(hit.adapter.move || hit.adapter.copy);
 
@@ -625,7 +622,7 @@ const SearchResults = ({
         focusResult(entry.id, index);
     };
 
-    // Shortcuts run for the selection when it's in one folder; results have no folder of their own
+    // Shortcuts run for the selection; results have no folder of their own
     // for the rest. Then the view's keys, as in a folder, but for going up, which leads nowhere.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         const key = keyAt(event.target);
@@ -651,7 +648,7 @@ const SearchResults = ({
 
         const typingSpace = event.key === " " && isTypingKey(event) && typeAhead.typing();
 
-        if (!typingSpace && actOnSelection && onShortcut(event, [requestFor(selectedHits)])) {
+        if (!typingSpace && selectedHits.length > 0 && onShortcut(event, [requestFor(selectedHits)])) {
             event.preventDefault();
 
             return;

@@ -1,6 +1,6 @@
 import { prepareDownload, saveFile } from "../utils/download";
 
-import type { DownloadItem, FileAdapter, FileEntry } from "../types";
+import type { DownloadItem, EntriesInFolder, FileAdapter, FileEntry } from "../types";
 
 /** How many downloads the adapter prepares at once; the rest wait their turn. */
 const MAX_ACTIVE = 3;
@@ -167,11 +167,18 @@ export const createDownloadQueue = () => {
         },
 
         /**
-         * Asks for `entries` as one file to save, through `adapter`, which hands them over. The same
-         * entries asked for again while they're being prepared are left to that download; one of
-         * them that failed or is ready is replaced.
+         * Asks for `entries` as one file to save, through `adapter`, which hands them over, or with
+         * `groups`, the entries of several folders, through its `downloadAcross`. The same entries
+         * asked for again while they're being prepared are left to that download; one of them that
+         * failed or is ready is replaced.
          */
-        add(adapter: FileAdapter, entries: FileEntry[], folderName: string, showHidden: boolean) {
+        add(
+            adapter: FileAdapter,
+            entries: FileEntry[],
+            folderName: string,
+            showHidden: boolean,
+            groups?: EntriesInFolder[],
+        ) {
             const same = items.filter((item) => sameEntries(item, adapter, entries));
 
             if (entries.length === 0 || same.some(isActive)) {
@@ -184,7 +191,7 @@ export const createDownloadQueue = () => {
 
             items = [
                 ...items,
-                { id, adapter, entries, folderName, showHidden, status: "queued", shown: false },
+                { id, adapter, entries, groups, folderName, showHidden, status: "queued", shown: false },
             ];
             showLater(id);
             pump();

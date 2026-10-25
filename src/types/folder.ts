@@ -38,4 +38,15 @@ export interface Clash {
      * say (`replaceable`), so what comes in would be kept beside it.
      */
     locked: boolean;
+    /**
+     * Whether the name is another entry's coming in before it, rather than one the folder has, as
+     * entries from several folders may share names.
+     */
+    shared?: boolean;
+}
+
+/** A name an entry going into a folder clashes with, and the entry. */
+export interface EntryClash {
+    entry: FileEntry;
+    clash: Clash;
 }

@@ -15,13 +15,31 @@ export interface MenuPosition {
     rtl: boolean;
 }
 
+/** Entries that share a folder of a section, with the trail to it. */
+export interface EntryGroup {
+    /** The section the folder is in. */
+    section: Section;
+    /** Trail to the folder the entries are in. */
+    trail: FolderRef[];
+    entries: FileEntry[];
+}
+
 /** A context menu request from the sidebar or the content, turned into an `ActionContext` by the file manager. */
 export interface MenuRequest {
     target: ActionTarget;
     section: Section;
-    /** Trail to the folder the action happens in. */
+    /**
+     * Trail to the folder the action happens in: the entries', or the nearest holding those of
+     * `groups` in `section`, the first group's.
+     */
     trail: FolderRef[];
     entries: FileEntry[];
+    /**
+     * The entries by their folder, when they're in several, of one section or more, as a search
+     * everywhere's selection may be (`ActionContext.byFolder`); missing while they share `trail`'s
+     * folder.
+     */
+    groups?: EntryGroup[];
     /**
      * Every entry of the view the request came from, in its order, which the preview of a single
      * file steps through. Only the content has one.

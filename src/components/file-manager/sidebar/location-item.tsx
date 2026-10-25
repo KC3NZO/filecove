@@ -609,7 +609,7 @@ const FolderItem = memo(
                 { target: "folder", section, trail, entries: [] },
             ]);
 
-        const pick = () => ({ section, trail: parentTrail, entries: takeSelection(), grabbed: entry });
+        const pick = () => ({ parts: [{ section, trail: parentTrail, entries: takeSelection() }], grabbed: entry });
 
         const handleDragStart = (event: DragEvent) => {
             drag?.start(event, pick);

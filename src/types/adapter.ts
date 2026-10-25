@@ -254,7 +254,13 @@ export interface ContentOptions {
  */
 export type FileContent = { url: string; blob?: never } | { blob: Blob; url?: never };
 
-/** Passed to `download`. */
+/** Entries that share a folder, among entries from several (`downloadAcross`). */
+export interface EntriesInFolder {
+    folder: FolderRef;
+    entries: FileEntry[];
+}
+
+/** Passed to `download` and `downloadAcross`. */
 export interface DownloadOptions {
     /** Aborted when the user cancels while the download is being prepared. */
     signal: AbortSignal;
@@ -468,9 +474,20 @@ export interface FileAdapter {
      * from its own menu, the open folder or a section's root, comes as an entry with only `id`,
      * `name` and `kind`, a root named after its section. A URL is saved as `content`'s are.
      * Without it, only single files can be downloaded, through `content`. Reject with an `Error`
-     * to show its message to the user, e.g. when the folder is too large.
+     * to show its message to the user, e.g. when the folder is too large. Entries from several
+     * folders, as a search's results may be, go to `downloadAcross`, or without it, a folder's at a
+     * time to this, each saved as a file of its own.
      */
     download?(entries: FileEntry[], options: DownloadOptions): Promise<DownloadContent>;
+    /**
+     * Hands over entries from several folders as one file to save, as `download` does a folder's,
+     * for a search's results: each folder with its entries, in the order the user sees them. Files
+     * of different folders may share a name, which the file has to keep apart, e.g. by putting each
+     * folder's entries in a folder of its name, as a zip can, or numbering them. A blob without a
+     * name is saved under the name of the folder holding them all. Without it, they're downloaded
+     * a folder at a time through `download` and `content`.
+     */
+    downloadAcross?(groups: EntriesInFolder[], options: DownloadOptions): Promise<DownloadContent>;
     /**
      * Gives a small picture of a file, which the list and the grid show in place of its icon: a URL
      * or the bytes, as `content` does, or null for a file with none. It's asked for as the file

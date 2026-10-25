@@ -45,6 +45,7 @@ import {
     takesUploads,
     uploadPatterns,
 } from "../../utils/files";
+import { groupedEntries, requestGroups, selectionRequest } from "../../utils/groups";
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
 import { allows, entriesAllow, entriesMoving, folderMoving, folderWritable, replaceable } from "../../utils/permissions";
@@ -62,7 +63,7 @@ import {
 } from "../../utils/shortcut";
 import { previewable } from "../../utils/preview";
 import { DEFAULT_SORT, entryComparator, sameSort } from "../../utils/sort";
-import { isMoving, movingIds, movingThrough } from "../../utils/transfer";
+import { isMoving, movingIds, movingThrough, sharesNames } from "../../utils/transfer";
 import { DEFAULT_ZOOM, canZoom, sameZoom, zoomScale, zoomedBy } from "../../utils/zoom";
 import DownloadPanel from "../downloads/download-panel";
 import TransferPanel from "../transfers/transfer-panel";
@@ -96,6 +97,7 @@ import type {
     DroppedFiles,
     DropInto,
     DropTarget,
+    EntryGroup,
     FileAdapter,
     FileEntry,
     FileManagerApi,
@@ -134,7 +136,7 @@ import type { MenuState } from "./context-menu/context-menu";
 import type { DeleteDialogState, DeleteRequest } from "./dialogs/delete-dialog";
 import type { NameDialogState, NameRequest } from "./dialogs/name-dialog";
 import type { PasteDialogState, PasteRequest } from "./dialogs/paste-dialog";
-import type { PreviewDialogState, PreviewRequest } from "./dialogs/preview-dialog";
+import type { PreviewDialogState, PreviewFile, PreviewRequest } from "./dialogs/preview-dialog";
 import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-dialog";
 import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
 
@@ -429,12 +431,25 @@ interface TransferPlace {
      * trails are rewritten with the history's, to try it again where they are now.
      */
     request: PasteRequest;
-    /** The names of the entries the user chose to skip, as the folder had them. */
-    skipped: string[];
+    /** The entries the user chose to skip, as their names clashed. */
+    skipped: FileEntry[];
     /** The folders a Replace or Merge merges others into, listed again all the way down as it ends. */
     merged: string[];
     /** Whether it can be tried again: false once a folder in either trail has gone (see `revise`). */
     retriable: boolean;
+    /** The copies or moves started with it, a folder's entries each, which are said together. */
+    batch: TransferBatch;
+}
+
+/**
+ * The copies or moves one paste, drop or pick started: one, or one per folder for a search's
+ * results from several, said together once the last has ended.
+ */
+interface TransferBatch {
+    /** How many haven't ended yet. */
+    left: number;
+    /** The entries of those done. */
+    done: FileEntry[];
 }
 
 /** `defaultSelectedIds`, for the folder the file manager opened in, until another opens. */
@@ -490,11 +505,20 @@ const folderIdsOf = (entries: FileEntry[]) =>
 const sameKeys = (a: readonly SearchHit[], b: readonly SearchHit[]) =>
     a.length === b.length && a.every((hit, index) => hit.key === b[index].key);
 
-/** What a menu was opened on, for the properties: its entries, or with none, its folder itself. */
-const subjectOf = ({ section, trail, entries, inResults }: MenuRequest): PropertiesSubject =>
-    entries.length > 0
-        ? { kind: "entries", inResults: !!inResults, entries: entries.map((entry) => ({ entry, section, trail })) }
+/** What a menu was opened on, for the properties: its entries, by folder, or with none, its folder itself. */
+const subjectOf = (request: MenuRequest): PropertiesSubject => {
+    const { section, trail, entries, inResults } = request;
+
+    return entries.length > 0
+        ? {
+              kind: "entries",
+              inResults: !!inResults,
+              entries: requestGroups(request).flatMap((group) =>
+                  group.entries.map((entry) => ({ entry, section: group.section, trail: group.trail })),
+              ),
+          }
         : { kind: "folder", section, trail };
+};
 
 /** Whether the sections a subject names are still the file manager's, as they were. */
 const subjectHolds = (subject: PropertiesSubject, sectionsById: ReadonlyMap<string, Section>) => {
@@ -786,12 +810,16 @@ const FileManager = ({
             });
             transferPlaces.current.forEach((transfer) => {
                 const { clipboard, section: target, trail } = transfer.request;
-                const from = followed({ sectionId: clipboard.section.id, trail: clipboard.trail });
+                const parts = clipboard.parts.map((part) => {
+                    const from = followed({ sectionId: part.section.id, trail: part.trail });
+
+                    return from && { ...part, trail: from.trail };
+                });
                 const to = followed({ sectionId: target.id, trail });
 
-                if (from && to) {
+                if (to && parts.every((part) => part !== null)) {
                     transfer.request = {
-                        clipboard: { ...clipboard, trail: from.trail },
+                        clipboard: { ...clipboard, parts },
                         section: target,
                         trail: to.trail,
                     };
@@ -1267,8 +1295,15 @@ const FileManager = ({
     // Cut entries being found again by name aren't marked, as their ids may name others meanwhile.
     const cut = useMemo(
         () =>
-            clipboard?.kind === "cut" && clipboard.lookup?.by !== "name"
-                ? { adapter: clipboard.adapter, ids: new Set(clipboard.entries.map((entry) => entry.id)) }
+            clipboard?.kind === "cut"
+                ? {
+                      adapter: clipboard.adapter,
+                      ids: new Set(
+                          clipboard.parts.flatMap((part) =>
+                              part.lookup?.by === "name" ? [] : part.entries.map((entry) => entry.id),
+                          ),
+                      ),
+                  }
                 : null,
         [clipboard],
     );
@@ -1285,7 +1320,7 @@ const FileManager = ({
         const ids = new Set([folderOf(target, trail).id, folderOf(target, trail.slice(0, -1)).id]);
 
         if (pasted.kind === "cut") {
-            ids.add(folderOf(pasted.section, pasted.trail).id);
+            pasted.parts.forEach((part) => ids.add(folderOf(part.section, part.trail).id));
         }
 
         return { adapter: pasted.adapter, ids };
@@ -1960,9 +1995,23 @@ const FileManager = ({
         [downloads.queue, showHidden],
     );
 
+    // Entries of several folders as one file, from the adapter's `downloadAcross`, named after
+    // `folder`, which holds them all, when the file comes without a name.
+    const askDownloadAcross = useCallback(
+        (served: FileAdapter, groups: EntryGroup[], folder: FolderRef) =>
+            downloads.queue.add(
+                served,
+                groupedEntries(groups),
+                folder.name,
+                showHidden,
+                groups.map((group) => ({ folder: folderOf(group.section, group.trail), entries: group.entries })),
+            ),
+        [downloads.queue, showHidden],
+    );
+
     // The preview's Download button saves the file shown.
     const handlePreviewDownload = useCallback(
-        ({ section: shown, adapter: served, trail }: PreviewRequest, entry: FileEntry) =>
+        ({ entry, section: shown, adapter: served, trail }: PreviewFile) =>
             askDownload(served, [entry], folderOf(shown, trail)),
         [askDownload],
     );
@@ -1982,20 +2031,20 @@ const FileManager = ({
     const changePreview = useCallback(
         (served: FileAdapter, change: (entry: FileEntry) => FileEntry | null) =>
             setPreviewing((prev) => {
-                if (!prev || prev.request.adapter !== served) {
+                if (!prev?.request.files.some((file) => file.adapter === served)) {
                     return prev;
                 }
 
-                const entries = prev.request.entries.flatMap((entry) => {
-                    const now = change(entry);
+                const files = prev.request.files.flatMap((file) => {
+                    const now = file.adapter === served ? change(file.entry) : file.entry;
 
-                    return now ? [now] : [];
+                    return !now ? [] : now === file.entry ? [file] : [{ ...file, entry: now }];
                 });
 
-                return entries.length === prev.request.entries.length &&
-                    entries.every((entry, index) => entry === prev.request.entries[index])
+                return files.length === prev.request.files.length &&
+                    files.every((file, index) => file === prev.request.files[index])
                     ? prev
-                    : { ...prev, request: { ...prev.request, entries } };
+                    : { ...prev, request: { ...prev.request, files } };
             }),
         [],
     );
@@ -2003,7 +2052,7 @@ const FileManager = ({
     // A single file steps through its folder, and the content's selection follows the file shown,
     // as it does in GNOME's and macOS's previewers.
     const handlePreviewStep = useCallback(
-        ({ section: shown, trail, follow }: PreviewRequest, entry: FileEntry) => {
+        ({ follow }: PreviewRequest, { entry, section: shown, trail }: PreviewFile) => {
             const key = folderKey(shown.id, folderOf(shown, trail).id);
 
             if (follow && key === openKey) {
@@ -2035,13 +2084,15 @@ const FileManager = ({
     const movable = useCallback(
         (dragged: DraggedEntries) =>
             !!dragged.adapter.move &&
-            entriesAllow(
-                store,
-                dragged.section,
-                dragged.trail,
-                dragged.entries,
-                "move",
-                movingThrough(moving, dragged.adapter),
+            dragged.parts.every((part) =>
+                entriesAllow(
+                    store,
+                    part.section,
+                    part.trail,
+                    part.entries,
+                    "move",
+                    movingThrough(moving, dragged.adapter),
+                ),
             ),
         [store, moving],
     );
@@ -2049,7 +2100,9 @@ const FileManager = ({
     // Entries a move under way is moving aren't dragged, as they can't be pasted anywhere either.
     const heldUp = useCallback(
         (dragged: DraggedEntries) =>
-            entriesMoving(dragged.section, dragged.trail, dragged.entries, movingThrough(moving, dragged.adapter)),
+            dragged.parts.some((part) =>
+                entriesMoving(part.section, part.trail, part.entries, movingThrough(moving, dragged.adapter)),
+            ),
         [moving],
     );
 
@@ -2086,7 +2139,7 @@ const FileManager = ({
             const served = target.adapter ?? adapter;
             const ownFirst =
                 clipboard &&
-                (clipboard.lookup
+                (clipboard.parts.some((part) => part.lookup)
                     ? clipboard.adapter === served
                     : canPaste(clipboard, served, target, trail, store, moving));
             const upload = ownFirst ? undefined : offerUpload(target, trail);
@@ -2454,9 +2507,7 @@ const FileManager = ({
                 goTo(destination);
             }
 
-            setClipboard(
-                (prev) => prev && withoutEntries(prev, fromAdapter, movedIds, dropped, mayBeBelow(prev.section.id)),
-            );
+            setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, movedIds, dropped, mayBeBelow));
             changePreview(fromAdapter, (entry) => (movedIds.has(entry.id) ? null : entry));
         },
         [adapter, section, place, dropFolders, mayBeRootedBelow, goTo, changePreview],
@@ -2491,11 +2542,11 @@ const FileManager = ({
         [dropFolders, revealInTree],
     );
 
-    // Says what a copy or move did, leaving out the entries skipped for names the folder had.
+    // Says what a copy or move did, leaving out the entries skipped for names that clashed.
     const announceTransfer = useCallback(
-        (kind: TransferRequest["kind"], entries: FileEntry[], skipped: readonly string[], folder: FolderRef) => {
-            const skippedNames = new Set(skipped);
-            const done = entries.filter((entry) => !skippedNames.has(entry.name));
+        (kind: TransferRequest["kind"], entries: FileEntry[], skipped: readonly FileEntry[], folder: FolderRef) => {
+            const leftOut = new Set(skipped);
+            const done = entries.filter((entry) => !leftOut.has(entry));
 
             if (done.length > 0) {
                 announce(
@@ -2520,9 +2571,21 @@ const FileManager = ({
         (item: TransferItem, outcome: TransferOutcome, items: TransferItem[]) => {
             const transfer = transferPlaces.current.get(item.id);
             const { kind, adapter: served, entries, source, target } = item;
+            const batch: TransferBatch = transfer?.batch ?? { left: 1, done: [] };
 
             if (outcome !== "failed") {
                 transferPlaces.current.delete(item.id);
+            }
+
+            // What's done is said once the last of the batch has ended, together.
+            batch.left -= 1;
+
+            if (outcome === "done") {
+                batch.done.push(...entries);
+            }
+
+            if (batch.left === 0 && batch.done.length > 0) {
+                announceTransfer(kind, batch.done, transfer?.skipped ?? [], target);
             }
 
             // Cancelled while it waited, it never reached the adapter.
@@ -2542,8 +2605,6 @@ const FileManager = ({
 
                     handleMoved(served, entries, { sectionId: into.id, trail });
                 }
-
-                announceTransfer(kind, entries, transfer?.skipped ?? [], target);
             } else if (outcome === "failed" && !items.some((other) => other.shown && other.id !== item.id)) {
                 announce(
                     (kind === "copy" ? localeValue.text.copyFailedNotice : localeValue.text.moveFailedNotice)(
@@ -2570,28 +2631,51 @@ const FileManager = ({
         [transfers.queue],
     );
 
-    // A copy or move asked for, by the picker, a paste or a drop, once its names are settled. A cut
-    // leaves the clipboard as its paste starts, so it isn't pasted twice while it runs; a copy can be
-    // pasted again. One that fails is tried again from the panel, and goes from it as the new one
-    // starts.
+    // A copy or move asked for, by the picker, a paste or a drop, once its names are settled, one
+    // per folder the entries are in, as the adapter takes entries sharing a folder: those already in
+    // the target are left there by a move, and kept both by a copy. Entries of several folders
+    // sharing names go one folder after another, so each lands before the next is settled against
+    // it. A cut leaves the clipboard as its paste starts, so it isn't pasted twice while it runs; a
+    // copy can be pasted again. One that fails is tried again from the panel, and goes from it as
+    // the new one starts.
     const startTransfer = useCallback(
-        (request: PasteRequest, conflict: ConflictPolicy, skipped: string[], merged: string[]) => {
+        (request: PasteRequest, conflict: ConflictPolicy, skipped: FileEntry[], merged: string[]) => {
             const { clipboard: pasted, section: target, trail, retrying } = request;
+            const into = folderOf(target, trail);
 
             if (retrying !== undefined) {
                 forgetTransfer(retrying);
             }
 
-            const id = transfers.queue.add(
-                pasted.kind === "cut" ? "move" : "copy",
-                pasted.adapter,
-                pasted.entries,
-                folderOf(pasted.section, pasted.trail),
-                folderOf(target, trail),
-                conflict,
+            const parts = pasted.parts.filter(
+                (part) => pasted.kind === "copy" || folderOf(part.section, part.trail).id !== into.id,
             );
+            const batch: TransferBatch = { left: parts.length, done: [] };
+            const inTurn = sharesNames(groupedEntries(parts));
+            let before: number | undefined;
 
-            transferPlaces.current.set(id, { request, skipped, merged, retriable: true });
+            parts.forEach((part) => {
+                const source = folderOf(part.section, part.trail);
+                const id = transfers.queue.add(
+                    pasted.kind === "cut" ? "move" : "copy",
+                    pasted.adapter,
+                    part.entries,
+                    source,
+                    into,
+                    source.id === into.id ? "keepBoth" : conflict,
+                    inTurn ? before : undefined,
+                );
+
+                before = id;
+
+                transferPlaces.current.set(id, {
+                    request: { clipboard: { ...pasted, parts: [part] }, section: target, trail },
+                    skipped,
+                    merged,
+                    retriable: true,
+                    batch,
+                });
+            });
 
             if (pasted.kind === "cut") {
                 setClipboard((prev) => (prev === pasted ? null : prev));
@@ -2604,20 +2688,14 @@ const FileManager = ({
     // the sections it was opened for.
     const handleTransferStart = useCallback(
         (
-            { kind, section: from, adapter: served, trail, entries, destinations }: TransferRequest,
+            { kind, section: from, adapter: served, groups, destinations }: TransferRequest,
             destination: FileManagerLocation,
             conflict: ConflictPolicy,
-            skipped: string[],
+            skipped: FileEntry[],
             merged: string[],
         ) => {
             const target = destinations.find((candidate) => candidate.id === destination.sectionId) ?? from;
-            const pasted: Clipboard = {
-                kind: kind === "move" ? "cut" : "copy",
-                section: from,
-                adapter: served,
-                trail,
-                entries,
-            };
+            const pasted: Clipboard = { kind: kind === "move" ? "cut" : "copy", adapter: served, parts: groups };
 
             closeTransfer();
             startTransfer({ clipboard: pasted, section: target, trail: destination.trail }, conflict, skipped, merged);
@@ -2626,16 +2704,16 @@ const FileManager = ({
     );
 
     const handlePasteStart = useCallback(
-        (request: PasteRequest, conflict: ConflictPolicy, skipped: string[], merged: string[]) => {
+        (request: PasteRequest, conflict: ConflictPolicy, skipped: FileEntry[], merged: string[]) => {
             closePaste();
             startTransfer(request, conflict, skipped, merged);
         },
         [closePaste, startTransfer],
     );
 
-    // A failed copy or move can be tried again while both its sections are there, served as they
-    // were, neither of its folders has gone (see `revise`), and no move under way is moving its
-    // entries or the folder they'd go into, which would refuse the paste.
+    // A failed copy or move can be tried again while its sections are there, served as they were,
+    // none of its folders has gone (see `revise`), and no move under way is moving its entries or
+    // the folder they'd go into, which would refuse the paste.
     const canRetryTransfer = useCallback(
         (item: TransferItem) => {
             const transfer = transferPlaces.current.get(item.id);
@@ -2645,17 +2723,19 @@ const FileManager = ({
             }
 
             const { clipboard: pasted, section: target, trail } = transfer.request;
-            const from = sectionsById.get(pasted.section.id);
             const into = sectionsById.get(target.id);
             const busy = movingThrough(moving, item.adapter);
+            const servedAsBefore = (shown: Section | undefined): shown is Section =>
+                !!shown && (shown.adapter ?? adapter) === item.adapter;
 
             return (
-                !!from &&
-                !!into &&
-                (from.adapter ?? adapter) === item.adapter &&
-                (into.adapter ?? adapter) === item.adapter &&
-                !entriesMoving(from, pasted.trail, pasted.entries, busy) &&
-                !folderMoving(into, trail, busy)
+                servedAsBefore(into) &&
+                !folderMoving(into, trail, busy) &&
+                pasted.parts.every((part) => {
+                    const from = sectionsById.get(part.section.id);
+
+                    return servedAsBefore(from) && !entriesMoving(from, part.trail, part.entries, busy);
+                })
             );
         },
         [sectionsById, adapter, moving],
@@ -2669,21 +2749,27 @@ const FileManager = ({
     const retryTransfer = useCallback(
         (item: TransferItem) => {
             const transfer = transferPlaces.current.get(item.id);
-            const from = transfer && sectionsById.get(transfer.request.clipboard.section.id);
             const into = transfer && sectionsById.get(transfer.request.section.id);
 
-            if (!transfer || !from || !into || !canRetryTransfer(item)) {
+            if (!transfer || !into || !canRetryTransfer(item)) {
                 return;
             }
 
+            // Each part in its section as it is now, which `canRetryTransfer` found there.
             const { clipboard: pasted, trail } = transfer.request;
-            const listed = store.get(folderKey(from.id, folderOf(from, pasted.trail).id))?.entries;
-            const listedIds = listed && new Set(listed.map((entry) => entry.id));
-            const entries = listedIds ? pasted.entries.filter((entry) => listedIds.has(entry.id)) : pasted.entries;
-            if (entries.length === 0) {
+            const parts = pasted.parts.flatMap((part) => {
+                const from = sectionsById.get(part.section.id) ?? part.section;
+                const listed = store.get(folderKey(from.id, folderOf(from, part.trail).id))?.entries;
+                const listedIds = listed && new Set(listed.map((entry) => entry.id));
+                const entries = listedIds ? part.entries.filter((entry) => listedIds.has(entry.id)) : part.entries;
+
+                return entries.length > 0 ? [{ ...part, section: from, entries }] : [];
+            });
+
+            if (parts.length === 0) {
                 forgetTransfer(item.id);
             } else {
-                offerPaste({ ...pasted, section: from, entries }, into, trail, item.id)?.();
+                offerPaste({ ...pasted, parts }, into, trail, item.id)?.();
             }
         },
         [sectionsById, canRetryTransfer, store, offerPaste, forgetTransfer],
@@ -2734,20 +2820,23 @@ const FileManager = ({
     // end at the folder that held it, in every section showing it. Deleted entries leave the clipboard,
     // and the rest are looked for again when they may be below a deleted folder.
     const handleDeleted = useCallback(
-        ({ adapter: fromAdapter, entries }: DeleteRequest) => {
-            const deletedIds = new Set(entries.map((entry) => entry.id));
-            const showing = new Set(sectionsOf(fromAdapter).map((shown) => shown.id));
+        ({ groups }: DeleteRequest) => {
+            const entries = groupedEntries(groups);
 
             closeDelete();
 
-            const mayBeBelow = mayBeRootedBelow(fromAdapter, folderIdsOf(entries));
-            const dropped = dropFolders(fromAdapter, folderIdsOf(entries));
+            // Each adapter's entries, as ids mean something only to their own.
+            new Set(groups.map((group) => group.adapter)).forEach((fromAdapter) => {
+                const own = groupedEntries(groups.filter((group) => group.adapter === fromAdapter));
+                const deletedIds = new Set(own.map((entry) => entry.id));
+                const showing = new Set(sectionsOf(fromAdapter).map((shown) => shown.id));
+                const mayBeBelow = mayBeRootedBelow(fromAdapter, folderIdsOf(own));
+                const dropped = dropFolders(fromAdapter, folderIdsOf(own));
 
-            revise((visited) => (showing.has(visited.sectionId) ? outsideDeleted(visited, dropped) : visited));
-            setClipboard(
-                (prev) => prev && withoutEntries(prev, fromAdapter, deletedIds, dropped, mayBeBelow(prev.section.id)),
-            );
-            changePreview(fromAdapter, (entry) => (deletedIds.has(entry.id) ? null : entry));
+                revise((visited) => (showing.has(visited.sectionId) ? outsideDeleted(visited, dropped) : visited));
+                setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, deletedIds, dropped, mayBeBelow));
+                changePreview(fromAdapter, (entry) => (deletedIds.has(entry.id) ? null : entry));
+            });
             announce(localeValue.text.deleteDone(entries.length, isolate(entries[0].name)));
         },
         [closeDelete, dropFolders, mayBeRootedBelow, revise, sectionsOf, changePreview, announce, localeValue],
@@ -2791,7 +2880,7 @@ const FileManager = ({
             // preview shows a renamed file by its new name, under its new id.
             if (before) {
                 setClipboard(
-                    (prev) => prev && withRenamed(prev, served, before, entry, dropped, mayBeBelow(prev.section.id)),
+                    (prev) => prev && withRenamed(prev, served, before, entry, dropped, mayBeBelow),
                 );
                 changePreview(served, (shown) => (shown.id === before.id ? entry : shown));
             }
@@ -2852,22 +2941,43 @@ const FileManager = ({
             const menuFolder = folderOf(menuSection, trail);
             const folderAdapter = menuSection.adapter ?? adapter;
             const base = { section: menuSection, adapter: folderAdapter, trail };
-            // The sections the entries can go into, and their own, where the picker starts. A
-            // section nothing can change is offered only when it's theirs.
-            const destinations = [...sectionsById.values()].filter(
-                (candidate) =>
-                    (candidate.adapter ?? adapter) === folderAdapter &&
-                    importsFrom(candidate, menuSection) &&
-                    (candidate.id === menuSection.id || !candidate.readOnly),
-            );
-            const transferTo = (kind: TransferRequest["kind"]) => () =>
-                askDestination({ ...base, kind, entries, destinations });
+            // The entries by their folder: one, or several for a search's results, of one section or
+            // more, each folder going by its own section's permissions and adapter, which is asked
+            // a folder's entries at a time. `trail` is then the nearest folder of `menuSection`
+            // holding its own, where nothing is made, uploaded or pasted for them.
+            const groups = requestGroups(request);
+            const spread = groups.length > 1;
+            const servedBy = (group: EntryGroup) => group.section.adapter ?? adapter;
+            // Copying and moving need one adapter serving them all, as nothing is copied between
+            // adapters.
+            const oneAdapter = groups.every((group) => servedBy(group) === folderAdapter);
+            // The sections the entries can go into, taking entries from each of theirs, and their
+            // own. A section nothing can change is offered only when it's one of theirs. The picker
+            // starts where the entries are, or in the first section they can go into.
+            const destinations = oneAdapter
+                ? [...sectionsById.values()].filter(
+                      (candidate) =>
+                          (candidate.adapter ?? adapter) === folderAdapter &&
+                          groups.every((group) => importsFrom(candidate, group.section)) &&
+                          (groups.some((group) => group.section.id === candidate.id) || !candidate.readOnly),
+                  )
+                : [];
+            const pickerStart = destinations.some((candidate) => candidate.id === menuSection.id)
+                ? { section: menuSection, trail }
+                : destinations[0] && { section: destinations[0], trail: [] };
+            const transferTo = (kind: TransferRequest["kind"]) =>
+                pickerStart
+                    ? () => askDestination({ ...pickerStart, adapter: folderAdapter, kind, groups, destinations })
+                    : undefined;
 
-            // What the folder and the entries' own permissions allow, while no move under way is
-            // moving them, or the folder.
+            // What the folders and the entries' own permissions allow, while no move under way is
+            // moving them, or their folders, through their own adapter.
             const busy = movingThrough(moving, folderAdapter);
-            const entriesBusy = entriesMoving(menuSection, trail, entries, busy);
-            const writable = folderWritable(store, menuSection, trail, busy);
+            const busyFor = (group: EntryGroup) => movingThrough(moving, servedBy(group));
+            const entriesBusy = groups.some((group) =>
+                entriesMoving(group.section, group.trail, group.entries, busyFor(group)),
+            );
+            const writable = groups.every((group) => folderWritable(store, group.section, group.trail, busyFor(group)));
             const permits = (what: "rename" | "move" | "delete") =>
                 writable &&
                 !entriesBusy &&
@@ -2875,31 +2985,68 @@ const FileManager = ({
                 entries.every((entry) => allows(what, entry.permissions));
 
             // Pastes into the folder at `pasteTrail`, when what was cut or copied can go there.
+            // Entries from several folders aren't in `trail`'s, so nothing goes in there for them.
             const pasteTo = (pasteTrail: FolderRef[]) =>
-                clipboard ? offerPaste(clipboard, menuSection, pasteTrail) : undefined;
+                clipboard && !spread ? offerPaste(clipboard, menuSection, pasteTrail) : undefined;
 
-            const uploadHere = offerUpload(menuSection, trail);
+            const uploadHere = spread ? undefined : offerUpload(menuSection, trail);
 
             const [only] = entries;
             // A folder's own menu, its empty space, the path bar's or a section row's, downloads the
             // folder itself.
             const downloaded = downloadedEntries(entries, menuFolder);
 
+            // Entries of several folders are one file per adapter, from its `downloadAcross`, or else
+            // one per folder, as `download` takes a folder's.
+            const downloadSpread = () => {
+                const byAdapter = new Map<FileAdapter, EntryGroup[]>();
+
+                groups.forEach((group) => byAdapter.set(servedBy(group), [...(byAdapter.get(servedBy(group)) ?? []), group]));
+
+                const asked = [...byAdapter].flatMap(([served, own]) => {
+                    if (own.length > 1 && served.downloadAcross) {
+                        const holding = selectionRequest(own);
+
+                        return [() => askDownloadAcross(served, own, folderOf(holding.section, holding.trail))];
+                    }
+
+                    return own.map((group) =>
+                        canDownload(served, group.entries)
+                            ? () => askDownload(served, group.entries, folderOf(group.section, group.trail))
+                            : undefined,
+                    );
+                });
+
+                return asked.every((ask) => !!ask) ? () => asked.forEach((ask) => ask?.()) : undefined;
+            };
+
             // A single file steps through the files of the view it's listed in, in its order, and
-            // the selection follows; several files step through themselves. Without the adapter's
-            // `content`, only those a previewer reading nothing takes.
-            const shows = (entry: FileEntry) => entry.kind === "file" && previewable(entry, folderAdapter, previewers);
-            const previewed = entries.filter(shows);
+            // the selection follows; several files, of one folder or several, step through
+            // themselves. Without their adapter's `content`, only those a previewer reading nothing
+            // takes.
+            const previewedIn = (group: EntryGroup) =>
+                group.entries
+                    .filter((entry) => entry.kind === "file" && previewable(entry, servedBy(group), previewers))
+                    .map(
+                        (entry): PreviewFile => ({
+                            entry,
+                            section: group.section,
+                            adapter: servedBy(group),
+                            trail: group.trail,
+                        }),
+                    );
+            const previewed = groups.flatMap(previewedIn);
             const preview =
                 previewed.length > 0
                     ? () => {
-                          const siblings = entries.length === 1 && listing ? listing.filter(shows) : [];
-                          const index = siblings.findIndex((entry) => entry.id === only.id);
+                          const own = { section: menuSection, trail, entries: listing ?? [] };
+                          const siblings = entries.length === 1 ? previewedIn(own) : [];
+                          const index = siblings.findIndex((file) => file.entry.id === only.id);
 
                           askPreview(
                               index >= 0
-                                  ? { ...base, entries: siblings, index, follow: true, inResults }
-                                  : { ...base, entries: previewed, index: 0, follow: false, inResults },
+                                  ? { files: siblings, index, follow: true, inResults }
+                                  : { files: previewed, index: 0, follow: false, inResults },
                           );
                       }
                     : undefined;
@@ -2909,17 +3056,30 @@ const FileManager = ({
                 entries,
                 folder: menuFolder,
                 section: menuSection,
+                byFolder: spread
+                    ? groups.map((group) => ({
+                          section: group.section,
+                          folder: folderOf(group.section, group.trail),
+                          entries: group.entries,
+                      }))
+                    : undefined,
                 readOnly: !writable,
                 moving: entriesBusy,
                 refresh: () => {
-                    store.load(folderKey(menuSection.id, menuFolder.id), folderAdapter, menuFolder.id, true);
+                    groups.forEach((group) => {
+                        const { id } = folderOf(group.section, group.trail);
+
+                        store.load(folderKey(group.section.id, id), servedBy(group), id, true);
+                    });
                     setSearchVersion((count) => count + 1);
                 },
                 openFolder: (entry) => {
                     goTo({ sectionId: menuSection.id, trail: [...trail, { id: entry.id, name: entry.name }] });
                 },
                 createFolder:
-                    folderAdapter.createFolder && writable ? () => askName({ ...base, kind: "create" }) : undefined,
+                    folderAdapter.createFolder && writable && !spread
+                        ? () => askName({ ...base, kind: "create" })
+                        : undefined,
                 createFolderInto:
                     folderAdapter.createFolder &&
                     entries.length === 1 &&
@@ -2945,23 +3105,28 @@ const FileManager = ({
                         : undefined,
                 moveTo: folderAdapter.move && permits("move") ? transferTo("move") : undefined,
                 cut:
-                    folderAdapter.move && permits("move")
+                    folderAdapter.move && oneAdapter && permits("move")
                         ? () => {
-                              setClipboard({ ...base, kind: "cut", entries });
+                              setClipboard({ kind: "cut", adapter: folderAdapter, parts: groups });
                               announce(localeValue.text.clipboardCut(entries.length, isolate(only.name)));
                           }
                         : undefined,
                 copy:
-                    folderAdapter.copy && entries.length > 0 && !entriesBusy
+                    folderAdapter.copy && oneAdapter && entries.length > 0 && !entriesBusy
                         ? () => {
-                              setClipboard({ ...base, kind: "copy", entries });
+                              setClipboard({ kind: "copy", adapter: folderAdapter, parts: groups });
                               announce(localeValue.text.clipboardCopied(entries.length, isolate(only.name)));
                           }
                         : undefined,
-                delete: folderAdapter.delete && permits("delete") ? () => askDelete({ ...base, entries }) : undefined,
-                download: canDownload(folderAdapter, downloaded)
-                    ? () => askDownload(folderAdapter, downloaded, menuFolder)
-                    : undefined,
+                delete:
+                    groups.every((group) => !!servedBy(group).delete) && permits("delete")
+                        ? () => askDelete({ groups: groups.map((group) => ({ ...group, adapter: servedBy(group) })) })
+                        : undefined,
+                download: spread
+                    ? downloadSpread()
+                    : canDownload(folderAdapter, downloaded)
+                      ? () => askDownload(folderAdapter, downloaded, menuFolder)
+                      : undefined,
                 properties: () => showProperties(subjectOf(request)),
                 upload:
                     uploadHere &&
@@ -3024,6 +3189,7 @@ const FileManager = ({
             askDestination,
             askDelete,
             askDownload,
+            askDownloadAcross,
             askPreview,
             offerPaste,
             offerUpload,
@@ -3045,7 +3211,7 @@ const FileManager = ({
     // in its folder, with what takes the user elsewhere closing the preview first. It isn't
     // previewed again from there.
     const previewActionsFor = useCallback(
-        ({ section: shown, trail, inResults }: PreviewRequest, entry: FileEntry): ToolbarGroup[] => {
+        ({ inResults }: PreviewRequest, { entry, section: shown, trail }: PreviewFile): ToolbarGroup[] => {
             if (previewActions.length === 0) {
                 return NO_TOOLBAR;
             }

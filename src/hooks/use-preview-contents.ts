@@ -25,7 +25,8 @@ interface Slot {
 }
 
 interface PreviewContentsOptions {
-    adapter: FileAdapter;
+    /** The adapter serving a file, as the files may come from several sections. */
+    adapterOf: (entry: FileEntry) => FileAdapter;
     entries: FileEntry[];
     /** The file shown, in `entries`. */
     index: number;
@@ -147,14 +148,14 @@ const load = (
 };
 
 /**
- * What the preview has loaded to show `entries[index]`, through the adapter's `content`, and the
+ * What the preview has loaded to show `entries[index]`, through its adapter's `content`, and the
  * file one step further on, loaded ahead once the file shown has come, so stepping on shows it at
  * once. What was loaded is kept for the files one step either side of the one shown, so stepping
  * back is as quick, and dropped for the rest: their loads are aborted, their object URLs revoked
  * and their fonts taken off the page, so coming back to one loads it afresh. Files the preview can
  * only describe, and those a previewer of the app's own shows without loading, aren't fetched.
  */
-export const usePreviewContents = ({ adapter, entries, index, ahead, pending, planOf }: PreviewContentsOptions) => {
+export const usePreviewContents = ({ adapterOf, entries, index, ahead, pending, planOf }: PreviewContentsOptions) => {
     const slots = useRef(new Map<string, Slot>());
     const [contents, setContents] = useState<ReadonlyMap<string, PreviewContent>>(() => new Map());
     // Bumped by `retry`, which drops the file's slot, so it's loaded afresh, and keys what shows it.
@@ -194,13 +195,13 @@ export const usePreviewContents = ({ adapter, entries, index, ahead, pending, pl
             if (file && key && plan && plan.reads !== "none" && !slots.current.has(key)) {
                 slots.current.set(
                     key,
-                    load(adapter, file, plan, file !== entries[index], (loaded) =>
+                    load(adapterOf(file), file, plan, file !== entries[index], (loaded) =>
                         setContents((prev) => new Map(prev).set(key, loaded)),
                     ),
                 );
             }
         }
-    }, [adapter, entries, index, aheadIndex, attempt, planOf]);
+    }, [adapterOf, entries, index, aheadIndex, attempt, planOf]);
 
     // Everything goes with the preview.
     useEffect(() => {

@@ -26,6 +26,12 @@ export interface TransferItem {
     target: FolderRef;
     /** Settles names the target already has, for every entry, as the user chose. */
     conflict: ConflictPolicy;
+    /**
+     * The transfer this one waits for, by id, while that one waits or runs: one before it bringing
+     * entries of the same names into the same folder, which has to land first for `conflict` to
+     * settle them.
+     */
+    after?: number;
     status: TransferStatus;
     /** Whether the panel shows it: once it has taken a moment, or at once when it fails. */
     shown: boolean;

@@ -159,6 +159,14 @@ export const enUS: FileManagerLocaleText = {
         count === 1
             ? `“${name}” already exists in “${folderName}”.`
             : `${count} items already exist in “${folderName}”.`,
+    conflictSharedMessage: (count, name, folderName) =>
+        count === 1
+            ? `Another item going into “${folderName}” is also named “${name}”.`
+            : `${count} items going into “${folderName}” have the same names as others going there.`,
+    conflictSharedToo: (count, name) =>
+        count === 1
+            ? `“${name}” is also the name of another item going there.`
+            : `${count} more have the same names as other items going there.`,
     conflictHint: (count) => `Replace what is there, keep both with new names, or skip ${itOrThem(count)}.`,
     conflictMergeHint: (count) =>
         count === 1
