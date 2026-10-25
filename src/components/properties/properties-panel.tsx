@@ -13,7 +13,6 @@ import { useLocale } from "../../hooks/use-locale";
 import { useProperties } from "../../hooks/use-properties";
 import { useThumbnail } from "../../hooks/use-thumbnail";
 import { createPropertiesCache } from "../../store/properties-cache";
-import { GRID_SIZES, GRID_START } from "../../styles/layout";
 import { focusOutline, visuallyHiddenSx } from "../../styles/mixins";
 import { isolate, joinIsolated } from "../../utils/bidi";
 import ToolbarActions from "../buttons/toolbar-actions";
@@ -87,10 +86,9 @@ interface Copied {
     id: number;
 }
 
-// The size the grid asks thumbnails for at its start, in rem, so the panel shows the one the grid
-// has, or a larger one it kept zoomed in, and asks the adapter for nothing more unless the grid
-// was only ever zoomed out.
-const GRID_THUMBNAIL = GRID_SIZES[GRID_START].icon;
+// The side of the square the panel asks the adapter's thumbnail for, in rem: about the width the
+// panel's body has, docked or as the overlay. The grid's smaller one shows until this has loaded.
+const PICTURE_SIZE = 17;
 
 /** How many of the host's actions with icons show as buttons in the narrow header. */
 const INLINE_ACTIONS = 2;
@@ -152,18 +150,16 @@ const heroSx: SxProps<Theme> = {
     textAlign: "center",
 };
 
-// The picture fits the box, as in the grid, but grows to fill it: the grid's thumbnail is a little
-// smaller, so it may look slightly soft.
+// The picture fills the panel's width, and is never taller than it is wide, shrunk to fit and
+// never stretched past the width. A smaller thumbnail standing in while the larger loads is drawn
+// at the same size, so the swap changes only its sharpness.
 const pictureSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "5rem",
-    height: "5rem",
+    alignSelf: "stretch",
     "& > img": {
         display: "block",
         width: "100%",
-        height: "100%",
+        height: "auto",
+        maxHeight: `${PICTURE_SIZE}rem`,
         objectFit: "contain",
         borderRadius: 1,
     },
@@ -250,9 +246,9 @@ const Row = ({ label, children }: RowProps) => (
     </Box>
 );
 
-/** The file's thumbnail, the grid's, once it has loaded, or else its type icon. */
+/** The file's thumbnail, large, once it has loaded, or else its type icon. */
 const Picture = ({ item }: PictureProps) => {
-    const thumbnail = useThumbnail(item.entry, item.adapter, "grid", GRID_THUMBNAIL);
+    const thumbnail = useThumbnail(item.entry, item.adapter, "grid", PICTURE_SIZE);
 
     if (thumbnail) {
         return (
