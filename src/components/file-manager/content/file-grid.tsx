@@ -24,13 +24,14 @@ import { pointerPosition } from "../../../utils/menu-position";
 import { drawnState } from "../../../utils/permissions";
 import { selectModifiers } from "../../../utils/selection";
 import { gridSize } from "../../../utils/zoom";
+import Icon from "../../icons/icon";
 import ItemIcon from "./item-icon";
 
 import type { EntryOrigin, FileEntry, FileViewProps } from "../../../types";
 
 interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "onSelect" | "onOpen" | "onMenu"> {
     entry: FileEntry;
-    /** Where a search everywhere's result comes from, whose own entry and adapter give its icon. */
+    /** Where a search everywhere's result comes from: its own entry and adapter give its icon, and its location is shown under the name. */
     origin?: EntryOrigin;
     /** Where the entry is listed, from 0. */
     index: number;
@@ -117,6 +118,41 @@ const nameSx: SxProps<Theme> = {
     minHeight: "2.7em",
 };
 
+// A search everywhere's result says where it is in an outlined pill under its name, a folder icon
+// and the location in smaller, fainter text, so it reads as where the entry is rather than as more
+// of its name. The text takes two lines as the name does, and the pill is as tall with one, so
+// every tile is still as tall. An outline rather than a fill, which forced colors would drop.
+const locationSx: SxProps<Theme> = {
+    boxSizing: "border-box",
+    display: "flex",
+    alignItems: "center",
+    gap: 0.5,
+    maxWidth: "100%",
+    minHeight: "calc(2.6em + 10px)",
+    px: 1,
+    py: 0.5,
+    border: 1,
+    borderColor: "divider",
+    borderRadius: 2,
+    color: "text.secondary",
+    fontSize: "0.6875rem",
+    lineHeight: 1.3,
+};
+
+const locationIconSx: SxProps<Theme> = {
+    flexShrink: 0,
+    fontSize: "0.875rem",
+};
+
+const locationTextSx: SxProps<Theme> = {
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+    overflowWrap: "anywhere",
+    minWidth: 0,
+};
+
 /**
  * One entry's tile. Memoized, so scrolling only renders the tiles coming into view.
  */
@@ -188,6 +224,14 @@ const FileTile = memo(
                 <Typography variant="body2" sx={nameSx}>
                     <bdi>{entry.name}</bdi>
                 </Typography>
+                {origin && (
+                    <Box sx={locationSx}>
+                        <Icon name="folder" sx={locationIconSx} />
+                        <Box component="span" sx={locationTextSx}>
+                            {origin.location}
+                        </Box>
+                    </Box>
+                )}
             </Box>
         );
     },
