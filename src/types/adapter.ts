@@ -63,10 +63,12 @@ export interface FileEntry {
 export interface EntryPermissions {
     /**
      * Folders: whether what's in them can change, as a read-only folder's can't. When false, no
-     * folder is created, nothing is uploaded, pasted, dropped, moved or copied in, and none of its
-     * entries is renamed, moved out or deleted, whatever their own permissions say. Files: whether
-     * their contents can change, which the file manager doesn't do itself, for an app's own
-     * actions, such as an editor's, to go by.
+     * folder is created, nothing is uploaded, pasted, dropped, moved, copied or merged in, and none
+     * of its entries is renamed, moved out or deleted, whatever their own permissions say. Files:
+     * whether their contents can change. When false, nothing copied, moved or uploaded in takes the
+     * file's place, and is kept beside it instead (see `ConflictPolicy`); otherwise the file manager
+     * doesn't change a file's contents itself, so it's for an app's own actions, such as an
+     * editor's, to go by.
      */
     write?: boolean;
     /** Whether the entry can be renamed. */
@@ -174,12 +176,14 @@ export interface NameCheck {
  * - "replace": a file takes the place of the file there, and a folder is merged into the folder
  *   there, what's in it going in the same way, all the way down, so files with the same names are
  *   replaced, folders with the same names merged, and the rest added. A file never takes the place
- *   of a folder, nor a folder of a file: such an entry is kept beside it, as with "keepBoth".
+ *   of a folder, nor a folder of a file, and nothing takes the place of a file whose `write`
+ *   permission is false, nor is merged into a folder that can't change (its entry's or its own
+ *   listing's `write` false): such an entry is kept beside it, as with "keepBoth".
  * - "keepBoth": the incoming entry is given a free name, such as "notes (2).txt".
  * - "skip": the entry is left out.
  *
  * The user sees "replace" as Merge when only folders clash, and isn't offered it when every clash
- * is between a file and a folder.
+ * is between a file and a folder, or with what can't be changed.
  */
 export type ConflictPolicy = "replace" | "keepBoth" | "skip";
 
@@ -188,8 +192,8 @@ export interface TransferOptions extends OperationOptions {
     /**
      * Chosen by the user when the destination's cached listing showed a clash, and "keepBoth"
      * otherwise, so a clash the cache missed never overwrites anything. One choice covers every
-     * entry, so with "replace", an entry whose name an entry of the other kind has there is kept
-     * beside it (see `ConflictPolicy`).
+     * entry, so with "replace", an entry whose name an entry of the other kind, or one that can't
+     * be changed, has there is kept beside it (see `ConflictPolicy`).
      */
     conflict: ConflictPolicy;
     /**
@@ -206,8 +210,8 @@ export interface UploadOptions extends OperationOptions {
      * Chosen by the user when the folder's cached listing showed a clash, and "keepBoth" otherwise,
      * so a clash the cache missed never overwrites anything. Files the user chose to skip are never
      * sent, so "skip" only reaches clashes the cache missed, and a file whose name the listing showed
-     * a folder has is sent with "keepBoth", so "replace" only meets a folder the cache missed, which
-     * the file is kept beside (see `ConflictPolicy`).
+     * a folder, or a file that can't be written, has is sent with "keepBoth", so "replace" only meets
+     * those the cache missed, which the file is kept beside (see `ConflictPolicy`).
      */
     conflict: ConflictPolicy;
     /**

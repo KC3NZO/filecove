@@ -1,7 +1,9 @@
 import { freeName } from "../utils/names";
+import { allows } from "../utils/permissions";
 
 import type {
     ConflictPolicy,
+    EntryPermissions,
     FileAdapter,
     FileEntry,
     FolderContents,
@@ -65,6 +67,11 @@ interface FolderStep {
     tried: boolean;
     /** What a folder merged into already holds, by name, once listed, when anything goes in it. */
     holds?: Map<string, FileEntry>;
+    /**
+     * The names in it, once opened, there and going in, that a folder going in made under a free
+     * name has to stay clear of.
+     */
+    taken?: Set<string>;
     files: FileStep[];
     folders: FolderStep[];
     state: StepState;
@@ -163,9 +170,10 @@ const toSteps = (
     return folder;
 };
 
-/** Everything a folder holds, every page of it, by name. */
+/** Everything a folder holds, every page of it, by name, and its own permissions. */
 const listAll = async (adapter: FileAdapter, folderId: string, signal: AbortSignal) => {
     const holds = new Map<string, FileEntry>();
+    let permissions: EntryPermissions | undefined;
     let cursor: string | undefined;
 
     do {
@@ -176,10 +184,11 @@ const listAll = async (adapter: FileAdapter, folderId: string, signal: AbortSign
         }
 
         page.entries.forEach((entry) => holds.set(entry.name, entry));
+        permissions ??= page.permissions;
         cursor = page.nextCursor;
     } while (cursor !== undefined);
 
-    return holds;
+    return { holds, permissions };
 };
 
 // The names from the folder uploaded down to a step in it, or that folder's own name for itself.
@@ -327,9 +336,10 @@ export const createUploadQueue = (
     };
 
     // Once a folder is made, or listed to merge into, what goes in it can start, its folders first,
-    // as they're quick to make. Those a folder merged into has are merged too, and those whose name
-    // a file has there are made under a free name, one neither there nor going in beside them,
-    // since a folder never takes a file's place and `createFolder` can't keep both.
+    // as they're quick to make. Those a folder merged into has are merged too, unless its
+    // permissions say nothing can go in, and those whose name a file, or such a folder, has there
+    // are made under a free name, one neither there nor going in beside them, since a folder never
+    // takes a file's place and `createFolder` can't keep both.
     const opened = (job: Job, folder: FolderStep) => {
         const taken = new Set([
             ...(folder.holds?.keys() ?? []),
@@ -337,10 +347,11 @@ export const createUploadQueue = (
             ...folder.files.map((step) => step.file.name),
         ]);
 
+        folder.taken = taken;
         folder.folders.forEach((child) => {
             const there = folder.holds?.get(child.name);
 
-            if (there?.kind === "folder") {
+            if (there?.kind === "folder" && allows("write", there.permissions)) {
                 child.id = there.id;
                 child.merge = true;
             } else if (there) {
@@ -457,26 +468,49 @@ export const createUploadQueue = (
                 signal.throwIfAborted();
 
                 // A folder merged into is listed when anything goes in it, for the folders in it to
-                // merge, and for the names a file and a folder share, which are kept both.
+                // merge, and for the names a file and a folder share, which are kept both. When its
+                // own listing says nothing can go in, it's kept beside under a free name instead, as
+                // one whose entry says so is, clear of the names in the folder it's in.
                 if (step.kind === "folder" && step.merge) {
-                    if (step.folders.length + step.files.length > 0) {
-                        step.holds = await listAll(adapter, step.id as string, signal);
+                    if (step.folders.length + step.files.length === 0) {
+                        return;
                     }
 
-                    return;
+                    const listed = await listAll(adapter, step.id as string, signal);
+
+                    if (allows("write", listed.permissions)) {
+                        step.holds = listed.holds;
+
+                        return;
+                    }
+
+                    const taken =
+                        step.parent?.taken ??
+                        new Set((await listAll(adapter, targetOf(job, step) as string, signal)).holds.keys());
+
+                    step.name = freeName(step.name, taken, { keptBothName });
+                    taken.add(step.name);
+                    step.merge = false;
+                    step.id = undefined;
+
+                    if (job.upload && !step.parent) {
+                        job.upload = { ...job.upload, name: step.name };
+                    }
                 }
 
                 // Made already by an earlier try, it's taken as it is, merged into in case anything
                 // went in since, rather than failing as its name is taken.
                 if (step.kind === "folder" && step.tried) {
-                    const there = (await listAll(adapter, targetOf(job, step) as string, signal)).get(step.name);
+                    const there = (await listAll(adapter, targetOf(job, step) as string, signal)).holds.get(
+                        step.name,
+                    );
 
                     if (there?.kind === "folder") {
                         step.id = there.id;
                         step.merge = true;
 
                         if (step.folders.length + step.files.length > 0) {
-                            step.holds = await listAll(adapter, there.id, signal);
+                            step.holds = (await listAll(adapter, there.id, signal)).holds;
                         }
 
                         return;
@@ -504,14 +538,16 @@ export const createUploadQueue = (
 
                 // A folder made for the upload has nothing to clash with but the file's own earlier
                 // try, which it replaces. One merged into takes the upload's choice, which merged it,
-                // but a file whose name a folder has there is kept beside it, never put in its place.
+                // but a file whose name a folder, or a file that can't be written, has there is kept
+                // beside it, never put in its place.
                 const ownFolder = step.into && !step.into.merge;
-                const besideFolder = step.into?.holds?.get(step.file.name)?.kind === "folder";
+                const there = step.into?.holds?.get(step.file.name);
+                const kept = there && (there.kind === "folder" || !allows("write", there.permissions));
                 let conflict = job.item.conflict;
 
                 if (ownFolder) {
                     conflict = step.tried ? "replace" : "keepBoth";
-                } else if (besideFolder && conflict === "replace") {
+                } else if (kept && conflict === "replace") {
                     conflict = "keepBoth";
                 }
 
@@ -692,7 +728,8 @@ export const createUploadQueue = (
          * makes folders, each with everything in it, read first. Files `accepts` refuses are left
          * out, and so are folders that held nothing else. With "replace", a folder merged into
          * gets the files with names it has already in their place, and folders merged into theirs,
-         * while a file and a folder sharing a name are kept both. Returns the ids of their
+         * while a file and a folder sharing a name are kept both, as is what shares a name with a
+         * file or folder whose permissions refuse writing. Returns the ids of their
          * uploads, in the order of `folders`.
          */
         addFolders(

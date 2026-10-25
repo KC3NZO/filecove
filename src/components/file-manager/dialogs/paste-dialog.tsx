@@ -9,16 +9,17 @@ import DialogTitle from "@mui/material/DialogTitle";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
-import { useFolder } from "../../../hooks/use-folder";
+import { useData, useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
 import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { folderOf } from "../../../utils/navigation";
+import { replaceable } from "../../../utils/permissions";
 import { findClashes, mergedFolders } from "../../../utils/transfer";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 
-import type { Clash, Clipboard, ConflictPolicy, FolderRef, Section } from "../../../types";
+import type { Clash, Clipboard, ConflictPolicy, FileEntry, FolderRef, Section } from "../../../types";
 
 export interface PasteRequest {
     /** What is pasted, as it was when the paste began: the clipboard, or entries dropped onto a folder. */
@@ -87,6 +88,9 @@ const PasteDialog = ({ open, request, onClose, onStart }: PasteDialogProps) => {
     // opened, and its clashes are only looked for once all its pages have come.
     const { state } = useFolder(section, target.id, true);
     const listed = (!!state?.entries && !state.partial) || state?.status === "error";
+    const { store } = useData();
+    // Whether an entry the folder has can be replaced or merged into, as its permissions say.
+    const changes = (entry: FileEntry) => replaceable(store, section, entry);
 
     const [checked, setChecked] = useState(false);
     const [conflicts, setConflicts] = useState<Clash[] | null>(null);
@@ -99,7 +103,7 @@ const PasteDialog = ({ open, request, onClose, onStart }: PasteDialogProps) => {
                 request,
                 conflict,
                 conflict === "skip" ? clashes.map((clash) => clash.name) : [],
-                conflict === "replace" ? mergedFolders(entries, state?.entries) : [],
+                conflict === "replace" ? mergedFolders(entries, state?.entries, changes) : [],
             );
         }
     };
@@ -113,7 +117,7 @@ const PasteDialog = ({ open, request, onClose, onStart }: PasteDialogProps) => {
             return;
         }
 
-        const clashes = target.id === sourceId ? [] : findClashes(entries, state?.entries);
+        const clashes = target.id === sourceId ? [] : findClashes(entries, state?.entries, changes);
 
         setChecked(true);
 

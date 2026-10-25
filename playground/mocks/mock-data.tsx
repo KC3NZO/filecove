@@ -118,7 +118,9 @@ export const serverAdapter = createMockAdapter(
             file("docker-compose.yml", 860, "2026-09-02T13:00"),
             file("Dockerfile", 540, "2026-09-02T13:00"),
             file("go.mod", 310, "2026-10-15T16:02"),
-            file("go.sum", 24_900, "2026-10-15T16:02"),
+            // Read-only too, so a file of its name copied, moved or uploaded here with Replace is
+            // kept beside it.
+            { ...file("go.sum", 24_900, "2026-10-15T16:02"), readOnly: true },
             file("README.md", 3_100, "2026-09-20T18:44"),
         ],
         "/shared/design": [

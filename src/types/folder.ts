@@ -33,4 +33,9 @@ export interface Clash {
     kind: FileEntry["kind"];
     /** What the folder already has under the name. */
     there: FileEntry["kind"];
+    /**
+     * Whether what's there can't be replaced, a file, or merged into, a folder, as its permissions
+     * say (`replaceable`), so what comes in would be kept beside it.
+     */
+    locked: boolean;
 }

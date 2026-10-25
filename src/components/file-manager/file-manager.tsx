@@ -47,7 +47,7 @@ import {
 } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
-import { allows, entriesAllow, entriesMoving, folderMoving, folderWritable } from "../../utils/permissions";
+import { allows, entriesAllow, entriesMoving, folderMoving, folderWritable, replaceable } from "../../utils/permissions";
 import { importsFrom } from "../../utils/sections";
 import { sameSearch } from "../../utils/search";
 import { sameIds } from "../../utils/sets";
@@ -2251,8 +2251,9 @@ const FileManager = ({
     }, [uploads.items, arrive]);
 
     // Files in the folders of types the section doesn't take are left out as the folders are read.
-    // A file never takes a folder's place, so with Replace, one whose name a folder has is kept
-    // beside it. A file kept beside one of its name may be given another, which only the adapter knows.
+    // A file never takes a folder's place, nor a file's that can't be replaced (`replaceable`), so
+    // with Replace, one whose name such an entry has is kept beside it. A file kept beside one of
+    // its name may be given another, which only the adapter knows.
     const startUpload = useCallback(
         (
             { section: target, adapter: served, trail }: UploadRequest,
@@ -2265,9 +2266,13 @@ const FileManager = ({
             const patterns = uploadPatterns(target);
             const accepts = patterns ? (file: File) => acceptsFile(patterns, file) : undefined;
             const listed = store.get(folderKey(target.id, into.id))?.entries ?? [];
-            const folderNames = new Set(listed.filter((entry) => entry.kind === "folder").map((entry) => entry.name));
-            const kept = conflict === "replace" ? files.filter((file) => folderNames.has(file.name)) : [];
-            const taken = new Set(conflict === "keepBoth" ? listed.map((entry) => entry.name) : folderNames);
+            const unreplaced = new Set(
+                listed
+                    .filter((entry) => entry.kind === "folder" || !replaceable(store, target, entry))
+                    .map((entry) => entry.name),
+            );
+            const kept = conflict === "replace" ? files.filter((file) => unreplaced.has(file.name)) : [];
+            const taken = new Set(conflict === "keepBoth" ? listed.map((entry) => entry.name) : unreplaced);
             const queueFiles = (queued: File[], policy: ConflictPolicy) =>
                 uploads.queue.add(served, into, queued, policy).forEach((id, index) => {
                     const { name } = queued[index];

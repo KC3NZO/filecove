@@ -26,24 +26,34 @@ const messageSx: SxProps<Theme> = {
 
 /**
  * What Replace would do to the clashes: replace a file with a file, merge a folder into a folder,
- * and keep both a file and a folder, which can't take each other's place.
+ * and keep both a file and a folder, which can't take each other's place, and what comes in beside
+ * an entry its permissions keep from being replaced or merged into (`locked`).
  */
-const sortClashes = (clashes: Clash[]) => ({
-    replacing: clashes.filter((clash) => clash.kind === "file" && clash.there === "file").length,
-    merging: clashes.filter((clash) => clash.kind === "folder" && clash.there === "folder").length,
-    otherKind: clashes.filter((clash) => clash.kind !== clash.there),
-});
+const sortClashes = (clashes: Clash[]) => {
+    const alike = clashes.filter((clash) => clash.kind === clash.there);
+
+    return {
+        replacing: alike.filter((clash) => clash.kind === "file" && !clash.locked).length,
+        merging: alike.filter((clash) => clash.kind === "folder" && !clash.locked).length,
+        otherKind: clashes.filter((clash) => clash.kind !== clash.there),
+        locked: alike.filter((clash) => clash.locked),
+    };
+};
 
 /** Says which names a copy, move or upload clashes with, and what each choice does to them. */
 export const ConflictMessage = ({ clashes, folderName }: ConflictMessageProps) => {
     const { text } = useLocale();
-    const { replacing, merging, otherKind } = sortClashes(clashes);
+    const { replacing, merging, otherKind, locked } = sortClashes(clashes);
     const replaces = replacing + merging > 0;
 
     let hint: string;
 
-    if (!replaces) {
+    if (!replaces && locked.length === 0) {
         hint = text.conflictKindHint(otherKind.length, otherKind[0].there);
+    } else if (!replaces && otherKind.length === 0) {
+        hint = text.conflictLockedHint(locked.length, locked[0].there);
+    } else if (!replaces) {
+        hint = text.conflictNothingReplacedHint;
     } else if (replacing === 0) {
         hint = text.conflictMergeHint(clashes.length);
     } else {
@@ -68,6 +78,11 @@ export const ConflictMessage = ({ clashes, folderName }: ConflictMessageProps) =
                     {text.conflictKindKept(otherKind.length, isolate(otherKind[0].name))}
                 </Typography>
             )}
+            {replaces && locked.length > 0 && (
+                <Typography variant="body2" color="text.secondary">
+                    {text.conflictLockedKept(locked.length, isolate(locked[0].name))}
+                </Typography>
+            )}
         </>
     );
 };
@@ -75,7 +90,8 @@ export const ConflictMessage = ({ clashes, folderName }: ConflictMessageProps) =
 /**
  * Skip, Replace and Keep both, in that order, with Keep both, which loses nothing, as the main
  * action. Replace reads Merge when it would only merge folders, and is left out when it would do
- * nothing but keep both, as every name clashes with one of the other kind.
+ * nothing but keep both, as every name clashes with one of the other kind or one that can't be
+ * changed.
  */
 export const ConflictChoices = ({ clashes, pending, onChoose }: ConflictChoicesProps) => {
     const { text } = useLocale();

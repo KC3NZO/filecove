@@ -12,6 +12,19 @@ export const allows = (what: keyof EntryPermissions, ...permissions: (EntryPermi
 export const lockedFolder = (entry: FileEntry) => entry.kind === "folder" && !allows("write", entry.permissions);
 
 /**
+ * Whether an entry a folder of `section` has can take the place of an entry of its name, a file, or
+ * have one merged into it, a folder: its own `write` isn't false, nor, for a folder, its own
+ * listing's, when cached. Replace keeps what comes in beside one that can't, as `ConflictPolicy`
+ * asks of the adapter.
+ */
+export const replaceable = (store: FolderStore, section: Section, entry: FileEntry) =>
+    allows(
+        "write",
+        entry.permissions,
+        entry.kind === "folder" ? store.get(folderKey(section.id, entry.id))?.permissions : undefined,
+    );
+
+/**
  * Whether the folder at `trail`, or one it's in up to its section's root, is among `moving`, the
  * ids a move under way through the section's adapter is moving (`movingThrough`), so it's being
  * moved too.

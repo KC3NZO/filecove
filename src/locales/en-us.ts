@@ -171,6 +171,14 @@ export const enUS: FileManagerLocaleText = {
             ? `A ${kind === "folder" ? "file can't replace a folder" : "folder can't replace a file"}. Keep both ` +
               "with a new name, or skip it."
             : "A file and a folder can't replace each other. Keep both with new names, or skip them.",
+    conflictLockedHint: (count, kind) =>
+        count === 1
+            ? `The ${kind} there is read-only, so it can't be ${kind === "folder" ? "merged into" : "replaced"}. ` +
+              "Keep both with a new name, or skip it."
+            : "The items there are read-only, so they can't be replaced. Keep both with new names, or skip them.",
+    conflictNothingReplacedHint:
+        "Nothing there can be replaced: some of it is read-only, and a file and a folder can't replace each " +
+        "other. Keep both with new names, or skip them.",
     conflictReplaceMerges: (count) =>
         count === 1
             ? "Replacing a folder merges what's in it into the one already there."
@@ -179,6 +187,10 @@ export const enUS: FileManagerLocaleText = {
         `A file and a folder can't replace each other, so ${
             count === 1 ? `“${name}” would get a new name` : `${count} items would get new names`
         }.`,
+    conflictLockedKept: (count, name) =>
+        count === 1
+            ? `“${name}” is read-only there, so the one coming in would get a new name.`
+            : `${count} items are read-only there, so the ones coming in would get new names.`,
     skip: "Skip",
     keepBoth: "Keep both",
     replace: "Replace",

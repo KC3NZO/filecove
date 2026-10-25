@@ -10,7 +10,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
-import { useFolder } from "../../../hooks/use-folder";
+import { useData, useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
 import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
@@ -18,6 +18,7 @@ import { isolate } from "../../../utils/bidi";
 import { acceptsFile, uploadPatterns } from "../../../utils/files";
 import { freeName } from "../../../utils/names";
 import { folderOf } from "../../../utils/navigation";
+import { replaceable } from "../../../utils/permissions";
 import { findClashes } from "../../../utils/transfer";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 
@@ -117,6 +118,9 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
         () => new Map(state?.entries?.map((entry): [string, FileEntry] => [entry.name, entry])),
         [state?.entries],
     );
+    const { store } = useData();
+    // Whether an entry the folder has can be replaced or merged into, as its permissions say.
+    const changes = (entry: FileEntry) => replaceable(store, section, entry);
 
     // A ref rather than state: React's development double mount runs the effect below twice before
     // any re-render, and state set by the first run wouldn't be seen by the second, which would
@@ -128,8 +132,9 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
     // could take a long time for nothing. "skip" still goes along for clashes the cache missed. A
     // folder is merged into the one of its name with Replace, and otherwise, or where a file has its
     // name, made under a free name, one neither there nor uploaded beside it, since `createFolder`
-    // can't replace or keep both. With Replace, a file whose name a folder has is kept beside it
-    // (`startUpload` in `file-manager.tsx`).
+    // can't replace or keep both. A folder there that can't be merged into, as its permissions say,
+    // counts as a file does. With Replace, a file whose name a folder, or a file that can't be
+    // replaced, has is kept beside it (`startUpload` in `file-manager.tsx`).
     const upload = (conflict: ConflictPolicy, clashes = conflicts ?? []) => {
         const skipped = new Set(conflict === "skip" ? clashes.map((clash) => clash.name) : []);
         const taken = new Set([...byName.keys(), ...files.map(({ name }) => name), ...folders.map(({ name }) => name)]);
@@ -144,7 +149,7 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                 return [{ source, name: source.name }];
             }
 
-            if (conflict === "replace" && there.kind === "folder") {
+            if (conflict === "replace" && there.kind === "folder" && changes(there)) {
                 return [{ source, name: source.name, mergeInto: there.id }];
             }
 
@@ -176,6 +181,7 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                 ...folders.map(({ name }) => ({ name, kind: "folder" as const })),
             ],
             state?.entries,
+            changes,
         );
 
         checked.current = true;

@@ -503,13 +503,15 @@ export const createMockAdapter = (
     /**
      * Puts a node into a folder, settling a name clash by `conflict`. "replace" puts a file in the
      * place of a file, and merges a folder into a folder, what's in it going in the same way; a file
-     * and a folder never take each other's place, and are kept both.
+     * and a folder never take each other's place, nor does anything take the place of, or merge
+     * into, what's read-only, and those are kept both.
      */
     const insert = (target: MockNode, targetId: string, node: MockNode, conflict: ConflictPolicy) => {
         const existing = target.children?.find((child) => child.name === node.name);
+        const replacing = conflict === "replace" && !!existing && !existing.readOnly;
 
-        if (existing?.children && node.children && conflict === "replace") {
-            if (existing.fails || existing.readOnly) {
+        if (existing?.children && node.children && replacing) {
+            if (existing.fails) {
                 throw new Error("Permission denied");
             }
 
@@ -520,11 +522,7 @@ export const createMockAdapter = (
             return;
         }
 
-        if (existing && conflict === "replace" && !existing.children === !node.children) {
-            if (existing.readOnly) {
-                throw new Error(`“${existing.name}” is read-only.`);
-            }
-
+        if (existing && replacing && !existing.children === !node.children) {
             detach(target, targetId, existing);
         } else if (existing) {
             node.name = freeName(target, node);

@@ -444,6 +444,17 @@ export interface FileManagerLocaleText
      * what has the name there, meant for when `count` is 1.
      */
     conflictKindHint: (count: number, kind: EntryKind) => string;
+    /**
+     * In place of `conflictHint`, when every name clashes with one of its kind that its permissions
+     * keep from being replaced, a file, or merged into, a folder: Keep both or Skip. `kind` is
+     * what has the name there, meant for when `count` is 1.
+     */
+    conflictLockedHint: (count: number, kind: EntryKind) => string;
+    /**
+     * In place of `conflictHint`, when nothing can be replaced, some names clashing with one of the
+     * other kind and the rest with what can't be changed: Keep both or Skip.
+     */
+    conflictNothingReplacedHint: string;
     /** Beside `conflictHint`, when folders clash with folders too: what Replace does to them. */
     conflictReplaceMerges: (count: number) => string;
     /**
@@ -451,6 +462,12 @@ export interface FileManagerLocaleText
      * what Replace or Merge does to those. `name` is the one's, meant for when `count` is 1.
      */
     conflictKindKept: (count: number, name: string) => string;
+    /**
+     * Beside `conflictHint` or `conflictMergeHint`, when some names clash with one that can't be
+     * replaced or merged into: what Replace or Merge does to those. `name` is the one's, meant for
+     * when `count` is 1.
+     */
+    conflictLockedKept: (count: number, name: string) => string;
     skip: string;
     keepBoth: string;
     replace: string;

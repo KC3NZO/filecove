@@ -28,7 +28,7 @@ import { isolate } from "../../../utils/bidi";
 import { isHidden } from "../../../utils/hidden";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { folderLeft, folderOf } from "../../../utils/navigation";
-import { folderMoving, folderWritable, lockedFolder } from "../../../utils/permissions";
+import { folderMoving, folderWritable, lockedFolder, replaceable } from "../../../utils/permissions";
 import { nameOrder } from "../../../utils/sort";
 import { findClashes, mergedFolders } from "../../../utils/transfer";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
@@ -525,6 +525,9 @@ const TransferDialog = ({
         }
     };
 
+    // Whether an entry the destination has can be replaced or merged into, as its permissions say.
+    const changes = (entry: FileEntry) => replaceable(store, target, entry);
+
     // Folders a Replace or Merge merges others into are listed again all the way down once it ends.
     // The picker closes as it starts, so a second click while it fades out starts nothing.
     const run = (conflict: ConflictPolicy) => {
@@ -534,7 +537,7 @@ const TransferDialog = ({
                 place,
                 conflict,
                 conflict === "skip" ? (conflicts ?? []).map((clash) => clash.name) : [],
-                conflict === "replace" ? mergedFolders(entries, state?.entries) : [],
+                conflict === "replace" ? mergedFolders(entries, state?.entries, changes) : [],
             );
         }
     };
@@ -542,7 +545,7 @@ const TransferDialog = ({
     // Copying into the entries' own folder clashes with every one of them, and only makes sense as
     // a duplicate, so it keeps both without asking.
     const confirm = () => {
-        const clashes = findClashes(entries, state?.entries);
+        const clashes = findClashes(entries, state?.entries, changes);
 
         if (clashes.length > 0 && !sameFolder) {
             setConflicts(clashes);
