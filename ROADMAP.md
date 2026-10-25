@@ -63,7 +63,8 @@ What's left in the features already built, what packaging needs before a release
 ### Properties
 - [ ] Editing fields (an adapter `updateProperties`, for the media manager's alt text and caption; fields already carry an `id` for it), designed with the media manager's contract.
 - [x] The app's own actions in the panel's header, designed together with the preview's. *Done 2026-10-24: `propertiesActions`, for its entries or the folder it shows, through the same `ToolbarActions` as the preview's, two as buttons, their shortcuts working in the panel.*
-- [ ] Tabs (activity, versions, sharing) and resizing the docked panel.
+- [ ] Tabs (activity, versions, sharing).
+- [x] Resizing the docked panel. *Done 2026-10-25: by dragging its edge (mouse, pen or touch), Left, Right, Home and End on it as a focusable `separator`, and a double click back to the default, from 240px to 640px, the content keeping room for the list's size and date columns beside it; `propertiesWidth` / `defaultPropertiesWidth` / `onPropertiesWidthChange` control it, told once per drag. The picture asks for a larger thumbnail as the panel widens, a step at a time.*
 - [x] A picture larger than the grid's thumbnail in the properties panel. *Done 2026-10-25: it fills the panel's width, asked of the adapter at 17rem in the grid's view, with the grid's smaller thumbnail standing in, at the same size, while it loads.*
 
 ### Thumbnails

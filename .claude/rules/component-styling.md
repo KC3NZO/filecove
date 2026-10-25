@@ -11,7 +11,7 @@ These apply to the component in `src/`, not to the playground.
 
 The component adapts to the box it is placed in, not the viewport. `src/styles/layout.ts` defines two named containers and their breakpoints:
 
-- The root (`rootMedium`, `rootWide`, `rootExtraWide`). At `rootWide` (900px or wider) the sidebar docks, unless it's hidden (`data-hidden`, with the frame's `data-sidebar-hidden` giving the panels back their margin on its side); below it, the sidebar is an in-component overlay. At `rootExtraWide` (1100px or wider) the properties dock on the content's other side, while shown (`data-shown`); below it, they're an overlay too (see `properties.md`).
+- The root (`rootMedium`, `rootWide`, `rootExtraWide`). At `rootWide` (900px or wider) the sidebar docks, unless it's hidden (`data-hidden`, with the frame's `data-sidebar-hidden` giving the panels back their margin on its side); below it, the sidebar is an in-component overlay. At `rootExtraWide` (1100px or wider) the properties dock on the content's other side, while shown (`data-shown`), as wide as the user made them, the content keeping 540px beside them as its `min-width`; below it, they're an overlay too (see `properties.md`).
 - The content view (`viewMedium`, `viewWide`), which decides which list columns show.
 
 The preview portals out of the root, where its queries don't reach, so its header and its image are containers of their own (`PREVIEW_HEADER_CONTAINER` with `previewHeaderMedium` and `previewHeaderWide`, `PREVIEW_IMAGE_CONTAINER` with `previewImageWide`; see `preview.md`).
@@ -24,7 +24,7 @@ Styles use logical properties (`insetInline`, `paddingInlineStart`, `marginInlin
 
 ## Dynamic geometry
 
-Dynamic geometry (tree depth, list column templates) goes through CSS custom properties set in `style`, so the `sx` objects stay static at module scope. Geometry worked out in JS from measurements, such as where a virtualized entry sits (`top`, `gridColumn`) or how tall its listbox is, goes in `style` as plain properties.
+Dynamic geometry (tree depth, list column templates, the docked properties' width) goes through CSS custom properties set in `style`, so the `sx` objects stay static at module scope. Geometry worked out in JS from measurements, such as where a virtualized entry sits (`top`, `gridColumn`) or how tall its listbox is, goes in `style` as plain properties.
 
 ## Colors
 
