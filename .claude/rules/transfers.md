@@ -5,6 +5,8 @@ paths:
   - "src/hooks/use-transfer-queue.ts"
   - "src/types/transfer.ts"
   - "src/utils/transfer.ts"
+  - "src/contexts/moving-context.ts"
+  - "src/hooks/use-moving-ids.ts"
   - "src/components/file-manager/dialogs/transfer-dialog.tsx"
   - "src/components/file-manager/dialogs/paste-dialog.tsx"
   - "src/types/adapter.ts"
@@ -56,6 +58,17 @@ The same `copy(entries, targetId, options)` and `move(...)` as ever: one call pe
 - **The progress bar** over the content (`busy`) shows while a copy or move waits or runs that changes the open folder, in whichever section: its target, the folder listing the target (dropped onto, or pasted into from its menu), or for a move its source; and while a paste is checked (`pasteIds`).
 - Clearing the panel forgets the places of what it cleared (`clearTransfers`).
 
+## While a move runs
+
+Entries a move is moving, waiting its turn or under way, are marked and left alone until it ends, done, failed or cancelled, since their ids may soon name nothing, and acting on them meanwhile would race the move. A copy's entries are only read, and aren't held.
+
+- **What's moving** is `moving` in `file-manager.tsx`, a `MovingIds` (`types/transfer.ts`: the ids by the adapter serving them), made by `movingIds` (`utils/transfer.ts`) from the queue's moves that haven't failed (`isMoving`), and made afresh only as moves start and end (`movesKey`, the moves' ids), not with every bit of progress. So the queue is made early in the frame (`useTransferQueue`, handed `handleTransferEnded` through a ref once that's made), before the paste, drag and context code that reads it. `movingThrough(moving, adapter)` gives one adapter's ids.
+- **Everything in a folder being moved goes with it**: `folderMoving` (`utils/permissions.ts`) is the folder or one in its trail, its section's root included, being moved, and `entriesMoving` that, or any of the entries. They go by the trail, so a section rooted further below a folder being moved, which nothing ties to it, isn't known to be; the adapter has the final say there.
+- **What's refused** (see "Permissions" in `file-manager.md`): a folder being moved can't change (`folderWritable`, given the ids), so nothing is created, uploaded, pasted or dropped into it, and none of its entries is renamed, moved out or deleted (`entriesAllow`); entries being moved can't be renamed, moved, cut or deleted, nor copied or copied to (`contextFor`), since a copy's ids would name nothing once they've moved, and aren't dragged (`useEntryDrag`'s `held`, `heldUp`); a clipboard holding entries being moved isn't pasted (`canPaste`, given `moving`), however they were cut or copied before; and a failed transfer isn't tried again while its entries or its destination are (`canRetryTransfer`). Opening, previewing, downloading and the properties are only reading, and stay. `ActionContext.moving` says so for an app's own actions, and `readOnly` is true for a folder being moved.
+- **The picker** disables folders being moved, as it does the entries it was opened for, read "Being moved" (`entryMoving`), and a place it reaches inside one, such as a section rooted in one, can't be chosen: "This folder is being moved" (`pickerMoving`) in place of `pickerReadOnly`.
+- **The mark**: `MovingContext` (`contexts/moving-context.ts`) carries `moving` to every view, and `useMovingIds` (`hooks/use-moving-ids.ts`) gives a section its adapter's ids, as `useCutIds` does for cut ones. List rows, grid tiles and tree rows set `data-moving` for `movingMarker` (see `component-styling.md`): the folder view marks the entries being moved, or every entry while the open folder is being moved itself (`movedHere`), a search's results by their trails (`movingKeys`), and the tree a folder row by its trail and a section row whose root is being moved. Screen readers hear "Being moved" (`entryMoving`) after the name, in place of the lock's "Read-only" (`drawnState`).
+- The playground's moves within a root only rename, at once, so to see it, move a large folder between roots, such as `archive` from API service into Website, or several, as three run at once and the rest wait marked.
+
 ## The playground
 
 The mock adapter's `copy` goes at 8 MB/s (`COPY_SPEED`), from 0.25 to 10 s in all (`COPY_TIME`), reporting progress (`carry`), so a large folder such as `archive` or `datasets` shows the panel and a small file doesn't. Something below an entry that can't be read (`contract.pdf`, in Website's `docs`) stops it halfway through that entry with "Couldn't read …", the entries before it copied, as a backend failing partway would, to see Try again. A `move` within a root only renames, at once; between roots (Website into API service, say) it goes as a copy does. Copying or moving `restricted` itself, or anything into it, fails at once.
@@ -64,5 +77,4 @@ The mock adapter's `copy` goes at 8 MB/s (`COPY_SPEED`), from 0.25 to 10 s in al
 
 - Copying and moving between adapters.
 - Which entries of a failed transfer went through: it's one adapter call, so the panel has its one error, and Try again finds what's left from the source's listing.
-- Entries being moved aren't marked while the move runs, and can be acted on meanwhile; the adapter settles what clashes.
 - The app's own long actions (compress, extract) in the same panel.
