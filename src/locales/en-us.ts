@@ -1,4 +1,19 @@
-import type { FileManagerLocaleText } from "../types";
+import type { FileManagerLocaleText, UndoChange } from "../types";
+
+// A change undone or redone, as the menu's items name it: "Undo rename".
+const CHANGES: Record<UndoChange, string> = {
+    rename: "rename",
+    newFolder: "new folder",
+    copy: "copy",
+    move: "move",
+};
+
+const UNDONE: Record<UndoChange, string> = {
+    rename: "Rename undone",
+    newFolder: "New folder undone",
+    copy: "Copy undone",
+    move: "Move undone",
+};
 
 const itOrThem = (count: number) => (count === 1 ? "it" : "them");
 
@@ -155,6 +170,24 @@ export const enUS: FileManagerLocaleText = {
     moveDone: (count, name, folderName) => `Moved ${entries(count, name)} to “${folderName}”`,
     clipboardCut: (count, name) => `Cut ${entries(count, name)}, ready to paste`,
     clipboardCopied: (count, name) => `Copied ${entries(count, name)}, ready to paste`,
+
+    undo: "Undo",
+    redo: "Redo",
+    undoChange: (change) => `Undo ${CHANGES[change]}`,
+    redoChange: (change) => `Redo ${CHANGES[change]}`,
+    undone: (change) => UNDONE[change],
+    undoFailed: (change) => `Couldn't undo the ${CHANGES[change]}`,
+    redoFailed: (change) => `Couldn't redo the ${CHANGES[change]}`,
+    undoChanged: (count, name) =>
+        count === 1
+            ? `“${name}” has changed since, so nothing was done.`
+            : `${count} items have changed since, so nothing was done.`,
+    undoNotEmpty: (name) => `“${name}” isn't empty any more, so it's kept.`,
+    undoCopyTitle: (count, name) => `Undo copying ${entries(count, name)}?`,
+    undoCopyWarning: (count, folderName) =>
+        count === 1
+            ? `The copy in “${folderName}” is deleted for good.`
+            : `The ${count} copies in “${folderName}” are deleted for good.`,
 
     conflictMessage: (count, name, folderName) =>
         count === 1

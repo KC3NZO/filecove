@@ -57,9 +57,10 @@ export const relistAfter =
 /**
  * `?limits=uploads:1,thumbnails:2`: the file manager's `limits`, each `key:number` of
  * `FileManagerLimits` (`uploads`, `downloads`, `transfers`, `thumbnails`, `keptThumbnails`,
- * `keptEntries`, `searchDelay`), `Infinity` for no limit. The defaults when left out. One upload or
- * copy at a time shows the rest waiting in their panels, and `keptEntries:0` drops every listing
- * once nothing shows it, so a folder opened again is listed afresh.
+ * `keptEntries`, `undoSteps`, `searchDelay`), `Infinity` for no limit. The defaults when left out.
+ * One upload or copy at a time shows the rest waiting in their panels, `keptEntries:0` drops every
+ * listing once nothing shows it, so a folder opened again is listed afresh, and `undoSteps:1` keeps
+ * only the last change to undo, as GNOME Files does.
  */
 export const limits: FileManagerLimits | undefined = params.has("limits")
     ? Object.fromEntries(

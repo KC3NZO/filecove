@@ -223,6 +223,17 @@ const App = () => {
         });
     };
 
+    // Undoes or redoes the latest change made through the file manager, as a toolbar of an app's own
+    // would, which says when there's nothing to.
+    const undo = (direction: "undo" | "redo") => {
+        const api = apiRef.current;
+        const done = direction === "undo" ? api?.undo() : api?.redo();
+
+        if (done === false) {
+            setNotice({ open: true, message: direction === "undo" ? "Nothing to undo" : "Nothing to redo" });
+        }
+    };
+
     // Uncontrolled, what the playground keeps only sets where the file manager starts.
     const settings = uncontrolled
         ? {
@@ -293,6 +304,12 @@ const App = () => {
                 <Typography variant="body2" noWrap sx={summarySx}>
                     {describe(selection)}
                 </Typography>
+                <Button size="small" color="inherit" onClick={() => undo("undo")}>
+                    Undo
+                </Button>
+                <Button size="small" color="inherit" onClick={() => undo("redo")}>
+                    Redo
+                </Button>
                 <Button size="small" color="inherit" onClick={download}>
                     {selected ? "Download selection" : "Download folder"}
                 </Button>

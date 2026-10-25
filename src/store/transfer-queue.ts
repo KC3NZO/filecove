@@ -6,6 +6,7 @@ import type {
     TransferItem,
     TransferKind,
     TransferOptions,
+    TransferResult,
 } from "../types";
 
 /** How many copies and moves the adapter carries out at once by default; the rest wait their turn. */
@@ -26,9 +27,23 @@ const PROGRESS_INTERVAL = 100;
  */
 export type TransferOutcome = "done" | "failed" | "cancelled";
 
+/**
+ * Told as a copy or move ends: the item as it was, how it ended, the items as they are now, and for
+ * one done, the entries as the adapter says they now are in the target, when it says.
+ */
+export type TransferEnded = (
+    item: TransferItem,
+    outcome: TransferOutcome,
+    items: TransferItem[],
+    made?: FileEntry[],
+) => void;
+
 const isActive = (item: TransferItem) => item.status === "queued" || item.status === "running";
 
-const call = ({ kind, adapter, entries, target }: TransferItem, options: TransferOptions) => {
+const call = (
+    { kind, adapter, entries, target }: TransferItem,
+    options: TransferOptions,
+): Promise<TransferResult | void> => {
     const run = kind === "copy" ? adapter.copy : adapter.move;
 
     if (!run) {
@@ -47,13 +62,12 @@ const call = ({ kind, adapter, entries, target }: TransferItem, options: Transfe
  * compare it by identity.
  *
  * `onEnded` is told as each ends, with the item as it was, and the items as they are now: done,
- * failed, or cancelled, when its status says whether it had reached the adapter ("running") or was
- * still waiting ("queued"). The adapter can't undo what it has done, so whatever reached it may have
- * changed folders, however it ended.
+ * with what the adapter made when it said (`TransferResult`), failed, or cancelled, when its status
+ * says whether it had reached the adapter ("running") or was still waiting ("queued"). The adapter
+ * can't take back what it has done, so whatever reached it may have changed folders, however it
+ * ended.
  */
-export const createTransferQueue = (
-    onEnded: (item: TransferItem, outcome: TransferOutcome, items: TransferItem[]) => void,
-) => {
+export const createTransferQueue = (onEnded: TransferEnded) => {
     let items: TransferItem[] = [];
     let nextId = 1;
     const controllers = new Map<number, AbortController>();
@@ -118,7 +132,7 @@ export const createTransferQueue = (
         // A cancelled copy or move no longer owns its item.
         const owns = () => controllers.get(item.id) === controller;
 
-        const settle = (outcome: TransferOutcome, change?: Partial<TransferItem>) => {
+        const settle = (outcome: TransferOutcome, change?: Partial<TransferItem>, made?: FileEntry[]) => {
             if (!owns()) {
                 return;
             }
@@ -135,7 +149,7 @@ export const createTransferQueue = (
             }
 
             if (ended) {
-                onEnded(find(item.id) ?? ended, outcome, items);
+                onEnded(find(item.id) ?? ended, outcome, items, made);
             }
 
             pump();
@@ -160,7 +174,9 @@ export const createTransferQueue = (
                 });
             })
             .then(
-                () => settle("done"),
+                // An adapter resolving with nothing says nothing of what it made.
+                (result) =>
+                    settle("done", undefined, result && Array.isArray(result.entries) ? result.entries : undefined),
                 (error: unknown) =>
                     settle("failed", {
                         status: "failed",

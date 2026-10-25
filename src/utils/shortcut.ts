@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 
-import type { FileManagerLocaleText, ZoomStep } from "../types";
+import type { FileManagerLocaleText, UndoDirection, ZoomStep } from "../types";
 
 const LATIN = /^[a-z0-9]$/;
 
@@ -92,6 +92,27 @@ export const ZOOM_ARIA_SHORTCUTS: Record<ZoomStep, string> = {
     1: "Control+Plus Meta+Plus",
     [-1]: "Control+- Meta+-",
     0: "Control+0 Meta+0",
+};
+
+/**
+ * The way through the undo history a key press asks for: Ctrl+Z undoes, and Shift+Ctrl+Z or Ctrl+Y
+ * redoes, ⌘ on macOS, the Z and Y printed on any layout, so QWERTZ's Z is Z. Null for any other
+ * press, and for one in a field typed in, whose own undo it is.
+ */
+export const undoDirection = (event: KeyboardEvent): UndoDirection | null => {
+    const inField =
+        event.target instanceof HTMLElement &&
+        (event.target.isContentEditable || event.target.matches("input, textarea, select"));
+
+    if (inField || !(event.ctrlKey || event.metaKey) || event.altKey) {
+        return null;
+    }
+
+    if (pressesKey(event, "z")) {
+        return event.shiftKey ? "redo" : "undo";
+    }
+
+    return pressesKey(event, "y") && !event.shiftKey ? "redo" : null;
 };
 
 /**

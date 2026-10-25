@@ -27,7 +27,7 @@ import { useTextDirection } from "../../hooks/use-text-direction";
 import { useTransferQueue } from "../../hooks/use-transfer-queue";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { useWheelZoom } from "../../hooks/use-wheel-zoom";
-import { createFolderStore, folderKey, keyFolder } from "../../store/folder-store";
+import { createFolderStore, folderKey, keyFolder, listingOf } from "../../store/folder-store";
 import { createPropertiesCache } from "../../store/properties-cache";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
 import {
@@ -72,11 +72,24 @@ import {
     pressesKey,
     showsShortcuts,
     typesInField,
+    undoDirection,
     zoomStep,
 } from "../../utils/shortcut";
 import { previewable } from "../../utils/preview";
 import { RELEVANCE_SORT, entryComparator, folderSort, sameSort } from "../../utils/sort";
 import { isMoving, movingIds, movingThrough, sharesNames } from "../../utils/transfer";
+import {
+    NO_HISTORY,
+    UNDO_STEPS,
+    asLeft,
+    canUndoWith,
+    changedFolders,
+    heldHistory,
+    latestSteps,
+    madePairs,
+    otherWay,
+    stepHolds,
+} from "../../utils/undo";
 import { DEFAULT_ZOOM, canZoom, sameZoom, zoomScale, zoomedBy } from "../../utils/zoom";
 import DownloadPanel from "../downloads/download-panel";
 import TransferPanel from "../transfers/transfer-panel";
@@ -97,6 +110,7 @@ import DragPreview from "./drag-preview";
 import HeaderBar from "./header-bar/header-bar";
 import PathBar from "./header-bar/path-bar";
 import SearchField from "./header-bar/search-field";
+import NoticeBar from "./notice-bar";
 import PropertiesPane from "./properties-pane";
 import Sidebar from "./sidebar/sidebar";
 
@@ -123,8 +137,10 @@ import type {
     FolderUpload,
     HistoryStop,
     LocationChangeReason,
+    MadePair,
     MainMenuGroup,
     MenuRequest,
+    MovingIds,
     OpenMenu,
     RefreshOptions,
     PasteFiles,
@@ -141,12 +157,19 @@ import type {
     ToolbarGroup,
     TransferItem,
     TreeReveal,
+    UndoAction,
+    UndoChange,
+    UndoDirection,
+    UndoFolder,
+    UndoHistory,
+    UndoMove,
+    UndoStep,
     UploadItem,
     ViewMode,
     ViewZoom,
     ZoomStep,
 } from "../../types";
-import type { TransferOutcome } from "../../store/transfer-queue";
+import type { TransferEnded, TransferOutcome } from "../../store/transfer-queue";
 import type { MenuState } from "./context-menu/context-menu";
 import type { DeleteDialogState, DeleteRequest } from "./dialogs/delete-dialog";
 import type { NameDialogState, NameRequest } from "./dialogs/name-dialog";
@@ -154,6 +177,8 @@ import type { PasteDialogState, PasteRequest } from "./dialogs/paste-dialog";
 import type { PreviewDialogState, PreviewFile, PreviewRequest } from "./dialogs/preview-dialog";
 import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-dialog";
 import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
+import type { Notice } from "./notice-bar";
+import type { UndoItems } from "./sidebar/main-menu";
 
 // The root element's own attributes, which go on it as they do on a MUI component's root, so an
 // `id`, an `aria-label`, a `data-` attribute or a handler can be set there. `title` is the sidebar's.
@@ -477,9 +502,6 @@ interface UploadPlace {
     name?: string;
 }
 
-/** What's done as a copy or move in the transfer queue ends. */
-type TransferEnded = (item: TransferItem, outcome: TransferOutcome, items: TransferItem[]) => void;
-
 /** What a copy or move in the transfer queue is of, and where it goes, for when it ends. */
 interface TransferPlace {
     /**
@@ -495,17 +517,95 @@ interface TransferPlace {
     retriable: boolean;
     /** The copies or moves started with it, a folder's entries each, which are said together. */
     batch: TransferBatch;
+    /**
+     * For a move undoing one, the name each entry had where it goes back to, in their order, taken
+     * back once it's there when it was kept both on the way in under another.
+     */
+    names?: string[];
+}
+
+/** A copy or move of a batch as it ended, for the history. */
+interface EndedTransfer {
+    item: TransferItem;
+    outcome: TransferOutcome;
+    /** The entries as the adapter says it made them, once it's done, when it says. */
+    made?: FileEntry[];
+    place?: TransferPlace;
 }
 
 /**
- * The copies or moves one paste, drop or pick started: one, or one per folder for a search's
- * results from several, said together once the last has ended.
+ * The copies or moves one paste, drop or pick started, or one undo or redo: one, or one per folder
+ * for a search's results from several, said together, and put in the history together, once the
+ * last has ended.
  */
 interface TransferBatch {
     /** How many haven't ended yet. */
     left: number;
     /** The entries of those done. */
     done: FileEntry[];
+    ended: EndedTransfer[];
+    /** The undo or redo it carries out; missing for a change of the user's own. */
+    run?: UndoRun;
+}
+
+/** A copy or move of a batch done, and what the adapter says each of its entries became. */
+interface SettledTransfer {
+    end: EndedTransfer;
+    place: TransferPlace;
+    pairs: MadePair[];
+}
+
+/** What else a copy or move is started with: the batch it's part of, and for a move undoing one, `names`. */
+interface TransferStart {
+    batch?: TransferBatch;
+    names?: string[];
+}
+
+/** An undo or redo under way, one at a time. */
+interface UndoRun {
+    /** The step taken off its list. */
+    step: UndoStep;
+    direction: UndoDirection;
+    /** The folders it changes itself, which show the progress bar meanwhile, as a copy's or move's do. */
+    folderIds: string[];
+    /** The history's count of changes as it started (`historyEpoch`). */
+    epoch: number;
+    /** Aborted as the file manager unmounts. */
+    controller: AbortController;
+}
+
+/** What the notice under the content says, and the step its button undoes or redoes. */
+interface UndoNotice extends Notice {
+    /**
+     * The step its button undoes or redoes, or tries again: the latest of `direction`'s list. The
+     * notice shows while it is, or while it's under way.
+     */
+    offer?: { direction: UndoDirection; stepId: number; retry?: boolean };
+}
+
+/**
+ * Why an undo or redo did nothing: what it acts on isn't as the change left it, so trying again
+ * wouldn't help. The message, when there is one, says what.
+ */
+class UndoRefused extends Error {}
+
+/** What an undo or redo goes on with once the adapter has answered, as it is by then. */
+interface UndoTools {
+    adapter: FileAdapter;
+    sectionsById: ReadonlyMap<string, Section>;
+    moving: MovingIds;
+    text: FileManagerLocaleText;
+    applyNamed: (request: NameRequest, entry: FileEntry, message: string | null, reveals?: boolean) => void;
+    applyDeleted: (groups: DeleteRequest["groups"]) => void;
+    askDelete: (request: DeleteRequest) => void;
+    relist: (adapter: FileAdapter, folderIds: string[]) => void;
+    startTransfer: (
+        request: PasteRequest,
+        conflict: ConflictPolicy,
+        skipped: FileEntry[],
+        merged: string[],
+        start?: TransferStart,
+    ) => void;
 }
 
 /** `defaultSelectedIds`, for the folder the file manager opened in, until another opens. */
@@ -829,6 +929,7 @@ const FileManager = ({
     const keptThumbnails = countLimit(limits?.keptThumbnails, 0);
     const keptEntries = countLimit(limits?.keptEntries, 0);
     const searchDelay = delayLimit(limits?.searchDelay);
+    const undoLimit = countLimit(limits?.undoSteps, 0) ?? UNDO_STEPS;
 
     useLayoutEffect(() => store.setMaxKept(keptEntries), [store, keptEntries]);
     useLayoutEffect(
@@ -1066,13 +1167,181 @@ const FileManager = ({
     const [reveal, setReveal] = useState<Reveal | null>(null);
     // Said from inside the preview while it's open, as it hides the rest from screen readers.
     const { announcement, announce } = useAnnouncer(() => (previewing?.open ? "preview" : "root"));
+
+    // The changes made through the file manager that can be undone, and those undone that can be
+    // done again, kept while it's mounted. The ref holds them as of now, for keys pressed in quick
+    // succession, before a render.
+    const [history, setHistory] = useState(NO_HISTORY);
+    const historyNow = useRef(NO_HISTORY);
+    // Counts the changes made and the history's ends, so an undo finishing after a change leaves
+    // nothing to redo, as the change cleared that.
+    const historyEpoch = useRef(0);
+    const stepCount = useRef(0);
+    const undoLimitNow = useRef(undoLimit);
+    // The undo or redo under way; another waits for it to end.
+    const [undoing, setUndoing] = useState<UndoRun | null>(null);
+    const undoingNow = useRef<UndoRun | null>(null);
+    const [notice, setNotice] = useState<UndoNotice | null>(null);
+    const undoTools = useRef<UndoTools | null>(null);
+
+    useEffect(() => () => undoingNow.current?.controller.abort(), []);
+
+    const changeHistory = useCallback((change: (before: UndoHistory) => UndoHistory) => {
+        const after = change(historyNow.current);
+
+        if (after !== historyNow.current) {
+            historyNow.current = after;
+            setHistory(after);
+        }
+    }, []);
+
+    // Fewer steps kept drops the oldest at once.
+    useLayoutEffect(() => {
+        undoLimitNow.current = undoLimit;
+        changeHistory((before) => {
+            const undo = latestSteps(before.undo, undoLimit);
+            const redo = latestSteps(before.redo, undoLimit);
+
+            return undo === before.undo && redo === before.redo ? before : { undo, redo };
+        });
+    }, [undoLimit, changeHistory]);
+
+    const showNotice = useCallback(
+        (shown: Omit<UndoNotice, "id">) => setNotice((prev) => ({ ...shown, id: (prev?.id ?? 0) + 1 })),
+        [],
+    );
+
+    const closeNotice = useCallback(() => setNotice(null), []);
+
+    // A step on top of a list, the oldest beyond the limit going.
+    const pushStep = useCallback(
+        (direction: UndoDirection, step: UndoStep) =>
+            changeHistory((before) => ({
+                ...before,
+                [direction]: latestSteps([...before[direction], step], undoLimitNow.current),
+            })),
+        [changeHistory],
+    );
+
+    // A change made through the file manager goes on the undo list, and leaves nothing undone to
+    // redo, as in any editor. The notice says what it did, with Undo.
+    const recordChange = useCallback(
+        (change: UndoChange, served: FileAdapter, action: UndoAction, message: string) => {
+            const step: UndoStep = { id: (stepCount.current += 1), change, adapter: served, action };
+
+            historyEpoch.current += 1;
+            changeHistory((before) => ({ undo: latestSteps([...before.undo, step], undoLimitNow.current), redo: [] }));
+            showNotice({ message, offer: { direction: "undo", stepId: step.id } });
+        },
+        [changeHistory, showNotice],
+    );
+
+    // A change made through the file manager that can't be undone (a delete, an upload, a copy or
+    // move that replaced something) ends the history, so undoing never goes back past it to an
+    // older change, which would have to undo it first.
+    const endHistory = useCallback(() => {
+        historyEpoch.current += 1;
+        changeHistory((before) => (before.undo.length > 0 || before.redo.length > 0 ? NO_HISTORY : before));
+    }, [changeHistory]);
+
+    // An undo or redo ending, done or not: the next can start.
+    const leaveRun = useCallback((run: UndoRun) => {
+        if (undoingNow.current !== run) {
+            return false;
+        }
+
+        undoingNow.current = null;
+        setUndoing(null);
+
+        return true;
+    }, []);
+
+    // An undo or redo done: what undoes or redoes it in turn goes on the other list, and the notice
+    // says what it did, with that one's button, unless an undo ends after another change was made
+    // meanwhile, which left nothing to redo.
+    const endRun = useCallback(
+        (run: UndoRun, done: { action: UndoAction; message: string }) => {
+            if (!leaveRun(run)) {
+                return;
+            }
+
+            const back = otherWay(run.direction);
+
+            if (back === "redo" && historyEpoch.current !== run.epoch) {
+                showNotice({ message: done.message });
+
+                return;
+            }
+
+            const step: UndoStep = {
+                id: (stepCount.current += 1),
+                change: run.step.change,
+                adapter: run.step.adapter,
+                action: done.action,
+            };
+
+            pushStep(back, step);
+            showNotice({ message: done.message, offer: { direction: back, stepId: step.id } });
+        },
+        [leaveRun, pushStep, showNotice],
+    );
+
+    // A step put back on its list, to try again, as long as no change was made meanwhile, which it
+    // would otherwise go back on top of.
+    const putBack = useCallback(
+        (run: UndoRun) => {
+            const back = historyEpoch.current === run.epoch;
+
+            if (back) {
+                pushStep(run.direction, run.step);
+            }
+
+            return back;
+        },
+        [pushStep],
+    );
+
+    // An undo or redo that did nothing, or failed: the notice says so, and why when it's known, and
+    // a step the adapter failed is put back, to try again with Try again or the same key.
+    const failRun = useCallback(
+        (run: UndoRun, detail: string | undefined, again: boolean) => {
+            if (!leaveRun(run)) {
+                return;
+            }
+
+            const { text } = localeValue;
+            const message = (run.direction === "undo" ? text.undoFailed : text.redoFailed)(run.step.change);
+            const retry = again && putBack(run);
+
+            announce(detail ? `${message}: ${detail}` : message);
+            showNotice({
+                message,
+                detail,
+                offer: retry ? { direction: run.direction, stepId: run.step.id, retry } : undefined,
+            });
+        },
+        [leaveRun, putBack, showNotice, announce, localeValue],
+    );
+
+    // An undo or redo the user called off, as the dialog confirming a copy's copies closed, is put back.
+    const callOffRun = useCallback(
+        (run: UndoRun) => {
+            if (leaveRun(run)) {
+                putBack(run);
+            }
+        },
+        [leaveRun, putBack],
+    );
+
     // A folder just created, which the sidebar tree scrolls to once it shows its row.
     const [treeReveal, setTreeReveal] = useState<TreeReveal | null>(null);
     // Copies and moves run in the background while the user browses, a few at once, and the panel
     // shows those that take a moment or failed. What one ending does needs much made further down
     // (`handleTransferEnded`), which it's handed once that's made.
     const transferEnded = useRef<TransferEnded | null>(null);
-    const transfers = useTransferQueue((item, outcome, items) => transferEnded.current?.(item, outcome, items));
+    const transfers = useTransferQueue((item, outcome, items, made) =>
+        transferEnded.current?.(item, outcome, items, made),
+    );
 
     useLayoutEffect(() => transfers.queue.setMaxActive(transferLimit), [transfers.queue, transferLimit]);
 
@@ -1414,6 +1683,13 @@ const FileManager = ({
 
         setClipboard((prev) => (prev && !adapters.has(prev.adapter) ? null : prev));
     }, [sectionsById, adapter, store, revise]);
+
+    // A step naming a section that's gone, rooted elsewhere or served by another adapter means
+    // nothing now, and leaves the history.
+    useLayoutEffect(
+        () => changeHistory((before) => heldHistory(before, sectionsById, adapter)),
+        [sectionsById, adapter, changeHistory],
+    );
 
     const hasActions = useMemo(() => actions.some((group) => group.actions.length > 0), [actions]);
 
@@ -2027,8 +2303,9 @@ const FileManager = ({
     };
 
     // Keys that work anywhere in the file manager: the main menu's shortcuts, F6, F9, Ctrl+?, Ctrl+H,
-    // Ctrl+F, Ctrl+Shift+F, Alt+Enter, and Alt+Left and Alt+Right for back and forward, the other
-    // way round right to left, as the arrows on the buttons are.
+    // Ctrl+F, Ctrl+Shift+F, Ctrl+Z, Shift+Ctrl+Z and Ctrl+Y outside fields, Alt+Enter, and Alt+Left
+    // and Alt+Right for back and forward, the other way round right to left, as the arrows on the
+    // buttons are.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         // Menus and dialogs portal out of the file manager, but their key presses still bubble here
         // through React's tree; they aren't the file manager's.
@@ -2049,6 +2326,7 @@ const FileManager = ({
         const others = event.ctrlKey || event.metaKey || event.shiftKey;
         const plain = !others && !event.altKey;
         const zooms = zoomStep(event);
+        const undoWay = undoDirection(event);
         let handled = true;
 
         if (event.key === "F6" && !event.ctrlKey && !event.metaKey && !event.altKey) {
@@ -2077,6 +2355,9 @@ const FileManager = ({
             (!event.shiftKey || canSearchEverywhere)
         ) {
             openSearch(event.shiftKey ? "everywhere" : "folder");
+        } else if (undoWay) {
+            // With nothing to undo or redo, the key is the browser's.
+            handled = runUndo(undoWay);
         } else if (zooms !== null && panelRef.current?.contains(event.target)) {
             // Only in the content, so the browser's own zoom still works from anywhere else.
             zoomContent(zooms);
@@ -2501,7 +2782,8 @@ const FileManager = ({
     // Files in the folders of types the section doesn't take are left out as the folders are read.
     // A file never takes a folder's place, nor a file's that can't be replaced (`replaceable`), so
     // with Replace, one whose name such an entry has is kept beside it. A file kept beside one of
-    // its name may be given another, which only the adapter knows.
+    // its name may be given another, which only the adapter knows. Uploads can't be undone, so they
+    // end the history as they start.
     const startUpload = useCallback(
         (
             { section: target, adapter: served, trail }: UploadRequest,
@@ -2529,13 +2811,14 @@ const FileManager = ({
                 });
 
             closeUploadCheck();
+            endHistory();
             uploads.queue.addFolders(served, into, folders, conflict, accepts).forEach((id, index) => {
                 uploadPlaces.current.set(id, { location, name: folders[index].name });
             });
             queueFiles(files.filter((file) => !kept.includes(file)), conflict);
             queueFiles(kept, "keepBoth");
         },
-        [closeUploadCheck, uploads.queue, store],
+        [closeUploadCheck, endHistory, uploads.queue, store],
     );
 
     // Forgets the ended uploads, and where they went.
@@ -2727,90 +3010,281 @@ const FileManager = ({
         [sectionsOf, showHidden],
     );
 
-    // A folder made in the transfer picker may take an id that named another folder before, as one
-    // made from the menu may (`handleNamed`). The picker opens it itself.
-    const handleFolderCreated = useCallback(
-        (served: FileAdapter, entry: FileEntry, parentId: string) => {
-            dropFolders(served, [entry.id], []);
-            revealInTree(served, parentId, entry);
+    // A rename, or a folder made, goes in the history, to be renamed back, or the folder deleted
+    // while it's still empty, which takes the adapter's `delete`.
+    const recordNamed = useCallback(
+        (request: NameRequest, entry: FileEntry, message: string) => {
+            const { section: target, adapter: served, trail } = request;
+            const group = { section: target, trail, entries: [entry] };
+
+            if (request.kind === "rename") {
+                recordChange("rename", served, { kind: "rename", group, name: request.entry.name }, message);
+            } else if (served.delete) {
+                recordChange("newFolder", served, { kind: "remove", group }, message);
+            } else {
+                endHistory();
+            }
         },
-        [dropFolders, revealInTree],
+        [recordChange, endHistory],
     );
 
-    // Says what a copy or move did, leaving out the entries skipped for names that clashed.
-    const announceTransfer = useCallback(
+    // A folder made in the transfer picker may take an id that named another folder before, as one
+    // made from the menu may (`handleNamed`). The picker opens it itself, which says so, and it goes
+    // in the history as one made from the menu does.
+    const handleFolderCreated = useCallback(
+        (request: NameRequest, entry: FileEntry) => {
+            const { section: target, adapter: served, trail } = request;
+
+            dropFolders(served, [entry.id], []);
+            revealInTree(served, folderOf(target, trail).id, entry);
+            recordNamed(request, entry, localeValue.text.createDone(isolate(entry.name)));
+        },
+        [dropFolders, revealInTree, recordNamed, localeValue],
+    );
+
+    // What a copy or move did, leaving out the entries skipped for names that clashed, or null when
+    // it did nothing.
+    const transferMessage = useCallback(
         (kind: TransferRequest["kind"], entries: FileEntry[], skipped: readonly FileEntry[], folder: FolderRef) => {
             const leftOut = new Set(skipped);
             const done = entries.filter((entry) => !leftOut.has(entry));
 
-            if (done.length > 0) {
-                announce(
-                    (kind === "copy" ? localeValue.text.copyDone : localeValue.text.moveDone)(
-                        done.length,
-                        isolate(done[0].name),
-                        isolate(folder.name),
-                    ),
-                );
+            return done.length > 0
+                ? (kind === "copy" ? localeValue.text.copyDone : localeValue.text.moveDone)(
+                      done.length,
+                      isolate(done[0].name),
+                      isolate(folder.name),
+                  )
+                : null;
+        },
+        [localeValue],
+    );
+
+    // A move undone puts back the name each entry had where it came from, when it was kept both on
+    // the way in under another and the name is still free there; one it can't keeps the one it has.
+    const renameBack = useCallback(
+        async (served: FileAdapter, settled: SettledTransfer[], signal: AbortSignal) => {
+            for (const { end, place, pairs } of settled) {
+                const names = place.names;
+                const wanted = new Map(end.item.entries.map((entry, index) => [entry.id, names?.[index]] as const));
+                const off = pairs.filter((pair) => {
+                    const name = wanted.get(pair.from.id);
+
+                    return name !== undefined && name !== pair.to.name;
+                });
+
+                if (!served.rename || off.length === 0) {
+                    continue;
+                }
+
+                const { section: into, trail } = place.request;
+                const folderId = folderOf(into, trail).id;
+                const listed = await listingOf(store, into.id, served, folderId, true, signal).catch(() => null);
+
+                if (!listed) {
+                    continue;
+                }
+
+                const taken = new Set(listed.map((entry) => entry.name));
+
+                for (const pair of off) {
+                    const name = wanted.get(pair.from.id) ?? pair.to.name;
+
+                    if (signal.aborted || taken.has(name)) {
+                        continue;
+                    }
+
+                    try {
+                        const renamed = await served.rename(pair.to, name, { signal });
+                        const request: NameRequest = {
+                            kind: "rename",
+                            section: into,
+                            adapter: served,
+                            trail,
+                            entry: pair.to,
+                        };
+
+                        undoTools.current?.applyNamed(request, renamed, null, false);
+                        undoTools.current?.relist(served, [folderId]);
+                        taken.delete(pair.to.name);
+                        taken.add(renamed.name);
+                        pair.to = renamed;
+                    } catch {
+                        // It keeps the name it was given.
+                    }
+                }
             }
         },
-        [announce, localeValue],
+        [store],
+    );
+
+    // Once the last copy or move of a batch has ended, what's done is said, and goes in the history,
+    // to be undone by what the adapter says it made: the copies deleted, or the entries moved back
+    // where each came from. A change that can't be undone that way, as Replace or Merge was chosen,
+    // the adapter said nothing, or part of it failed or was called off once under way, ends the
+    // history. A batch carrying out an undo or redo ends it, with what redoes or undoes it in turn,
+    // or says it failed, the panel showing why with Try again.
+    const settleBatch = useCallback(
+        (batch: TransferBatch, skipped: readonly FileEntry[], target: FolderRef) => {
+            const { ended, run } = batch;
+            const { kind, adapter: served } = ended[0].item;
+            const { text } = localeValue;
+            const message = transferMessage(kind, batch.done, skipped, target);
+            const settled = ended.flatMap((end): SettledTransfer[] => {
+                const { item, outcome, made, place } = end;
+                const pairs = outcome === "done" && place ? madePairs(item.entries, made, item.conflict) : null;
+
+                return pairs && place ? [{ end, place, pairs }] : [];
+            });
+            const undoable = settled.length === ended.length && (kind === "move" || !!served.delete);
+            const went = undoable ? settled.filter((transfer) => transfer.pairs.length > 0) : [];
+
+            if (message && run?.direction !== "undo") {
+                announce(message);
+            }
+
+            if (went.length === 0) {
+                const failed = ended.find((end) => end.outcome === "failed");
+                const reached = ended.some((end) => end.outcome !== "cancelled" || end.item.status !== "queued");
+
+                // Called off before any of it reached the adapter, an undo or redo is put back.
+                if (run && failed) {
+                    failRun(run, failed.item.error && isolate(failed.item.error), false);
+                } else if (run && !reached) {
+                    callOffRun(run);
+                } else if (run) {
+                    leaveRun(run);
+                } else if (!undoable && reached) {
+                    endHistory();
+                }
+
+                return;
+            }
+
+            // Undone, a move hands the next redo the names the adapter chooses, as the move did.
+            const actionOf = (): UndoAction => {
+                if (kind === "copy") {
+                    const { section: into, trail } = went[0].place.request;
+                    const copies = went.flatMap(({ pairs }) => pairs.map((pair) => pair.to));
+
+                    return {
+                        kind: "removeCopies",
+                        group: { section: into, trail, entries: copies },
+                        sources: went.map(({ place, pairs }) => {
+                            const [{ section: from, trail: fromTrail }] = place.request.clipboard.parts;
+
+                            return { section: from, trail: fromTrail, entries: pairs.map((pair) => pair.from) };
+                        }),
+                    };
+                }
+
+                return {
+                    kind: "move",
+                    moves: went.map(({ place, pairs }): UndoMove => {
+                        const [part] = place.request.clipboard.parts;
+
+                        return {
+                            group: {
+                                section: place.request.section,
+                                trail: place.request.trail,
+                                entries: pairs.map((pair) => pair.to),
+                            },
+                            to: { section: part.section, trail: part.trail },
+                            names: run?.direction === "undo" ? undefined : pairs.map((pair) => pair.from.name),
+                        };
+                    }),
+                };
+            };
+            const madeFrom = went.flatMap(({ pairs }) => pairs.map((pair) => pair.from));
+            const doneMessage =
+                message ??
+                (kind === "copy" ? text.copyDone : text.moveDone)(
+                    madeFrom.length,
+                    isolate(madeFrom[0].name),
+                    isolate(target.name),
+                );
+
+            if (!run) {
+                recordChange(kind, served, actionOf(), doneMessage);
+            } else if (run.direction === "redo") {
+                endRun(run, { action: actionOf(), message: doneMessage });
+            } else {
+                void renameBack(served, went, run.controller.signal).then(() => {
+                    if (!run.controller.signal.aborted) {
+                        announce(text.undone(kind));
+                        endRun(run, { action: actionOf(), message: text.undone(kind) });
+                    }
+                });
+            }
+        },
+        [
+            transferMessage,
+            renameBack,
+            recordChange,
+            endRun,
+            failRun,
+            callOffRun,
+            leaveRun,
+            endHistory,
+            announce,
+            localeValue,
+        ],
     );
 
     // As a copy or move ends, what it may have changed is listed again, however it ended, since the
-    // adapter can't undo what it has done: the destination, the source after a move, and after a
-    // Replace or Merge, the folders merged into, all the way down. Once it's done, moved entries leave
-    // the cache, the clipboard and the preview (`handleMoved`), and it's announced. A failure stays in
-    // the panel to be tried again, and is announced unless the panel was showing already, since a
-    // panel just shown isn't read out, while its title is once it shows.
-    const handleTransferEnded = useCallback(
-        (item: TransferItem, outcome: TransferOutcome, items: TransferItem[]) => {
+    // adapter can't take back what it has done: the destination, the source after a move, and after
+    // a Replace or Merge, the folders merged into, all the way down. Once it's done, moved entries
+    // leave the cache, the clipboard and the preview (`handleMoved`). Once its batch has all ended,
+    // it's announced and goes in the history (`settleBatch`). A failure stays in the panel to be
+    // tried again, and is announced unless the panel was showing already, since a panel just shown
+    // isn't read out, while its title is once it shows.
+    const handleTransferEnded = useCallback<TransferEnded>(
+        (item, outcome, items, made) => {
             const transfer = transferPlaces.current.get(item.id);
             const { kind, adapter: served, entries, source, target } = item;
-            const batch: TransferBatch = transfer?.batch ?? { left: 1, done: [] };
+            const batch: TransferBatch = transfer?.batch ?? { left: 1, done: [], ended: [] };
 
             if (outcome !== "failed") {
                 transferPlaces.current.delete(item.id);
             }
 
-            // What's done is said once the last of the batch has ended, together.
             batch.left -= 1;
+            batch.ended.push({ item, outcome, made, place: transfer });
 
             if (outcome === "done") {
                 batch.done.push(...entries);
             }
 
-            if (batch.left === 0 && batch.done.length > 0) {
-                announceTransfer(kind, batch.done, transfer?.skipped ?? [], target);
-            }
-
             // Cancelled while it waited, it never reached the adapter.
-            if (outcome === "cancelled" && item.status === "queued") {
-                return;
+            if (!(outcome === "cancelled" && item.status === "queued")) {
+                relistTransferred(
+                    served,
+                    kind === "move" ? [target.id, source.id] : [target.id],
+                    item.conflict === "replace" ? transfer?.merged : undefined,
+                );
+
+                if (outcome === "done") {
+                    if (kind === "move" && transfer) {
+                        const { section: into, trail } = transfer.request;
+
+                        handleMoved(served, entries, { sectionId: into.id, trail });
+                    }
+                } else if (outcome === "failed" && !items.some((other) => other.shown && other.id !== item.id)) {
+                    announce(
+                        (kind === "copy" ? localeValue.text.copyFailedNotice : localeValue.text.moveFailedNotice)(
+                            entries.length,
+                            isolate(entries[0].name),
+                            isolate(target.name),
+                        ),
+                    );
+                }
             }
 
-            relistTransferred(
-                served,
-                kind === "move" ? [target.id, source.id] : [target.id],
-                item.conflict === "replace" ? transfer?.merged : undefined,
-            );
-
-            if (outcome === "done") {
-                if (kind === "move" && transfer) {
-                    const { section: into, trail } = transfer.request;
-
-                    handleMoved(served, entries, { sectionId: into.id, trail });
-                }
-            } else if (outcome === "failed" && !items.some((other) => other.shown && other.id !== item.id)) {
-                announce(
-                    (kind === "copy" ? localeValue.text.copyFailedNotice : localeValue.text.moveFailedNotice)(
-                        entries.length,
-                        isolate(entries[0].name),
-                        isolate(target.name),
-                    ),
-                );
+            if (batch.left === 0) {
+                settleBatch(batch, transfer?.skipped ?? [], target);
             }
         },
-        [relistTransferred, handleMoved, announceTransfer, announce, localeValue],
+        [relistTransferred, handleMoved, settleBatch, announce, localeValue],
     );
 
     useLayoutEffect(() => {
@@ -2826,15 +3300,22 @@ const FileManager = ({
         [transfers.queue],
     );
 
-    // A copy or move asked for, by the picker, a paste or a drop, once its names are settled, one
-    // per folder the entries are in, as the adapter takes entries sharing a folder: those already in
-    // the target are left there by a move, and kept both by a copy. Entries of several folders
-    // sharing names go one folder after another, so each lands before the next is settled against
-    // it. A cut leaves the clipboard as its paste starts, so it isn't pasted twice while it runs; a
-    // copy can be pasted again. One that fails is tried again from the panel, and goes from it as
-    // the new one starts.
+    // A copy or move asked for, by the picker, a paste or a drop, once its names are settled, or by
+    // an undo or redo, one per folder the entries are in, as the adapter takes entries sharing a
+    // folder: those already in the target are left there by a move, and kept both by a copy.
+    // Entries of several folders sharing names go one folder after another, so each lands before
+    // the next is settled against it. A cut leaves the clipboard as its paste starts, so it isn't
+    // pasted twice while it runs; a copy can be pasted again. One that fails is tried again from the
+    // panel, and goes from it as the new one starts. An undo moving entries back to several folders
+    // starts each with the same `batch`.
     const startTransfer = useCallback(
-        (request: PasteRequest, conflict: ConflictPolicy, skipped: FileEntry[], merged: string[]) => {
+        (
+            request: PasteRequest,
+            conflict: ConflictPolicy,
+            skipped: FileEntry[],
+            merged: string[],
+            { batch: given, names }: TransferStart = {},
+        ) => {
             const { clipboard: pasted, section: target, trail, retrying } = request;
             const into = folderOf(target, trail);
 
@@ -2845,7 +3326,9 @@ const FileManager = ({
             const parts = pasted.parts.filter(
                 (part) => pasted.kind === "copy" || folderOf(part.section, part.trail).id !== into.id,
             );
-            const batch: TransferBatch = { left: parts.length, done: [] };
+            const batch: TransferBatch = given ?? { left: 0, done: [], ended: [] };
+
+            batch.left += parts.length;
             const inTurn = sharesNames(groupedEntries(parts));
             let before: number | undefined;
 
@@ -2869,6 +3352,7 @@ const FileManager = ({
                     merged,
                     retriable: true,
                     batch,
+                    names,
                 });
             });
 
@@ -2994,6 +3478,10 @@ const FileManager = ({
             return true;
         }
 
+        if (undoing?.step.adapter === served && undoing.folderIds.includes(folder.id)) {
+            return true;
+        }
+
         return transfers.items.some((item) => {
             const transfer = transferPlaces.current.get(item.id);
 
@@ -3009,17 +3497,13 @@ const FileManager = ({
                 (item.kind === "move" && item.source.id === folder.id)
             );
         });
-    }, [section, adapter, folder, pasteIds, transfers.items]);
+    }, [section, adapter, folder, pasteIds, undoing, transfers.items]);
 
     // Deleted folders go from the cache (`dropFolders`), and places inside one, in the history too,
     // end at the folder that held it, in every section showing it. Deleted entries leave the clipboard,
     // and the rest are looked for again when they may be below a deleted folder.
-    const handleDeleted = useCallback(
-        ({ groups }: DeleteRequest) => {
-            const entries = groupedEntries(groups);
-
-            closeDelete();
-
+    const applyDeleted = useCallback(
+        (groups: DeleteRequest["groups"]) => {
             // Each adapter's entries, as ids mean something only to their own.
             new Set(groups.map((group) => group.adapter)).forEach((fromAdapter) => {
                 const own = groupedEntries(groups.filter((group) => group.adapter === fromAdapter));
@@ -3032,32 +3516,66 @@ const FileManager = ({
                 setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, deletedIds, dropped, mayBeBelow));
                 changePreview(fromAdapter, (entry) => (deletedIds.has(entry.id) ? null : entry));
             });
-            announce(localeValue.text.deleteDone(entries.length, isolate(entries[0].name)));
         },
-        [closeDelete, dropFolders, mayBeRootedBelow, revise, sectionsOf, changePreview, announce, localeValue],
+        [dropFolders, mayBeRootedBelow, revise, sectionsOf, changePreview],
     );
 
-    // The new or renamed entry is selected if its folder is open, in whichever section shows it. A
-    // renamed folder keeps its place in the path, the history and the sidebar tree, in every
-    // section showing it.
-    const handleNamed = useCallback(
-        (request: NameRequest, entry: FileEntry) => {
+    // Deleting is for good, so it ends the history, unless it's the copies undoing a copy deletes,
+    // whose redo copies them again.
+    const handleDeleted = useCallback(
+        (request: DeleteRequest) => {
+            const entries = groupedEntries(request.groups);
+            const run = undoingNow.current;
+
+            closeDelete();
+            applyDeleted(request.groups);
+
+            if (request.undoesCopy && run?.step.action.kind === "removeCopies") {
+                const { group, sources } = run.step.action;
+                const message = localeValue.text.undone("copy");
+
+                announce(message);
+                endRun(run, {
+                    action: { kind: "copy", sources, to: { section: group.section, trail: group.trail } },
+                    message,
+                });
+
+                return;
+            }
+
+            endHistory();
+            announce(localeValue.text.deleteDone(entries.length, isolate(entries[0].name)));
+        },
+        [closeDelete, applyDeleted, endRun, endHistory, announce, localeValue],
+    );
+
+    // The dialog confirming a copy's copies closed without deleting them leaves the copy to undo.
+    const handleDeleteClose = useCallback(() => {
+        const run = undoingNow.current;
+
+        if (deleting?.request.undoesCopy && run?.step.action.kind === "removeCopies") {
+            callOffRun(run);
+        }
+
+        closeDelete();
+    }, [deleting?.request.undoesCopy, callOffRun, closeDelete]);
+
+    // The new or renamed entry is selected if its folder is open, in whichever section shows it,
+    // unless it's renamed back quietly, as a move undone does, and `message` is said. A renamed
+    // folder keeps its place in the path, the history and the sidebar tree, in every section
+    // showing it.
+    const applyNamed = useCallback(
+        (request: NameRequest, entry: FileEntry, message: string | null, reveals = true) => {
             const { section: target, adapter: served, trail } = request;
             const parentId = folderOf(target, trail).id;
             const before = request.kind === "rename" ? request.entry : undefined;
             const showing = sectionsOf(served);
 
-            const message = before
-                ? localeValue.text.renameDone(isolate(before.name), isolate(entry.name))
-                : localeValue.text.createDone(isolate(entry.name));
-
-            closeNaming();
-
             // Shown in the open folder, the entry is announced once it's revealed there, unless it
             // takes the focus.
-            if (openKey && showing.some((shown) => folderKey(shown.id, parentId) === openKey)) {
-                setReveal({ key: openKey, id: entry.id, announce: message });
-            } else {
+            if (reveals && openKey && showing.some((shown) => folderKey(shown.id, parentId) === openKey)) {
+                setReveal({ key: openKey, id: entry.id, announce: message ?? undefined });
+            } else if (message) {
                 announce(message);
             }
 
@@ -3116,18 +3634,312 @@ const FileManager = ({
                 });
             }
         },
-        [
-            closeNaming,
-            openKey,
-            sectionsOf,
-            dropFolders,
-            mayBeRootedBelow,
-            revealInTree,
-            revise,
-            changePreview,
-            announce,
-            localeValue,
-        ],
+        [openKey, sectionsOf, dropFolders, mayBeRootedBelow, revealInTree, revise, changePreview, announce],
+    );
+
+    const handleNamed = useCallback(
+        (request: NameRequest, entry: FileEntry) => {
+            const message =
+                request.kind === "rename"
+                    ? localeValue.text.renameDone(isolate(request.entry.name), isolate(entry.name))
+                    : localeValue.text.createDone(isolate(entry.name));
+
+            closeNaming();
+            applyNamed(request, entry, message);
+            recordNamed(request, entry, message);
+        },
+        [closeNaming, applyNamed, recordNamed, localeValue],
+    );
+
+    // Carries out an undo or redo taken off its list. What it acts on is checked first against its
+    // folder's listing, listed afresh: each entry by its id, with the name it was left with, and a
+    // copy with its size and date too, as deleting it is for good. Anything not as the change left
+    // it, as changed elsewhere since, leaves it all alone, and the step goes; the adapter failing
+    // puts the step back to try again. What it calls once the adapter has answered is as it is by
+    // then (`undoTools`).
+    const carryOut = useCallback(
+        async (run: UndoRun) => {
+            const {
+                step,
+                direction,
+                controller: { signal },
+            } = run;
+            const { action, adapter: served } = step;
+            const tools = () => {
+                if (!undoTools.current) {
+                    throw new UndoRefused();
+                }
+
+                return undoTools.current;
+            };
+            // Where entries are, in their section as it is now.
+            const placed = <T extends { section: Section }>(where: T): T => ({
+                ...where,
+                section: tools().sectionsById.get(where.section.id) ?? where.section,
+            });
+            const asListed = async (group: EntryGroup, exactly: boolean) => {
+                const listed = await listingOf(
+                    store,
+                    group.section.id,
+                    served,
+                    folderOf(group.section, group.trail).id,
+                    true,
+                    signal,
+                ).catch((error: unknown) => {
+                    if (signal.aborted) {
+                        throw error;
+                    }
+
+                    return [];
+                });
+                const { found, changed } = asLeft(listed, group.entries, exactly);
+
+                if (changed.length > 0) {
+                    throw new UndoRefused(tools().text.undoChanged(changed.length, isolate(changed[0].name)));
+                }
+
+                return found;
+            };
+            // Whether the entries' folder can change, and they can be renamed or deleted, with no
+            // move under way holding them.
+            const changeable = (group: EntryGroup, what?: "rename" | "delete") => {
+                const busy = movingThrough(tools().moving, served);
+
+                return (
+                    folderWritable(store, group.section, group.trail, busy) &&
+                    !entriesMoving(group.section, group.trail, group.entries, busy) &&
+                    (!what || group.entries.every((entry) => allows(what, entry.permissions)))
+                );
+            };
+            // Whether entries can go into a folder, as a paste of them could.
+            const goes = (pasted: Clipboard, to: UndoFolder) =>
+                canPaste(pasted, served, to.section, to.trail, store, tools().moving);
+
+            try {
+                if (!stepHolds(step, tools().sectionsById, tools().adapter)) {
+                    throw new UndoRefused();
+                }
+
+                switch (action.kind) {
+                    case "rename": {
+                        const group = placed(action.group);
+                        const [entry] = await asListed(group, false);
+
+                        if (!served.rename || !changeable({ ...group, entries: [entry] }, "rename")) {
+                            throw new UndoRefused();
+                        }
+
+                        const renamed = await served.rename(entry, action.name, { signal });
+                        const { text, relist: listAgain, applyNamed: named } = tools();
+                        const message =
+                            direction === "undo"
+                                ? text.undone("rename")
+                                : text.renameDone(isolate(entry.name), isolate(renamed.name));
+                        const request: NameRequest = {
+                            kind: "rename",
+                            section: group.section,
+                            adapter: served,
+                            trail: group.trail,
+                            entry,
+                        };
+
+                        listAgain(served, [folderOf(group.section, group.trail).id]);
+                        named(request, renamed, direction === "undo" ? null : message);
+
+                        if (direction === "undo") {
+                            announce(message);
+                        }
+
+                        endRun(run, {
+                            action: { kind: "rename", group: { ...group, entries: [renamed] }, name: entry.name },
+                            message,
+                        });
+
+                        return;
+                    }
+                    case "remove": {
+                        const group = placed(action.group);
+                        const [folder] = await asListed(group, false);
+                        const inside = await listingOf(store, group.section.id, served, folder.id, true, signal).catch(
+                            (error: unknown) => {
+                                if (signal.aborted) {
+                                    throw error;
+                                }
+
+                                return null;
+                            },
+                        );
+
+                        if (!inside) {
+                            throw new UndoRefused(tools().text.undoChanged(1, isolate(folder.name)));
+                        }
+
+                        if (inside.length > 0) {
+                            throw new UndoRefused(tools().text.undoNotEmpty(isolate(folder.name)));
+                        }
+
+                        if (!served.delete || !changeable({ ...group, entries: [folder] }, "delete")) {
+                            throw new UndoRefused();
+                        }
+
+                        await served.delete([folder], { signal });
+
+                        const { text, relist: listAgain, applyDeleted: deleted } = tools();
+                        const message = text.undone("newFolder");
+
+                        listAgain(served, [folderOf(group.section, group.trail).id]);
+                        deleted([{ ...group, entries: [folder], adapter: served }]);
+                        announce(message);
+                        endRun(run, {
+                            action: {
+                                kind: "create",
+                                to: { section: group.section, trail: group.trail },
+                                name: folder.name,
+                            },
+                            message,
+                        });
+
+                        return;
+                    }
+                    case "create": {
+                        const to = placed(action.to);
+
+                        if (!served.createFolder || !changeable({ ...to, entries: [] })) {
+                            throw new UndoRefused();
+                        }
+
+                        const parentId = folderOf(to.section, to.trail).id;
+                        const made = await served.createFolder(parentId, action.name, { signal });
+                        const { text, relist: listAgain, applyNamed: named } = tools();
+                        const message = text.createDone(isolate(made.name));
+
+                        listAgain(served, [parentId]);
+                        named({ kind: "create", section: to.section, adapter: served, trail: to.trail }, made, message);
+                        endRun(run, { action: { kind: "remove", group: { ...to, entries: [made] } }, message });
+
+                        return;
+                    }
+                    case "removeCopies": {
+                        const group = placed(action.group);
+                        const copies = await asListed(group, true);
+
+                        if (!served.delete || !changeable({ ...group, entries: copies }, "delete")) {
+                            throw new UndoRefused();
+                        }
+
+                        // The dialog ends the run, done (`handleDeleted`) or called off (`handleDeleteClose`).
+                        tools().askDelete({
+                            groups: [{ ...group, entries: copies, adapter: served }],
+                            undoesCopy: true,
+                        });
+
+                        return;
+                    }
+                    case "copy": {
+                        const to = placed(action.to);
+                        const sources = await Promise.all(
+                            action.sources.map(async (source) => {
+                                const group = placed(source);
+
+                                return { ...group, entries: await asListed(group, false) };
+                            }),
+                        );
+                        const pasted: Clipboard = { kind: "copy", adapter: served, parts: sources };
+
+                        if (!goes(pasted, to)) {
+                            throw new UndoRefused();
+                        }
+
+                        // The batch ends the run once the copies are done (`settleBatch`).
+                        tools().startTransfer(
+                            { clipboard: pasted, section: to.section, trail: to.trail },
+                            "keepBoth",
+                            [],
+                            [],
+                            { batch: { left: 0, done: [], ended: [], run } },
+                        );
+
+                        return;
+                    }
+                    case "move": {
+                        const moves = await Promise.all(
+                            action.moves.map(async (move) => {
+                                const group = placed(move.group);
+                                const pasted: Clipboard = {
+                                    kind: "cut",
+                                    adapter: served,
+                                    parts: [{ ...group, entries: await asListed(group, false) }],
+                                };
+
+                                return { ...move, pasted, to: placed(move.to) };
+                            }),
+                        );
+
+                        if (moves.some(({ pasted, to }) => !goes(pasted, to))) {
+                            throw new UndoRefused();
+                        }
+
+                        // Each goes back to its own folder, together, and the batch ends the run.
+                        const batch: TransferBatch = { left: 0, done: [], ended: [], run };
+
+                        moves.forEach(({ pasted, to, names }) =>
+                            tools().startTransfer(
+                                { clipboard: pasted, section: to.section, trail: to.trail },
+                                "keepBoth",
+                                [],
+                                [],
+                                { batch, names },
+                            ),
+                        );
+
+                        return;
+                    }
+                }
+            } catch (error) {
+                if (signal.aborted) {
+                    return;
+                }
+
+                if (error instanceof UndoRefused) {
+                    failRun(run, error.message || undefined, false);
+
+                    return;
+                }
+
+                // The adapter may have done some of it all the same.
+                undoTools.current?.relist(served, run.folderIds);
+                failRun(run, error instanceof Error && error.message ? isolate(error.message) : undefined, true);
+            }
+        },
+        [store, announce, endRun, failRun],
+    );
+
+    // Undoes, or redoes, the latest change of `direction`'s list, taking it off, one at a time.
+    // Returns whether there was one, with none under way.
+    const runUndo = useCallback(
+        (direction: UndoDirection) => {
+            const step = historyNow.current[direction].at(-1);
+
+            if (!step || undoingNow.current) {
+                return false;
+            }
+
+            const run: UndoRun = {
+                step,
+                direction,
+                folderIds: changedFolders(step.action),
+                epoch: historyEpoch.current,
+                controller: new AbortController(),
+            };
+
+            changeHistory((before) => ({ ...before, [direction]: before[direction].slice(0, -1) }));
+            undoingNow.current = run;
+            setUndoing(run);
+            void carryOut(run);
+
+            return true;
+        },
+        [changeHistory, carryOut],
     );
 
     const contextFor = useCallback(
@@ -3339,6 +4151,8 @@ const FileManager = ({
                         ? pasteTo([...trail, { id: only.id, name: only.name }])
                         : undefined,
                 preview,
+                undo: history.undo.length > 0 && !undoing ? () => runUndo("undo") : undefined,
+                redo: history.redo.length > 0 && !undoing ? () => runUndo("redo") : undefined,
             };
 
             // A result of a search everywhere is shown in its folder, which ends the search, even when
@@ -3397,10 +4211,72 @@ const FileManager = ({
             place,
             stopSearching,
             focusInContent,
+            history,
+            undoing,
+            runUndo,
             announce,
             localeValue,
         ],
     );
+
+    // What undoing and redoing call once the adapter has answered.
+    useLayoutEffect(() => {
+        undoTools.current = {
+            adapter,
+            sectionsById,
+            moving,
+            text: localeValue.text,
+            applyNamed,
+            applyDeleted,
+            askDelete,
+            relist,
+            startTransfer,
+        };
+    });
+
+    // Whether anything the file manager does can be undone, for the main menu's Undo and Redo and the
+    // keyboard shortcuts to show.
+    const canUndo = useMemo(
+        () =>
+            undoLimit > 0 &&
+            sections.some((group) => group.sections.some((shown) => canUndoWith(shown.adapter ?? adapter))),
+        [undoLimit, sections, adapter],
+    );
+
+    const undoItems = useMemo(
+        (): UndoItems | undefined =>
+            canUndo
+                ? {
+                      undo: (!undoing && history.undo.at(-1)?.change) || null,
+                      redo: (!undoing && history.redo.at(-1)?.change) || null,
+                      onUndo: () => runUndo("undo"),
+                      onRedo: () => runUndo("redo"),
+                  }
+                : undefined,
+        [canUndo, undoing, history, runUndo],
+    );
+
+    // The notice shows while its button's step is the latest of its list, or under way, so it never
+    // offers to undo what's no longer next; one without a button shows for its time.
+    const offer = notice?.offer;
+    const offerHolds =
+        !!offer && (history[offer.direction].at(-1)?.id === offer.stepId || undoing?.step.id === offer.stepId);
+    const shownNotice = notice && (!offer || offerHolds) ? notice : null;
+    const noticeAction =
+        shownNotice?.offer &&
+        (shownNotice.offer.retry
+            ? localeValue.text.tryAgain
+            : shownNotice.offer.direction === "undo"
+              ? localeValue.text.undo
+              : localeValue.text.redo);
+
+    const handleNoticeAction = useCallback(() => {
+        if (notice?.offer) {
+            runUndo(notice.offer.direction);
+        }
+    }, [notice, runUndo]);
+
+    const focusFromNotice = useCallback(() => setFocusContent(true), []);
 
     // What the app's actions in the preview's header get: the context menu's for the one file shown,
     // in its folder, with what takes the user elsewhere closing the preview first. It isn't
@@ -3592,6 +4468,7 @@ const FileManager = ({
         openSearch,
         closeSearch,
         showShortcuts,
+        runUndo,
     });
 
     useLayoutEffect(() => {
@@ -3606,6 +4483,7 @@ const FileManager = ({
             openSearch,
             closeSearch,
             showShortcuts,
+            runUndo,
         };
     });
 
@@ -3660,6 +4538,8 @@ const FileManager = ({
             closeSearch: () => api.current.closeSearch(),
             focus: () => setFocusContent(true),
             showShortcuts: () => api.current.showShortcuts(),
+            undo: () => api.current.runUndo("undo"),
+            redo: () => api.current.runUndo("redo"),
         }),
         [],
     );
@@ -3763,6 +4643,7 @@ const FileManager = ({
                                             onClose={closeSidebar}
                                             onSearchEverywhere={searchEverywhere}
                                             mainMenu={mainMenu}
+                                            undoItems={undoItems}
                                             onShowShortcuts={showShortcuts}
                                         />
                                         <Box sx={mainSx} data-properties-shown={propertiesOpen}>
@@ -3898,6 +4779,14 @@ const FileManager = ({
                                                                 />
                                                             )}
                                                         </Box>
+                                                        <NoticeBar
+                                                            notice={shownNotice}
+                                                            actionLabel={noticeAction}
+                                                            raised={selecting && !showsResults}
+                                                            onAction={handleNoticeAction}
+                                                            onClose={closeNotice}
+                                                            onFocusLost={focusFromNotice}
+                                                        />
                                                     </Box>
                                                     {shownTransfers.length > 0 && (
                                                         <Box sx={taskPanelSx}>
@@ -3988,7 +4877,7 @@ const FileManager = ({
                                             key={`delete:${deleting.id}`}
                                             open={deleting.open}
                                             request={deleting.request}
-                                            onClose={closeDelete}
+                                            onClose={handleDeleteClose}
                                             onChanged={relist}
                                             onDone={handleDeleted}
                                         />
@@ -4036,6 +4925,7 @@ const FileManager = ({
                                         choosesSections={searchTargets.length > 1}
                                         canPreview={canPreview}
                                         canUpload={canUpload}
+                                        canUndo={canUndo}
                                         onClose={closeShortcuts}
                                         onClosed={handleShortcutsClosed}
                                     />

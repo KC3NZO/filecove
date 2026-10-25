@@ -27,6 +27,8 @@ export interface DeleteGroup extends EntryGroup {
 export interface DeleteRequest {
     /** The entries by the folder they're in: one, or several for a search's results, of one section or more. */
     groups: DeleteGroup[];
+    /** Set when they're the copies a copy made, which undoing it deletes, as the dialog then says. */
+    undoesCopy?: boolean;
 }
 
 export interface DeleteDialogState {
@@ -62,8 +64,9 @@ const contentSx: SxProps<Theme> = {
 /**
  * Asks to confirm deleting entries, then has the adapter delete them, a folder's at a time, as it
  * takes entries sharing a folder, each through its own section's adapter. Deleting can't be undone,
- * so nothing is deleted without asking. Anything the adapter rejects with is shown in the dialog,
- * which stays open to try again, with only the folders' entries not yet deleted.
+ * so nothing is deleted without asking, not even the copies undoing a copy deletes. Anything the
+ * adapter rejects with is shown in the dialog, which stays open to try again, with only the folders'
+ * entries not yet deleted.
  */
 const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialogProps) => {
     const { groups } = request;
@@ -177,13 +180,18 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
     };
 
     const hasFolders = entries.some((entry) => entry.kind === "folder");
+    const [first] = groups;
 
     return (
         <Dialog dir={dir} open={open} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
-            <DialogTitle>{text.deleteTitle(entries.length, isolate(entries[0].name))}</DialogTitle>
+            <DialogTitle>
+                {(request.undoesCopy ? text.undoCopyTitle : text.deleteTitle)(entries.length, isolate(entries[0].name))}
+            </DialogTitle>
             <DialogContent sx={contentSx}>
                 <Typography variant="body2" color="text.secondary">
-                    {text.deleteWarning(entries.length, hasFolders)}
+                    {request.undoesCopy
+                        ? text.undoCopyWarning(entries.length, isolate(folderOf(first.section, first.trail).name))
+                        : text.deleteWarning(entries.length, hasFolders)}
                 </Typography>
                 {failure && (
                     <Typography variant="body2" color="error">

@@ -105,9 +105,9 @@ interface TransferDialogProps {
     ) => void;
     /**
      * Called with a folder made with the picker's New folder button, as the adapter returned it,
-     * and the id of the folder it was made in.
+     * and what made it: its section, adapter and the trail to the folder it was made in.
      */
-    onFolderCreated: (adapter: FileAdapter, entry: FileEntry, parentId: string) => void;
+    onFolderCreated: (request: NameRequest, entry: FileEntry) => void;
 }
 
 /** A row of the folder list: a section, on the list of sections, or a folder. */
@@ -441,9 +441,9 @@ const TransferDialog = ({
     // "Copy here" or "Move here", and the list takes the focus. Going back up lands on it, scrolled
     // to, as the folder left through (`folderLeft`). Its id leaves the cache first, so the listing
     // about to load for it isn't dropped with any stale one.
-    const handleCreated = (_: unknown, entry: FileEntry) => {
+    const handleCreated = (nameRequest: NameRequest, entry: FileEntry) => {
         closeNaming();
-        onFolderCreated(adapter, entry, targetFolder.id);
+        onFolderCreated(nameRequest, entry);
 
         if (place) {
             pendingFocus.current = true;

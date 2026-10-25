@@ -33,6 +33,8 @@ interface ShortcutsDialogProps {
     canPreview: boolean;
     /** Whether any section takes uploads, without which nothing pasted is uploaded. */
     canUpload: boolean;
+    /** Whether anything the file manager does can be undone, without which there's no Undo and Redo. */
+    canUndo: boolean;
     onClose: () => void;
     /** Called once it has faded out, to give the focus back. */
     onClosed: () => void;
@@ -71,13 +73,22 @@ interface SectionOptions {
     choosesSections: boolean;
     canPreview: boolean;
     canUpload: boolean;
+    canUndo: boolean;
 }
 
 // Stands for any of the four arrows.
 const ARROWS = "Arrows";
 
 /** The file manager's own keys, as `keyboard.md` lists them, by where they work. */
-const ownSections = ({ text, rtl, canSearchEverywhere, choosesSections, canPreview, canUpload }: SectionOptions) => {
+const ownSections = ({
+    text,
+    rtl,
+    canSearchEverywhere,
+    choosesSections,
+    canPreview,
+    canUpload,
+    canUndo,
+}: SectionOptions) => {
     // Back and forward, and expanding and collapsing, swap right to left, as the arrows on the
     // buttons and the chevrons are mirrored.
     const start = rtl ? "ArrowRight" : "ArrowLeft";
@@ -88,6 +99,12 @@ const ownSections = ({ text, rtl, canSearchEverywhere, choosesSections, canPrevi
             yields: true,
             rows: [
                 { label: text.keyboardShortcuts, combos: [["Ctrl", "?"]] },
+                ...(canUndo
+                    ? [
+                          { label: text.undo, combos: [["Ctrl", "Z"]] },
+                          { label: text.redo, combos: [["Ctrl", "Shift", "Z"], ["Ctrl", "Y"]] },
+                      ]
+                    : []),
                 { label: text.shortcutToggleHidden, combos: [["Ctrl", "H"]] },
                 { label: text.shortcutToggleProperties, combos: [["Alt", "Enter"]] },
                 { label: text.shortcutResizePanes, combos: [[start], [end]], yields: false },
@@ -333,6 +350,7 @@ const ShortcutsDialog = ({
     choosesSections,
     canPreview,
     canUpload,
+    canUndo,
     onClose,
     onClosed,
 }: ShortcutsDialogProps) => {
@@ -343,7 +361,7 @@ const ShortcutsDialog = ({
     const rtl = dir === "rtl";
 
     const sections = useMemo(() => {
-        const own = ownSections({ text, rtl, canSearchEverywhere, choosesSections, canPreview, canUpload });
+        const own = ownSections({ text, rtl, canSearchEverywhere, choosesSections, canPreview, canUpload, canUndo });
         // Only the content's and the tree's shortcuts, and the main menu's, come before keys of the
         // file manager's own; the preview's and the panel's work there alone.
         const theirs = consumerRows([actions, previewActions, propertiesActions], mainMenu);
@@ -372,6 +390,7 @@ const ShortcutsDialog = ({
         choosesSections,
         canPreview,
         canUpload,
+        canUndo,
         actions,
         previewActions,
         propertiesActions,

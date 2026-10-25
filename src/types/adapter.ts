@@ -211,6 +211,18 @@ export interface TransferOptions extends OperationOptions {
     onProgress: (loaded: number, total: number) => void;
 }
 
+/** What `copy` and `move` may resolve with. An object, so fields can be added later without a breaking change. */
+export interface TransferResult {
+    /**
+     * The entries as they now are in the target: the copies made, or the entries moved, one for
+     * each entry given that went there, in the order they were given, under the name each went in
+     * by, which "keepBoth" may have changed. Those skipped are left out. It's what lets the user
+     * undo a copy, deleting the copies, or a move, moving the entries back, as the file manager
+     * can't find them by name: a name kept both is the adapter's to choose.
+     */
+    entries: FileEntry[];
+}
+
 /** Passed to `upload`. */
 export interface UploadOptions extends OperationOptions {
     /**
@@ -436,16 +448,19 @@ export interface FileAdapter {
     /**
      * Copies entries, folders with everything in them, into `targetId`. The entries share a
      * parent. It runs in the background while the user browses, shown in a panel once it takes a
-     * moment, and several may run at once. Without it, the file manager has no way to copy. Reject
-     * with an `Error` to show its message to the user.
+     * moment, and several may run at once. Resolve with the copies' entries (`TransferResult`), so
+     * the user can undo the copy; without them, it can't be undone. Without `copy`, the file manager
+     * has no way to copy. Reject with an `Error` to show its message to the user.
      */
-    copy?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<void>;
+    copy?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<TransferResult | void>;
     /**
      * Moves entries into `targetId`; never into themselves, nor into the folder they're in. The
-     * entries share a parent. It runs in the background as `copy` does. Without it, the file manager
-     * has no way to move. Reject with an `Error` to show its message to the user.
+     * entries share a parent. It runs in the background as `copy` does. Resolve with the entries as
+     * they now are (`TransferResult`), so the user can undo the move; without them, it can't be
+     * undone. Without `move`, the file manager has no way to move. Reject with an `Error` to show
+     * its message to the user.
      */
-    move?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<void>;
+    move?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<TransferResult | void>;
     /**
      * Deletes entries for good, folders with everything in them. The entries share a parent, and
      * the user has already confirmed. Without it, the file manager has no way to delete. Reject

@@ -1,4 +1,5 @@
 import type { FileEntry } from "./adapter";
+import type { UndoChange } from "./undo";
 
 type EntryKind = FileEntry["kind"];
 
@@ -428,6 +429,36 @@ export interface FileManagerLocaleText
     clipboardCut: (count: number, name: string) => string;
     /** Read to screen readers as entries are copied, to be copied where they're pasted. */
     clipboardCopied: (count: number, name: string) => string;
+
+    // Undoing and redoing, from the main menu, Ctrl+Z and the notice under the content
+    /** The main menu's item while there's nothing to undo, the notice's button, and the key's row. */
+    undo: string;
+    /** As `undo`, for doing again what was undone. */
+    redo: string;
+    /** The main menu's item undoing the latest change, by what it was: "Undo rename". */
+    undoChange: (change: UndoChange) => string;
+    /** The main menu's item doing the latest change undone again: "Redo rename". */
+    redoChange: (change: UndoChange) => string;
+    /** Read to screen readers, and shown in the notice with Redo, once a change is undone. */
+    undone: (change: UndoChange) => string;
+    /** The notice's title when a change couldn't be undone, over why. */
+    undoFailed: (change: UndoChange) => string;
+    /** The notice's title when a change undone couldn't be done again, over why. */
+    redoFailed: (change: UndoChange) => string;
+    /**
+     * Why undoing or redoing did nothing: what it acts on was changed, renamed, moved or deleted
+     * since, elsewhere. `name` is the one's, meant for when `count` is 1.
+     */
+    undoChanged: (count: number, name: string) => string;
+    /** Why undoing a new folder doesn't delete it: something went in it since. */
+    undoNotEmpty: (name: string) => string;
+    /**
+     * The title of the dialog confirming the copies that undoing a copy deletes. `name` is meant for
+     * when `count` is 1.
+     */
+    undoCopyTitle: (count: number, name: string) => string;
+    /** Under `undoCopyTitle`: the copies go for good, from the folder named. */
+    undoCopyWarning: (count: number, folderName: string) => string;
 
     // Names a folder already has, when copying, moving or uploading into it
     /** `name` is the one clashing name, meant for when `count` is 1. */

@@ -191,6 +191,19 @@ export interface ActionContext {
      * `paste`, when there is nothing to paste there.
      */
     pasteInto?: () => void;
+    /**
+     * Undoes the latest change made through the file manager, whatever `entries` and `folder` are,
+     * as Ctrl+Z and the main menu's Undo do: renamed back, a new folder deleted while it's empty,
+     * moved back, or a copy's copies deleted once the user confirms. Missing when there's nothing to
+     * undo, or while an undo or redo is under way.
+     */
+    undo?: () => void;
+    /**
+     * Does the latest change undone again, as Shift+Ctrl+Z and the main menu's Redo do. Missing when
+     * nothing undone is left to redo, as once another change has been made, or while an undo or redo
+     * is under way.
+     */
+    redo?: () => void;
 }
 
 export interface FileAction {

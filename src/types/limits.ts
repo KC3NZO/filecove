@@ -26,6 +26,11 @@ export interface FileManagerLimits {
      */
     keptEntries?: number;
     /**
+     * Changes kept to undo, with Ctrl+Z, the oldest going first; 20 by default, at least 0, which
+     * leaves nothing to undo.
+     */
+    undoSteps?: number;
+    /**
      * How long the typing has to stop for before a search everywhere asks the adapter's `search`, in
      * ms; 300 by default. A finite number, 0 or more.
      */

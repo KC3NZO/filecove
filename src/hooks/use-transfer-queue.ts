@@ -2,17 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 
 import { createTransferQueue } from "../store/transfer-queue";
 
-import type { TransferOutcome } from "../store/transfer-queue";
-import type { TransferItem } from "../types";
+import type { TransferEnded } from "../store/transfer-queue";
 
 /**
  * A copy and move queue for as long as the component using it is mounted; unmounting cancels
  * whatever is still under way. `onEnded` is told as each copy or move ends (see
  * `createTransferQueue`), and may change from render to render.
  */
-export const useTransferQueue = (
-    onEnded: (item: TransferItem, outcome: TransferOutcome, items: TransferItem[]) => void,
-) => {
+export const useTransferQueue = (onEnded: TransferEnded) => {
     const onEndedRef = useRef(onEnded);
 
     useLayoutEffect(() => {
@@ -20,7 +17,7 @@ export const useTransferQueue = (
     });
 
     const [queue] = useState(() =>
-        createTransferQueue((item, outcome, items) => onEndedRef.current(item, outcome, items)),
+        createTransferQueue((item, outcome, items, made) => onEndedRef.current(item, outcome, items, made)),
     );
     const items = useSyncExternalStore(queue.subscribe, queue.getItems);
 

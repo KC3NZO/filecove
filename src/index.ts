@@ -61,6 +61,8 @@ export type {
     SortOrder,
     ThumbnailOptions,
     TransferOptions,
+    TransferResult,
+    UndoChange,
     UploadOptions,
     ViewMode,
     ViewZoom,

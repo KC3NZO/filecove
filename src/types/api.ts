@@ -81,4 +81,16 @@ export interface FileManagerApi {
      * had it as it closes.
      */
     showShortcuts: () => void;
+    /**
+     * Undoes the latest change made through the file manager, as Ctrl+Z and the main menu's Undo
+     * do, e.g. from a toolbar of the consumer's own, which can tell whether there's anything to undo
+     * from `actionContext()`'s `undo`. Returns false when there's nothing to undo, or an undo or
+     * redo is still under way.
+     */
+    undo: () => boolean;
+    /**
+     * Does the latest change undone again, as Shift+Ctrl+Z and the main menu's Redo do. Returns false
+     * when there's nothing to redo, or an undo or redo is still under way.
+     */
+    redo: () => boolean;
 }

@@ -46,6 +46,7 @@ import type {
     TreeReveal,
     TreeRow,
 } from "../../../types";
+import type { UndoItems } from "./main-menu";
 
 interface SidebarProps {
     ref?: Ref<HTMLDivElement>;
@@ -85,6 +86,8 @@ interface SidebarProps {
     onSearchEverywhere: () => void;
     /** The consumer's main menu items, above the file manager's own. */
     mainMenu: MainMenuGroup[];
+    /** The main menu's Undo and Redo; missing when nothing the file manager does can be undone. */
+    undoItems?: UndoItems;
     /** Opens the keyboard shortcuts from the main menu, giving the focus back to `opener` after. */
     onShowShortcuts: (opener: HTMLElement | null) => void;
     onToggle: (key: string) => void;
@@ -285,6 +288,7 @@ const Sidebar = ({
     onClose,
     onSearchEverywhere,
     mainMenu,
+    undoItems,
     onShowShortcuts,
 }: SidebarProps) => {
     // The sidebar's own selection; the content's lives in its folder view, and neither sees the other.
@@ -613,7 +617,7 @@ const Sidebar = ({
                 <Typography component="span" noWrap sx={titleSx}>
                     {title}
                 </Typography>
-                <MainMenu groups={mainMenu} onShowShortcuts={onShowShortcuts} />
+                <MainMenu groups={mainMenu} undo={undoItems} onShowShortcuts={onShowShortcuts} />
             </Box>
             <Box component="nav" aria-label={text.sidebar} sx={navSx}>
                 <Box

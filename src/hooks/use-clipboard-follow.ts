@@ -1,71 +1,11 @@
 import { useEffect } from "react";
 
-import { folderKey } from "../store/folder-store";
+import { listingOf } from "../store/folder-store";
 import { folderOf } from "../utils/navigation";
 
 import type { Dispatch, SetStateAction } from "react";
 import type { FolderStore } from "../store/folder-store";
-import type { Clipboard, ClipboardPart, FileAdapter, FileEntry } from "../types";
-
-/**
- * A folder's whole listing, listed through the store unless it's there, so it's shared with what
- * shows the folder, or listed again quietly when `fresh`, since one saved from before a change may
- * still hold entries it took away. A listing being checked again is waited for, as an entry may
- * only be found then. Rejected when listing fails or `signal` aborts.
- */
-const listingOf = (
-    store: FolderStore,
-    sectionId: string,
-    adapter: FileAdapter,
-    folderId: string,
-    fresh: boolean,
-    signal: AbortSignal,
-) =>
-    new Promise<FileEntry[]>((resolve, reject) => {
-        const key = folderKey(sectionId, folderId);
-
-        if (signal.aborted) {
-            reject(signal.reason);
-
-            return;
-        }
-
-        const end = () => {
-            unsubscribe();
-            signal.removeEventListener("abort", abort);
-        };
-
-        const abort = () => {
-            end();
-            reject(signal.reason);
-        };
-
-        const check = () => {
-            const state = store.get(key);
-
-            if (state?.status === "ready" && !state.checking) {
-                end();
-                resolve(state.entries ?? []);
-            } else if (state?.status === "error") {
-                end();
-                reject(state.error);
-            } else if (!state) {
-                // Not listed yet, or dropped meanwhile, as after another change.
-                store.load(key, adapter, folderId);
-            }
-        };
-
-        const unsubscribe = store.subscribe(check);
-
-        signal.addEventListener("abort", abort);
-
-        // As old as it may be, the listing is listed again, unless a request is in flight.
-        if (fresh) {
-            store.open(key, adapter, folderId, 0);
-        }
-
-        check();
-    });
+import type { Clipboard, ClipboardPart } from "../types";
 
 // A part of the clipboard with its entries as they are now: by name, the folders from the first
 // step not known, under the renamed folder's new id, and then the entries, a listing at a time; by

@@ -27,6 +27,7 @@ export type {
     SearchResult,
     ThumbnailOptions,
     TransferOptions,
+    TransferResult,
     UploadOptions,
 } from "./adapter";
 export type { Clipboard, ClipboardLookup, ClipboardPart } from "./clipboard";
@@ -61,6 +62,16 @@ export type { CountTarget, PropertiesItem, PropertiesSubject, Requested, Subject
 export type { FileManagerSearch, SearchHit, SearchScope, SearchTarget, SectionSearch } from "./search";
 export type { FolderRef, Section, SectionFolder, SectionGroup, SectionImports } from "./section";
 export type { MovingIds, TransferItem, TransferKind, TransferStatus } from "./transfer";
+export type {
+    MadePair,
+    UndoAction,
+    UndoChange,
+    UndoDirection,
+    UndoFolder,
+    UndoHistory,
+    UndoMove,
+    UndoStep,
+} from "./undo";
 export type { EntrySelection, SelectionDetails, SelectModifiers, TreeSelection, TreeTarget } from "./selection";
 export type {
     DroppedFiles,

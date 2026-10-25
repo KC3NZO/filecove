@@ -16,6 +16,7 @@ import type {
     SearchMatch,
     SearchResult,
     TransferOptions,
+    TransferResult,
 } from "../../src";
 import type { ZipItem } from "./mock-zip";
 
@@ -543,9 +544,10 @@ export const createMockAdapter = (
      * Puts a node into a folder, settling a name clash by `conflict`. "replace" puts a file in the
      * place of a file, and merges a folder into a folder, what's in it going in the same way; a file
      * and a folder never take each other's place, nor does anything take the place of, or merge
-     * into, what's read-only, and those are kept both.
+     * into, what's read-only, and those are kept both. Returns the node there now: the one put in,
+     * or the folder merged into.
      */
-    const insert = (target: MockNode, targetId: string, node: MockNode, conflict: ConflictPolicy) => {
+    const insert = (target: MockNode, targetId: string, node: MockNode, conflict: ConflictPolicy): MockNode => {
         const existing = target.children?.find((child) => child.name === node.name);
         const replacing = conflict === "replace" && !!existing && !existing.readOnly;
 
@@ -558,7 +560,7 @@ export const createMockAdapter = (
 
             node.children.forEach((child) => insert(existing, existingId, child, "replace"));
 
-            return;
+            return existing;
         }
 
         if (existing && replacing && !existing.children === !node.children) {
@@ -572,6 +574,8 @@ export const createMockAdapter = (
         if (node.children) {
             index(childId(targetId, node.name), node);
         }
+
+        return node;
     };
 
     const clashes = (target: MockNode, node: MockNode) => !!target.children?.some((child) => child.name === node.name);
@@ -580,15 +584,16 @@ export const createMockAdapter = (
      * Copies or moves entries into a folder at `COPY_SPEED`, reporting how far it has got, as a
      * backend copying the bytes would. Something below an entry that can't be read stops it halfway
      * through that entry, with the entries before it done, as a backend failing partway leaves them.
-     * `put` puts each entry where it goes once its bytes have come.
+     * `put` puts each entry where it goes once its bytes have come, and says where it went, so the
+     * entries come back as they are there, for the file manager to undo the copy or move with.
      */
     const carry = async (
         entries: FileEntry[],
         targetId: string,
         { signal, conflict, onProgress }: TransferOptions,
-        put: (target: MockNode, located: ReturnType<typeof locate>) => void,
+        put: (target: MockNode, located: ReturnType<typeof locate>) => MockNode,
         find: (entry: FileEntry) => ReturnType<typeof locate> = locate,
-    ) => {
+    ): Promise<TransferResult> => {
         const target = writableAt(targetId);
         const located = entries.map(find).filter(({ node }) => !(conflict === "skip" && clashes(target, node)));
         const sizes = located.map(({ node }) => sizeOf(node));
@@ -602,11 +607,13 @@ export const createMockAdapter = (
         await transfer(signal, reached, total > 0 ? (duration * reached) / total : duration, (loaded) =>
             onProgress(loaded, total),
         );
-        done.forEach((item) => put(target, item));
+        const made = done.map((item) => toEntry(targetId, put(target, item), locked(targetId)));
 
         if (stuckAt >= 0) {
             throw new Error(`Couldn't read “${unreadableIn(located[stuckAt].node)?.name}”.`);
         }
+
+        return { entries: made };
     };
 
     // The root a path is below, which says who owns it.
@@ -834,23 +841,26 @@ export const createMockAdapter = (
 
             const put = (target: MockNode, { parentId, parent, node }: ReturnType<typeof locate>) => {
                 detach(parent, parentId, node);
-                insert(target, targetId, node, conflict);
+
+                return insert(target, targetId, node, conflict);
             };
 
             if (entries.some((entry) => rootOf(entry.id) !== rootOf(targetId))) {
                 return carry(entries, targetId, options, put, locateChangeable);
             }
 
-            return respond(signal, () => {
+            return respond<TransferResult>(signal, () => {
                 const target = writableAt(targetId);
 
-                entries.forEach((entry) => {
-                    const located = locateChangeable(entry);
+                return {
+                    entries: entries.flatMap((entry) => {
+                        const located = locateChangeable(entry);
 
-                    if (located.parent !== target && !(conflict === "skip" && clashes(target, located.node))) {
-                        put(target, located);
-                    }
-                });
+                        return located.parent !== target && !(conflict === "skip" && clashes(target, located.node))
+                            ? [toEntry(targetId, put(target, located), locked(targetId))]
+                            : [];
+                    }),
+                };
             });
         },
 
