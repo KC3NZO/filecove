@@ -110,7 +110,7 @@ What's left in the features already built, what packaging needs before a release
 - [ ] **new:** There's no `"use client"` directive, which Next.js App Router needs.
 - [ ] The README is still Vite's template, there's no LICENSE or CHANGELOG, `index.html` still has the repo name as its title, and the repo name mentions Pigment.
 - [ ] **new:** The MUI-style ways to customise are missing: stable class names, theme `defaultProps` (`localeText` included, as MUI's own components take it) and `styleOverrides`, and `slots`/`slotProps` (for example to replace the empty state or add header buttons).
-- [ ] **new:** Fixed numbers an app can't change: 3 uploads and 3 downloads at once, 6 thumbnails at once, the search delay, and the 20,000 entries of listings kept that nothing shows.
+- [x] **new:** Fixed numbers an app can't change: 3 uploads and 3 downloads at once, 6 thumbnails at once, the search delay, and the 20,000 entries of listings kept that nothing shows. *Done 2026-10-25: `limits` (`FileManagerLimits`) sets `uploads`, `downloads`, `transfers`, `thumbnails`, `keptThumbnails`, `keptEntries` and `searchDelay`, each its default when omitted, taking effect at once (see "Limits" in `props.md`).*
 
 ## C. New features
 

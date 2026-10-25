@@ -34,7 +34,7 @@ The same `copy(entries, targetId, options)` and `move(...)` as ever: one call pe
 `store/transfer-queue.ts`, with `hooks/use-transfer-queue.ts` holding one for the life of `FileManager` (unmounting cancels what's under way, telling nothing). It's shaped like the download queue, and like it imports nothing from `components/file-manager/`, so the media manager can use it too.
 
 - An item (`TransferItem`, `types/transfer.ts`, internal) is `queued`, `running` or `failed`, with its `kind`, `adapter`, `entries`, `source` and `target` folders (`FolderRef`s) and `conflict`. One that's done, or cancelled, leaves the queue, so there are no "done" or "cancelled" states.
-- At most `MAX_ACTIVE` (3) run at once, as uploads' calls do; the rest wait in the order asked for. `add` returns the id, for the host's own record.
+- At most `MAX_ACTIVE` (3) run at once, as uploads' calls do, or as many as `setMaxActive` says (`limits.transfers`, see "Limits" in `props.md`); the rest wait in the order asked for. `add` returns the id, for the host's own record.
 - One added with `after`, another's id (`TransferItem.after`), waits until that one has ended, done, failed or cancelled (`waits` in `pump`). `startTransfer` chains a batch's transfers that way when entries of its folders share names (`sharesNames`), so each lands before the next is settled against it by its `conflict` (see "Acting on several folders" in `file-manager.md`).
 - `progress` keeps the last `loaded` and `total` reported, within the total, told at most every `PROGRESS_INTERVAL` (100 ms).
 - `shown` is set once it has taken `SHOW_AFTER` (500 ms), waiting included, or at once when it fails, so a quick one is never shown.

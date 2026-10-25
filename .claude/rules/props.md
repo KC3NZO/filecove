@@ -3,6 +3,8 @@ paths:
   - "src/index.ts"
   - "src/components/file-manager/file-manager.tsx"
   - "src/types/api.ts"
+  - "src/types/limits.ts"
+  - "src/utils/limits.ts"
   - "src/types/navigation.ts"
   - "src/types/selection.ts"
   - "src/types/section.ts"
@@ -18,7 +20,7 @@ paths:
 
 # Public props
 
-Besides `adapter`, `sections` / `section` and `actions` (CLAUDE.md), `mainMenu` and `relistAfter` (`file-manager.md`), `onOpenFile`, `previewers` and `previewActions` (`preview.md`), `propertiesActions` (`properties.md`) and `localeText` / `locale` (`locale.md`), `FileManager` takes the props below. Their comments in `file-manager.tsx` are the consumer's documentation, so they say what each does from the outside.
+Besides `adapter`, `sections` / `section` and `actions` (CLAUDE.md), `mainMenu` and `relistAfter` (`file-manager.md`), `limits` (see "Limits"), `onOpenFile`, `previewers` and `previewActions` (`preview.md`), `propertiesActions` (`properties.md`) and `localeText` / `locale` (`locale.md`), `FileManager` takes the props below. Their comments in `file-manager.tsx` are the consumer's documentation, so they say what each does from the outside.
 
 ## Checklist for a new feature
 
@@ -116,6 +118,25 @@ What the checklist leaves internal, and why. Anything not listed here or above i
 - **The upload, download and transfer queues and their panels' collapsed state**: the queues report what the adapter is doing, which the consumer's adapter already knows.
 - **Focus, scroll and the entry grabbed for a drag**: `focus()` and `reveal` move the first two from outside.
 
+## Limits
+
+`limits` (`FileManagerLimits`, `types/limits.ts`, public) sets how much the file manager does at once and keeps, for a backend that takes more, or less, than the defaults. Each field is left to its default when omitted:
+
+| Field | Default | Least | What it sets |
+|---|---|---|---|
+| `uploads` | 3 | 1 | calls an upload runs at once, files sent and folders made, across every upload (`store/upload-queue.ts`) |
+| `downloads` | 3 | 1 | downloads the adapter prepares at once (`store/download-queue.ts`) |
+| `transfers` | 3 | 1 | copies and moves at once (`store/transfer-queue.ts`) |
+| `thumbnails` | 6 | 1 | `thumbnail` calls at once (`store/thumbnail-cache.ts`) |
+| `keptThumbnails` | 1,000 | 0 | thumbnails kept while nothing shows them |
+| `keptEntries` | 20,000 | 0 | entries kept in listings nothing shows (`store/folder-store.ts`) |
+| `searchDelay` | 300 ms | 0 | how long the typing stops before a search everywhere (`hooks/use-search.ts`) |
+
+- Counts are made whole and raised to their least, with `Infinity` as no limit (`countLimit`, `utils/limits.ts`); a delay must be finite (`delayLimit`). Anything else, NaN included, is the default.
+- Each store keeps its default as its constant and takes the limit through a setter (`setMaxActive`, `setLimits`, `setMaxKept`), so the queues the media manager will share have the same defaults without the prop. `file-manager.tsx` reads the fields into numbers, so a new object of the same limits every render changes nothing, and sets them in layout effects, before the parts' own effects ask for anything on mounting.
+- A change takes effect at once: more at once starts what's waiting, less lets what's under way finish, and fewer kept drops what's beyond them (listings and thumbnails nothing shows). A new search delay applies from the next keystroke, and to one waiting.
+- Fixed by choice, as interface timing rather than capacity: the long-press, the drag hold, type-ahead's pause, when the panels show a task (`SHOW_AFTER`), and how often progress and pages are shown.
+
 ## The root element
 
 `FileManagerProps` takes the root `div`'s own attributes (`RootAttributes`), spread on it as a MUI component's root takes them, so `id`, `className`, `style`, `aria-*`, `data-*` and handlers go there. `title` is the sidebar's.
@@ -128,9 +149,9 @@ What the checklist leaves internal, and why. Anything not listed here or above i
 - A section removed takes its places out of the history, and the open one goes to the first section's root ("replace", above).
 - A section rooted elsewhere, or served by another adapter (its own `adapter`, or the file manager's when it has none), goes back to its root, in the history too, since its trails lead nowhere now. Another adapter's ids mean something else, so its listings are dropped (`store.forgetSection`), and what shows them lists them again: `useFolder` by its `adapter` dependency, the sidebar tree because it remembers which adapter each shown folder was listed with (`useTreeRows`' `requested`). A rerooted section stays expanded or collapsed as it was. A clipboard of entries no section's adapter serves any more is dropped. These run in a layout effect over what each section had before (`servedBefore`).
 - A `default…` prop changing does nothing, as with MUI's, which warn.
-- `actions`, `previewActions`, `propertiesActions`, `previewers`, `title`, `onOpenFile`, the callbacks, `localeText` and `locale` take effect at once, and `relistAfter` from the next folder opened. A dialog open during a change finishes with the section and adapter it was opened for.
+- `actions`, `previewActions`, `propertiesActions`, `previewers`, `title`, `onOpenFile`, the callbacks, `localeText`, `locale` and `limits` take effect at once, and `relistAfter` from the next folder opened. A dialog open during a change finishes with the section and adapter it was opened for.
 - `sections` may be empty, as while an app is still getting them: the content says there's nothing to show (`content/no-sections.tsx`), and the location passed waits for its section to come (see "The parts" in `file-manager.md`).
 
 ## The playground
 
-By default the playground controls everything, as an app would: the location in the URL's hash (`hooks/use-hash-location.ts`), so a reload, a link or the browser's back button follows it, the view settings (the view, the zoom, the order, hidden files, the hidden sidebar) and the expanded folders in local storage (`hooks/use-stored-state.ts`), and the selection in its own state, shown in a footer. The docked sidebar's width, the docked properties, shown or not, and their width are kept in local storage too. The file manager shares the page with the footer through `sx`. The footer's "Show a file" calls `reveal` for a file far down `archive`'s 10,000 (in a single section, one in Website's `src/components`), "Change elsewhere" adds a file to the open folder behind the file manager's back (the mock's `addElsewhere`, found through `actionContext()`), which shows once the folder opens again, "Reload all" calls `refresh()`, and "Download selection" ("Download folder" with nothing selected) calls `download`, "New folder" calls `actionContext().createFolder`, or says the folder is read-only (`readOnly`), "Properties" calls `actionContext(...)?.properties()` for the selection, or the open folder with nothing selected, "Search "record"" calls `search` (everywhere, the open folder in a single section), and "Shortcuts" calls `showShortcuts`. Its `mainMenu` has Preferences (Ctrl+,) and About Files, its `previewActions` and `propertiesActions` the headers' demo actions (`createPreviewActions`, `createPropertiesActions` in `mock-data.tsx`), and its `previewers` Markdown, CSV and zips (`mock-previewers.tsx`). The search is the playground's state, not kept across reloads; the sections left out are in local storage. `?uncontrolled` (`options.ts`) passes what it keeps as the `default…` props instead, so the file manager keeps everything itself, and only the footer's selection is told. `?relistAfter=` passes `relistAfter` (`Infinity` for never), and `?lateSections` hands the sections over 3 s after the page opens.
+By default the playground controls everything, as an app would: the location in the URL's hash (`hooks/use-hash-location.ts`), so a reload, a link or the browser's back button follows it, the view settings (the view, the zoom, the order, hidden files, the hidden sidebar) and the expanded folders in local storage (`hooks/use-stored-state.ts`), and the selection in its own state, shown in a footer. The docked sidebar's width, the docked properties, shown or not, and their width are kept in local storage too. The file manager shares the page with the footer through `sx`. The footer's "Show a file" calls `reveal` for a file far down `archive`'s 10,000 (in a single section, one in Website's `src/components`), "Change elsewhere" adds a file to the open folder behind the file manager's back (the mock's `addElsewhere`, found through `actionContext()`), which shows once the folder opens again, "Reload all" calls `refresh()`, and "Download selection" ("Download folder" with nothing selected) calls `download`, "New folder" calls `actionContext().createFolder`, or says the folder is read-only (`readOnly`), "Properties" calls `actionContext(...)?.properties()` for the selection, or the open folder with nothing selected, "Search "record"" calls `search` (everywhere, the open folder in a single section), and "Shortcuts" calls `showShortcuts`. Its `mainMenu` has Preferences (Ctrl+,) and About Files, its `previewActions` and `propertiesActions` the headers' demo actions (`createPreviewActions`, `createPropertiesActions` in `mock-data.tsx`), and its `previewers` Markdown, CSV and zips (`mock-previewers.tsx`). The search is the playground's state, not kept across reloads; the sections left out are in local storage. `?uncontrolled` (`options.ts`) passes what it keeps as the `default…` props instead, so the file manager keeps everything itself, and only the footer's selection is told. `?relistAfter=` passes `relistAfter` (`Infinity` for never), `?limits=uploads:1,thumbnails:2` passes `limits` (each `key:number`), and `?lateSections` hands the sections over 3 s after the page opens.
