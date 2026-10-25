@@ -25,6 +25,7 @@ import {
     visuallyHiddenSx,
 } from "../../../styles/mixins";
 import { joinIsolated } from "../../../utils/bidi";
+import { lockedFolder } from "../../../utils/permissions";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
 import { SORT_LABELS, toggleSortKey } from "../../../utils/sort";
@@ -288,7 +289,7 @@ const FileRow = memo(
         onOpen,
         onMenu,
     }: FileRowProps) => {
-        const { describeDate, describeSize, describeType } = useLocale();
+        const { text, describeDate, describeSize, describeType } = useLocale();
 
         return (
             <Box
@@ -299,6 +300,8 @@ const FileRow = memo(
                 // Only some rows are rendered, so each says where it is among all of them.
                 aria-setsize={count}
                 aria-posinset={index + 1}
+                // Its lock is only drawn.
+                aria-description={lockedFolder(origin?.entry ?? entry) ? text.folderLocked : undefined}
                 tabIndex={focused ? 0 : -1}
                 // The whole row is the entry's: it's dragged by any part, and a marquee only starts from
                 // the empty space around the rows.

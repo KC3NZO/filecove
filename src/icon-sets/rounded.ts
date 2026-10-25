@@ -27,6 +27,7 @@ import GridViewRounded from "@mui/icons-material/GridViewRounded";
 import HomeRounded from "@mui/icons-material/HomeRounded";
 import InfoRounded from "@mui/icons-material/InfoRounded";
 import ViewListRounded from "@mui/icons-material/ViewListRounded";
+import LockRounded from "@mui/icons-material/LockRounded";
 import MenuRounded from "@mui/icons-material/MenuRounded";
 import MoreVertRounded from "@mui/icons-material/MoreVertRounded";
 import DriveFileMoveRounded from "@mui/icons-material/DriveFileMoveRounded";
@@ -87,6 +88,7 @@ const rounded: IconSet = {
     home: HomeRounded,
     info: InfoRounded,
     listView: ViewListRounded,
+    lock: LockRounded,
     menu: MenuRounded,
     more: MoreVertRounded,
     move: DriveFileMoveRounded,

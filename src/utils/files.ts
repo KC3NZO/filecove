@@ -101,8 +101,11 @@ export const pickedFolder = (files: File[]): FolderSource | undefined => {
     return picked && { name: picked.name, read: () => Promise.resolve(picked) };
 };
 
-/** Whether a section takes uploads at all; an `acceptUploads` string limits which files. */
-export const takesUploads = (section: Section) => section.acceptUploads !== false;
+/**
+ * Whether a section takes uploads at all: not when it's `readOnly`, nor when `acceptUploads` is
+ * false. An `acceptUploads` string limits which files.
+ */
+export const takesUploads = (section: Section) => section.acceptUploads !== false && !section.readOnly;
 
 /**
  * The patterns of the section's `acceptUploads` string, as a file input reads its `accept`:

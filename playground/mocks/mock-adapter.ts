@@ -3,6 +3,7 @@ import { zip } from "./mock-zip";
 
 import type {
     ConflictPolicy,
+    EntryPermissions,
     EntryProperties,
     EntryTotals,
     FileAdapter,
@@ -34,6 +35,11 @@ export interface MockNode {
     blob?: Blob;
     /** Listing this folder, or reading this file, fails, to show the error states. */
     fails?: boolean;
+    /**
+     * This folder or file, and everything in it, can't be changed: its entries say so in their
+     * `permissions`, and the adapter refuses changing them anyway, as a backend would.
+     */
+    readOnly?: boolean;
 }
 
 interface MockAdapterOptions {
@@ -115,7 +121,11 @@ const MARKS = /\p{M}/gu;
 /** A name or what's typed with case and accents left out, as the file manager's own folder search folds them. */
 const fold = (text: string) => text.toLowerCase().normalize("NFKD").replace(MARKS, "");
 
-const clone = (node: MockNode): MockNode => ({ ...node, children: node.children?.map(clone) });
+// A copy is the copier's, so it can be changed, even when what it was copied from can't.
+const clone = (node: MockNode): MockNode => ({ ...node, readOnly: undefined, children: node.children?.map(clone) });
+
+/** What an entry that can't be changed allows: nothing but reading. */
+const READ_ONLY: EntryPermissions = { write: false, rename: false, move: false, delete: false };
 
 /** How many bytes a file is, or everything in a folder. */
 const sizeOf = (node: MockNode): number =>
@@ -292,7 +302,8 @@ const bytesOf = async (node: MockNode, signal: AbortSignal) => {
     return response.blob();
 };
 
-const toEntry = (parentPath: string, node: MockNode): FileEntry => ({
+// `locked` is whether the folder it's in can't be changed, which nothing in it can be then.
+const toEntry = (parentPath: string, node: MockNode, locked: boolean): FileEntry => ({
     id: childId(parentPath, node.name),
     name: node.name,
     kind: node.children ? "folder" : "file",
@@ -301,6 +312,7 @@ const toEntry = (parentPath: string, node: MockNode): FileEntry => ({
     mimeType: node.mimeType,
     childCount: node.fails ? undefined : node.children?.length,
     hasSubfolders: node.fails ? undefined : node.children?.some((child) => child.children),
+    permissions: locked || node.readOnly ? READ_ONLY : undefined,
 });
 
 /**
@@ -308,7 +320,8 @@ const toEntry = (parentPath: string, node: MockNode): FileEntry => ({
  * lazy loading can be seen. Entry ids are full paths, as a path-based backend would use, so a
  * renamed folder's id changes along with every id below it. Large folders are listed in pages,
  * with the offset of the next one as the cursor. Files and folders marked `fails` refuse to be
- * listed, read, renamed, deleted or written to.
+ * listed, read, renamed, deleted or written to, and those marked `readOnly`, with everything in
+ * them, say so in their permissions and refuse to be changed.
  */
 export const createMockAdapter = (
     roots: Record<string, MockNode[]>,
@@ -368,6 +381,30 @@ export const createMockAdapter = (
         return node;
     };
 
+    /** Whether the folder or file at `path`, or a folder it's in, can't be changed. */
+    const locked = (path: string) => {
+        for (let at = path; ; at = parentOf(at)) {
+            if (folders.get(at)?.readOnly) {
+                return true;
+            }
+
+            if (at === "/") {
+                return false;
+            }
+        }
+    };
+
+    /** A folder to change what's in it: refused when it can't be changed. */
+    const writableAt = (path: string) => {
+        const node = folderAt(path);
+
+        if (locked(path)) {
+            throw new Error("This folder is read-only.");
+        }
+
+        return node;
+    };
+
     const ensureFree = (parent: MockNode, name: string, except?: MockNode) => {
         if (parent.children?.some((child) => child !== except && child.name === name)) {
             throw new Error(`"${name}" already exists.`);
@@ -389,6 +426,17 @@ export const createMockAdapter = (
         }
 
         return { parentId, parent, node };
+    };
+
+    /** An entry's node and the folder it is in, to rename, move or delete it: refused when it can't be changed. */
+    const locateChangeable = (entry: FileEntry) => {
+        const located = locate(entry);
+
+        if (located.node.readOnly || locked(located.parentId)) {
+            throw new Error(`“${entry.name}” is read-only.`);
+        }
+
+        return located;
     };
 
     const detach = (parent: MockNode, parentId: string, node: MockNode) => {
@@ -421,7 +469,7 @@ export const createMockAdapter = (
         const existing = target.children?.find((child) => child.name === node.name);
 
         if (existing?.children && node.children && conflict === "replace") {
-            if (existing.fails) {
+            if (existing.fails || existing.readOnly) {
                 throw new Error("Permission denied");
             }
 
@@ -433,6 +481,10 @@ export const createMockAdapter = (
         }
 
         if (existing && conflict === "replace" && !existing.children === !node.children) {
+            if (existing.readOnly) {
+                throw new Error(`“${existing.name}” is read-only.`);
+            }
+
             detach(target, targetId, existing);
         } else if (existing) {
             node.name = freeName(target, node);
@@ -458,9 +510,10 @@ export const createMockAdapter = (
         targetId: string,
         { signal, conflict, onProgress }: TransferOptions,
         put: (target: MockNode, located: ReturnType<typeof locate>) => void,
+        find: (entry: FileEntry) => ReturnType<typeof locate> = locate,
     ) => {
-        const target = folderAt(targetId);
-        const located = entries.map(locate).filter(({ node }) => !(conflict === "skip" && clashes(target, node)));
+        const target = writableAt(targetId);
+        const located = entries.map(find).filter(({ node }) => !(conflict === "skip" && clashes(target, node)));
         const sizes = located.map(({ node }) => sizeOf(node));
         const total = sizes.reduce((sum, size) => sum + size, 0);
         const stuckAt = located.findIndex(({ node }) => unreadableIn(node));
@@ -489,10 +542,13 @@ export const createMockAdapter = (
                 const children = folderAt(folderId).children ?? [];
                 const start = cursor ? Number(cursor) : 0;
                 const end = start + pageSize;
+                const lockedHere = locked(folderId);
 
                 return {
-                    entries: children.slice(start, end).map((child) => toEntry(folderId, child)),
+                    entries: children.slice(start, end).map((child) => toEntry(folderId, child, lockedHere)),
                     nextCursor: end < children.length ? String(end) : undefined,
+                    // Read-only folders say so with their listing, which is how a root does.
+                    permissions: lockedHere ? READ_ONLY : undefined,
                 };
             }),
 
@@ -506,7 +562,7 @@ export const createMockAdapter = (
                 const terms = fold(query).split(/\s+/u).filter(Boolean);
                 const matches: SearchMatch[] = [];
 
-                const walk = (path: string, node: MockNode, trail: FolderRef[]) => {
+                const walk = (path: string, node: MockNode, trail: FolderRef[], lockedHere: boolean) => {
                     node.children?.forEach((child) => {
                         if (!showHidden && child.name.startsWith(".")) {
                             return;
@@ -515,18 +571,18 @@ export const createMockAdapter = (
                         const name = fold(child.name);
 
                         if (terms.length > 0 && terms.every((term) => name.includes(term))) {
-                            matches.push({ entry: toEntry(path, child), trail });
+                            matches.push({ entry: toEntry(path, child, lockedHere), trail });
                         }
 
                         if (child.children && !child.fails) {
                             const id = childId(path, child.name);
 
-                            walk(id, child, [...trail, { id, name: child.name }]);
+                            walk(id, child, [...trail, { id, name: child.name }], lockedHere || !!child.readOnly);
                         }
                     });
                 };
 
-                walk(rootId, folderAt(rootId), []);
+                walk(rootId, folderAt(rootId), [], locked(rootId));
 
                 const start = cursor ? Number(cursor) : 0;
                 const end = start + SEARCH_PAGE;
@@ -566,7 +622,7 @@ export const createMockAdapter = (
                                 id: "permissions",
                                 label: "Permissions",
                                 type: "text",
-                                value: root.startsWith("/shared") ? "Read only" : "Read and write",
+                                value: node.readOnly || locked(entry.id) ? "Read only" : "Read and write",
                             },
                             { id: "path", label: "Path", type: "text", value: entry.id, copyable: true },
                         ],
@@ -653,7 +709,7 @@ export const createMockAdapter = (
 
         createFolder: (parentId, name, { signal }) =>
             respond(signal, () => {
-                const parent = folderAt(parentId);
+                const parent = writableAt(parentId);
 
                 ensureFree(parent, name);
 
@@ -662,12 +718,12 @@ export const createMockAdapter = (
                 parent.children = [...(parent.children ?? []), node];
                 index(childId(parentId, name), node);
 
-                return toEntry(parentId, node);
+                return toEntry(parentId, node, false);
             }),
 
         rename: (entry, name, { signal }) =>
             respond(signal, () => {
-                const { parentId, parent, node } = locate(entry);
+                const { parentId, parent, node } = locateChangeable(entry);
 
                 ensureFree(parent, name, node);
                 node.name = name;
@@ -677,7 +733,7 @@ export const createMockAdapter = (
                     index(childId(parentId, name), node);
                 }
 
-                return toEntry(parentId, node);
+                return toEntry(parentId, node, false);
             }),
 
         copy: (entries, targetId, options) =>
@@ -700,14 +756,14 @@ export const createMockAdapter = (
             };
 
             if (entries.some((entry) => rootOf(entry.id) !== rootOf(targetId))) {
-                return carry(entries, targetId, options, put);
+                return carry(entries, targetId, options, put, locateChangeable);
             }
 
             return respond(signal, () => {
-                const target = folderAt(targetId);
+                const target = writableAt(targetId);
 
                 entries.forEach((entry) => {
-                    const located = locate(entry);
+                    const located = locateChangeable(entry);
 
                     if (located.parent !== target && !(conflict === "skip" && clashes(target, located.node))) {
                         put(target, located);
@@ -719,7 +775,7 @@ export const createMockAdapter = (
         delete: (entries, { signal }) =>
             respond(signal, () => {
                 entries.forEach((entry) => {
-                    const { parentId, parent, node } = locate(entry);
+                    const { parentId, parent, node } = locateChangeable(entry);
 
                     detach(parent, parentId, node);
                 });
@@ -731,7 +787,7 @@ export const createMockAdapter = (
         upload: (file, folderId, { signal, conflict, onProgress }) =>
             Promise.resolve()
                 .then(() => {
-                    folderAt(folderId);
+                    writableAt(folderId);
 
                     if (/fail/i.test(file.name)) {
                         throw new Error(`The server refused "${file.name}".`);
@@ -742,7 +798,7 @@ export const createMockAdapter = (
                 )
                 .then(() =>
                     respond(signal, () => {
-                        const target = folderAt(folderId);
+                        const target = writableAt(folderId);
                         const node: MockNode = {
                             name: file.name,
                             size: file.size,
@@ -757,7 +813,7 @@ export const createMockAdapter = (
 
                         insert(target, folderId, node, conflict);
 
-                        return toEntry(folderId, node);
+                        return toEntry(folderId, node, false);
                     }),
                 ),
 

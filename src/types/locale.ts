@@ -394,6 +394,13 @@ export interface FileManagerLocaleText
     pickerLocations: string;
     /** The picker's list of the folders in a folder, for screen readers. */
     pickerFolders: (folderName: string) => string;
+    /** Beside the picker's disabled "Copy here" or "Move here", in a folder nothing can be put in. */
+    pickerReadOnly: string;
+    /**
+     * Read to screen readers after the name of a folder nothing can be put in, which shows a lock
+     * (`EntryPermissions.write` false), in the list, the grid, the sidebar tree and the picker.
+     */
+    folderLocked: string;
     /** The title of a paste asking about names the folder already has. */
     copyTitle: (count: number, name: string) => string;
     moveTitle: (count: number, name: string) => string;

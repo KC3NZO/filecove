@@ -17,7 +17,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
-import { useFolder } from "../../../hooks/use-folder";
+import { useData, useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
@@ -27,6 +27,7 @@ import { isolate } from "../../../utils/bidi";
 import { isHidden } from "../../../utils/hidden";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { folderLeft, folderOf } from "../../../utils/navigation";
+import { folderWritable, lockedFolder } from "../../../utils/permissions";
 import { nameOrder } from "../../../utils/sort";
 import { findClashes, mergedFolders } from "../../../utils/transfer";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
@@ -34,6 +35,7 @@ import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import PathBar from "../header-bar/path-bar";
 import IconSlot from "../../icons/icon-slot";
+import LockedIcon from "../../icons/locked-icon";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 import NameDialog from "./name-dialog";
 
@@ -111,6 +113,8 @@ interface PickerItem {
     section?: Section;
     /** One of the entries being copied or moved, which can't be opened. */
     disabled?: boolean;
+    /** A folder nothing can be put in, shown with a lock, which can be gone through but not chosen. */
+    locked?: boolean;
 }
 
 const NO_MENU: OpenMenu = () => false;
@@ -211,12 +215,21 @@ const spacerSx: SxProps<Theme> = {
     flex: 1,
 };
 
+// Says why "Copy here" or "Move here" is disabled, in the actions' row, before the buttons.
+const readOnlySx: SxProps<Theme> = {
+    flex: 1,
+    minWidth: 0,
+    paddingInlineStart: 1,
+    color: "text.secondary",
+};
+
 const isFolder = (entry: FileEntry) => entry.kind === "folder";
 
 /**
  * Asks where to copy or move entries, then has the adapter do it. It browses folders only, across
  * the sections the adapter serves that take entries from theirs, starting in the entries' own
- * folder. The entries themselves can't be opened, so a folder can never go into itself. Names the
+ * folder. The entries themselves can't be opened, so a folder can never go into itself, and a
+ * folder that can't change (`folderWritable`) can be gone through but not chosen. Names the
  * destination already has are settled in a second step: replace or merge, keep both, or skip. Then
  * it closes, and the copy or move runs in the background, shown in the transfer panel.
  *
@@ -240,6 +253,7 @@ const TransferDialog = ({
     onFolderCreated,
 }: TransferDialogProps) => {
     const { kind, section, adapter, trail, entries, destinations } = request;
+    const { store } = useData();
     const sourceId = folderOf(section, trail).id;
     const locale = useLocale();
     const { text } = locale;
@@ -264,6 +278,8 @@ const TransferDialog = ({
     // All of the folder has come, not just some of its pages, so its names can be checked for clashes.
     const listed = !!state?.entries && !state.partial;
     const failed = state?.status === "error";
+    // Read as the folder's listing comes, which may bring its own permissions.
+    const readOnly = place !== null && !folderWritable(store, target, place.trail);
 
     // Ids are unique within an adapter, so the same folder is the same id whichever section shows it.
     const sameFolder = place !== null && targetFolder.id === sourceId;
@@ -274,6 +290,7 @@ const TransferDialog = ({
     const scrollerRef = useRef<HTMLDivElement>(null);
     const frameRef = useRef<HTMLDivElement>(null);
     const stateId = useId();
+    const readOnlyId = useId();
     // The row with the list's Tab stop, which the arrow keys move from.
     const [focusId, setFocusId] = useState<string | null>(null);
     // Set while the list is to take the focus once it has rows to focus.
@@ -294,6 +311,7 @@ const TransferDialog = ({
                       id: folder.id,
                       name: folder.name,
                       disabled: movingIds.has(folder.id),
+                      locked: lockedFolder(folder),
                   })),
         [choosingSection, destinations, folders, movingIds],
     );
@@ -377,7 +395,7 @@ const TransferDialog = ({
     };
 
     // The listing is complete first, so the name starts unused and clashes are caught as it's typed.
-    const canCreate = !!adapter.createFolder && !!place && listed;
+    const canCreate = !!adapter.createFolder && !!place && listed && !readOnly;
 
     const askName = () => {
         if (place && canCreate) {
@@ -557,6 +575,7 @@ const TransferDialog = ({
                                     sx={rowSx}
                                     disabled={item.disabled}
                                     tabIndex={item.id === tabStop ? 0 : -1}
+                                    aria-description={item.locked ? text.folderLocked : undefined}
                                     data-row-id={item.id}
                                     onClick={() => openItem(item)}
                                 >
@@ -564,7 +583,9 @@ const TransferDialog = ({
                                         {item.section ? (
                                             <IconSlot icon={item.section.icon ?? "folder"} />
                                         ) : (
-                                            <FolderTypeIcon folderName={item.name} size="1.25rem" />
+                                            <LockedIcon locked={!!item.locked}>
+                                                <FolderTypeIcon folderName={item.name} size="1.25rem" />
+                                            </LockedIcon>
                                         )}
                                     </ListItemIcon>
                                     <ListItemText primary={<bdi>{item.name}</bdi>} slotProps={TEXT_SLOTS} />
@@ -657,6 +678,11 @@ const TransferDialog = ({
                     </DialogActions>
                 ) : (
                     <DialogActions sx={dialogActionsSx}>
+                        {readOnly && (
+                            <Typography id={readOnlyId} variant="body2" sx={readOnlySx}>
+                                {text.pickerReadOnly}
+                            </Typography>
+                        )}
                         <Button color="inherit" onClick={onClose}>
                             {text.cancel}
                         </Button>
@@ -664,7 +690,8 @@ const TransferDialog = ({
                             all come. */}
                         <Button
                             variant="contained"
-                            disabled={!place || !loaded || (kind === "move" && sameFolder)}
+                            disabled={!place || !loaded || readOnly || (kind === "move" && sameFolder)}
+                            aria-describedby={readOnly ? readOnlyId : undefined}
                             onClick={confirm}
                         >
                             {kind === "copy" ? text.copyHere : text.moveHere}

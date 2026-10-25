@@ -103,10 +103,14 @@ export const serverAdapter = createMockAdapter({
             folder("store", "2026-10-03T11:47", [file("postgres.go", 11_300, "2026-10-03T11:47")]),
         ]),
         folder("logs", "2026-10-17T03:00", logs),
-        folder("migrations", "2026-08-28T09:10", [
-            file("001_init.sql", 3_400, "2026-07-11T09:10"),
-            file("002_add_sharing.sql", 1_250, "2026-08-28T09:10"),
-        ]),
+        // Read-only, as the backend's permissions say: copied out, never changed.
+        {
+            ...folder("migrations", "2026-08-28T09:10", [
+                file("001_init.sql", 3_400, "2026-07-11T09:10"),
+                file("002_add_sharing.sql", 1_250, "2026-08-28T09:10"),
+            ]),
+            readOnly: true,
+        },
         file("docker-compose.yml", 860, "2026-09-02T13:00"),
         file("Dockerfile", 540, "2026-09-02T13:00"),
         file("go.mod", 310, "2026-10-15T16:02"),
@@ -213,11 +217,21 @@ export const sections: SectionGroup[] = [
             },
         ],
     },
-    // A bookmark rooted inside Website, so the same folders show in two sections, under the same ids.
+    // A bookmark rooted inside Website, so the same folders show in two sections, under the same ids,
+    // and one inside API service that nothing can be changed through, though API service changes it.
     {
         id: "bookmarks",
         title: "Bookmarks",
-        sections: [{ id: "website-src", label: "Website source", icon: "folder", rootId: "/server/project/a/src" }],
+        sections: [
+            { id: "website-src", label: "Website source", icon: "folder", rootId: "/server/project/a/src" },
+            {
+                id: "api-logs",
+                label: "Server logs",
+                icon: "documents",
+                rootId: "/server/project/b/logs",
+                readOnly: true,
+            },
+        ],
     },
 ];
 
@@ -380,6 +394,8 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 label: "Compress…",
                 icon: <FolderZipOutlined />,
                 target: "selection",
+                // The archive goes beside the entries, which a read-only folder can't take.
+                visible: (context) => !context.readOnly,
                 onSelect: (context) => notify(`Compress ${names(context)}`),
             },
         ],
@@ -481,6 +497,8 @@ export const createPreviewActions = (notify: (message: string) => void): ActionG
             {
                 id: "edit",
                 label: "Open in editor",
+                // Only for a file that can be written, as an editor saves it.
+                visible: (context) => context.entries.every((entry) => entry.permissions?.write !== false),
                 onSelect: (context) => {
                     context.closePreview?.();
                     notify(`Open ${names(context)} in an editor`);

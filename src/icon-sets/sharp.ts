@@ -27,6 +27,7 @@ import GridViewSharp from "@mui/icons-material/GridViewSharp";
 import HomeSharp from "@mui/icons-material/HomeSharp";
 import InfoSharp from "@mui/icons-material/InfoSharp";
 import ViewListSharp from "@mui/icons-material/ViewListSharp";
+import LockSharp from "@mui/icons-material/LockSharp";
 import MenuSharp from "@mui/icons-material/MenuSharp";
 import MoreVertSharp from "@mui/icons-material/MoreVertSharp";
 import DriveFileMoveSharp from "@mui/icons-material/DriveFileMoveSharp";
@@ -87,6 +88,7 @@ const sharp: IconSet = {
     home: HomeSharp,
     info: InfoSharp,
     listView: ViewListSharp,
+    lock: LockSharp,
     menu: MenuSharp,
     more: MoreVertSharp,
     move: DriveFileMoveSharp,

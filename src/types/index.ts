@@ -5,6 +5,7 @@ export type {
     ContentOptions,
     DownloadContent,
     DownloadOptions,
+    EntryPermissions,
     EntryProperties,
     EntryTotals,
     FileAdapter,

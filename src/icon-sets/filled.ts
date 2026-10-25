@@ -27,6 +27,7 @@ import GridView from "@mui/icons-material/GridView";
 import Home from "@mui/icons-material/Home";
 import Info from "@mui/icons-material/Info";
 import ViewList from "@mui/icons-material/ViewList";
+import Lock from "@mui/icons-material/Lock";
 import Menu from "@mui/icons-material/Menu";
 import MoreVert from "@mui/icons-material/MoreVert";
 import DriveFileMove from "@mui/icons-material/DriveFileMove";
@@ -87,6 +88,7 @@ const filled: IconSet = {
     home: Home,
     info: Info,
     listView: ViewList,
+    lock: Lock,
     menu: Menu,
     more: MoreVert,
     move: DriveFileMove,

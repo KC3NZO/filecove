@@ -186,12 +186,12 @@ const App = () => {
     // Makes a folder in the open folder, as a toolbar of an app's own would, through the same name
     // dialog as the context menu's New folder.
     const createFolder = () => {
-        const create = apiRef.current?.actionContext()?.createFolder;
+        const here = apiRef.current?.actionContext();
 
-        if (create) {
-            create();
+        if (here?.createFolder) {
+            here.createFolder();
         } else {
-            setNotice({ open: true, message: "No folder can be made here" });
+            setNotice({ open: true, message: here?.readOnly ? "This folder is read-only" : "No folder can be made here" });
         }
     };
 

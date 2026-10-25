@@ -1,4 +1,4 @@
-import type { FileAdapter, FileEntry, FolderState } from "../types";
+import type { EntryPermissions, FileAdapter, FileEntry, FolderState } from "../types";
 
 /**
  * How often, at most, a folder listed for the first time in pages shows the pages that have come so
@@ -50,9 +50,14 @@ const sameFields = (a: object, b: object, depth: number) => {
     );
 };
 
-// An entry a new listing brings as it was: every field the same, `meta`'s and `media`'s one level down.
+// An entry a new listing brings as it was: every field the same, `meta`'s, `media`'s and
+// `permissions`' one level down.
 const sameEntry = (a: FileEntry, b: FileEntry) =>
     a === b || (Object.getPrototypeOf(a) === Object.getPrototypeOf(b) && sameFields(a, b, 1));
+
+// A folder's own permissions as a new listing gives them, kept as they were when they're the same.
+const withSamePermissions = (before: EntryPermissions | undefined, given: EntryPermissions | undefined) =>
+    before && given && sameFields(before, given, 0) ? before : given;
 
 /**
  * A folder's new listing, keeping the entries of the one before that haven't changed, and the whole
@@ -217,7 +222,8 @@ export const createFolderStore = () => {
      * lists in pages is asked for page after page, as long as each hands back a cursor. Listed for
      * the first time, it shows what has come so far as it goes (`partial`); listed again, the
      * listing it had stays until the new one is complete, shown loading, or `quiet`ly, as ready
-     * but `checking`. The new listing keeps the entries that came back as they were.
+     * but `checking`. The new listing keeps the entries that came back as they were. The folder's
+     * own permissions are the first page's.
      */
     const request = (key: string, adapter: FileAdapter, folderId: string, quiet: boolean) => {
         const current = states.get(key);
@@ -251,6 +257,7 @@ export const createFolderStore = () => {
 
         const progressive = !current?.entries || !!current.partial;
         const entries: FileEntry[] = [];
+        let permissions: EntryPermissions | undefined;
         // An entry a later page repeats, as offset paging can while the folder changes, is listed once.
         const listed = new Set<string>();
         let shownAt = -Infinity;
@@ -259,9 +266,13 @@ export const createFolderStore = () => {
         const listPage = (cursor?: string): Promise<void> =>
             Promise.resolve()
                 .then(() => adapter.list(folderId, { signal, cursor }))
-                .then(({ entries: page, nextCursor }) => {
+                .then(({ entries: page, nextCursor, permissions: given }) => {
                     if (!owns()) {
                         return;
+                    }
+
+                    if (cursor === undefined) {
+                        permissions = withSamePermissions(states.get(key)?.permissions, given);
                     }
 
                     page.forEach((entry) => {
@@ -272,7 +283,11 @@ export const createFolderStore = () => {
                     });
 
                     if (!nextCursor) {
-                        settle({ status: "ready", entries: withUnchanged(states.get(key)?.entries, entries) });
+                        settle({
+                            status: "ready",
+                            entries: withUnchanged(states.get(key)?.entries, entries),
+                            permissions,
+                        });
 
                         return;
                     }
@@ -284,7 +299,7 @@ export const createFolderStore = () => {
 
                     if (progressive && entries.length > 0 && performance.now() - shownAt >= PAGE_INTERVAL) {
                         shownAt = performance.now();
-                        states.set(key, { status: "loading", entries: entries.slice(), partial: true });
+                        states.set(key, { status: "loading", entries: entries.slice(), partial: true, permissions });
                         notify();
                     }
 
@@ -297,8 +312,13 @@ export const createFolderStore = () => {
         states.set(
             key,
             quiet
-                ? { status: "ready", entries: current?.entries, checking: true }
-                : { status: "loading", entries: current?.entries, partial: current?.partial },
+                ? { status: "ready", entries: current?.entries, permissions: current?.permissions, checking: true }
+                : {
+                      status: "loading",
+                      entries: current?.entries,
+                      partial: current?.partial,
+                      permissions: current?.permissions,
+                  },
         );
         notify();
 
@@ -502,7 +522,7 @@ export const createFolderStore = () => {
                 checkedAt.delete(key);
 
                 if (state?.entries && !state.partial) {
-                    states.set(key, { status: "ready", entries: state.entries });
+                    states.set(key, { status: "ready", entries: state.entries, permissions: state.permissions });
                 } else {
                     states.delete(key);
                     recent.delete(key);

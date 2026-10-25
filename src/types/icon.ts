@@ -35,6 +35,7 @@ export type IconName =
     | "home"
     | "info"
     | "listView"
+    | "lock"
     | "menu"
     | "more"
     | "move"

@@ -46,6 +46,7 @@ import {
 } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
 import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
+import { allows, entriesAllow, folderWritable } from "../../utils/permissions";
 import { importsFrom } from "../../utils/sections";
 import { sameSearch } from "../../utils/search";
 import { sameIds } from "../../utils/sets";
@@ -89,6 +90,7 @@ import type {
     Arrival,
     Clipboard,
     ConflictPolicy,
+    DraggedEntries,
     DroppedFiles,
     DropInto,
     DropTarget,
@@ -1997,10 +1999,10 @@ const FileManager = ({
     // checked, or tries a failed copy or move again (`retrying`).
     const offerPaste = useCallback(
         (pasted: Clipboard, target: Section, trail: FolderRef[], retrying?: number) =>
-            !pasting?.open && canPaste(pasted, target.adapter ?? adapter, target, trail)
+            !pasting?.open && canPaste(pasted, target.adapter ?? adapter, target, trail, store)
                 ? () => askPaste({ clipboard: pasted, section: target, trail, retrying })
                 : undefined,
-        [adapter, pasting?.open, askPaste],
+        [adapter, store, pasting?.open, askPaste],
     );
 
     // A drop is pasted like the clipboard, with the dragged entries as a clipboard of their own, so
@@ -2010,17 +2012,25 @@ const FileManager = ({
         [offerPaste],
     );
 
-    // Uploads into the folder at `trail`, when its section and adapter take uploads and no other
-    // upload is being checked. Files dropped from outside go the same way.
+    // Dragged entries that can't be moved out of their folder are copied, as a paste of them cut
+    // couldn't go anywhere (`canPaste`).
+    const movable = useCallback(
+        (dragged: DraggedEntries) =>
+            !!dragged.adapter.move && entriesAllow(store, dragged.section, dragged.trail, dragged.entries, "move"),
+        [store],
+    );
+
+    // Uploads into the folder at `trail`, when its section and adapter take uploads, the folder can
+    // change, and no other upload is being checked. Files dropped from outside go the same way.
     const offerUpload = useCallback(
         (target: Section, trail: FolderRef[]) => {
             const served = target.adapter ?? adapter;
 
-            return served.upload && takesUploads(target) && !uploadCheck?.open
+            return served.upload && takesUploads(target) && folderWritable(store, target, trail) && !uploadCheck?.open
                 ? (dropped: DroppedFiles) => askUpload({ section: target, adapter: served, trail, dropped })
                 : undefined;
         },
-        [adapter, uploadCheck?.open, askUpload],
+        [adapter, store, uploadCheck?.open, askUpload],
     );
 
     // A drag of files none of which the section can take (`acceptUploads`) shows the no-drop cursor.
@@ -2040,7 +2050,7 @@ const FileManager = ({
             const served = target.adapter ?? adapter;
             const ownFirst =
                 clipboard &&
-                (clipboard.lookup ? clipboard.adapter === served : canPaste(clipboard, served, target, trail));
+                (clipboard.lookup ? clipboard.adapter === served : canPaste(clipboard, served, target, trail, store));
             const upload = ownFirst ? undefined : offerUpload(target, trail);
 
             if (!upload || !event.clipboardData.types.includes("Files")) {
@@ -2054,7 +2064,7 @@ const FileManager = ({
                 upload(pasted);
             }
         },
-        [adapter, clipboard, offerUpload],
+        [adapter, store, clipboard, offerUpload],
     );
 
     // Only opens from a click or key press, which an action's `onSelect` runs in. It offers the
@@ -2088,7 +2098,7 @@ const FileManager = ({
         }
     };
 
-    const drag = useEntryDrag(adapter, dropInto, uploadInto, rootRef);
+    const drag = useEntryDrag(adapter, dropInto, uploadInto, movable, rootRef);
     const dragging = !!drag.context.dragged;
 
     // Shows the sidebar for the drag under way, unless it shows already, leaving the overlay open
@@ -2795,16 +2805,21 @@ const FileManager = ({
             const menuFolder = folderOf(menuSection, trail);
             const folderAdapter = menuSection.adapter ?? adapter;
             const base = { section: menuSection, adapter: folderAdapter, trail };
+            // The sections the entries can go into, and their own, where the picker starts. A
+            // section nothing can change is offered only when it's theirs.
+            const destinations = [...sectionsById.values()].filter(
+                (candidate) =>
+                    (candidate.adapter ?? adapter) === folderAdapter &&
+                    importsFrom(candidate, menuSection) &&
+                    (candidate.id === menuSection.id || !candidate.readOnly),
+            );
             const transferTo = (kind: TransferRequest["kind"]) => () =>
-                askDestination({
-                    ...base,
-                    kind,
-                    entries,
-                    destinations: [...sectionsById.values()].filter(
-                        (candidate) =>
-                            (candidate.adapter ?? adapter) === folderAdapter && importsFrom(candidate, menuSection),
-                    ),
-                });
+                askDestination({ ...base, kind, entries, destinations });
+
+            // What the folder and the entries' own permissions allow.
+            const writable = folderWritable(store, menuSection, trail);
+            const permits = (what: "rename" | "move" | "delete") =>
+                writable && entries.length > 0 && entries.every((entry) => allows(what, entry.permissions));
 
             // Pastes into the folder at `pasteTrail`, when what was cut or copied can go there.
             const pasteTo = (pasteTrail: FolderRef[]) =>
@@ -2841,6 +2856,7 @@ const FileManager = ({
                 entries,
                 folder: menuFolder,
                 section: menuSection,
+                readOnly: !writable,
                 refresh: () => {
                     store.load(folderKey(menuSection.id, menuFolder.id), folderAdapter, menuFolder.id, true);
                     setSearchVersion((count) => count + 1);
@@ -2848,9 +2864,13 @@ const FileManager = ({
                 openFolder: (entry) => {
                     goTo({ sectionId: menuSection.id, trail: [...trail, { id: entry.id, name: entry.name }] });
                 },
-                createFolder: folderAdapter.createFolder ? () => askName({ ...base, kind: "create" }) : undefined,
+                createFolder:
+                    folderAdapter.createFolder && writable ? () => askName({ ...base, kind: "create" }) : undefined,
                 createFolderInto:
-                    folderAdapter.createFolder && entries.length === 1 && only.kind === "folder"
+                    folderAdapter.createFolder &&
+                    entries.length === 1 &&
+                    only.kind === "folder" &&
+                    folderWritable(store, menuSection, [...trail, { id: only.id, name: only.name }])
                         ? () =>
                               askName({
                                   ...base,
@@ -2859,13 +2879,16 @@ const FileManager = ({
                               })
                         : undefined,
                 rename:
-                    folderAdapter.rename && entries.length === 1
+                    folderAdapter.rename && entries.length === 1 && permits("rename")
                         ? () => askName({ ...base, kind: "rename", entry: entries[0] })
                         : undefined,
-                copyTo: folderAdapter.copy && entries.length > 0 ? transferTo("copy") : undefined,
-                moveTo: folderAdapter.move && entries.length > 0 ? transferTo("move") : undefined,
+                copyTo:
+                    folderAdapter.copy && entries.length > 0 && destinations.some((candidate) => !candidate.readOnly)
+                        ? transferTo("copy")
+                        : undefined,
+                moveTo: folderAdapter.move && permits("move") ? transferTo("move") : undefined,
                 cut:
-                    folderAdapter.move && entries.length > 0
+                    folderAdapter.move && permits("move")
                         ? () => {
                               setClipboard({ ...base, kind: "cut", entries });
                               announce(localeValue.text.clipboardCut(entries.length, isolate(only.name)));
@@ -2878,7 +2901,7 @@ const FileManager = ({
                               announce(localeValue.text.clipboardCopied(entries.length, isolate(only.name)));
                           }
                         : undefined,
-                delete: folderAdapter.delete && entries.length > 0 ? () => askDelete({ ...base, entries }) : undefined,
+                delete: folderAdapter.delete && permits("delete") ? () => askDelete({ ...base, entries }) : undefined,
                 download: canDownload(folderAdapter, downloaded)
                     ? () => askDownload(folderAdapter, downloaded, menuFolder)
                     : undefined,

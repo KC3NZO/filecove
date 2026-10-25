@@ -142,6 +142,8 @@ export const enUS: FileManagerLocaleText = {
     moveHere: "Move here",
     pickerLocations: "Locations",
     pickerFolders: (folderName) => `Folders in ${folderName}`,
+    pickerReadOnly: "This folder is read-only",
+    folderLocked: "Read-only",
     copyTitle: (count, name) => `Copy ${entries(count, name)}`,
     moveTitle: (count, name) => `Move ${entries(count, name)}`,
     copyFailedNotice: (count, name, folderName) => `Couldn't copy ${entries(count, name)} to “${folderName}”`,

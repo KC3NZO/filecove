@@ -32,7 +32,8 @@ export interface Section {
      * Which other sections entries can be moved or copied into this one from, by dragging,
      * pasting, "Move to…" or "Copy to…". Only sections served by the same adapter can ever be
      * among them, since another adapter's ids mean nothing to this one's, and moving or copying
-     * within the section is always allowed.
+     * within the section is always allowed. A `readOnly` section, or a folder whose permissions
+     * refuse writing, takes nothing either way.
      *
      * - `true`: every other section.
      * - `false`: none.
@@ -51,6 +52,15 @@ export interface Section {
      * @default true
      */
     acceptUploads?: boolean | string;
+    /**
+     * Whether nothing in the section can be changed through the file manager, whatever its adapter
+     * allows: no folder is created, nothing is uploaded, pasted, dropped, moved or copied in, and
+     * nothing is renamed, moved out or deleted. Its entries can still be copied into other sections,
+     * downloaded and previewed, which is only reading. The same folders shown in another section
+     * still change there, as sections are independent.
+     * @default false
+     */
+    readOnly?: boolean;
 }
 
 /** Sections shown together in the sidebar, divided from the next group by a rule. */

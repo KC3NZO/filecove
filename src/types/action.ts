@@ -15,6 +15,13 @@ export interface ActionContext {
     /** The folder the action happens in: the one right-clicked, or the parent of `entries`. */
     folder: FolderRef;
     section: Section;
+    /**
+     * Whether nothing in `folder` can be changed: the section is `readOnly`, or the folder's
+     * permissions refuse writing (`EntryPermissions.write`). Creating, uploading, pasting, renaming,
+     * moving out and deleting are missing then; an action of the app's own that changes the folder,
+     * such as "Compress…" or "New file", can hide with `visible: (context) => !context.readOnly`.
+     */
+    readOnly: boolean;
     /** Lists `folder` again, e.g. after the action changed its contents. */
     refresh: () => void;
     /** Opens a folder entry of `folder` in the file manager. */
@@ -65,33 +72,39 @@ export interface ActionContext {
     properties: () => void;
     /**
      * Asks for a name and creates a folder in `folder`. Missing when the section's adapter has no
-     * `createFolder`, so an action can hide with `visible: (context) => !!context.createFolder`.
+     * `createFolder`, or `folder` is read-only, so an action can hide with
+     * `visible: (context) => !!context.createFolder`.
      */
     createFolder?: () => void;
     /**
      * Asks for a name and creates a folder in the one folder in `entries`, for a "New folder inside"
      * action on a folder's menu, in the content and the sidebar tree alike. Missing unless `entries`
-     * is a single folder, and, as with `createFolder`, when the section's adapter has no `createFolder`.
+     * is a single folder, and, as with `createFolder`, when the section's adapter has no `createFolder`
+     * or that folder is read-only.
      */
     createFolderInto?: () => void;
     /**
      * Asks for a new name for the one entry in `entries`. Missing when the section's adapter has no
-     * `rename`, or when there isn't exactly one entry.
+     * `rename`, when there isn't exactly one entry, or when it can't be renamed: `folder` is
+     * read-only, or its permissions say so.
      */
     rename?: () => void;
     /**
-     * Asks for a destination folder and copies `entries` there. Missing when the section's adapter
-     * has no `copy`, or there are no entries.
+     * Asks for a destination folder and copies `entries` there, among the folders that aren't
+     * read-only. Missing when the section's adapter has no `copy`, there are no entries, or every
+     * section they could go into is `readOnly`.
      */
     copyTo?: () => void;
     /**
-     * Asks for a destination folder and moves `entries` there. Missing when the section's adapter
-     * has no `move`, or there are no entries.
+     * Asks for a destination folder and moves `entries` there, among the folders that aren't
+     * read-only. Missing when the section's adapter has no `move`, there are no entries, or they
+     * can't be moved out: `folder` is read-only, or their permissions say so.
      */
     moveTo?: () => void;
     /**
      * Puts `entries` on the file manager's clipboard to be moved where they're pasted, and shows
-     * them as cut meanwhile. Missing when the section's adapter has no `move`, or there are no entries.
+     * them as cut meanwhile. Missing when the section's adapter has no `move`, there are no entries,
+     * or they can't be moved out, as with `moveTo`.
      */
     cut?: () => void;
     /**
@@ -101,15 +114,16 @@ export interface ActionContext {
     copy?: () => void;
     /**
      * Asks to confirm, then deletes `entries` for good. Missing when the section's adapter has no
-     * `delete`, or there are no entries.
+     * `delete`, there are no entries, or they can't be deleted: `folder` is read-only, or their
+     * permissions say so.
      */
     delete?: () => void;
     /**
      * Uploads `files` into `folder`, or, without them, asks for some with the browser's file picker,
      * which only opens from a click or key press and offers the types the section's `acceptUploads`
      * takes. Names `folder` already has are asked about first, and files of other types are left
-     * out. Missing when the section's adapter has no `upload`, its `acceptUploads` is false, or
-     * while another upload is being checked.
+     * out. Missing when the section's adapter has no `upload`, its `acceptUploads` is false, `folder`
+     * is read-only, or while another upload is being checked.
      */
     upload?: (files?: File[]) => void;
     /**
@@ -125,8 +139,9 @@ export interface ActionContext {
     /**
      * Moves or copies what was cut or copied into `folder`. Missing when there is nothing to paste
      * here: the clipboard is empty, its entries came from another adapter, `folder` is one of them
-     * or inside one, cut entries are already in `folder`, or a paste is still running. An action
-     * can stay in the menu, greyed out, with `disabled: (context) => !context.paste`.
+     * or inside one or is read-only, cut entries are already in `folder` or can no longer be moved
+     * out of theirs, or a paste is still running. An action can stay in the menu, greyed out, with
+     * `disabled: (context) => !context.paste`.
      */
     paste?: () => void;
     /**

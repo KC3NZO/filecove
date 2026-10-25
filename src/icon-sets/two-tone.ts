@@ -27,6 +27,7 @@ import GridViewTwoTone from "@mui/icons-material/GridViewTwoTone";
 import HomeTwoTone from "@mui/icons-material/HomeTwoTone";
 import InfoTwoTone from "@mui/icons-material/InfoTwoTone";
 import ViewListTwoTone from "@mui/icons-material/ViewListTwoTone";
+import LockTwoTone from "@mui/icons-material/LockTwoTone";
 import MenuTwoTone from "@mui/icons-material/MenuTwoTone";
 import MoreVertTwoTone from "@mui/icons-material/MoreVertTwoTone";
 import DriveFileMoveTwoTone from "@mui/icons-material/DriveFileMoveTwoTone";
@@ -87,6 +88,7 @@ const twoTone: IconSet = {
     home: HomeTwoTone,
     info: InfoTwoTone,
     listView: ViewListTwoTone,
+    lock: LockTwoTone,
     menu: MenuTwoTone,
     more: MoreVertTwoTone,
     move: DriveFileMoveTwoTone,

@@ -1,19 +1,31 @@
 import { folderOf } from "./navigation";
+import { entriesAllow, folderWritable } from "./permissions";
 import { importsFrom } from "./sections";
 
+import type { FolderStore } from "../store/folder-store";
 import type { Clipboard, FileAdapter, FileEntry, FolderRef, Section } from "../types";
 
 /**
  * Whether the clipboard can be pasted into the folder at `trail`: only through the adapter its
- * entries came from, into a section that takes entries from theirs, never into one of them or
- * below one, when cut, not into their own folder, and not while they're looked for again.
+ * entries came from, into a section that takes entries from theirs and a folder that can change
+ * (`folderWritable`), never into one of them or below one, when cut, not into their own folder,
+ * nor when they can't be moved out of it (`entriesAllow`), and not while they're looked for again.
  */
-export const canPaste = (clipboard: Clipboard, adapter: FileAdapter, section: Section, trail: FolderRef[]) => {
+export const canPaste = (
+    clipboard: Clipboard,
+    adapter: FileAdapter,
+    section: Section,
+    trail: FolderRef[],
+    store: FolderStore,
+) => {
     if (
         clipboard.lookup ||
         clipboard.adapter !== adapter ||
         !(clipboard.kind === "cut" ? adapter.move : adapter.copy) ||
-        !importsFrom(section, clipboard.section)
+        !importsFrom(section, clipboard.section) ||
+        !folderWritable(store, section, trail) ||
+        (clipboard.kind === "cut" &&
+            !entriesAllow(store, clipboard.section, clipboard.trail, clipboard.entries, "move"))
     ) {
         return false;
     }

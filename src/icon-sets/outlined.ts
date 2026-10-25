@@ -27,6 +27,7 @@ import GridViewOutlined from "@mui/icons-material/GridViewOutlined";
 import HomeOutlined from "@mui/icons-material/HomeOutlined";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import ViewListOutlined from "@mui/icons-material/ViewListOutlined";
+import LockOutlined from "@mui/icons-material/LockOutlined";
 import MenuOutlined from "@mui/icons-material/MenuOutlined";
 import MoreVertOutlined from "@mui/icons-material/MoreVertOutlined";
 import DriveFileMoveOutlined from "@mui/icons-material/DriveFileMoveOutlined";
@@ -87,6 +88,7 @@ const outlined: IconSet = {
     home: HomeOutlined,
     info: InfoOutlined,
     listView: ViewListOutlined,
+    lock: LockOutlined,
     menu: MenuOutlined,
     more: MoreVertOutlined,
     move: DriveFileMoveOutlined,

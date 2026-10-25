@@ -45,8 +45,36 @@ export interface FileEntry {
      * still listed, so name clashes are found among them.
      */
     hidden?: boolean;
+    /**
+     * What the user may do with the entry, as the backend allows it, so the file manager doesn't
+     * offer what would only fail. Leave it out to allow everything.
+     */
+    permissions?: EntryPermissions;
     /** Anything else the adapter wants to carry for custom actions; the file manager ignores it. */
     meta?: Record<string, unknown>;
+}
+
+/**
+ * What the user may do with an entry (`FileEntry.permissions`), or in a folder (`ListResult.permissions`).
+ * Each is allowed unless it's false, so a backend sets only what it refuses, and the adapter still
+ * has the final say: a call refused anyway shows its error as ever. A read-only entry sets them all
+ * to false. Copying an entry out, downloading it and previewing it are only reading, and always allowed.
+ */
+export interface EntryPermissions {
+    /**
+     * Folders: whether what's in them can change, as a read-only folder's can't. When false, no
+     * folder is created, nothing is uploaded, pasted, dropped, moved or copied in, and none of its
+     * entries is renamed, moved out or deleted, whatever their own permissions say. Files: whether
+     * their contents can change, which the file manager doesn't do itself, for an app's own
+     * actions, such as an editor's, to go by.
+     */
+    write?: boolean;
+    /** Whether the entry can be renamed. */
+    rename?: boolean;
+    /** Whether the entry can be moved out of its folder, by "Move to…", cutting it or dragging it. */
+    move?: boolean;
+    /** Whether the entry can be deleted. */
+    delete?: boolean;
 }
 
 /** What a picture, a video or a piece of audio is like (`FileEntry.media`). */
@@ -76,6 +104,13 @@ export interface ListResult {
      * it out on the last page, or for a folder listed in one go.
      */
     nextCursor?: string;
+    /**
+     * The listed folder's own permissions, such as `{ write: false }` for a read-only folder, given
+     * with its first page when it comes in pages. They count with its entry's own in the listing it's
+     * in, what either refuses being refused, and are how a section's root, which no listing holds,
+     * says what it allows.
+     */
+    permissions?: EntryPermissions;
 }
 
 /** Passed to `search`. */

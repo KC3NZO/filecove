@@ -5,10 +5,12 @@ import type { DragSource, DroppedFiles, DropTarget, FileAdapter, HeldPress } fro
 
 export interface DragContextValue {
     /**
-     * The dragged entries' adapter and ids, so every view listing them can fade them. Null while
-     * no entries are dragged, as when the drag came from outside, such as files from the desktop.
+     * The dragged entries' adapter and ids, so every view listing them can fade them, and whether
+     * they can only be copied, as they can't be moved out of their folder, so a drop copies them
+     * with no key held. Null while no entries are dragged, as when the drag came from outside, such
+     * as files from the desktop.
      */
-    dragged: { adapter: FileAdapter; ids: ReadonlySet<string> } | null;
+    dragged: { adapter: FileAdapter; ids: ReadonlySet<string>; copyOnly: boolean } | null;
     /**
      * Starts a drag from a mouse press with what `pick` picks up, once it has selected whatever
      * it needs, or cancels the drag when it picks up nothing. `pick` isn't asked for a touch or

@@ -5,6 +5,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useLocale } from "../../../hooks/use-locale";
 import { viewMedium } from "../../../styles/layout";
 import {
     arrivedMarker,
@@ -19,6 +20,7 @@ import {
     selectedHoverBackground,
 } from "../../../styles/mixins";
 import { pointerPosition } from "../../../utils/menu-position";
+import { lockedFolder } from "../../../utils/permissions";
 import { selectModifiers } from "../../../utils/selection";
 import { gridSize } from "../../../utils/zoom";
 import ItemIcon from "./item-icon";
@@ -134,49 +136,55 @@ const FileTile = memo(
         onSelect,
         onOpen,
         onMenu,
-    }: FileTileProps) => (
-        <Box
-            sx={tileSx}
-            // The span ends the tile's box at its column's far side, not at the grid's.
-            style={{ top, gridColumn: `${column + 1} / span 1` }}
-            role="option"
-            aria-selected={selected}
-            // Only some tiles are rendered, so each says where it is among all of them.
-            aria-setsize={count}
-            aria-posinset={index + 1}
-            tabIndex={focused ? 0 : -1}
-            draggable={draggable}
-            data-entry-id={entry.id}
-            data-no-marquee
-            data-selected={selected}
-            data-cut={cut}
-            data-arrived={arrived}
-            data-dragged={dragged}
-            data-drop-target={dropTarget}
-            onClick={(event) => {
-                event.stopPropagation();
-                onSelect(entry.id, selectModifiers(event));
-            }}
-            onDoubleClick={() => onOpen(entry)}
-            onContextMenu={(event) => {
-                event.stopPropagation();
+    }: FileTileProps) => {
+        const { text } = useLocale();
 
-                if (onMenu(pointerPosition(event), entry)) {
-                    event.preventDefault();
-                }
-            }}
-        >
-            <ItemIcon
-                entry={origin?.entry ?? entry}
-                size={iconSize}
-                adapter={origin?.adapter ?? adapter}
-                view="grid"
-            />
-            <Typography variant="body2" sx={nameSx}>
-                <bdi>{entry.name}</bdi>
-            </Typography>
-        </Box>
-    ),
+        return (
+            <Box
+                sx={tileSx}
+                // The span ends the tile's box at its column's far side, not at the grid's.
+                style={{ top, gridColumn: `${column + 1} / span 1` }}
+                role="option"
+                aria-selected={selected}
+                // Only some tiles are rendered, so each says where it is among all of them.
+                aria-setsize={count}
+                aria-posinset={index + 1}
+                // Its lock is only drawn.
+                aria-description={lockedFolder(origin?.entry ?? entry) ? text.folderLocked : undefined}
+                tabIndex={focused ? 0 : -1}
+                draggable={draggable}
+                data-entry-id={entry.id}
+                data-no-marquee
+                data-selected={selected}
+                data-cut={cut}
+                data-arrived={arrived}
+                data-dragged={dragged}
+                data-drop-target={dropTarget}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(entry.id, selectModifiers(event));
+                }}
+                onDoubleClick={() => onOpen(entry)}
+                onContextMenu={(event) => {
+                    event.stopPropagation();
+
+                    if (onMenu(pointerPosition(event), entry)) {
+                        event.preventDefault();
+                    }
+                }}
+            >
+                <ItemIcon
+                    entry={origin?.entry ?? entry}
+                    size={iconSize}
+                    adapter={origin?.adapter ?? adapter}
+                    view="grid"
+                />
+                <Typography variant="body2" sx={nameSx}>
+                    <bdi>{entry.name}</bdi>
+                </Typography>
+            </Box>
+        );
+    },
 );
 
 /**

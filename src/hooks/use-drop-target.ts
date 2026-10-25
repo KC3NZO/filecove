@@ -82,11 +82,14 @@ export const useDropTarget = ({ targetsAt, onHold }: DropTargetOptions) => {
 
     const handles = (event: DragEvent) => !!drag?.dragged || carriesFiles(event);
 
+    // Entries that can't be moved are copied with no key held.
+    const copying = (event: DragEvent) => copies(event) || !!drag?.dragged?.copyOnly;
+
     // The drop that letting go now would make, if any. Dropped files are read only when it's run.
     const dropAmong = (event: DragEvent, targets: DropTarget[]) => {
         for (const target of targets) {
             if (drag?.dragged) {
-                const run = drag.dropInto(target, copies(event));
+                const run = drag.dropInto(target, copying(event));
 
                 if (run) {
                     return { key: target.key, run };
@@ -116,7 +119,7 @@ export const useDropTarget = ({ targetsAt, onHold }: DropTargetOptions) => {
 
         if (drop) {
             event.preventDefault();
-            event.dataTransfer.dropEffect = drag?.dragged && !copies(event) ? "move" : "copy";
+            event.dataTransfer.dropEffect = drag?.dragged && !copying(event) ? "move" : "copy";
         }
 
         // Dragover repeats while the pointer rests, so the state is only replaced when it changes.

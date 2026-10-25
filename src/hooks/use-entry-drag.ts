@@ -33,6 +33,8 @@ interface TouchDrag {
     effect: DropEffect;
     /** Ctrl or Option (Alt) is held on a keyboard, which copies, as with a mouse. */
     copying: boolean;
+    /** The entries can't be moved out of their folder, so they're copied with no key held. */
+    copyOnly: boolean;
     frame: number;
     timer: number;
     stop: () => void;
@@ -76,6 +78,9 @@ const speedAt = (offset: number) => (offset < EDGE ? Math.ceil(((EDGE - Math.max
  * around every view, `end` for both `drop` and `dragend`. `uploadInto` is handed on to the views as
  * it is, for files dragged in from outside.
  *
+ * Entries `movable` says can't be moved out of their folder are copied, with no key held, and
+ * entries that can be neither moved nor copied aren't dragged at all.
+ *
  * A mouse drag is the browser's own. Its image is taken from `previewRef`'s element, which the
  * caller renders while `preview` is set, for a single frame.
  *
@@ -91,6 +96,7 @@ export const useEntryDrag = (
     adapter: FileAdapter,
     dropInto: DropInto,
     uploadInto: DragContextValue["uploadInto"],
+    movable: (dragged: DraggedEntries) => boolean,
     rootRef: RefObject<HTMLElement | null>,
 ) => {
     const previewRef = useRef<HTMLDivElement>(null);
@@ -111,26 +117,37 @@ export const useEntryDrag = (
         setDragged(null);
     }, []);
 
+    // What a drag picks up, unless its entries can be neither moved nor copied.
+    const take = useCallback(
+        ({ section, trail, entries }: DragSource): DraggedEntries | null => {
+            const taken = { section, adapter: section.adapter ?? adapter, trail, entries };
+
+            return taken.adapter.copy || movable(taken) ? taken : null;
+        },
+        [adapter, movable],
+    );
+
     // Mouse only: a touch press scrolls or, held, selects, and a touch drag is `touch`'s.
     const start = useCallback(
         (event: DragEvent, pick: () => DragSource | null) => {
             const source = pointerType.current === "mouse" ? pick() : null;
+            const taken = source && take(source);
 
-            if (!source) {
+            if (!source || !taken) {
                 event.preventDefault();
 
                 return;
             }
 
-            const { section, trail, entries, grabbed } = source;
+            const { entries, grabbed } = source;
 
             // Rendered right away, so the preview is there for the browser to take its picture of.
             flushSync(() => {
-                setDragged({ section, adapter: section.adapter ?? adapter, trail, entries });
+                setDragged(taken);
                 setPreview({ entry: grabbed, count: entries.length, touch: false });
             });
 
-            event.dataTransfer.effectAllowed = "copyMove";
+            event.dataTransfer.effectAllowed = movable(taken) ? "copyMove" : "copy";
             // Firefox starts no drag without data. Dropped on a text field, the names go in as text.
             event.dataTransfer.setData("text/plain", entries.map((entry) => entry.name).join("\n"));
 
@@ -165,7 +182,7 @@ export const useEntryDrag = (
                 window.removeEventListener("pointerdown", resumed, true);
             };
         },
-        [adapter, end],
+        [take, movable, end],
     );
 
     // Sends a drag event to an element, as the browser would to what's under the pointer, with
@@ -204,7 +221,8 @@ export const useEntryDrag = (
 
     // Tells the element under the finger, and the one it left, as dragenter, dragleave and
     // dragover would, and learns what letting go would do there: a move, or else a copy, or with
-    // Ctrl or Option held on a keyboard, a copy only, as a mouse drag would.
+    // Ctrl or Option held on a keyboard, or for entries that can't be moved, a copy only, as a
+    // mouse drag would.
     const sendOver = (touch: TouchDrag) => {
         const element = elementAt(touch.x, touch.y);
 
@@ -222,7 +240,7 @@ export const useEntryDrag = (
 
         let next: DropEffect = "none";
 
-        if (element && !touch.copying && send("dragover", element, touch)) {
+        if (element && !touch.copying && !touch.copyOnly && send("dragover", element, touch)) {
             next = "move";
         } else if (element && send("dragover", element, touch, true)) {
             next = "copy";
@@ -277,22 +295,24 @@ export const useEntryDrag = (
 
     const begin = (touch: TouchDrag) => {
         const source = touch.pick?.();
+        const taken = source && take(source);
 
-        if (!source) {
+        if (!source || !taken) {
             touch.stop();
 
             return;
         }
 
-        const { section, trail, entries, grabbed } = source;
+        const { entries, grabbed } = source;
 
         // The views only take the drag once they've rendered with it, so the drag events start with
         // the next move, frame or resend.
         touch.active = true;
-        setDragged({ section, adapter: section.adapter ?? adapter, trail, entries });
+        touch.copyOnly = !movable(taken);
+        touch.effect = touch.copyOnly ? "copy" : "move";
+        setDragged(taken);
         setPreview({ entry: grabbed, count: entries.length, touch: true });
-        setEffect("move");
-        touch.effect = "move";
+        setEffect(touch.effect);
         touch.frame = requestAnimationFrame(() => scroll(touch));
         touch.timer = window.setInterval(() => sendOver(touch), RESEND_INTERVAL);
     };
@@ -344,6 +364,7 @@ export const useEntryDrag = (
                 over: null,
                 effect: "move",
                 copying: false,
+                copyOnly: false,
                 frame: 0,
                 timer: 0,
                 stop: () => {},
@@ -425,8 +446,8 @@ export const useEntryDrag = (
             window.addEventListener("keyup", handleKey, true);
             touchRef.current = drag;
         },
-        // The helpers it calls read only refs, setters and `adapter`.
-        [adapter],
+        // The helpers it calls read only refs, setters, `take` and `movable`.
+        [take, movable],
     );
 
     // The page mustn't scroll under a finger that drags, nor under one held to drag, which would
@@ -458,8 +479,13 @@ export const useEntryDrag = (
     }, [rootRef]);
 
     const marked = useMemo(
-        () => dragged && { adapter: dragged.adapter, ids: new Set(dragged.entries.map((entry) => entry.id)) },
-        [dragged],
+        () =>
+            dragged && {
+                adapter: dragged.adapter,
+                ids: new Set(dragged.entries.map((entry) => entry.id)),
+                copyOnly: !movable(dragged),
+            },
+        [dragged, movable],
     );
 
     const context = useMemo<DragContextValue>(

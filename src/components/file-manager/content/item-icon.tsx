@@ -4,8 +4,10 @@ import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useThumbnail } from "../../../hooks/use-thumbnail";
+import { lockedFolder } from "../../../utils/permissions";
 import { FileTypeIcon, FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
+import LockedIcon from "../../icons/locked-icon";
 
 import type { FileAdapter, FileEntry, ViewMode } from "../../../types";
 
@@ -62,7 +64,10 @@ const badgeSx: SxProps<Theme> = {
     '[data-selected="true"] & > svg': { visibility: "visible" },
 };
 
-/** An entry's type icon, or its file's thumbnail once one has loaded, with the check badge of touch selection. */
+/**
+ * An entry's type icon, or its file's thumbnail once one has loaded, with the check badge of touch
+ * selection, and a lock on a folder nothing can be put in.
+ */
 const ItemIcon = ({ entry, size, adapter, view }: ItemIconProps) => {
     const thumbnail = useThumbnail(entry, adapter, view, size);
     const length = `${size}rem`;
@@ -75,7 +80,11 @@ const ItemIcon = ({ entry, size, adapter, view }: ItemIconProps) => {
             </Box>
         );
     } else if (entry.kind === "folder") {
-        icon = <FolderTypeIcon folderName={entry.name} size={length} />;
+        icon = (
+            <LockedIcon locked={lockedFolder(entry)}>
+                <FolderTypeIcon folderName={entry.name} size={length} />
+            </LockedIcon>
+        );
     } else {
         icon = <FileTypeIcon fileName={entry.name} size={length} />;
     }

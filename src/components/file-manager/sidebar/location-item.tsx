@@ -37,10 +37,12 @@ import { isRtl } from "../../../utils/dom";
 import { isMenuKey } from "../../../utils/keyboard";
 import { belowElement, pointerPosition, pressPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
+import { lockedFolder } from "../../../utils/permissions";
 import { selectModifiers } from "../../../utils/selection";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import IconSlot from "../../icons/icon-slot";
+import LockedIcon from "../../icons/locked-icon";
 
 import type {
     ErrorRow,
@@ -118,6 +120,8 @@ interface TreeItemProps {
     /** Where the row goes, and whether it expands. */
     row: SectionRow | FolderRow;
     icon: ReactNode;
+    /** Read after its name, for what its icon shows besides, such as a read-only folder's lock. */
+    description?: string;
     /** Part of the tree's selection. */
     selected: boolean;
     /** The open folder, which needn't be selected. */
@@ -319,6 +323,7 @@ const TreeItem = ({
     variant,
     row,
     icon,
+    description,
     selected,
     open,
     cut = false,
@@ -410,6 +415,7 @@ const TreeItem = ({
             role="treeitem"
             tabIndex={-1}
             aria-label={row.label}
+            aria-description={description}
             aria-level={row.depth + 1}
             aria-setsize={row.siblingCount}
             aria-posinset={row.position}
@@ -529,6 +535,8 @@ const FolderItem = memo(
         const draggedIds = useDraggedIds(section);
         const data = useContext(DataContext);
         const drag = useContext(DragContext);
+        const { text } = useLocale();
+        const locked = lockedFolder(entry);
 
         // A drag moves or copies, so it needs an adapter that does one or the other.
         const adapter = section.adapter ?? data?.adapter;
@@ -607,7 +615,12 @@ const FolderItem = memo(
             <TreeItem
                 variant="folder"
                 row={row}
-                icon={<FolderTypeIcon folderName={entry.name} size="1.125rem" />}
+                icon={
+                    <LockedIcon locked={locked}>
+                        <FolderTypeIcon folderName={entry.name} size="1.125rem" />
+                    </LockedIcon>
+                }
+                description={locked ? text.folderLocked : undefined}
                 selected={selected}
                 open={key === openKey}
                 cut={cutIds.has(entry.id)}
