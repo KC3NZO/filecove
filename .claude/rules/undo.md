@@ -9,6 +9,7 @@ paths:
   - "src/store/transfer-queue.ts"
   - "src/types/adapter.ts"
   - "src/utils/shortcut.ts"
+  - "src/utils/trash.ts"
   - "playground/mocks/mock-adapter.ts"
   - "playground/app.tsx"
 ---
@@ -25,25 +26,27 @@ Changes made through the file manager can be undone, several steps back, and don
 | New folder, from the menu or the picker (`newFolder`) | deleted, only while it's still empty | made again, by its name |
 | Copy, by the picker, a paste or a drop (`copy`) | the copies deleted, once the delete dialog confirms | copied again, keeping both |
 | Move, by the picker, a paste or a drop (`move`) | moved back, each to the folder it came from, taking back its own name when it was kept both on the way in under another and the name is free | moved again, keeping both |
+| Move to the trash, by `ActionContext.trash` or a drop on the trash (`trash`) | restored, each to the folder it came from, keeping both | moved to the trash again |
+| Restore from the trash (`restore`) | moved to the trash again, a folder's at a time | restored again, keeping both |
 
 - **Several steps**: 20 by default, the oldest going first, or as many as `limits.undoSteps` says (0 for none; see "Limits" in `props.md`). Redoing is possible until another change is made, as in any editor.
-- **The steps** (`UndoStep`, `types/undo.ts`, internal) each hold the change (`UndoChange`, public, for the text), the adapter, and the `UndoAction` that undoes it on the undo list, or redoes it on the redo list. Carrying one out makes the action that goes back the other way (rename and rename, `remove` and `create`, `removeCopies` and `copy`, `move` and `move`).
-- **What ends the history**: a change made through the file manager that can't be undone clears both lists, so undoing never goes back past it to an older change, which would have to undo it first. That's deleting (for good; `handleDeleted`), an upload as it starts (`startUpload`), a new folder when the adapter has no `delete`, and a copy or move that can't be undone: Replace or Merge was chosen, as what it replaced is gone, the adapter said nothing of what it made, or part of it failed or was called off once under way. A copy or move that went nowhere, everything skipped or called off before it started, changed nothing and leaves the history as it is.
+- **The steps** (`UndoStep`, `types/undo.ts`, internal) each hold the change (`UndoChange`, public, for the text), the adapter, and the `UndoAction` that undoes it on the undo list, or redoes it on the redo list. Carrying one out makes the action that goes back the other way (rename and rename, `remove` and `create`, `removeCopies` and `copy`, `move` and `move`, `restore` and `trash`).
+- **What ends the history**: a change made through the file manager that can't be undone clears both lists, so undoing never goes back past it to an older change, which would have to undo it first. That's deleting (for good; `handleDeleted`), emptying the trash, an upload as it starts (`startUpload`), a new folder when the adapter has no `delete`, a copy or move that can't be undone: Replace or Merge was chosen, as what it replaced is gone, the adapter said nothing of what it made, or part of it failed or was called off once under way, and a move to the trash or a restore that can't be: the adapter said nothing of what it put there, has no `restore` (or `trash`), a restore replaced something or went back to a folder no section shows, or it failed (see `trash.md`). A copy, move or restore that went nowhere, everything skipped or called off before it started, changed nothing and leaves the history as it is.
 - Steps hold the entries and folders as the change left them, and are never rewritten as later changes are made: undoing goes back in order, so by the time a step is undone, every change made through the file manager since has been undone, or has ended the history. A step whose section is gone, rooted elsewhere or served by another adapter leaves the history (`heldHistory`, in a layout effect over the sections).
 
 ## Checked before it acts
 
-Each undo or redo (`carryOut` in `file-manager.tsx`) lists what it acts on afresh first (`listingOf`, `store/folder-store.ts`, shared with the clipboard's lookup), and only acts when every entry is as the change left it (`asLeft`, `utils/undo.ts`): by its id, with the same kind and name, and for copies about to be deleted, the same size, date modified and count of what's in it, where both say. Anything changed elsewhere since refuses it all, saying so (`undoChanged`), and the step goes. So does a new folder that isn't empty any more (`undoNotEmpty`), and anything the permissions or a move under way refuse, as a paste or a rename would be (`canPaste`, `folderWritable`, `entriesMoving`, `allows`).
+Each undo or redo (`carryOut` in `file-manager.tsx`) lists what it acts on afresh first (`listingOf`, `store/folder-store.ts`, shared with the clipboard's lookup), and only acts when every entry is as the change left it (`asLeft`, `utils/undo.ts`): by its id, with the same kind and name, and for copies about to be deleted, the same size, date modified and count of what's in it, where both say. Entries in the trash are looked for in the listings of every trash section of the adapter (`trashesOf`); with none, the adapter has the final say. Anything changed elsewhere since refuses it all, saying so (`undoChanged`), and the step goes. So does a new folder that isn't empty any more (`undoNotEmpty`), and anything the permissions or a move under way refuse, as a paste or a rename would be (`canPaste`, `folderWritable`, `entriesMoving`, `allows`).
 
 - Deleting is for good, so undoing a copy asks first in the delete dialog (`DeleteRequest.undoesCopy`: "Undo copying 3 items?", "The 3 copies in “Photos” are deleted for good."), as the adapter's `delete` says the user has confirmed. Cancelling puts the step back.
 - The adapter failing puts the step back to try again, as long as no change was made meanwhile, which it would otherwise go back on top of, and the notice offers Try again. A copy or move that fails partway is the transfer panel's, with its own Try again, and its step goes.
-- One undo or redo runs at a time (`undoing`); another key press meanwhile does nothing. The folders it changes show the progress bar over the content (`busy`, `changedFolders`), and copies and moves run through the transfer queue and its panel as any do (see `transfers.md`), the batch ending the run (`settleBatch`).
+- One undo or redo runs at a time (`undoing`); another key press meanwhile does nothing. The folders it changes show the progress bar over the content (`busy`, `changedFolders`, and the trash for a move to it or a restore, `trashRootIds`), and copies and moves run through the transfer queue and its panel as any do (see `transfers.md`), the batch ending the run (`settleBatch`). A move to the trash and a restore call the adapter themselves, a folder's at a time and all at once, and what follows is the user's own change's (`applyTrashed`, `applyRestored`); one that can't be undone in turn, the adapter saying nothing of what it did, leaves the run (`leaveRun`) and ends the history, the notice saying what was done without a button.
 - An undo ending after another change was made leaves nothing to redo, as that change cleared it (`historyEpoch`).
 - What it calls once the adapter has answered is as it is by then (`undoTools`, set in a layout effect), as the location or the sections may have changed meanwhile.
 
 ## What the adapter says
 
-Copies and moves can only be undone when the adapter says what it made: `copy` and `move` may resolve with a `TransferResult` (`types/adapter.ts`, public), `entries` being the entries as they now are in the target, one for each entry given that went, in their order, under the name each went in by. Without it, they can't be undone, since finding them by name could take a file that was there already for the copy, a name kept both being the adapter's to choose. `madePairs` (`utils/undo.ts`) pairs each entry given with what it became: kept both, every entry went, in order; skipped, those that went kept their names; replaced, never.
+Copies and moves can only be undone when the adapter says what it made: `copy` and `move` may resolve with a `TransferResult` (`types/adapter.ts`, public), `entries` being the entries as they now are in the target, one for each entry given that went, in their order, under the name each went in by. So may `trash` and `restore`, with a `TrashResult` of the same shape (see `trash.md`), paired by `madePairs` too, a move to the trash and an undo's restore as kept both. Without it, they can't be undone, since finding them by name could take a file that was there already for the copy, a name kept both being the adapter's to choose. `madePairs` (`utils/undo.ts`) pairs each entry given with what it became: kept both, every entry went, in order; skipped, those that went kept their names; replaced, never.
 
 The transfer queue hands it on as `onEnded`'s `made` (`TransferEnded`, `store/transfer-queue.ts`), so the media manager's queue gets it too. A batch, one paste, drop or pick, or one undo or redo, goes in the history together once its last transfer has ended (`TransferBatch.ended`, `run`).
 
@@ -65,8 +68,8 @@ The transfer queue hands it on as `onEnded`'s `made` (`TransferEnded`, `store/tr
 
 ## The playground
 
-The mock adapter's `copy` and `move` resolve with what they made (`insert` returns the node there now), so everything can be undone there. The footer's Undo and Redo call `apiRef.undo()` and `redo()`, and say so in its snackbar when there's nothing to.
+The mock adapter's `copy` and `move` resolve with what they made (`insert` returns the node there now), and its `trash` and `restore` with what they put in the trash and back, so everything can be undone there. The footer's Undo and Redo call `apiRef.undo()` and `redo()`, and say so in its snackbar when there's nothing to.
 
 ## Not yet
 
-- An app's own actions that change the backend, such as a "Move to trash" built from `move`, can neither add a step nor end the history.
+- An app's own actions that change the backend, such as "Compress…", can neither add a step nor end the history. Moving to the trash is the file manager's own now (`ActionContext.trash`).

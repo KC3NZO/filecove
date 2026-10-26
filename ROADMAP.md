@@ -77,6 +77,12 @@ What's left in the features already built, what packaging needs before a release
 - [x] Locations in the grid view. *Done 2026-10-25: a result's tile shows its location under the name in an outlined pill with a folder icon, two lines of text kept as tall as the name's so the tiles are still all one height.*
 - [x] Ordering results by relevance. *Done 2026-10-25: a `relevance` sort key, the default, ranks a search everywhere's results by the adapter's optional `SearchMatch.score` or else by how their names answer what's typed; folders go by name as before.*
 
+### Trash
+- [ ] **new:** A restored entry isn't shown: nothing selects or scrolls to it, and there's no "Open original location" for an entry in the trash.
+- [ ] **new:** The properties of an entry in the trash show where it is, the trash, rather than where it came from.
+- [ ] **new (minor):** Entries being moved to the trash or restored aren't held meanwhile, as a move's are, since it's quick; acting on them meanwhile is left to the adapter.
+- [ ] **new (minor):** A move to the trash through several adapters at once (a search's results of several sections) can't be undone as one change, so it ends the history.
+
 ### Selection
 - [ ] The sidebar tree has no touch selection mode.
 
@@ -121,9 +127,10 @@ What's left in the features already built, what packaging needs before a release
 4. [ ] The media manager, after its contract is designed on paper.
 5. [ ] List columns from `FileEntry.meta`.
 6. [x] Undo. *Done 2026-10-25: renames, new folders (from the menu or the picker), copies and moves can be undone and redone, 20 steps back (`limits.undoSteps`), with Ctrl+Z and Shift+Ctrl+Z or Ctrl+Y, the main menu's "Undo rename" and "Redo move", `ActionContext.undo`/`redo` and `apiRef.undo()`/`redo()`, and a notice over the content after each change with Undo, which the user chose with the several steps. Each checks a fresh listing first and acts only on what the change left as it left it: a new folder is deleted only while empty, a copy's copies only once the delete dialog confirms, a move goes back through the transfer panel taking back names kept both on the way in. Copies and moves need `copy`/`move` to resolve with a `TransferResult`; a delete, an upload, or a copy or move that replaced something ends the history (see `undo.md`).*
+7. [x] Trash and restoring. *Done 2026-10-25: the adapter's optional `trash` and `restore` (each resolving with a `TrashResult`), `FileEntry.trashed` (`TrashInfo`: the trail it came from and when) and `Section.trash` for the section showing the backend's trash. `ActionContext.trash()` moves entries there at once, as a desktop's Delete key does, and so does dropping them on it; `restore()` puts them back, asking about names their folders have now as a paste does; `delete()` deletes them for good there, and `emptyTrash()` and the trash's own bar empty it, through the delete dialog. Nothing else changes in the trash, it isn't searched everywhere, and its list shows each entry's original location and when it was trashed. A move to the trash is undone by restoring, and a restore by moving to the trash again, both redone, through the undo history and its notice (see `trash.md`).*
 
 ### Optional ideas
-- [ ] **new:** An app's own actions in the undo history, such as a "Move to trash" built from `move`: an `ActionContext` member to add a step, or to end the history, since for now they do neither.
+- [ ] **new:** An app's own actions in the undo history, such as "Compress…": an `ActionContext` member to add a step, or to end the history, since for now they do neither.
 - [ ] Live updates: an adapter `watch`, or re-checking the open folder when the page is shown again (re-checking a folder as it opens is done, `relistAfter`).
 - [x] Zoom levels for the list and the grid (Ctrl+plus and Ctrl+minus, as in GNOME), which also give pictures larger thumbnails. *Done 2026-10-25: each view zooms by its own steps (the list four sizes, the grid five), its icons, thumbnails, rows or columns growing and the text staying, with Ctrl+plus, Ctrl+minus, Ctrl+0, Ctrl+wheel and a touchpad pinch in the content only, so the browser's page zoom works everywhere else, and from the view menu; `zoom` / `defaultZoom` / `onZoomChange` control it. The entry at the top stays there as the lines change size, larger thumbnails are asked for as a view zooms in, and the level is announced.*
 - [ ] Zooming the content with a pinch on a touch screen, which zooms the page for now, since the content takes the touch to scroll.
@@ -137,4 +144,4 @@ What's left in the features already built, what packaging needs before a release
 
 ## Left out by choice
 
-Not gaps: tests, undoing a delete (it's for good, and a trash is the app's) or an upload, a built-in editor, previewers for other kinds built into the package (an app plugs them in through `previewers`), saving an image turned in the preview, keyboard drag and drop, renaming in place, a built-in trash (an app builds one from `move` and a section of its own), modal dialogs for background work, resuming an upload after a reload (the browser no longer has the files, and resuming partway is the backend's upload protocol), upload types per folder (a section rooted there, or the adapter's `upload`, covers it), and `onClipboardChange` until a consumer needs it (see "Internal by choice" in `props.md`).
+Not gaps: tests, undoing a delete (it's for good; what should come back goes to the trash) or an upload, a built-in editor, previewers for other kinds built into the package (an app plugs them in through `previewers`), saving an image turned in the preview, keyboard drag and drop, renaming in place, modal dialogs for background work, resuming an upload after a reload (the browser no longer has the files, and resuming partway is the backend's upload protocol), upload types per folder (a section rooted there, or the adapter's `upload`, covers it), and `onClipboardChange` until a consumer needs it (see "Internal by choice" in `props.md`).
