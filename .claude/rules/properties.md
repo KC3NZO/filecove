@@ -109,4 +109,6 @@ The mock adapter's `properties` makes the rest up from each entry's name: a crea
 
 ## Not yet
 
-Tabs (activity, versions, sharing). Editing other kinds of fields (numbers, dates, links), several entries' fields at once, and checking a value as it's typed (as `checkName` does names) rather than on saving. Saving a property isn't in the undo history, nor does it end it, as it changes no entry the history holds.
+Editing other kinds of fields (numbers, dates, links), several entries' fields at once, and checking a value as it's typed (as `checkName` does names) rather than on saving. Saving a property isn't in the undo history, nor does it end it, as it changes no entry the history holds.
+
+Tabs for activity, versions and sharing are left out by choice: they're backend features (edit history, stored versions, permissions) the component can't supply, and an app adds its own through `propertiesActions`.
