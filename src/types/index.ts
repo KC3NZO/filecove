@@ -71,6 +71,8 @@ export type {
     UndoChange,
     UndoDirection,
     UndoFolder,
+    UndoFolders,
+    UndoGroup,
     UndoHistory,
     UndoMove,
     UndoRestore,

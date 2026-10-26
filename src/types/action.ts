@@ -74,6 +74,13 @@ export interface ActionContext {
      */
     openLocation?: () => void;
     /**
+     * Opens the folder the one entry, in the trash's root (`Section.trash`), was moved to the trash
+     * from, for an "Open original location" action. Missing unless there's exactly one entry, it's
+     * right in the trash's root and says where it came from (`FileEntry.trashed`), and a section
+     * shows that folder.
+     */
+    openOrigin?: () => void;
+    /**
      * Shows the files among `entries` in the file manager's preview, one at a time. A single file
      * steps through the files of the folder it's listed in, in the content's order; several, from
      * one folder or many (`byFolder`), through themselves. Missing when `entries` holds no files,
@@ -85,7 +92,8 @@ export interface ActionContext {
     /**
      * Closes the preview, for an action in the preview's header (`previewActions`) that takes the
      * user elsewhere, such as an editor of the app's own, which the preview would otherwise stay
-     * over. `open`, `openLocation` and `properties` close it themselves there. Missing elsewhere.
+     * over. `open`, `openLocation`, `openOrigin` and `properties` close it themselves there. Missing
+     * elsewhere.
      */
     closePreview?: () => void;
     /**

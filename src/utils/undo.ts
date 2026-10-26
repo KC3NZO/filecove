@@ -9,6 +9,7 @@ import type {
     Section,
     UndoAction,
     UndoDirection,
+    UndoFolders,
     UndoHistory,
     UndoStep,
 } from "../types";
@@ -114,46 +115,69 @@ export const actionGroups = (action: UndoAction): EntryGroup[] => {
 };
 
 /**
- * The folders an action changes, which show the progress bar while it runs. The trash an action
- * moves entries to, or restores them from, isn't named by it, and is the file manager's to add.
+ * The folders a step changes, by the adapter serving them, which show the progress bar while it
+ * runs. The trash a move to the trash or a restore goes through isn't named by it, and is the file
+ * manager's to add.
  */
-export const changedFolders = (action: UndoAction) => {
+export const changedFolders = ({ action, adapter }: UndoStep): UndoFolders[] => {
     switch (action.kind) {
         case "create":
         case "copy":
-            return [folderOf(action.to.section, action.to.trail).id];
+            return [{ adapter, folderIds: [folderOf(action.to.section, action.to.trail).id] }];
         case "move":
-            return action.moves.flatMap((move) => [
-                folderOf(move.group.section, move.group.trail).id,
-                folderOf(move.to.section, move.to.trail).id,
-            ]);
+            return [
+                {
+                    adapter,
+                    folderIds: action.moves.flatMap((move) => [
+                        folderOf(move.group.section, move.group.trail).id,
+                        folderOf(move.to.section, move.to.trail).id,
+                    ]),
+                },
+            ];
         case "trash":
-            return action.groups.map((group) => folderOf(group.section, group.trail).id);
+            return action.groups.map((group) => ({
+                adapter: group.adapter,
+                folderIds: [folderOf(group.section, group.trail).id],
+            }));
         case "restore":
-            return action.restores.map((restore) => folderOf(restore.to.section, restore.to.trail).id);
+            return action.restores.map((restore) => ({
+                adapter: restore.adapter,
+                folderIds: [folderOf(restore.to.section, restore.to.trail).id],
+            }));
         default:
-            return [folderOf(action.group.section, action.group.trail).id];
+            return [{ adapter, folderIds: [folderOf(action.group.section, action.group.trail).id] }];
     }
 };
 
-/** Every section an action names: where its entries are, and where it puts what it makes or moves. */
-export const actionSections = (action: UndoAction): Section[] => [
-    ...actionGroups(action).map((group) => group.section),
-    ...(action.kind === "create" || action.kind === "copy" ? [action.to.section] : []),
-    ...(action.kind === "move" ? action.moves.map((move) => move.to.section) : []),
-    ...(action.kind === "restore" ? action.restores.map((restore) => restore.to.section) : []),
-];
+/**
+ * Every section a step names, with the adapter it was served by: where its entries are, and where
+ * it puts what it makes or moves.
+ */
+export const stepSections = ({ action, adapter }: UndoStep): { section: Section; adapter: FileAdapter }[] => {
+    switch (action.kind) {
+        case "trash":
+            return action.groups.map((group) => ({ section: group.section, adapter: group.adapter }));
+        case "restore":
+            return action.restores.map((restore) => ({ section: restore.to.section, adapter: restore.adapter }));
+        default:
+            return [
+                ...actionGroups(action).map((group) => group.section),
+                ...(action.kind === "create" || action.kind === "copy" ? [action.to.section] : []),
+                ...(action.kind === "move" ? action.moves.map((move) => move.to.section) : []),
+            ].map((section) => ({ section, adapter }));
+    }
+};
 
 /**
  * Whether a step still means what it did: every section it names is the file manager's, rooted where
- * it was and served by the step's adapter, as another adapter's ids, or another root's trails, name
+ * it was and served by the adapter it was, as another adapter's ids, or another root's trails, name
  * something else.
  */
 export const stepHolds = (step: UndoStep, sectionsById: ReadonlyMap<string, Section>, adapter: FileAdapter) =>
-    actionSections(step.action).every((section) => {
+    stepSections(step).every(({ section, adapter: served }) => {
         const now = sectionsById.get(section.id);
 
-        return !!now && now.rootId === section.rootId && (now.adapter ?? adapter) === step.adapter;
+        return !!now && now.rootId === section.rootId && (now.adapter ?? adapter) === served;
     });
 
 /** The history without the steps that no longer mean what they did (`stepHolds`), the same object when none goes. */

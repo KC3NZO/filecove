@@ -462,8 +462,11 @@ const PropertiesPanel = ({
         const files = items.filter((item) => item.entry.kind === "file");
         const folders = items.length - files.length;
         const bytes = files.reduce((sum, item) => sum + (item.entry.size ?? 0), 0);
-        const [firstLocation] = items.map((item) => item.location);
-        const location = items.every((item) => item.location === firstLocation)
+        // Entries in a trash are where they were moved there from, which they go back to.
+        const trashed = items.every((item) => !!item.trashed);
+        const locations = items.map((item) => (trashed ? item.trashed?.location : item.location));
+        const [firstLocation] = locations;
+        const location = locations.every((each) => each === firstLocation)
             ? firstLocation
             : text.propertiesSeveralFolders;
         const media = entry?.kind === "file" ? entry.media : undefined;
@@ -534,8 +537,16 @@ const PropertiesPanel = ({
 
         if (location) {
             rows.push(
-                <Row key="location" label={text.propertiesLocation}>
+                <Row key="location" label={trashed ? text.propertiesOriginalLocation : text.propertiesLocation}>
                     {location}
+                </Row>,
+            );
+        }
+
+        if (single?.trashed?.trashedAt) {
+            rows.push(
+                <Row key="trashed" label={text.propertiesTrashed}>
+                    <bdi>{formatDate(single.trashed.trashedAt)}</bdi>
                 </Row>,
             );
         }
@@ -618,11 +629,16 @@ const PropertiesPanel = ({
                     <Typography component="p" sx={nameSx}>
                         {entry ? <bdi>{entry.name}</bdi> : text.propertiesItems(items.length)}
                     </Typography>
-                    {(single?.rename || single?.openLocation) && (
+                    {(single?.rename || single?.openLocation || single?.openOrigin) && (
                         <Box sx={buttonsSx}>
                             {single.openLocation && (
                                 <Button size="small" color="inherit" variant="outlined" onClick={single.openLocation}>
                                     {text.propertiesOpenLocation}
+                                </Button>
+                            )}
+                            {single.openOrigin && (
+                                <Button size="small" color="inherit" variant="outlined" onClick={single.openOrigin}>
+                                    {text.propertiesOpenOriginalLocation}
                                 </Button>
                             )}
                             {single.rename && (

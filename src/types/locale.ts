@@ -189,10 +189,16 @@ export interface PropertiesLocaleText {
     /** Read for the spinner beside totals still being counted. */
     propertiesCounting: string;
     propertiesLocation: string;
+    /** In place of the location, for entries in a trash: the folder they were moved there from. */
+    propertiesOriginalLocation: string;
     /** In place of the location of entries in different folders, as a search's results may be. */
     propertiesSeveralFolders: string;
     /** The button on a search's result that opens the folder it's in. */
     propertiesOpenLocation: string;
+    /** The button on an entry in a trash that opens the folder it was moved there from. */
+    propertiesOpenOriginalLocation: string;
+    /** When an entry in a trash was moved there. */
+    propertiesTrashed: string;
     propertiesModified: string;
     propertiesCreated: string;
     propertiesDimensions: string;
@@ -417,6 +423,8 @@ export interface FileManagerLocaleText
     trashFailed: (count: number, name: string) => string;
     /** Read to screen readers, and shown in the notice with Undo, once entries are restored from the trash. */
     restoreDone: (count: number, name: string) => string;
+    /** The notice's button beside `restoreDone`, opening the folder the entries went back to, with them selected. */
+    showRestored: string;
     /** The notice's title when entries couldn't be restored, over why. */
     restoreFailed: (count: number, name: string) => string;
     /** The title of a restore asking about names the folders the entries go back to have now. */

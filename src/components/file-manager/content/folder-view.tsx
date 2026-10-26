@@ -86,6 +86,8 @@ interface FolderViewProps {
     takeFocus: boolean;
     /** An entry to select and scroll to once the listing has it, e.g. a folder just created. */
     revealId?: string;
+    /** Selected along with `revealId`, those shown, as entries restored with it are. */
+    revealWith?: readonly string[];
     /**
      * What uploads just put in folders, highlighted for a moment once this folder shows them, and
      * those asked for with "Show in folder" scrolled to as well.
@@ -223,6 +225,7 @@ const FolderView = ({
     busy,
     takeFocus,
     revealId,
+    revealWith,
     arrivals,
     selectedIds: controlledIds,
     defaultSelectedIds,
@@ -460,14 +463,17 @@ const FolderView = ({
             return;
         }
 
-        replace({ ids: new Set([revealId]), anchor: revealId });
+        replace({
+            ids: new Set([revealId, ...(revealWith ?? []).filter((id) => indexById.has(id))]),
+            anchor: revealId,
+        });
         setFocus({ id: revealId, index: revealIndex });
         const focused = pendingFocus.current || focusWithin.current;
 
         pendingScroll.current = { id: revealId, focus: focused };
         pendingFocus.current = false;
         onRevealed(focused);
-    }, [revealId, revealIndex, replace, onRevealed]);
+    }, [revealId, revealWith, revealIndex, indexById, replace, onRevealed]);
 
     // A selection set from outside, which the consumer's `selectedIds` (other than what the view
     // asked them for) or `defaultSelectedIds` makes, is revealed: the first of its entries the view

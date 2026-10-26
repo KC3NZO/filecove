@@ -28,8 +28,18 @@ export interface UndoMove {
     names?: string[];
 }
 
+/**
+ * Entries sharing a folder, with the adapter serving its section, for a change that may go through
+ * several, as a move to the trash of a search's results does.
+ */
+export interface UndoGroup extends EntryGroup {
+    adapter: FileAdapter;
+}
+
 /** Entries in the trash going back into a folder, by a restore that undoes or redoes one. */
 export interface UndoRestore {
+    /** The adapter serving `to`'s section, whose trash they're in. */
+    adapter: FileAdapter;
     /** The entries in the trash, as the change left them there. */
     entries: FileEntry[];
     /** The folder they were moved to the trash from, which they go back to. */
@@ -56,9 +66,12 @@ export type UndoAction =
     | { kind: "copy"; sources: EntryGroup[]; to: UndoFolder }
     /** Moves each one's entries into its folder, as many transfers. */
     | { kind: "move"; moves: UndoMove[] }
-    /** Moves each group's entries to the trash, a folder's at a time. */
-    | { kind: "trash"; groups: EntryGroup[] }
-    /** Puts the entries in the trash back, each one's into its folder, together, keeping both. */
+    /** Moves each group's entries to the trash, a folder's at a time, each through its own adapter. */
+    | { kind: "trash"; groups: UndoGroup[] }
+    /**
+     * Puts the entries in the trash back, each one's into its folder, keeping both, an adapter's
+     * together, each through its own.
+     */
     | { kind: "restore"; restores: UndoRestore[] };
 
 /** A change made through the file manager, which the history undoes, or redoes once undone. */
@@ -66,10 +79,19 @@ export interface UndoStep {
     /** Unique within the history, for the notice offering to undo or redo it. */
     id: number;
     change: UndoChange;
-    /** The adapter serving every section the action names. */
+    /**
+     * The adapter serving every section the action names, but a move to the trash's or a
+     * restore's, which may go through several, each part naming its own; the first of those.
+     */
     adapter: FileAdapter;
     /** What undoing it does, on the undo list, or redoing it, on the redo list. */
     action: UndoAction;
+}
+
+/** Folders of one adapter, which an undo or redo changes, and show the progress bar while it runs. */
+export interface UndoFolders {
+    adapter: FileAdapter;
+    folderIds: string[];
 }
 
 /** An entry given to `copy` or `move`, and what the adapter says it became in the target. */

@@ -285,6 +285,16 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 onSelect: (context) => context.openLocation?.(),
             },
             {
+                // Only on an entry in the trash, for the folder it came from.
+                id: "open-origin",
+                label: "Open original location",
+                icon: "folder",
+                target: "selection",
+                single: true,
+                visible: (context) => !!context.openOrigin,
+                onSelect: (context) => context.openOrigin?.(),
+            },
+            {
                 id: "preview",
                 label: "Preview",
                 icon: "preview",

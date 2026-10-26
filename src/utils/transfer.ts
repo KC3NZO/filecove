@@ -75,11 +75,17 @@ export const mergedFolders = (
 /** Whether a copy or move is a move still to end, waiting or under way; a failed one has stopped. */
 export const isMoving = (item: TransferItem) => item.kind === "move" && item.status !== "failed";
 
-/** The entries the moves among `items` are moving, by the adapter serving them (`isMoving`). */
-export const movingIds = (items: readonly TransferItem[]): MovingIds => {
+/**
+ * The entries the moves among `items` are moving, by the adapter serving them (`isMoving`), and
+ * those `held` otherwise, as entries going to the trash or coming back from it are.
+ */
+export const movingIds = (
+    items: readonly TransferItem[],
+    held: readonly { adapter: FileAdapter; entries: readonly FileEntry[] }[] = [],
+): MovingIds => {
     const moving = new Map<FileAdapter, Set<string>>();
 
-    items.filter(isMoving).forEach(({ adapter, entries }) => {
+    [...items.filter(isMoving), ...held].forEach(({ adapter, entries }) => {
         const ids = moving.get(adapter) ?? new Set<string>();
 
         entries.forEach((entry) => ids.add(entry.id));

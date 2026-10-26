@@ -27,6 +27,9 @@ interface NoticeBarProps {
     /** The label of its button (Undo, Redo, Try again), when it has one. */
     actionLabel?: string;
     onAction: () => void;
+    /** The label of a button before that one, showing where a change put something (Show), when it has one. */
+    showLabel?: string;
+    onShow: () => void;
     onClose: () => void;
     /** Whether it sits above the touch selection bar, which has the panel's bottom. */
     raised: boolean;
@@ -79,12 +82,21 @@ const detailSx: SxProps<Theme> = {
 };
 
 /**
- * A notice over the bottom of the content, as a snackbar is: what a change did, with Undo, or why an
- * undo did nothing. It goes after `SHOW_FOR`, which waits while the pointer is over it or the focus
- * in it, or with its ✕ or Escape. Screen readers hear its message from the file manager's live
- * region, so it isn't one itself.
+ * A notice over the bottom of the content, as a snackbar is: what a change did, with Undo, and Show
+ * for what a restore put back, or why an undo did nothing. It goes after `SHOW_FOR`, which waits
+ * while the pointer is over it or the focus in it, or with its ✕ or Escape. Screen readers hear its
+ * message from the file manager's live region, so it isn't one itself.
  */
-const NoticeBar = ({ notice, actionLabel, onAction, onClose, raised, onFocusLost }: NoticeBarProps) => {
+const NoticeBar = ({
+    notice,
+    actionLabel,
+    onAction,
+    showLabel,
+    onShow,
+    onClose,
+    raised,
+    onFocusLost,
+}: NoticeBarProps) => {
     const { text } = useLocale();
     // A notice going keeps saying what it said while it shrinks away.
     const [shown, setShown] = useState(notice);
@@ -177,6 +189,11 @@ const NoticeBar = ({ notice, actionLabel, onAction, onClose, raised, onFocusLost
                     }
                     action={
                         <>
+                            {showLabel && (
+                                <Button color="inherit" size="small" onClick={onShow}>
+                                    {showLabel}
+                                </Button>
+                            )}
                             {actionLabel && (
                                 <Button color="inherit" size="small" onClick={onAction}>
                                     {actionLabel}

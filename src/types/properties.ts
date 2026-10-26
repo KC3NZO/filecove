@@ -14,6 +14,11 @@ export interface PropertiesItem {
     /** Where it is, written out, e.g. "Website / src"; missing for a root, which is nowhere. */
     location?: string;
     /**
+     * For an entry in a trash, where it was moved there from, written out as `location` is, shown
+     * in its place, and when (`trashedAt`).
+     */
+    trashed?: { location: string; trashedAt?: Date };
+    /**
      * How many entries a folder holds, from its own listing, when the entry doesn't say
      * (`childCount`), as for a section's root, which no listing holds.
      */
@@ -22,6 +27,8 @@ export interface PropertiesItem {
     rename?: () => void;
     /** Opens the folder it's in and shows it there, for a search's result; missing otherwise. */
     openLocation?: () => void;
+    /** Opens the folder it was moved to a trash from, for an entry in a trash; missing otherwise. */
+    openOrigin?: () => void;
 }
 
 /**

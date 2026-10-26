@@ -21,6 +21,7 @@ import { joinIsolated } from "../../utils/bidi";
 import { folderOf } from "../../utils/navigation";
 import { clampWidth } from "../../utils/resize";
 import { typesInField } from "../../utils/shortcut";
+import { inTrashRoot } from "../../utils/trash";
 import PropertiesPanel from "../properties/properties-panel";
 import ResizeEdge from "./resize-edge";
 
@@ -35,6 +36,7 @@ import type {
     PropertiesSubject,
     Section,
     ToolbarGroup,
+    TrashInfo,
 } from "../../types";
 
 interface PropertiesPaneProps {
@@ -59,10 +61,12 @@ interface PropertiesPaneProps {
     /** The app's actions for the panel's header (`propertiesActions`). */
     actions: ActionGroup[];
     /**
-     * What the context menu's actions get, for the panel's Rename and "Open item location", and
-     * the header's actions.
+     * What the context menu's actions get, for the panel's Rename, "Open item location" and "Open
+     * original location", and the header's actions.
      */
     contextFor: (request: MenuRequest) => ActionContext;
+    /** Where an entry in `trash`'s root was moved there from, written out. */
+    locateTrashed: (trash: Section, info: TrashInfo) => string;
     /** The panel's close button. */
     onClose: () => void;
     /** Escape in the panel. */
@@ -185,6 +189,7 @@ const PropertiesPane = ({
     takeFocus,
     actions,
     contextFor,
+    locateTrashed,
     onClose,
     onEscape,
     onFocusOut,
@@ -249,12 +254,18 @@ const PropertiesPane = ({
         const listed = (section: Section, trail: FolderRef[], id: string) =>
             store.get(folderKey(section.id, folderOf(section, trail).id))?.entries?.find((entry) => entry.id === id);
 
-        // Rename and "Open item location", as the context menu offers them for the one entry.
+        // Rename, "Open item location" and "Open original location", as the context menu offers
+        // them for the one entry.
         const actionsFor = (request: MenuRequest) => {
             const context = contextFor(request);
 
-            return { rename: context.rename, openLocation: context.openLocation };
+            return { rename: context.rename, openLocation: context.openLocation, openOrigin: context.openOrigin };
         };
+        // An entry right in a trash's root is shown where it was moved there from.
+        const trashedOf = (section: Section, trail: FolderRef[], entry: FileEntry) =>
+            inTrashRoot(section, trail) && entry.trashed
+                ? { location: locateTrashed(section, entry.trashed), trashedAt: entry.trashed.trashedAt }
+                : undefined;
 
         if (subject.kind === "folder") {
             const { section, trail } = subject;
@@ -291,9 +302,11 @@ const PropertiesPane = ({
                     entry,
                     adapter: served,
                     location: trail.length > 0 ? locationOf(section, parentTrail) : undefined,
+                    trashed: trail.length > 0 ? trashedOf(section, parentTrail, entry) : undefined,
                     // How many entries it holds, once its own listing has all of them.
                     childCount: own?.status === "ready" && !own.partial ? own.entries?.length : undefined,
                     rename: actions?.rename,
+                    openOrigin: actions?.openOrigin,
                 },
             ];
         }
@@ -315,12 +328,14 @@ const PropertiesPane = ({
                 entry: now,
                 adapter: section.adapter ?? adapter,
                 location: locationOf(section, trail),
+                trashed: trashedOf(section, trail, now),
                 rename: actions?.rename,
                 openLocation: actions?.openLocation,
+                openOrigin: actions?.openOrigin,
             };
         });
         // `listings` stands for the listings read through the store.
-    }, [visible, subject, store, adapter, contextFor, listings]);
+    }, [visible, subject, store, adapter, contextFor, locateTrashed, listings]);
 
     // The app's actions in the header, for what the panel shows: its entries, by folder when they're
     // in several, as the context menu's are, or else the folder it shows.
