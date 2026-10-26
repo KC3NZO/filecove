@@ -92,7 +92,7 @@ What's left in the features already built, what packaging needs before a release
 - [x] The sidebar tree has no touch selection mode. *Done 2026-10-26: a long-press on a tree folder still opens its menu, which offers `ActionContext.select()` for the app's "Select" (the playground's), starting the mode with the folder, or the tree's selection it's in. In it every tap toggles a folder (under another parent starting anew), a long-press adds it so the finger moving on drags the selection, the folders' icons show check badges, and the content's selection bar sits at the sidebar's bottom (✕, the count, Select all or none of the folders beside them, ⋮ for their menu). Opening a folder, Escape, or the sidebar being closed or hidden ends it.*
 
 ### Keyboard
-- [ ] Two layout cases miss: a non-Latin layout on a non-US keyboard, and Option+letter on a non-QWERTY Mac. Fixing them needs `getLayoutMap()`, which only Chromium has.
+- [x] Two layout cases miss: a non-Latin layout on a non-US keyboard, and Option+letter on a non-QWERTY Mac. Fixing them needs `getLayoutMap()`, which only Chromium has. *Done 2026-10-26: the Latin letter printed on each key is learned from the layout map where there is one (Chromium) and, in every browser, from keys typed in the page with no modifier but Shift, and a press that types no Latin letter falls back to it before the US place. A non-Latin layout on a non-US keyboard still gets the US place until its Latin layout has been used in the page, since no browser can read what's printed on the keys (see "Keyboard layouts" in `keyboard.md`).*
 
 ### Virtualization limits
 - [ ] The browser's find in page and a screen reader's browse mode only see the rows on screen.
