@@ -32,6 +32,7 @@ import { selectModifiers } from "../../../utils/selection";
 import { SORT_LABELS, toggleSortKey } from "../../../utils/sort";
 import { listIconSize } from "../../../utils/zoom";
 import Icon from "../../icons/icon";
+import { DrawnName } from "../find-layer";
 import ItemIcon from "./item-icon";
 
 import type { EntryOrigin, FileEntry, FileViewProps, MovingKind, SortKey, SortOrder } from "../../../types";
@@ -59,7 +60,7 @@ interface FileRowProps
     count: number;
     /** The side of the icon or thumbnail beside the name, in rem, as the zoom has it. */
     iconSize: number;
-    /** How far down the listbox the row sits, in px. */
+    /** How far down the listbox the row sits, in px, as the lines place it. */
     top: number;
     /** Whether the row has the view's Tab stop. */
     focused: boolean;
@@ -72,6 +73,8 @@ interface FileRowProps
     moving: MovingKind | undefined;
     /** Whether the entry was just uploaded, and is highlighted for a moment. */
     arrived: boolean;
+    /** Whether the browser's find in page just came to it, and it's highlighted for a moment. */
+    found: boolean;
     dragged: boolean;
     /** Whether the dragged entries would be dropped into this folder now. */
     dropTarget: boolean;
@@ -82,9 +85,13 @@ interface FileRowProps
 // and the trash's root, have a Location column after the name, sharing its room. `--icon-size`,
 // set in `style`, is the icon's side as the zoom has it, which the rows grow with.
 // Text can't be selected anywhere in the list, or Shift-click would select it across rows.
+// Clipped down its length, so a row kept rendered far from view in a squeezed listbox, placed in
+// px of all the lines, doesn't lengthen what the panel scrolls (see `virtualization.md`); clipping
+// is no scroll container, so the column header still sticks.
 const listSx: SxProps<Theme> = {
     "--columns": "minmax(0, 1fr) 2.5rem",
     userSelect: "none",
+    overflowY: "clip",
     px: 1,
     pt: 1,
     pb: 2,
@@ -293,6 +300,7 @@ const FileRow = memo(
         cut,
         moving,
         arrived,
+        found,
         adapter,
         draggable,
         dragged,
@@ -326,6 +334,7 @@ const FileRow = memo(
                 data-cut={cut}
                 data-moving={!!moving}
                 data-arrived={arrived}
+                data-found={found}
                 data-dragged={dragged}
                 data-drop-target={dropTarget}
                 onClick={(event) => {
@@ -350,7 +359,7 @@ const FileRow = memo(
                     />
                     <Box sx={nameTextSx}>
                         <Typography variant="body2" noWrap>
-                            <bdi>{entry.name}</bdi>
+                            <DrawnName name={entry.name} />
                         </Typography>
                         {/* A result says where it is here, rather than its size and date. */}
                         <Typography variant="caption" noWrap sx={secondaryLineSx}>
@@ -414,6 +423,7 @@ const FileList = ({
     cutIds,
     movingIds,
     arrivedIds,
+    foundId,
     adapter,
     draggable,
     draggedIds,
@@ -470,12 +480,13 @@ const FileList = ({
                             index={index}
                             count={entries.length}
                             iconSize={iconSize}
-                            top={index * lines.pitch}
+                            top={index * lines.pitch - lines.offset}
                             focused={entry.id === focusId}
                             selected={selectedIds.has(entry.id)}
                             cut={cutIds.has(entry.id)}
                             moving={movingIds.get(entry.id)}
                             arrived={!!arrivedIds?.has(entry.id)}
+                            found={entry.id === foundId}
                             adapter={adapter}
                             draggable={draggable}
                             dragged={draggedIds.has(entry.id)}

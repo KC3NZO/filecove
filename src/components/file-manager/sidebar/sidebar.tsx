@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
+import { Fragment, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent, FocusEvent, KeyboardEvent, Ref } from "react";
 
 import Box from "@mui/material/Box";
@@ -8,6 +8,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { useForkRef } from "@mui/material/utils";
 
 import { DragContext } from "../../../contexts/drag-context";
+import { useFound } from "../../../hooks/use-found";
 import { useLocale } from "../../../hooks/use-locale";
 import { useTreeRows } from "../../../hooks/use-tree-rows";
 import { useTreeSelection } from "../../../hooks/use-tree-selection";
@@ -23,12 +24,13 @@ import {
     rootWide,
 } from "../../../styles/layout";
 import { focusOutline, forcedColors, forcedPressed } from "../../../styles/mixins";
-import { focusLost, isRtl, scrollParent } from "../../../utils/dom";
-import { focusTreeItem, isTypingKey, matchName } from "../../../utils/keyboard";
+import { focusLost, isRtl } from "../../../utils/dom";
+import { isTypingKey, matchName } from "../../../utils/keyboard";
 import { belowElement } from "../../../utils/menu-position";
 import { clampWidth } from "../../../utils/resize";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
+import FindLayer from "../find-layer";
 import ResizeEdge from "../resize-edge";
 import SelectionBar from "../selection-bar";
 import TreeRowItem, { GuideLine } from "./location-item";
@@ -227,6 +229,12 @@ const treeSx: SxProps<Theme> = {
     "&:focus-visible": focusOutline,
 };
 
+// Clips the tree down its length, so a row kept rendered far from view in a squeezed tree, placed
+// in px of all the rows, doesn't lengthen what the sidebar scrolls (see `virtualization.md`).
+const treeClipSx: SxProps<Theme> = {
+    overflowY: "clip",
+};
+
 // Holds rows placed in the tree, so it takes no room itself. The section groups are still lists,
 // so each is a `group` of the tree.
 const listSx: SxProps<Theme> = {
@@ -318,7 +326,7 @@ const Sidebar = ({
 
     // A single section that hides its folders still gets its row, so the sidebar isn't left empty.
     const tree = single && single.showFolders !== false ? single : null;
-    const { rows, guides, height } = useTreeRows(groups, tree, expanded, showHidden);
+    const { rows, guides, height: wholeHeight } = useTreeRows(groups, tree, expanded, showHidden);
 
     // The focused row stays rendered wherever the tree is scrolled, so it keeps the focus, and so
     // does a row the focus is going to, and the row a drag started from while it's dragged, since
@@ -327,7 +335,18 @@ const Sidebar = ({
         ref: virtualRef,
         shown,
         span,
-    } = useVirtualRows(rows, [focusKey, focusRequest, drag?.dragged ? grabbedKey : null]);
+        offset,
+        height,
+        reveal: revealRow,
+    } = useVirtualRows(rows, wholeHeight, [focusKey, focusRequest, drag?.dragged ? grabbedKey : null]);
+
+    // The names the browser's find in page looks through, every section's and folder's, as only
+    // some rows are rendered, and the row it last came to, highlighted for a moment.
+    const names = useMemo(
+        () => rows.map((row) => (row.kind === "section" || row.kind === "folder" ? row.label : "")),
+        [rows],
+    );
+    const { foundId: foundKey, markFound } = useFound();
 
     const treeElement = useCallback(
         (element: HTMLDivElement | null) => {
@@ -368,13 +387,15 @@ const Sidebar = ({
         }
 
         const element = rowElement(treeRef.current, focusRequest);
+        const row = rows.find((candidate) => candidate.id === focusRequest);
 
         setFocusRequest(null);
 
-        if (element) {
-            focusTreeItem(element);
+        if (element && row) {
+            element.focus({ preventScroll: true });
+            revealRow(row, element);
         }
-    }, [focusRequest]);
+    }, [focusRequest, rows, revealRow]);
 
     // A folder just created is scrolled to as soon as its row is there, which is when the folder it
     // was made in has been listed again, wherever it sorts. Its row is placed by the rows, so it
@@ -406,31 +427,36 @@ const Sidebar = ({
             return;
         }
 
-        const scroller = scrollParent(list);
-
-        if (scroller && scroller.clientHeight > 0) {
-            const panelTop = scroller.getBoundingClientRect().top + scroller.clientTop;
-            const viewTop = panelTop - list.getBoundingClientRect().top;
-            const viewBottom = viewTop + scroller.clientHeight;
-
-            if (row.top < viewTop) {
-                scroller.scrollTop += row.top - viewTop;
-            } else if (row.top + row.height > viewBottom) {
-                scroller.scrollTop += row.top + row.height - viewBottom;
-            }
+        // Not while the sidebar is hidden, with nothing to scroll.
+        if (list.offsetParent) {
+            revealRow(row);
         }
 
         onRevealed();
-    }, [reveal, rows, tree, onRevealed]);
+    }, [reveal, rows, tree, onRevealed, revealRow]);
 
     /** Focuses a row and scrolls to it, rendering it first if it isn't. */
     const focusRow = (id: string) => {
         const element = rowElement(treeRef.current, id);
+        const row = rows.find((candidate) => candidate.id === id);
 
-        if (element) {
-            focusTreeItem(element);
+        if (element && row) {
+            element.focus({ preventScroll: true });
+            revealRow(row, element);
         } else {
             setFocusRequest(id);
+        }
+    };
+
+    // The browser's find in page came to a section or a folder, in the find layer: it takes the
+    // tree's Tab stop and is scrolled to and highlighted, the focus staying in the browser's find bar.
+    const handleFound = (index: number) => {
+        const row = rows[index];
+
+        if (row && (row.kind === "section" || row.kind === "folder")) {
+            setFocusKey(row.id);
+            revealRow(row);
+            markFound(row.id);
         }
     };
 
@@ -628,6 +654,7 @@ const Sidebar = ({
             onToggle={onToggle}
             onExpand={onExpand}
             onNavigate={handleNavigate}
+            foundKey={foundKey}
             onSelectFolder={select}
             onSelectSection={selectSection}
             onOpenMenu={onOpenMenu}
@@ -673,75 +700,85 @@ const Sidebar = ({
                 <MainMenu groups={mainMenu} undo={undoItems} onShowShortcuts={onShowShortcuts} />
             </Box>
             <Box component="nav" aria-label={text.sidebar} sx={navSx}>
-                <Box
-                    ref={treeElement}
-                    role="tree"
-                    aria-label={tree ? tree.label : text.sections}
-                    aria-multiselectable
-                    // Shows the check badges on the folders' icons.
-                    data-selecting={selecting}
-                    // With no section, there's nothing in it to tab to.
-                    tabIndex={focusInside || !rows.some(isItem) ? -1 : 0}
-                    sx={treeSx}
-                    style={{ height }}
-                    onFocus={handleTreeFocus}
-                    onBlur={handleTreeBlur}
-                    onKeyDown={handleTreeKeyDown}
-                    onDragStart={handleDragStart}
-                >
-                    {/* Behind the rows, as they're first in the page. */}
-                    {guides
-                        .filter((guide) => guide.top < span.bottom && guide.bottom > span.top)
-                        .map((guide) => (
-                            <GuideLine key={`${guide.depth}:${guide.top}`} guide={guide} />
-                        ))}
-                    {tree && (
-                        <Box component="ul" role="none" sx={listSx}>
-                            {shown.filter(isListed).map(renderItem)}
-                        </Box>
-                    )}
-                    {/* Each group is a `group` of the tree, named by its title, which is hidden from screen
-                        readers so it isn't read twice. */}
-                    {!tree &&
-                        groups.map((group, index) => {
-                            const inGroup = shown.filter((row) => row.group === index);
-                            const items = inGroup.filter(isListed);
+                <FindLayer names={names} onFound={handleFound} />
+                <Box sx={treeClipSx}>
+                    <Box
+                        ref={treeElement}
+                        role="tree"
+                        aria-label={tree ? tree.label : text.sections}
+                        aria-multiselectable
+                        // Shows the check badges on the folders' icons.
+                        data-selecting={selecting}
+                        // With no section, there's nothing in it to tab to.
+                        tabIndex={focusInside || !rows.some(isItem) ? -1 : 0}
+                        sx={treeSx}
+                        style={{ height }}
+                        onFocus={handleTreeFocus}
+                        onBlur={handleTreeBlur}
+                        onKeyDown={handleTreeKeyDown}
+                        onDragStart={handleDragStart}
+                    >
+                        {/* Behind the rows, as they're first in the page, placed as the rows are. */}
+                        {guides
+                            .filter((guide) => guide.top < span.bottom && guide.bottom > span.top)
+                            .map((guide) => (
+                                <GuideLine
+                                    key={`${guide.depth}:${guide.top}`}
+                                    guide={
+                                        offset
+                                            ? { ...guide, top: guide.top - offset, bottom: guide.bottom - offset }
+                                            : guide
+                                    }
+                                />
+                            ))}
+                        {tree && (
+                            <Box component="ul" role="none" sx={listSx}>
+                                {shown.filter(isListed).map(renderItem)}
+                            </Box>
+                        )}
+                        {/* Each group is a `group` of the tree, named by its title, which is hidden from screen
+                            readers so it isn't read twice. */}
+                        {!tree &&
+                            groups.map((group, index) => {
+                                const inGroup = shown.filter((row) => row.group === index);
+                                const items = inGroup.filter(isListed);
 
-                            return (
-                                <Fragment key={group.id}>
-                                    {inGroup.map((row) => {
-                                        if (row.kind === "divider") {
-                                            return (
-                                                <Box key={row.id} sx={ruleSx} style={placeStyle(row)} aria-hidden>
-                                                    <Divider sx={dividerSx} />
-                                                </Box>
-                                            );
-                                        }
+                                return (
+                                    <Fragment key={group.id}>
+                                        {inGroup.map((row) => {
+                                            if (row.kind === "divider") {
+                                                return (
+                                                    <Box key={row.id} sx={ruleSx} style={placeStyle(row)} aria-hidden>
+                                                        <Divider sx={dividerSx} />
+                                                    </Box>
+                                                );
+                                            }
 
-                                        if (row.kind === "caption") {
-                                            return (
-                                                <Typography
-                                                    key={row.id}
-                                                    variant="caption"
-                                                    sx={groupTitleSx}
-                                                    style={placeStyle(row)}
-                                                    aria-hidden
-                                                >
-                                                    {row.title}
-                                                </Typography>
-                                            );
-                                        }
+                                            if (row.kind === "caption") {
+                                                return (
+                                                    <Typography
+                                                        key={row.id}
+                                                        variant="caption"
+                                                        sx={groupTitleSx}
+                                                        style={placeStyle(row)}
+                                                        aria-hidden
+                                                    >
+                                                        {row.title}
+                                                    </Typography>
+                                                );
+                                            }
 
-                                        return null;
-                                    })}
-                                    {items.length > 0 && (
-                                        <Box component="ul" role="group" aria-label={group.title} sx={listSx}>
-                                            {items.map(renderItem)}
-                                        </Box>
-                                    )}
-                                </Fragment>
-                            );
-                        })}
+                                            return null;
+                                        })}
+                                        {items.length > 0 && (
+                                            <Box component="ul" role="group" aria-label={group.title} sx={listSx}>
+                                                {items.map(renderItem)}
+                                            </Box>
+                                        )}
+                                    </Fragment>
+                                );
+                            })}
+                    </Box>
                 </Box>
             </Box>
             {selecting && (

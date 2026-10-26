@@ -1,10 +1,10 @@
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
 import type { RefObject } from "react";
 
 import { gridColumns } from "../utils/dom";
-import { shownSpan, useScrollMeasure } from "./use-scroll-measure";
+import { laidHeight, useScrollMeasure } from "./use-scroll-measure";
 
-import type { ScrollTarget, VirtualLines } from "../types";
+import type { ScrollView, VirtualLines } from "../types";
 
 /** The lines as last measured, and which of them to render. */
 interface Measure {
@@ -40,10 +40,6 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 const sameMeasure = (a: Measure, b: Measure) =>
     a.columns === b.columns && a.height === b.height && a.pitch === b.pitch && a.first === b.first && a.last === b.last;
 
-/** How far the panel's top is down the list, in px; negative while the list starts below it. */
-const scrolledPast = ({ list, scroller }: ScrollTarget) =>
-    scroller ? scroller.getBoundingClientRect().top + scroller.clientTop - list.getBoundingClientRect().top : 0;
-
 /**
  * Measures the lines of `count` entries: how many entries a line holds from the list's column
  * tracks, how tall it is from the first entry rendered, the row gap between lines, and which
@@ -52,44 +48,44 @@ const scrolledPast = ({ list, scroller }: ScrollTarget) =>
  * Lines that change size, or the number a line holds, as zooming or the panel resizing does, keep
  * the entry at the panel's top where it was: it's noted against the `previous` measure as `anchor`,
  * and scrolled back to on the measure after, once the list has been rendered as tall as the new
- * lines make it, so the panel can scroll that far.
+ * lines make it, so the panel can scroll that far. Both go in px of all the lines, however a list
+ * too tall for the browser is squeezed (see `useScrollMeasure`).
  */
-const measure = (
-    target: ScrollTarget,
-    count: number,
-    previous: Measure,
-    anchor: RefObject<Anchor | null>,
-): Measure => {
-    const { list, scroller } = target;
+const measure = (view: ScrollView, count: number, previous: Measure, anchor: RefObject<Anchor | null>): Measure => {
+    const { list, scroller } = view.target;
     const entry = list.firstElementChild;
     const columns = gridColumns(list);
     const height = entry ? entry.getBoundingClientRect().height : 0;
     const pitch = height + (parseFloat(getComputedStyle(list).rowGap) || 0);
-    const lastLine = Math.max(Math.ceil(count / columns) - 1, 0);
+    const lineCount = Math.ceil(count / columns);
+    const lastLine = Math.max(lineCount - 1, 0);
 
     // Hidden, the list has nothing to measure, and only its first line is rendered until it shows.
     if (height === 0) {
         return { columns, height, pitch: 0, first: 0, last: 0 };
     }
 
+    // How tall all the lines are, laid out whole.
+    const whole = (lineCount - 1) * pitch + height;
+
     if (scroller && previous.pitch > 0 && (previous.pitch !== pitch || previous.columns !== columns)) {
-        const offset = scrolledPast(target);
+        const top = view.top();
 
         anchor.current =
-            offset > 0
+            top > 0
                 ? {
-                      index: Math.floor(offset / previous.pitch) * previous.columns,
-                      fraction: (offset % previous.pitch) / previous.pitch,
+                      index: Math.floor(top / previous.pitch) * previous.columns,
+                      fraction: (top % previous.pitch) / previous.pitch,
                   }
                 : null;
     } else if (scroller && anchor.current) {
         const { index, fraction } = anchor.current;
 
         anchor.current = null;
-        scroller.scrollTop += (Math.floor(index / columns) + fraction) * pitch - scrolledPast(target);
+        view.scrollTo((Math.floor(index / columns) + fraction) * pitch, whole);
     }
 
-    const span = shownSpan(target);
+    const span = view.place(whole);
 
     if (!span) {
         return { columns, height, pitch, first: 0, last: lastLine };
@@ -110,20 +106,23 @@ const measure = (
  * queries still decide the layout: its column tracks say how many entries a line holds, its row
  * gap spaces the lines, and the first entry rendered is measured for their height. Each rendered
  * entry is absolutely positioned at its line, and in the grid in its column, and the listbox is as
- * tall as all the lines, so the panel scrolls as it would with every entry there.
+ * tall as all the lines, so the panel scrolls as it would with every entry there. Lines too many
+ * for the browser to lay out are squeezed into fewer px (see `useScrollMeasure`): each line's top
+ * then has the lines' `offset` taken off.
  *
  * `keep` lists entries to render wherever they are, such as the focused one. `indexesIn` finds
  * entries by where the lines put them, rendered or not, and `settled` says whether the rendered
  * ones are in their places yet, to be scrolled to, which they aren't until the latest measure is
- * rendered.
+ * rendered. `reveal` scrolls to an entry, and `drift` says how far a squeeze moves the entries
+ * shown up the listbox, for the marquee.
  */
 export const useVirtualLines = (count: number, keep: number[]) => {
     // The measure last made, rendered or about to be, which the next is compared with.
     const lastMeasure = useRef(UNMEASURED);
     const anchor = useRef<Anchor | null>(null);
-    const { ref, target, measured, settled } = useScrollMeasure(
-        (scrollTarget) => {
-            lastMeasure.current = measure(scrollTarget, count, lastMeasure.current, anchor);
+    const { ref, target, measured, offset, settled, show, drift } = useScrollMeasure(
+        (view) => {
+            lastMeasure.current = measure(view, count, lastMeasure.current, anchor);
 
             return lastMeasure.current;
         },
@@ -153,7 +152,8 @@ export const useVirtualLines = (count: number, keep: number[]) => {
         indexes,
         columns,
         pitch,
-        height: lineCount > 0 ? (lineCount - 1) * pitch + height : 0,
+        offset,
+        height: laidHeight(lineCount > 0 ? (lineCount - 1) * pitch + height : 0),
     };
 
     /**
@@ -176,8 +176,9 @@ export const useVirtualLines = (count: number, keep: number[]) => {
             style.direction === "rtl"
                 ? [origin.right - box.right, origin.right - box.left]
                 : [box.left - origin.left, box.right - origin.left];
-        const top = box.top - origin.top;
-        const bottom = box.bottom - origin.top;
+        // The listbox's own px, as its entries are placed, then those of all the lines.
+        const top = box.top - origin.top + offset;
+        const bottom = box.bottom - origin.top + offset;
 
         // The lines and columns the box overlaps, the gaps between them aside.
         const firstLine = Math.max(Math.floor((top - height) / pitch) + 1, 0);
@@ -199,5 +200,19 @@ export const useVirtualLines = (count: number, keep: number[]) => {
         return hits;
     };
 
-    return { lines, indexesIn, settled };
+    /**
+     * Scrolls the panel by the least that shows the entry at `index`, and `element`, its own when
+     * it's rendered, with the page around as needed, by the latest measure.
+     */
+    const reveal = useCallback(
+        (index: number, element?: HTMLElement | null) => {
+            const line = lastMeasure.current;
+            const top = Math.floor(index / line.columns) * line.pitch;
+
+            show(top, top + line.height, element);
+        },
+        [show],
+    );
+
+    return { lines, indexesIn, settled, reveal, drift };
 };

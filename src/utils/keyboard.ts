@@ -87,9 +87,3 @@ export const matchName = (
 
     return -1;
 };
-
-/** Focuses a tree item and scrolls it into view. */
-export const focusTreeItem = (item: HTMLElement) => {
-    item.focus({ preventScroll: true });
-    item.scrollIntoView({ block: "nearest" });
-};

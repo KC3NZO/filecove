@@ -128,6 +128,8 @@ export type {
     FileViewProps,
     GridSize,
     ScrollTarget,
+    ScrollView,
+    ShownSpan,
     SortDirection,
     SortKey,
     SortOrder,

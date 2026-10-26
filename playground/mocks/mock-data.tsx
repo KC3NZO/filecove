@@ -3,7 +3,7 @@ import FileCopyOutlined from "@mui/icons-material/FileCopyOutlined";
 import FolderZipOutlined from "@mui/icons-material/FolderZipOutlined";
 import LanguageOutlined from "@mui/icons-material/LanguageOutlined";
 
-import { downloadUrls } from "../options";
+import { downloadUrls, huge } from "../options";
 import { createMockAdapter, file, folder } from "./mock-adapter";
 
 import type { ActionContext, ActionGroup, MainMenuGroup, SectionGroup } from "../../src";
@@ -30,6 +30,21 @@ const archive: MockNode[] = Array.from({ length: 10_000 }, (_, index) =>
         new Date(Date.UTC(2024, 0, 1) + index * 3_600_000).toISOString(),
     ),
 );
+
+/**
+ * `?huge`: a folder of files too many for the list to be laid out whole, which the content
+ * squeezes into the height browsers allow (see `options.ts`).
+ */
+const hugeFolder: MockNode[] = huge
+    ? Array.from({ length: 200_000 }, (_, index) =>
+          file(
+              `entry-${String(index + 1).padStart(6, "0")}.txt`,
+              500 + ((index * 7_919) % 90_000),
+              new Date(Date.UTC(2020, 0, 1) + index * 600_000).toISOString(),
+              "text/plain",
+          ),
+      )
+    : [];
 
 /** A folder of folders large enough that the sidebar tree only renders what's in view. */
 const datasets: MockNode[] = Array.from({ length: 5_000 }, (_, index) => {
@@ -100,6 +115,7 @@ export const serverAdapter = createMockAdapter(
         "/server/project/b": [
             folder("archive", "2026-10-01T09:00", archive),
             folder("datasets", "2026-10-05T12:00", datasets),
+            ...(huge ? [folder("huge", "2026-10-26T09:00", hugeFolder)] : []),
             folder("cmd", "2026-09-12T10:30", [
                 folder("server", "2026-09-12T10:30", [file("main.go", 2_950, "2026-09-12T10:30")]),
             ]),
@@ -145,7 +161,8 @@ export const serverAdapter = createMockAdapter(
             folder("archive", "2025-12-01T09:00", []),
         ],
     },
-    { windowsNames: true, trash: "/trash" },
+    // `?huge` lists 50,000 entries a page, so its folder of 200,000 comes in seconds.
+    { windowsNames: true, trash: "/trash", pageSize: huge ? 50_000 : undefined },
 );
 
 // Pictures, videos and sound, by their type, or else their extension, as a copy from another

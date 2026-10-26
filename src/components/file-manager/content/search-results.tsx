@@ -12,6 +12,7 @@ import { CutContext } from "../../../contexts/cut-context";
 import { DragContext } from "../../../contexts/drag-context";
 import { MovingContext } from "../../../contexts/moving-context";
 import { useDropTarget } from "../../../hooks/use-drop-target";
+import { useFound } from "../../../hooks/use-found";
 import { useLocale } from "../../../hooks/use-locale";
 import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
@@ -36,6 +37,7 @@ import { relevanceOf, resultKey, searchTerms } from "../../../utils/search";
 import { entryComparator } from "../../../utils/sort";
 import { canCarry, movingThrough } from "../../../utils/transfer";
 import Icon from "../../icons/icon";
+import FindLayer from "../find-layer";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
 import SearchTabs, { tabId } from "./search-tabs";
@@ -250,6 +252,8 @@ const SearchResults = ({
     // show each result's own entry, adapter and location from `origins`. Inside a section's tab,
     // the location leaves the section out.
     const entries = useMemo(() => hits.map((hit) => ({ ...hit.entry, id: hit.key })), [hits]);
+    // Every result's name, for the browser's find in page, as only some are rendered.
+    const names = useMemo(() => hits.map((hit) => hit.entry.name), [hits]);
 
     const origins = useMemo(
         () =>
@@ -357,7 +361,7 @@ const SearchResults = ({
 
     const [grabbedId, setGrabbedId] = useState<string | null>(null);
 
-    const { lines, indexesIn, settled } = useVirtualLines(entries.length, [
+    const { lines, indexesIn, settled, reveal, drift } = useVirtualLines(entries.length, [
         focusId === null ? -1 : (indexByKey.get(focusId) ?? -1),
         grabbedId !== null && draggedKeys.has(grabbedId) ? (indexByKey.get(grabbedId) ?? -1) : -1,
     ]);
@@ -366,11 +370,13 @@ const SearchResults = ({
     const pendingFocus = useRef(false);
     const pendingScroll = useRef<ScrollRequest | null>(null);
     const pointerType = useRef("mouse");
+    const { foundId, markFound } = useFound();
 
     const marqueeBase = useRef<EntrySelection>(EMPTY_SELECTION);
     const marquee = useMarquee({
         enabled: entries.length > 0,
         entriesIn: (box) => indexesIn(box).map((index) => entries[index].id),
+        drift,
         onStart: () => {
             marqueeBase.current = selection;
         },
@@ -417,15 +423,18 @@ const SearchResults = ({
         }
 
         const element = resultElement(surface, request.id);
+        const index = indexByKey.get(request.id);
 
-        if (element || !indexByKey.has(request.id)) {
+        if (element || index === undefined) {
             pendingScroll.current = null;
 
             if (request.focus) {
                 element?.focus({ preventScroll: true });
             }
 
-            element?.scrollIntoView({ block: "nearest" });
+            if (index !== undefined) {
+                reveal(index, element);
+            }
         }
     });
 
@@ -439,10 +448,14 @@ const SearchResults = ({
         }
 
         const element = focusId === null ? null : resultElement(surface, focusId);
+        const index = focusId === null ? undefined : indexByKey.get(focusId);
 
         pendingFocus.current = false;
         (element ?? surface).focus({ preventScroll: true });
-        element?.scrollIntoView({ block: "nearest" });
+
+        if (element && index !== undefined) {
+            reveal(index, element);
+        }
     });
 
     const hitAt = (event: DragEvent) => {
@@ -802,6 +815,18 @@ const SearchResults = ({
     const shownStates = shownTargets.map((target) => searches.get(target.section.id));
     const searching = shownStates.some((state) => !state || state.status === "searching");
     const failed = shownTargets.filter((target) => searches.get(target.section.id)?.status === "error");
+
+    // The browser's find in page came to a result, in the find layer, as in a folder.
+    const handleFound = (index: number) => {
+        const entry = entries[index];
+
+        if (entry) {
+            setFocus({ id: entry.id, index });
+            pendingScroll.current = { id: entry.id, focus: false };
+            markFound(entry.id);
+        }
+    };
+
     const ContentView = view === "list" ? FileList : FileGrid;
     const listed = entries.length > 0;
     let content: ReactNode;
@@ -818,6 +843,7 @@ const SearchResults = ({
                 selectedIds={selectedIds}
                 cutIds={cutKeys}
                 movingIds={movingKeys}
+                foundId={foundId}
                 adapter={undefined}
                 draggable={draggable}
                 draggedIds={draggedKeys}
@@ -918,6 +944,7 @@ const SearchResults = ({
                     onDragStart={handleDragStart}
                     {...drop.handlers}
                 >
+                    {listed && <FindLayer names={names} onFound={handleFound} />}
                     {searching && listed && <LinearProgress sx={progressSx} aria-label={text.loading} />}
                     {content}
                     <Box ref={marquee.marqueeRef} sx={marqueeSx} />

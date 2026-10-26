@@ -73,6 +73,14 @@ export const limits: FileManagerLimits | undefined = params.has("limits")
     : undefined;
 
 /**
+ * `?huge`: API service also has `huge`, a folder of 200,000 files, too many for the list to be laid
+ * out whole, as browsers cap an element's height, so it's squeezed (see "Lists too tall for the
+ * browser" in `virtualization.md`). The server lists 50,000 entries a page meanwhile, so it comes
+ * in seconds.
+ */
+export const huge = params.has("huge");
+
+/**
  * `?lateSections`: the sections come 3 s after the page opens, as an app getting them from its
  * server would, to see the file manager with none meanwhile. Not with `?single`, which has its one.
  */

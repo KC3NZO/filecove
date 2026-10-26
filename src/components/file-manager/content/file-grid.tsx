@@ -25,6 +25,7 @@ import { drawnState } from "../../../utils/permissions";
 import { selectModifiers } from "../../../utils/selection";
 import { gridSize } from "../../../utils/zoom";
 import Icon from "../../icons/icon";
+import { DrawnName } from "../find-layer";
 import ItemIcon from "./item-icon";
 
 import type { EntryOrigin, FileEntry, FileViewProps, MovingKind } from "../../../types";
@@ -39,7 +40,7 @@ interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "o
     count: number;
     /** The side of the icon or thumbnail, in rem, as the zoom has it. */
     iconSize: number;
-    /** How far down the listbox the tile's line sits, in px. */
+    /** How far down the listbox the tile's line sits, in px, as the lines place it. */
     top: number;
     /** The grid column the tile goes in, from 0. */
     column: number;
@@ -54,14 +55,19 @@ interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "o
     moving: MovingKind | undefined;
     /** Whether the entry was just uploaded, and is highlighted for a moment. */
     arrived: boolean;
+    /** Whether the browser's find in page just came to it, and it's highlighted for a moment. */
+    found: boolean;
     dragged: boolean;
     /** Whether the dragged entries would be dropped into this folder now. */
     dropTarget: boolean;
 }
 
 // Text can't be selected anywhere in the grid, or Shift-click would select it across tiles.
+// Clipped down its length, as the list is, so a tile kept rendered far from view in a squeezed
+// listbox doesn't lengthen what the panel scrolls.
 const gridSx: SxProps<Theme> = {
     userSelect: "none",
+    overflowY: "clip",
     p: 1,
     [viewMedium]: { p: 3 },
 };
@@ -173,6 +179,7 @@ const FileTile = memo(
         cut,
         moving,
         arrived,
+        found,
         adapter,
         draggable,
         dragged,
@@ -203,6 +210,7 @@ const FileTile = memo(
                 data-cut={cut}
                 data-moving={!!moving}
                 data-arrived={arrived}
+                data-found={found}
                 data-dragged={dragged}
                 data-drop-target={dropTarget}
                 onClick={(event) => {
@@ -225,7 +233,7 @@ const FileTile = memo(
                     view="grid"
                 />
                 <Typography variant="body2" sx={nameSx}>
-                    <bdi>{entry.name}</bdi>
+                    <DrawnName name={entry.name} />
                 </Typography>
                 {origin && (
                     <Box sx={locationSx}>
@@ -256,6 +264,7 @@ const FileGrid = ({
     cutIds,
     movingIds,
     arrivedIds,
+    foundId,
     adapter,
     draggable,
     draggedIds,
@@ -285,13 +294,14 @@ const FileGrid = ({
                             index={index}
                             count={entries.length}
                             iconSize={size.icon}
-                            top={Math.floor(index / lines.columns) * lines.pitch}
+                            top={Math.floor(index / lines.columns) * lines.pitch - lines.offset}
                             column={index % lines.columns}
                             focused={entry.id === focusId}
                             selected={selectedIds.has(entry.id)}
                             cut={cutIds.has(entry.id)}
                             moving={movingIds.get(entry.id)}
                             arrived={!!arrivedIds?.has(entry.id)}
+                            found={entry.id === foundId}
                             adapter={adapter}
                             draggable={draggable}
                             dragged={draggedIds.has(entry.id)}

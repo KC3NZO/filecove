@@ -18,12 +18,21 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useData, useFolder } from "../../../hooks/use-folder";
+import { useFound } from "../../../hooks/use-found";
 import { useLocale } from "../../../hooks/use-locale";
 import { useMovingIds } from "../../../hooks/use-moving-ids";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
 import { dialogActionsSx } from "../../../styles/direction";
-import { dialogPaperSx, focusOutline, focusRing, hoverBackground } from "../../../styles/mixins";
+import {
+    arrivedMarker,
+    dialogPaperSx,
+    focusOutline,
+    focusRing,
+    forcedArrived,
+    forcedColors,
+    hoverBackground,
+} from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { groupedEntries } from "../../../utils/groups";
 import { isHidden } from "../../../utils/hidden";
@@ -45,6 +54,7 @@ import Icon from "../../icons/icon";
 import PathBar from "../header-bar/path-bar";
 import IconSlot from "../../icons/icon-slot";
 import LockedIcon from "../../icons/locked-icon";
+import FindLayer, { DrawnName } from "../find-layer";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 import NameDialog from "./name-dialog";
 
@@ -194,6 +204,12 @@ const listSx: SxProps<Theme> = {
     "&:focus-visible": focusOutline,
 };
 
+// Clips the list down its length, so a row kept rendered far from view in a squeezed list, placed
+// in px of all the rows, doesn't lengthen what the box scrolls (see `virtualization.md`).
+const listClipSx: SxProps<Theme> = {
+    overflowY: "clip",
+};
+
 // Placed at its line by `top`, set in `style`. MUI aligns a list item's text with `text-align: left`.
 const itemSx: SxProps<Theme> = {
     position: "absolute",
@@ -214,7 +230,9 @@ const rowSx: SxProps<Theme> = (theme) => ({
     borderRadius: 1.5,
     textAlign: "start",
     "&:hover": { bgcolor: hoverBackground(theme) },
+    ...arrivedMarker(theme),
     ...focusRing,
+    [forcedColors]: forcedArrived,
 });
 
 const rowIconSx: SxProps<Theme> = {
@@ -373,8 +391,12 @@ const TransferDialog = ({
     const listLabel = place ? text.pickerFolders(isolate(targetFolder.name)) : text.pickerLocations;
 
     // The row with the Tab stop stays rendered wherever the list is scrolled, so it keeps the focus.
-    const { lines, settled } = useVirtualLines(items.length, [items.findIndex((item) => item.id === tabStop)]);
+    const { lines, settled, reveal } = useVirtualLines(items.length, [items.findIndex((item) => item.id === tabStop)]);
     const linesRef = lines.ref;
+    // Every row's name, for the browser's find in page, as only some are rendered, and the row it
+    // last came to, highlighted for a moment.
+    const names = useMemo(() => items.map((item) => item.name), [items]);
+    const { foundId, markFound } = useFound();
 
     const listElement = useCallback(
         (element: HTMLUListElement | null) => {
@@ -400,13 +422,15 @@ const TransferDialog = ({
             (row ?? body).focus({ preventScroll: true });
         }
 
-        row?.scrollIntoView({ block: "nearest" });
+        if (row) {
+            reveal(Number(row.dataset.index), row);
+        }
 
         if (row || body.getAttribute("aria-busy") !== "true") {
             pendingFocus.current = false;
             pendingScroll.current = false;
         }
-    }, [settled]);
+    }, [settled, reveal]);
 
     useEffect(() => settleFocus());
 
@@ -544,11 +568,31 @@ const TransferDialog = ({
         // A row that isn't rendered yet is, once it has the Tab stop, and is focused then.
         if (element) {
             element.focus({ preventScroll: true });
-            element.scrollIntoView({ block: "nearest" });
+            reveal(items.indexOf(nextRow), element);
         } else {
             pendingFocus.current = true;
             setFocusId(nextRow.id);
         }
+    };
+
+    // The browser's find in page came to a row, in the find layer: one that can be opened takes the
+    // list's Tab stop and is scrolled to, and either is highlighted, the focus staying in the
+    // browser's find bar.
+    const handleFound = (index: number) => {
+        const item = items[index];
+
+        if (!item) {
+            return;
+        }
+
+        if (item.disabled) {
+            reveal(index);
+        } else {
+            pendingScroll.current = true;
+            setFocusId(item.id);
+        }
+
+        markFound(item.id);
     };
 
     const openItem = (item: PickerItem) => {
@@ -600,59 +644,64 @@ const TransferDialog = ({
         // Keyed by place, so each folder opens scrolled to the top.
         body = (
             <Box key={place ? targetFolder.id : ""} ref={scrollerRef} sx={scrollerSx}>
-                <List
-                    ref={listElement}
-                    dense
-                    disablePadding
-                    sx={listSx}
-                    style={{ height: lines.height }}
-                    aria-label={listLabel}
-                    tabIndex={tabStop === null ? 0 : -1}
-                    onFocus={handleListFocus}
-                    onKeyDown={handleListKeyDown}
-                >
-                    {lines.indexes.map((index) => {
-                        const item = items[index];
+                <FindLayer names={names} onFound={handleFound} />
+                <Box sx={listClipSx}>
+                    <List
+                        ref={listElement}
+                        dense
+                        disablePadding
+                        sx={listSx}
+                        style={{ height: lines.height }}
+                        aria-label={listLabel}
+                        tabIndex={tabStop === null ? 0 : -1}
+                        onFocus={handleListFocus}
+                        onKeyDown={handleListKeyDown}
+                    >
+                        {lines.indexes.map((index) => {
+                            const item = items[index];
 
-                        return (
-                            <ListItem
-                                key={item.id}
-                                disablePadding
-                                sx={itemSx}
-                                style={{ top: index * lines.pitch }}
-                                // Only some rows are rendered, so each says where it is among all of them.
-                                aria-setsize={items.length}
-                                aria-posinset={index + 1}
-                            >
-                                <ListItemButton
-                                    sx={rowSx}
-                                    disabled={item.disabled}
-                                    tabIndex={item.id === tabStop ? 0 : -1}
-                                    aria-description={
-                                        item.moving
-                                            ? heldText(text, item.moving)
-                                            : item.locked
-                                              ? text.folderLocked
-                                              : undefined
-                                    }
-                                    data-row-id={item.id}
-                                    onClick={() => openItem(item)}
+                            return (
+                                <ListItem
+                                    key={item.id}
+                                    disablePadding
+                                    sx={itemSx}
+                                    style={{ top: index * lines.pitch - lines.offset }}
+                                    // Only some rows are rendered, so each says where it is among all of them.
+                                    aria-setsize={items.length}
+                                    aria-posinset={index + 1}
                                 >
-                                    <ListItemIcon sx={rowIconSx}>
-                                        {item.section ? (
-                                            <IconSlot icon={item.section.icon ?? "folder"} />
-                                        ) : (
-                                            <LockedIcon locked={!!item.locked}>
-                                                <FolderTypeIcon folderName={item.name} size="1.25rem" />
-                                            </LockedIcon>
-                                        )}
-                                    </ListItemIcon>
-                                    <ListItemText primary={<bdi>{item.name}</bdi>} slotProps={TEXT_SLOTS} />
-                                </ListItemButton>
-                            </ListItem>
-                        );
-                    })}
-                </List>
+                                    <ListItemButton
+                                        sx={rowSx}
+                                        disabled={item.disabled}
+                                        tabIndex={item.id === tabStop ? 0 : -1}
+                                        aria-description={
+                                            item.moving
+                                                ? heldText(text, item.moving)
+                                                : item.locked
+                                                  ? text.folderLocked
+                                                  : undefined
+                                        }
+                                        data-row-id={item.id}
+                                        data-index={index}
+                                        data-found={item.id === foundId}
+                                        onClick={() => openItem(item)}
+                                    >
+                                        <ListItemIcon sx={rowIconSx}>
+                                            {item.section ? (
+                                                <IconSlot icon={item.section.icon ?? "folder"} />
+                                            ) : (
+                                                <LockedIcon locked={!!item.locked}>
+                                                    <FolderTypeIcon folderName={item.name} size="1.25rem" />
+                                                </LockedIcon>
+                                            )}
+                                        </ListItemIcon>
+                                        <ListItemText primary={<DrawnName name={item.name} />} slotProps={TEXT_SLOTS} />
+                                    </ListItemButton>
+                                </ListItem>
+                            );
+                        })}
+                    </List>
+                </Box>
             </Box>
         );
     } else {

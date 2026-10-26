@@ -80,7 +80,10 @@ export const dragMarkers = (theme: Theme) => ({
     },
 });
 
-/** How long an entry just uploaded is highlighted, in ms, its fade included. */
+/**
+ * How long an entry just uploaded is highlighted, in ms, its fade included, as is one the
+ * browser's find in page just came to.
+ */
 export const ARRIVED_FOR = 2500;
 
 // Held for a moment, then faded away. A shadow inside the edge rather than a background, so it lies
@@ -91,16 +94,17 @@ const arrivedFade = keyframes`
 `;
 
 /**
- * Highlights a row or tile whose entry was just uploaded, keyed off `data-arrived`, which is set for
- * `ARRIVED_FOR`: an accent tint over whatever background it has, fading away, as it never changes
- * the selection. Forced colors drop shadows, so it goes with `forcedArrived` under `forcedColors`.
+ * Highlights a row or tile whose entry was just uploaded, keyed off `data-arrived`, or that the
+ * browser's find in page just came to, keyed off `data-found`, each set for `ARRIVED_FOR`: an
+ * accent tint over whatever background it has, fading away, as it never changes the selection.
+ * Forced colors drop shadows, so it goes with `forcedArrived` under `forcedColors`.
  */
 export const arrivedMarker = (theme: Theme) => {
     const tokens = theme.vars || theme;
 
     return {
         "--arrived-tint": theme.alpha(tokens.palette.primary.main, `${tokens.palette.action.selectedOpacity} + 0.24`),
-        '&[data-arrived="true"]': { animation: `${arrivedFade} ${ARRIVED_FOR}ms ease-out` },
+        '&[data-arrived="true"], &[data-found="true"]': { animation: `${arrivedFade} ${ARRIVED_FOR}ms ease-out` },
     };
 };
 
@@ -142,11 +146,11 @@ export const forcedSelected = {
 };
 
 /**
- * A row or tile just uploaded (`data-arrived`), outlined in the system's selection colour for as
- * long as it's highlighted. Goes under `forcedColors`.
+ * A row or tile just uploaded (`data-arrived`), or found (`data-found`), outlined in the system's
+ * selection colour for as long as it's highlighted. Goes under `forcedColors`.
  */
 export const forcedArrived = {
-    '&[data-arrived="true"]': { outline: "2px solid Highlight", outlineOffset: "-2px" },
+    '&[data-arrived="true"], &[data-found="true"]': { outline: "2px solid Highlight", outlineOffset: "-2px" },
 };
 
 /** A pressed toggle button (`aria-pressed`) in the system's selection colour. Goes under `forcedColors`. */

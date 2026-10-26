@@ -25,9 +25,11 @@ import { useLongPress } from "../../../hooks/use-long-press";
 import { useMovingIds } from "../../../hooks/use-moving-ids";
 import { folderKey } from "../../../store/folder-store";
 import {
+    arrivedMarker,
     cutMarker,
     dragMarkers,
     focusOutline,
+    forcedArrived,
     forcedColors,
     forcedSelected,
     hoverBackground,
@@ -46,6 +48,7 @@ import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import IconSlot from "../../icons/icon-slot";
 import LockedIcon from "../../icons/locked-icon";
+import { DrawnName } from "../find-layer";
 
 import type {
     ErrorRow,
@@ -75,6 +78,8 @@ interface TreeProps {
     openKey: string | null;
     /** The tree's selection; null while the open folder alone counts as selected. */
     selection: TreeSelection | null;
+    /** `folderKey` of the row the browser's find in page last came to, highlighted for a moment. */
+    foundKey: string | null;
     /** Starts the touch selection mode with the folder selected, from the menu a long-press opened. */
     onStartSelecting: (target: TreeTarget) => void;
     onToggle: (key: string) => void;
@@ -134,6 +139,8 @@ interface TreeItemProps {
     selected: boolean;
     /** The open folder, which needn't be selected. */
     open: boolean;
+    /** The browser's find in page just came to it. */
+    found: boolean;
     /** Cut to the clipboard, and not pasted yet. */
     cut?: boolean;
     /** Being moved by a move under way, or held by the trash's work, itself or with a folder it's in. */
@@ -197,10 +204,11 @@ const rowSx: SxProps<Theme> = (theme) => ({
     '&[data-open="true"]': { color: "primary.main" },
     ...cutMarker,
     ...movingMarker,
+    ...arrivedMarker(theme),
     '[role="treeitem"]:focus-visible > &': focusOutline,
     ...dragMarkers(theme),
     // The open folder's accent text, then the selection over it.
-    [forcedColors]: { '&[data-open="true"]': { color: "Highlight" }, ...forcedSelected },
+    [forcedColors]: { '&[data-open="true"]': { color: "Highlight" }, ...forcedSelected, ...forcedArrived },
 });
 
 // The row's main part, which a click opens or selects. It's no button: the item around it takes
@@ -344,6 +352,7 @@ const TreeItem = ({
     description,
     selected,
     open,
+    found,
     cut = false,
     moving = false,
     draggable = false,
@@ -451,6 +460,7 @@ const TreeItem = ({
                 draggable={draggable}
                 data-selected={selected}
                 data-open={open}
+                data-found={found}
                 data-cut={cut}
                 data-moving={moving}
                 data-dragged={dragged}
@@ -465,7 +475,7 @@ const TreeItem = ({
                 <Box sx={isSection ? sectionButtonSx : folderButtonSx} onClick={onSelect}>
                     {icon}
                     <Typography component="span" noWrap sx={isSection ? sectionLabelSx : folderLabelSx}>
-                        <bdi>{row.label}</bdi>
+                        <DrawnName name={row.label} />
                     </Typography>
                 </Box>
                 {expandable && (
@@ -542,6 +552,7 @@ const FolderItem = memo(
         row,
         openKey,
         selection,
+        foundKey,
         onStartSelecting,
         onToggle,
         onExpand,
@@ -687,6 +698,7 @@ const FolderItem = memo(
                 description={drawnState(text, entry, moving)}
                 selected={selected}
                 open={key === openKey}
+                found={key === foundKey}
                 cut={cutIds.has(entry.id)}
                 moving={!!moving}
                 draggable={draggable}
@@ -715,6 +727,7 @@ const SectionItem = memo(
         row,
         openKey,
         selection,
+        foundKey,
         onToggle,
         onExpand,
         onNavigate,
@@ -766,6 +779,7 @@ const SectionItem = memo(
                 moving={!!moving}
                 selected={selection ? selection.ids.has(key) : key === openKey}
                 open={key === openKey}
+                found={key === foundKey}
                 dropTarget={drop.dropKey !== null}
                 dragHandlers={drop.handlers}
                 pressHandlers={longPress}

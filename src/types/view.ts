@@ -66,6 +66,29 @@ export interface ScrollTarget {
     scroller: HTMLElement | null;
 }
 
+/** Part of a list, from `top` to `bottom`, in px from the list's top. Internal. */
+export interface ShownSpan {
+    top: number;
+    bottom: number;
+}
+
+/**
+ * A list's scroll panel, as a measure of the list sees it (`useScrollMeasure`), in px of the
+ * whole list, however a list too tall for the browser is squeezed to lay it out. Internal.
+ */
+export interface ScrollView {
+    target: ScrollTarget;
+    /** How far the panel's top is down the list, as it was last laid out; negative while it starts below. */
+    top: () => number;
+    /**
+     * Lays the list out for its whole height, in px: what the panel shows of it then, widened by
+     * the overscan, or null when nothing around it scrolls, so all of it shows.
+     */
+    place: (height: number) => ShownSpan | null;
+    /** Scrolls the panel so its top is `top` px down the list, laid out for `height`. */
+    scrollTo: (top: number, height: number) => void;
+}
+
 /**
  * The entries a view renders, only those in or near the scroll panel, and how they're laid out in
  * lines. Internal, from `useVirtualLines`.
@@ -79,7 +102,15 @@ export interface VirtualLines {
     columns: number;
     /** From one line's top to the next one's, in px. */
     pitch: number;
-    /** How tall the lines are together, in px, which the listbox takes so the panel scrolls as far. */
+    /**
+     * Taken off each line's top as it's placed, in px, while lines too many for the browser to
+     * lay out are squeezed into fewer px (see `useScrollMeasure`); 0 otherwise.
+     */
+    offset: number;
+    /**
+     * How tall the listbox is, in px, so the panel scrolls as far as it would with every line
+     * there, or as the squeeze has it.
+     */
     height: number;
 }
 
@@ -152,6 +183,11 @@ export interface FileViewProps {
     movingIds: MovingKinds;
     /** Entries just uploaded, highlighted for a moment; none among a search's results. */
     arrivedIds?: ReadonlySet<string>;
+    /**
+     * The entry the browser's find in page last came to, highlighted for a moment, as the
+     * browser's own highlight is in the find layer (see `virtualization.md`).
+     */
+    foundId?: string | null;
     /** The folder's adapter, which may give its files thumbnails. */
     adapter: FileAdapter | undefined;
     /** Entries can be dragged onto a folder, to be moved or copied into it. */

@@ -14,6 +14,7 @@ import { useCutIds } from "../../../hooks/use-cut-ids";
 import { useDraggedIds } from "../../../hooks/use-dragged-ids";
 import { useDropTarget } from "../../../hooks/use-drop-target";
 import { useFolder } from "../../../hooks/use-folder";
+import { useFound } from "../../../hooks/use-found";
 import { useLocale } from "../../../hooks/use-locale";
 import { useLongPress } from "../../../hooks/use-long-press";
 import { useMarquee } from "../../../hooks/use-marquee";
@@ -36,6 +37,7 @@ import { pressesKey } from "../../../utils/shortcut";
 import { entryComparator } from "../../../utils/sort";
 import { canCarry } from "../../../utils/transfer";
 import Icon from "../../icons/icon";
+import FindLayer from "../find-layer";
 import SelectionBar from "../selection-bar";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
@@ -378,10 +380,15 @@ const FolderView = ({
 
     // Only the entries in or near view are rendered. The focused one stays rendered wherever the
     // panel is scrolled, so it keeps the focus and the view's Tab stop.
-    const { lines, indexesIn, settled } = useVirtualLines(entries?.length ?? 0, [
+    const { lines, indexesIn, settled, reveal, drift } = useVirtualLines(entries?.length ?? 0, [
         focusId === null ? -1 : (indexById.get(focusId) ?? -1),
         grabbedId !== null && draggedIds.has(grabbedId) ? (indexById.get(grabbedId) ?? -1) : -1,
     ]);
+
+    // The names the browser's find in page looks through, every entry's, as only some are rendered,
+    // and the entry it last came to, highlighted for a moment.
+    const names = useMemo(() => entries?.map((entry) => entry.name) ?? [], [entries]);
+    const { foundId, markFound } = useFound();
 
     // Whether the focus is in the view. Removing the focused entry, as deleting or moving it away
     // does, drops the focus to the page without a blur, so this stays set and the entry taking its
@@ -413,6 +420,7 @@ const FolderView = ({
     const marquee = useMarquee({
         enabled: Boolean(entries?.length),
         entriesIn: (box) => (entries ? indexesIn(box).map((index) => entries[index].id) : []),
+        drift,
         onStart: () => {
             marqueeBase.current = selection;
         },
@@ -636,15 +644,18 @@ const FolderView = ({
         }
 
         const element = entryElement(surface, request.id);
+        const index = indexById.get(request.id);
 
-        if (element || !indexById.has(request.id)) {
+        if (element || index === undefined) {
             pendingScroll.current = null;
 
             if (request.focus) {
                 element?.focus({ preventScroll: true });
             }
 
-            element?.scrollIntoView({ block: "nearest" });
+            if (index !== undefined) {
+                reveal(index, element);
+            }
         }
     });
 
@@ -665,10 +676,14 @@ const FolderView = ({
         }
 
         const element = focusId === null ? null : entryElement(surface, focusId);
+        const index = focusId === null ? undefined : indexById.get(focusId);
 
         pendingFocus.current = false;
         (element ?? surface).focus({ preventScroll: true });
-        element?.scrollIntoView({ block: "nearest" });
+
+        if (element && index !== undefined) {
+            reveal(index, element);
+        }
     });
 
     // The entry an event happened on.
@@ -1104,6 +1119,18 @@ const FolderView = ({
         }
     };
 
+    // The browser's find in page came to an entry, in the find layer: it takes the view's Tab stop
+    // and is scrolled to and highlighted, and the focus stays in the browser's find bar.
+    const handleFound = (index: number) => {
+        const entry = entries?.[index];
+
+        if (entry) {
+            setFocus({ id: entry.id, index });
+            pendingScroll.current = { id: entry.id, focus: false };
+            markFound(entry.id);
+        }
+    };
+
     const ContentView = view === "list" ? FileList : FileGrid;
     // Until something shows, a folder still coming in page by page waits with the spinner, so
     // neither "Folder is empty" nor "No results found" shows before all of it has come.
@@ -1124,6 +1151,7 @@ const FolderView = ({
                 cutIds={cutIds}
                 movingIds={movedHere}
                 arrivedIds={arrivedIds}
+                foundId={foundId}
                 adapter={adapter}
                 draggable={draggable}
                 draggedIds={draggedIds}
@@ -1219,6 +1247,7 @@ const FolderView = ({
             onDragStart={handleDragStart}
             {...drop.handlers}
         >
+            {listed && <FindLayer names={names} onFound={handleFound} />}
             {(busy || state?.status === "loading") && shownSoFar && (
                 <LinearProgress sx={progressSx} aria-label={text.loading} />
             )}

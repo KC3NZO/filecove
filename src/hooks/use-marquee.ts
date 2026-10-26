@@ -25,7 +25,10 @@ interface Box {
 
 interface Drag {
     pointerId: number;
-    /** Where the press began, relative to the surface, so it stays put in the content while scrolling. */
+    /**
+     * Where the press began, relative to the surface, so it stays put in the content while
+     * scrolling, and down by the entries' `drift` then, so it stays on the entry it was on.
+     */
     startX: number;
     startY: number;
     /** Latest pointer position in the viewport. */
@@ -43,6 +46,11 @@ interface MarqueeOptions {
     enabled: boolean;
     /** The ids of the entries a box in viewport coordinates touches, in display order. */
     entriesIn: (box: Box) => string[];
+    /**
+     * How far the entries are moved up the surface, in px, beyond what scrolling it does: a list
+     * too tall for the browser to lay out moves them as it scrolls (`useVirtualLines`' `drift`).
+     */
+    drift?: () => number;
     /** Called once a press has moved far enough to become a marquee. */
     onStart: () => void;
     /** Called whenever the entries under the marquee change, with their ids in display order. */
@@ -57,16 +65,16 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
  * rectangle is drawn by moving `marqueeRef`'s element directly, so dragging doesn't re-render the
  * view; only a change in the covered entries reaches `onChange`. Mouse only: on touch, a drag scrolls.
  */
-export const useMarquee = ({ enabled, entriesIn, onStart, onChange }: MarqueeOptions) => {
+export const useMarquee = ({ enabled, entriesIn, drift, onStart, onChange }: MarqueeOptions) => {
     const surfaceRef = useRef<HTMLDivElement>(null);
     const marqueeRef = useRef<HTMLDivElement>(null);
     const dragRef = useRef<Drag | null>(null);
     const endRef = useRef<(() => void) | null>(null);
     const suppressClick = useRef(false);
-    const callbacks = useRef({ entriesIn, onStart, onChange });
+    const callbacks = useRef({ entriesIn, drift, onStart, onChange });
 
     useEffect(() => {
-        callbacks.current = { entriesIn, onStart, onChange };
+        callbacks.current = { entriesIn, drift, onStart, onChange };
     });
 
     // A drag still running when the view goes away (another folder opened) is dropped with it.
@@ -85,10 +93,11 @@ export const useMarquee = ({ enabled, entriesIn, onStart, onChange }: MarqueeOpt
             }
 
             const origin = surface.getBoundingClientRect();
+            const drifted = () => callbacks.current.drift?.() ?? 0;
             const drag: Drag = {
                 pointerId: event.pointerId,
                 startX: event.clientX - origin.left,
-                startY: event.clientY - origin.top,
+                startY: event.clientY - origin.top + drifted(),
                 clientX: event.clientX,
                 clientY: event.clientY,
                 modifiers: selectModifiers(event),
@@ -102,9 +111,11 @@ export const useMarquee = ({ enabled, entriesIn, onStart, onChange }: MarqueeOpt
                 const rect = surface.getBoundingClientRect();
                 const x = clamp(drag.clientX - rect.left, 0, surface.clientWidth);
                 const y = clamp(drag.clientY - rect.top, 0, surface.offsetHeight);
+                // Where the press began now, which a squeezed list's drift may have taken off the surface.
+                const startY = drag.startY - drifted();
 
                 if (!drag.active) {
-                    if (Math.hypot(x - drag.startX, y - drag.startY) < THRESHOLD) {
+                    if (Math.hypot(x - drag.startX, y - startY) < THRESHOLD) {
                         return;
                     }
 
@@ -124,20 +135,23 @@ export const useMarquee = ({ enabled, entriesIn, onStart, onChange }: MarqueeOpt
 
                 const box = {
                     left: Math.min(drag.startX, x),
-                    top: Math.min(drag.startY, y),
+                    top: Math.min(startY, y),
                     right: Math.max(drag.startX, x),
-                    bottom: Math.max(drag.startY, y),
+                    bottom: Math.max(startY, y),
                 };
 
                 const marquee = marqueeRef.current;
 
                 // Measured from the surface's left edge, right to left too, so it's placed by
-                // `left` in its inline style, which Emotion's RTL plugin doesn't see to flip.
+                // `left` in its inline style, which Emotion's RTL plugin doesn't see to flip. It's
+                // drawn within the surface; the entries it covers go by the whole box.
                 if (marquee) {
+                    const top = clamp(box.top, 0, surface.offsetHeight);
+
                     marquee.style.left = `${box.left}px`;
-                    marquee.style.top = `${box.top}px`;
+                    marquee.style.top = `${top}px`;
                     marquee.style.width = `${box.right - box.left}px`;
-                    marquee.style.height = `${box.bottom - box.top}px`;
+                    marquee.style.height = `${clamp(box.bottom, 0, surface.offsetHeight) - top}px`;
                     marquee.dataset.active = "true";
                 }
 
