@@ -143,7 +143,10 @@ What's left in the features already built, what packaging needs before a release
 - [ ] Progress and errors for the app's own long actions (compress, extract) through the planned job panel, which could grow from the transfer queue and panel.
 - [ ] "New file" with the name dialog.
 - [ ] Renaming several files at once.
-- [ ] Going to a location by typing a path (would need an adapter `resolve`, since ids are never parsed).
+- [x] Going to a location by typing a path. *Done 2026-10-26: Ctrl+L or ⌘L, a click on the path bar's empty space, its edit button on touch screens or `apiRef.editPath()` swap the path bar for a path field with the open folder's path selected, as the path bar writes it ("/Website/src/components", led by the section's label); Enter goes to where the path leads, Escape or ✕ closes it, and what can't be found is said under the field. A path starting with "/" begins with a section's label, any other in the open folder, where ".." goes up; a name is found by looking for it in its folder's listing, so ids are never parsed and no adapter member is needed, and the last name may be a file, which is selected in its folder. `apiRef.goToPath(path)` does the same from outside (see "Going to a path" in `file-manager.md`).*
+- [ ] **new:** Completing a path as it's typed: a list of the folders matching what's typed, and Tab or a pick to complete it, as GNOME Files' location bar does.
+- [ ] **new (minor):** A "/" typed in the content starting the path field, as GNOME Files does; it's type-ahead for now.
+- [ ] **new (minor):** An optional adapter `resolve(path)` answering a whole path in one call, for a backend where listing every folder on the way costs; for now each folder on the way is listed (the cached listing first), however deep.
 - [ ] "Folders first" as a setting.
 - [ ] Invert selection.
 

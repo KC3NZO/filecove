@@ -77,6 +77,7 @@ Text that comes from outside the sentence or line around it can be in any script
 - In a string, between FSI and PDI (`isolate`, `utils/bidi.ts`): every name, message or formatted value the component hands a text of `FileManagerLocaleText` (sizes and dates included, and the server's status text), and an adapter's message shown as a failure (the name and delete dialogs, the picker, the preview, the transfer, upload and download rows). Translations don't have to isolate them.
 - Joins written in code isolate each piece (`joinIsolated`), so they're laid out the way the page runs: the list's size and date, the preview's details, its dimensions and its "3 / 12", the upload rows' status and folder, and the properties' dimensions and location.
 - The name field (`name-dialog.tsx`) is `dir="auto"`, and the text preview is `unicode-bidi: plaintext`, so each line runs and lines up as its own letters do, as in a text editor.
+- The path field (`header-bar/path-field.tsx`) runs what's typed as its own letters do, as the search field does (`unicode-bidi: plaintext`, in `styles/header-field.ts`), so "/Website/مستندات" reads each name its way, and the names in its messages are isolated (`pathProblemText`). Its message hangs under it by `inset-inline`.
 
 ## The playground
 
