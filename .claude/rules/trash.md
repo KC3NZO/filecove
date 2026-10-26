@@ -1,6 +1,12 @@
 ---
 paths:
   - "src/utils/trash.ts"
+  - "src/utils/transfer.ts"
+  - "src/utils/undo.ts"
+  - "src/components/file-manager/notice-bar.tsx"
+  - "src/components/file-manager/properties-pane.tsx"
+  - "src/components/properties/properties-panel.tsx"
+  - "src/types/properties.ts"
   - "src/types/adapter.ts"
   - "src/types/section.ts"
   - "src/types/action.ts"
@@ -21,7 +27,7 @@ paths:
 
 # The trash
 
-Entries can go to a trash and come back from it, as on a desktop: moved there at once, without asking, as GNOME Files, Finder and Windows do it, restored to where they were, deleted for good there, or all of it emptied. The file manager still has no built-in locations, so the trash is the backend's and the consumer's: the adapter moves entries there and back, and a section shows it. The user asked for it on 2026-10-25, with restoring undone and undone restoring (see `undo.md`), and chose that a restore asks about names its folders have now, as a paste does.
+Entries can go to a trash and come back from it, as on a desktop: moved there at once, without asking, as GNOME Files, Finder and Windows do it, restored to where they were, deleted for good there, or all of it emptied. The file manager still has no built-in locations, so the trash is the backend's and the consumer's: the adapter moves entries there and back, and a section shows it. The user asked for it on 2026-10-25, with restoring undone and undone restoring (see `undo.md`), and chose that a restore asks about names its folders have now, as a paste does, and on 2026-10-26 that a restore's notice offers Show beside Undo.
 
 ## What the adapter does
 
@@ -37,9 +43,10 @@ Two optional members (`types/adapter.ts`, public), and a field of the entries th
 `Section.trash` makes a section its adapter's trash, rooted where `trash` puts entries (`types/section.ts`, public). `utils/trash.ts` has what goes with it: `inTrashRoot`, `trashesOf` (an adapter's trash sections), `trashOrigin` (the folder an entry came from as a section's folder: the first section in the sidebar's order, served by the adapter and not a trash, whose root is in its trail, one that isn't `readOnly` first, the trail below that root), `trashedLocation` (where it came from written out, the section's label and the folders below its root, joined as a search's results are, or the whole trail when no section shows it) and `trashedDate`.
 
 - **Nothing changes in it** but restoring and deleting for good: `sectionLocked` (`utils/sections.ts`) counts it as `readOnly` is counted, in `folderWritable` and `takesUploads`, so nothing is created, uploaded, pasted, dropped, renamed or moved there, and what's inside its folders stays as it is. Its entries aren't copied out either (`copyTo` and `copy` are missing, `inTrash` in `contextFor`), nor dragged (`heldUp`; the folder view's rows aren't `draggable`), as a trashed entry's id may only mean something to `restore` and `delete`. They're still opened, previewed, downloaded and shown in the properties, which is reading. The picker never offers it as a destination.
-- **Its root's entries** are deleted for good (`delete`, by their own `delete` permission, `trashPermits`) and restored (`restore`, by their own `move`, when each has `trashed`). Folders below the root open and list as any do, read only.
+- **Its root's entries** are deleted for good (`delete`, by their own `delete` permission, `trashPermits`) and restored (`restore`, by their own `move`, when each has `trashed`). One alone opens the folder it came from (`openOrigin`, "Open original location", when a section shows it, by `trashOrigin`), as GNOME's trash offers, closing the preview first from its header. Folders below the root open and list as any do, read only.
 - **A search everywhere leaves it out** (`searchTargets`), so trashed files don't turn up among the rest. A folder search filters it as any folder.
 - **The list** in its root has the search's Location column, headed "Original location" (`trashLocation`), from `FolderView`'s `trashLocation` (`locateTrashed` in `file-manager.tsx`), handed to the views as `origins` with each entry itself, and its date column headed "Trashed" (`sortTrashed`), showing `trashedAt` (`Locale.describeListDate`) and ordered by it (the `modified` comparator goes by `trashedDate`, which is the date modified for any entry without `trashed`). The view menu names the order "Trashed" there too (`trashShown`). The grid shows the location under the name, as a search's results do. An empty root reads "Trash is empty" (`trashEmpty`) with the trash icon.
+- **The properties** of an entry right in its root, the selection's or a trashed folder opened, show where it came from in place of its location, as GNOME's do: "Original location" (`propertiesOriginalLocation`), written out as the list's column is (`locateIn` in `file-manager.tsx`, the pane's `locateTrashed`, into `PropertiesItem.trashed`), "Several folders" for several from different ones, then "Trashed" (`propertiesTrashed`), when it was moved there, for one; and "Open original location" (`propertiesOpenOriginalLocation`) under the name, from `openOrigin`. The panel knows nothing of trashes, only of an item's `trashed` place and date (see `properties.md`).
 - **The trash bar** (`content/trash-bar.tsx`) sits above its root's listing in the content panel, out of the scrolling view, as Finder's and GNOME's do: the trash icon, `trashHint`, and "Empty trash…" (`trashEmptyButton`, in `error`), disabled while its listing is empty, missing when the adapter has no `delete`. It isn't shown over a search everywhere's results.
 
 ## Moving to the trash
@@ -47,8 +54,9 @@ Two optional members (`types/adapter.ts`, public), and a field of the entries th
 `ActionContext.trash()` (`trashEntries` in `file-manager.tsx`) moves the entries at once, a folder's at a time, each through its own section's adapter, offered by `delete`'s rules (`permits("delete")`), when every one of their adapters has `trash` and they aren't in the trash already.
 
 - While the adapter works, their folders and the trash show the progress bar over the content (`trashWork`, `TrashWork`, in `busy`). There's no panel, as moving to a trash is quick on any backend.
+- **They're held meanwhile**, as a move's entries are (see "While a move runs" in `transfers.md`): `TrashWork.entries` go into `moving` with the moves' (`movingIds`' `held`), so they're marked (`data-moving`, read "Being moved"), aren't renamed, moved, copied, deleted, dragged or moved to the trash again, and a folder among them takes nothing in. So are the entries a restore puts back, in the trash, and those an undo or redo moves to the trash or restores (`carryOut` calls `startTrashWork` with no folders, its run showing the bar).
 - Each folder's entries, once in the trash, go as deleted ones do (`applyTrashed`, which runs `applyGone`, shared with `applyDeleted`: out of the cache, the clipboard, the preview, and places inside a folder in the history ending at the folder that held it), and their folder and the trash are listed again.
-- Done, it's announced (`trashDone`, "Moved 3 items to the trash"), and goes in the undo history (`recordChange("trash", …)`, with the notice's Undo) when one adapter served it all, it has `restore`, and it said what it put in the trash for every folder; otherwise it ends the history.
+- Done, it's announced (`trashDone`, "Moved 3 items to the trash"), and goes in the undo history (`recordChange("trash", …)`, with the notice's Undo) when every folder's adapter has `restore` and said what it put in the trash; otherwise it ends the history. A search's results of several sections on different adapters go in as one step, each part with its own adapter (`UndoRestore.adapter`; see "Several adapters" in `undo.md`).
 - One that fails stops there: the notice says so (`trashFailed`, with the adapter's message under it), it's announced, the folder and the trash are listed again, and it ends the history, as part of it may have gone.
 - **Dropping** entries on the trash's root, its row in the sidebar or its open folder's empty space, moves them to the trash (`offerTrash`, through `dropInto`), Ctrl held or not, when they could be deleted, through the trash's adapter, by the same `trashEntries`. Files from the desktop are refused, as nothing is uploaded there.
 
@@ -59,6 +67,7 @@ Two optional members (`types/adapter.ts`, public), and a field of the entries th
 - With the names settled, `restoreEntries` calls `restore` with the choice, the trash and those folders showing the progress bar. Skip passes "skip", leaving the skipped in the trash, and they aren't counted.
 - Done, the entries that went leave the trash as deleted ones go (`applyRestored`), what came back may take ids that named other folders (`dropFolders` with none gone, as a new folder), and the trash and the folders are listed again, after a Replace or Merge the folders merged into all the way down (`relistTransferred`).
 - It's announced (`restoreDone`), and goes in the history (`recordChange("restore", …)`) to be moved to the trash again, a folder's at a time, when the adapter said what it put back (`madePairs`), a section shows every folder it went to, nothing was replaced, and the adapter has `trash`; otherwise it ends the history.
+- **What came back is shown** (`revealRestored`): where the folder it went back to is open, in whichever section shows it, as after undoing a move to the trash there, it's selected and scrolled to, all of it together (`Reveal.with`, `FolderView`'s `revealWith`, as the user chose on 2026-10-26). Otherwise the notice says what was restored with **Show** beside Undo (`showRestored`, `UndoNotice.show`, `NoticeBar`'s `showLabel`), shown even when the restore can't be undone: it opens the first folder they went back to, with what went into it selected, ending a search, and takes the focus into it (`handleNoticeShow`), as "Open item location" does. Without what the adapter put back, Show only opens the folder, and with no section showing the folder, there's none. An undo or redo's restore does the same, through `undoTools`.
 - One that fails says so in the notice (`restoreFailed`), lists the trash and the folders again, and ends the history.
 
 ## Emptying
@@ -69,12 +78,11 @@ Two optional members (`types/adapter.ts`, public), and a field of the entries th
 
 The server adapter keeps a trash (`trash: "/trash"` in `createMockAdapter`), shown as the Trash section in a group of its own at the end of the sidebar, a plain place (`showFolders: false`), as GNOME Files has it. The mock keeps each trashed entry under an id of its own there (`Trashed`), so two of one name can be in it, its name, and the folder it came from, listed with `trashed` (the trail from its root, `trailOf`); a trashed folder is indexed under its id there, so it opens. Its `restore` makes a folder that has gone again (`folderMadeAt`), settles names as a move does, and leaves skipped entries in the trash. The media bucket's adapter has none, so it deletes for good.
 
-The demo actions: Delete moves to the trash where there's one ("Move to trash"), with "Delete permanently…" on Shift+Delete, and deletes for good in the trash and in the media bucket; the trash's menu has Restore and, on its empty space or row, "Empty trash…"; Share hides in the trash. The preview's header has "Move to trash" in place of Delete where there's a trash.
+The demo actions: Delete moves to the trash where there's one ("Move to trash"), with "Delete permanently…" on Shift+Delete, and deletes for good in the trash and in the media bucket; the trash's menu has Restore, "Open original location" for one entry, and, on its empty space or row, "Empty trash…"; Share hides in the trash. The preview's header has "Move to trash" in place of Delete where there's a trash.
 
 ## Not yet
 
-- Showing a restored entry: nothing is selected or scrolled to, as GNOME Files does nothing either, and there's no "Open original location".
-- The properties of an entry in the trash show where it is, the trash, rather than where it came from.
-- An entry being moved to the trash or restored isn't held meanwhile, as a move's are (see "While a move runs" in `transfers.md`), since it's quick; acting on it meanwhile is left to the adapter.
-- A trash through several adapters at once, as a search's results of several sections may be, is done, but can't be undone as one change, so it ends the history.
+- Held entries read "Being moved", the moves' wording, rather than one of their own.
+- An undo or redo through several adapters, or of several folders, that fails partway is put back whole, so trying it again refuses, as the part done is no longer as the change left it.
+- Show opens only the first folder entries went back to, when they went to several.
 - Moving to the trash between adapters, or a trash an app's other adapter keeps: entries only go to their own adapter's trash.

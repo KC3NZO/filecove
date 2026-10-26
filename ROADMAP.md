@@ -78,10 +78,10 @@ What's left in the features already built, what packaging needs before a release
 - [x] Ordering results by relevance. *Done 2026-10-25: a `relevance` sort key, the default, ranks a search everywhere's results by the adapter's optional `SearchMatch.score` or else by how their names answer what's typed; folders go by name as before.*
 
 ### Trash
-- [ ] **new:** A restored entry isn't shown: nothing selects or scrolls to it, and there's no "Open original location" for an entry in the trash.
-- [ ] **new:** The properties of an entry in the trash show where it is, the trash, rather than where it came from.
-- [ ] **new (minor):** Entries being moved to the trash or restored aren't held meanwhile, as a move's are, since it's quick; acting on them meanwhile is left to the adapter.
-- [ ] **new (minor):** A move to the trash through several adapters at once (a search's results of several sections) can't be undone as one change, so it ends the history.
+- [x] **new:** A restored entry isn't shown: nothing selects or scrolls to it, and there's no "Open original location" for an entry in the trash. *Done 2026-10-26: what a restore puts back is selected and scrolled to, all of it together, where its folder is open; otherwise the notice has Show beside Undo, opening the first folder it went back to with it selected. `ActionContext.openOrigin()` opens the folder a trashed entry came from, from the menu, the preview's header and the properties (see "Restoring" in `trash.md`).*
+- [x] **new:** The properties of an entry in the trash show where it is, the trash, rather than where it came from. *Done 2026-10-26: "Original location" in place of the location, "Trashed" with when, and "Open original location" under the name (`PropertiesItem.trashed`, `openOrigin`).*
+- [x] **new (minor):** Entries being moved to the trash or restored aren't held meanwhile, as a move's are, since it's quick; acting on them meanwhile is left to the adapter. *Done 2026-10-26: they go into `moving` beside the moves' entries, by the user or an undo or redo, so they're marked and refused as a move's are until the adapter answers. They read "Being moved", the moves' wording.*
+- [x] **new (minor):** A move to the trash through several adapters at once (a search's results of several sections) can't be undone as one change, so it ends the history. *Done 2026-10-26: each part of a `trash` or `restore` step names its own adapter, checked and carried out through it, so it's one change to undo and redo. Left: such an undo failing partway is put back whole, and trying again refuses, as for several folders through one adapter.*
 
 ### Selection
 - [ ] The sidebar tree has no touch selection mode.
