@@ -10,6 +10,7 @@ import CloseTwoTone from "@mui/icons-material/CloseTwoTone";
 import ContentCopyTwoTone from "@mui/icons-material/ContentCopyTwoTone";
 import ContentCutTwoTone from "@mui/icons-material/ContentCutTwoTone";
 import DeleteTwoTone from "@mui/icons-material/DeleteTwoTone";
+import DeleteForeverTwoTone from "@mui/icons-material/DeleteForeverTwoTone";
 import DesktopWindowsTwoTone from "@mui/icons-material/DesktopWindowsTwoTone";
 import DescriptionTwoTone from "@mui/icons-material/DescriptionTwoTone";
 import DownloadTwoTone from "@mui/icons-material/DownloadTwoTone";
@@ -40,6 +41,7 @@ import VisibilityTwoTone from "@mui/icons-material/VisibilityTwoTone";
 import HistoryTwoTone from "@mui/icons-material/HistoryTwoTone";
 import RefreshTwoTone from "@mui/icons-material/RefreshTwoTone";
 import DriveFileRenameOutlineTwoTone from "@mui/icons-material/DriveFileRenameOutlineTwoTone";
+import RestoreFromTrashTwoTone from "@mui/icons-material/RestoreFromTrashTwoTone";
 import RotateLeftTwoTone from "@mui/icons-material/RotateLeftTwoTone";
 import RotateRightTwoTone from "@mui/icons-material/RotateRightTwoTone";
 import SearchTwoTone from "@mui/icons-material/SearchTwoTone";
@@ -72,6 +74,7 @@ const twoTone: IconSet = {
     copy: ContentCopyTwoTone,
     cut: ContentCutTwoTone,
     delete: DeleteTwoTone,
+    deleteForever: DeleteForeverTwoTone,
     desktop: DesktopWindowsTwoTone,
     documents: DescriptionTwoTone,
     download: DownloadTwoTone,
@@ -101,6 +104,7 @@ const twoTone: IconSet = {
     recent: HistoryTwoTone,
     refresh: RefreshTwoTone,
     rename: DriveFileRenameOutlineTwoTone,
+    restore: RestoreFromTrashTwoTone,
     rotateLeft: RotateLeftTwoTone,
     rotateRight: RotateRightTwoTone,
     search: SearchTwoTone,

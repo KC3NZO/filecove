@@ -10,6 +10,7 @@ import CloseRounded from "@mui/icons-material/CloseRounded";
 import ContentCopyRounded from "@mui/icons-material/ContentCopyRounded";
 import ContentCutRounded from "@mui/icons-material/ContentCutRounded";
 import DeleteRounded from "@mui/icons-material/DeleteRounded";
+import DeleteForeverRounded from "@mui/icons-material/DeleteForeverRounded";
 import DesktopWindowsRounded from "@mui/icons-material/DesktopWindowsRounded";
 import DescriptionRounded from "@mui/icons-material/DescriptionRounded";
 import DownloadRounded from "@mui/icons-material/DownloadRounded";
@@ -40,6 +41,7 @@ import VisibilityRounded from "@mui/icons-material/VisibilityRounded";
 import HistoryRounded from "@mui/icons-material/HistoryRounded";
 import RefreshRounded from "@mui/icons-material/RefreshRounded";
 import DriveFileRenameOutlineRounded from "@mui/icons-material/DriveFileRenameOutlineRounded";
+import RestoreFromTrashRounded from "@mui/icons-material/RestoreFromTrashRounded";
 import RotateLeftRounded from "@mui/icons-material/RotateLeftRounded";
 import RotateRightRounded from "@mui/icons-material/RotateRightRounded";
 import SearchRounded from "@mui/icons-material/SearchRounded";
@@ -72,6 +74,7 @@ const rounded: IconSet = {
     copy: ContentCopyRounded,
     cut: ContentCutRounded,
     delete: DeleteRounded,
+    deleteForever: DeleteForeverRounded,
     desktop: DesktopWindowsRounded,
     documents: DescriptionRounded,
     download: DownloadRounded,
@@ -101,6 +104,7 @@ const rounded: IconSet = {
     recent: HistoryRounded,
     refresh: RefreshRounded,
     rename: DriveFileRenameOutlineRounded,
+    restore: RestoreFromTrashRounded,
     rotateLeft: RotateLeftRounded,
     rotateRight: RotateRightRounded,
     search: SearchRounded,

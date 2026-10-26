@@ -82,13 +82,17 @@ export interface VirtualLines {
 
 /**
  * Where an entry shown among the results of a search everywhere comes from, which the view's
- * entry stands for under a key of its own. Internal.
+ * entry stands for under a key of its own, or where an entry in the trash's root was moved there
+ * from. Internal.
  */
 export interface EntryOrigin {
     /** The entry as its adapter gave it, which is what's handed back to the adapter. */
     entry: FileEntry;
     adapter: FileAdapter;
-    /** Where it is, for the list's Location column: the section and the folders below its root. */
+    /**
+     * Where it is, for the list's Location column: the section and the folders below its root, or
+     * in the trash, where it was.
+     */
     location: string;
 }
 
@@ -119,9 +123,14 @@ export interface FileViewProps {
     /**
      * For results from many folders, as a search everywhere's, where each of `entries` comes from,
      * by index: its own entry and adapter, for its icon, and its location, which the list shows in
-     * a column of its own.
+     * a column of its own. In the trash's root, where each was moved there from.
      */
     origins?: readonly EntryOrigin[];
+    /**
+     * The folder is the trash's root, so the location column is headed "Original location", and
+     * the date column "Trashed", which shows, and orders by, when each entry was moved there.
+     */
+    trash?: boolean;
     /** Which of them to render, and where. */
     lines: VirtualLines;
     /** How far the view is zoomed, in steps from the size it starts at (see `ViewZoom`). */

@@ -22,12 +22,15 @@ export type {
     PropertyField,
     PropertyGroup,
     PropertyValue,
+    RestoreOptions,
     SearchMatch,
     SearchOptions,
     SearchResult,
     ThumbnailOptions,
     TransferOptions,
     TransferResult,
+    TrashInfo,
+    TrashResult,
     UploadOptions,
 } from "./adapter";
 export type { Clipboard, ClipboardLookup, ClipboardPart } from "./clipboard";
@@ -70,6 +73,7 @@ export type {
     UndoFolder,
     UndoHistory,
     UndoMove,
+    UndoRestore,
     UndoStep,
 } from "./undo";
 export type { EntrySelection, SelectionDetails, SelectModifiers, TreeSelection, TreeTarget } from "./selection";

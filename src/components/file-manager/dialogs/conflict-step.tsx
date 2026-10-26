@@ -9,7 +9,11 @@ import type { Clash, ConflictPolicy } from "../../../types";
 
 interface ConflictMessageProps {
     clashes: Clash[];
-    folderName: string;
+    /**
+     * The folder the names clash in, or null when they're in several, as a restore's may be, the
+     * entries going back to the folders they came from.
+     */
+    folderName: string | null;
 }
 
 interface ConflictChoicesProps {
@@ -41,8 +45,8 @@ const sortClashes = (clashes: Clash[]) => {
 };
 
 /**
- * Says which names a copy, move or upload clashes with, the folder's or each other's, as entries
- * from several folders may share names, and what each choice does to them.
+ * Says which names a copy, move, upload or restore clashes with, the folder's or each other's, as
+ * entries from several folders may share names, and what each choice does to them.
  */
 export const ConflictMessage = ({ clashes, folderName }: ConflictMessageProps) => {
     const { text } = useLocale();
@@ -51,7 +55,20 @@ export const ConflictMessage = ({ clashes, folderName }: ConflictMessageProps) =
     const there = clashes.filter((clash) => !clash.shared);
     const shared = clashes.filter((clash) => clash.shared);
 
+    let message: string;
     let hint: string;
+
+    if (folderName === null) {
+        message =
+            there.length > 0
+                ? text.restoreConflictMessage(there.length, isolate(there[0].name))
+                : text.restoreSharedMessage(shared.length, isolate(shared[0].name));
+    } else {
+        message =
+            there.length > 0
+                ? text.conflictMessage(there.length, isolate(there[0].name), isolate(folderName))
+                : text.conflictSharedMessage(shared.length, isolate(shared[0].name), isolate(folderName));
+    }
 
     if (!replaces && locked.length === 0) {
         hint = text.conflictKindHint(otherKind.length, otherKind[0].there);
@@ -67,11 +84,7 @@ export const ConflictMessage = ({ clashes, folderName }: ConflictMessageProps) =
 
     return (
         <>
-            <Typography sx={messageSx}>
-                {there.length > 0
-                    ? text.conflictMessage(there.length, isolate(there[0].name), isolate(folderName))
-                    : text.conflictSharedMessage(shared.length, isolate(shared[0].name), isolate(folderName))}
-            </Typography>
+            <Typography sx={messageSx}>{message}</Typography>
             {there.length > 0 && shared.length > 0 && (
                 <Typography variant="body2" color="text.secondary">
                     {text.conflictSharedToo(shared.length, isolate(shared[0].name))}

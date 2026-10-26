@@ -37,6 +37,8 @@ interface HeaderBarProps {
     sort: SortOrder;
     /** Whether a search everywhere's results show, which the view menu can order by relevance. */
     resultsShown: boolean;
+    /** Whether the trash's root shows, whose date the view menu names by when entries were moved there. */
+    trashShown: boolean;
     showHidden: boolean;
     /** Whether touch selection mode is on. */
     selecting: boolean;
@@ -185,6 +187,7 @@ const HeaderBar = ({
     zoom,
     sort,
     resultsShown,
+    trashShown,
     showHidden,
     selecting,
     searchScope,
@@ -339,6 +342,7 @@ const HeaderBar = ({
                     zoom={zoom}
                     sort={sort}
                     resultsShown={resultsShown}
+                    trashShown={trashShown}
                     showHidden={showHidden}
                     sidebarHidden={sidebarHidden}
                     sidebarDocked={sidebarDocked}

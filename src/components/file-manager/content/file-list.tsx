@@ -39,6 +39,8 @@ import type { EntryOrigin, FileEntry, FileViewProps, SortKey, SortOrder } from "
 interface ColumnHeaderProps {
     sortKey: SortKey;
     sort: SortOrder;
+    /** The column's label, in place of the key's own. */
+    label?: string;
     sx?: SxProps<Theme>;
     onSortChange: (sort: SortOrder) => void;
 }
@@ -46,7 +48,10 @@ interface ColumnHeaderProps {
 interface FileRowProps
     extends Pick<FileViewProps, "adapter" | "draggable" | "hasActions" | "onSelect" | "onOpen" | "onMenu"> {
     entry: FileEntry;
-    /** Where a search everywhere's result comes from, which the row shows in its Location column. */
+    /**
+     * Where a search everywhere's result comes from, or where an entry in the trash was, which the
+     * row shows in its Location column.
+     */
     origin?: EntryOrigin;
     /** Where the entry is listed, from 0. */
     index: number;
@@ -70,9 +75,9 @@ interface FileRowProps
 }
 
 // `--columns` holds the tracks shared by the header and every row. It grows with the view:
-// name and menu button, then size and modified, then type as well. A search everywhere's results
-// have a Location column after the name, sharing its room. `--icon-size`, set in `style`, is the
-// icon's side as the zoom has it, which the rows grow with.
+// name and menu button, then size and modified, then type as well. A search everywhere's results,
+// and the trash's root, have a Location column after the name, sharing its room. `--icon-size`,
+// set in `style`, is the icon's side as the zoom has it, which the rows grow with.
 // Text can't be selected anywhere in the list, or Shift-click would select it across rows.
 const listSx: SxProps<Theme> = {
     "--columns": "minmax(0, 1fr) 2.5rem",
@@ -241,7 +246,7 @@ const menuButtonSx: SxProps<Theme> = {
  * A sortable column label: picks its key, or reverses the order when it already sorts by it. The
  * column sorting the list tells screen readers its direction, which the arrow only shows.
  */
-const ColumnHeader = ({ sortKey, sort, sx, onSortChange }: ColumnHeaderProps) => {
+const ColumnHeader = ({ sortKey, sort, label, sx, onSortChange }: ColumnHeaderProps) => {
     const { text } = useLocale();
     const labels = SORT_LABELS[sortKey](text);
     const active = sortKey === sort.key;
@@ -257,7 +262,7 @@ const ColumnHeader = ({ sortKey, sort, sx, onSortChange }: ColumnHeaderProps) =>
                     onSortChange(toggleSortKey(sort, sortKey));
                 }}
             >
-                {labels.label}
+                {label ?? labels.label}
                 {active && (
                     <Box component="span" sx={visuallyHiddenSx}>
                         {text.sortedColumn(labels[sort.direction])}
@@ -294,7 +299,7 @@ const FileRow = memo(
         onOpen,
         onMenu,
     }: FileRowProps) => {
-        const { text, describeDate, describeSize, describeType } = useLocale();
+        const { text, describeListDate, describeSize, describeType } = useLocale();
 
         return (
             <Box
@@ -346,7 +351,7 @@ const FileRow = memo(
                         </Typography>
                         {/* A result says where it is here, rather than its size and date. */}
                         <Typography variant="caption" noWrap sx={secondaryLineSx}>
-                            {origin?.location ?? joinIsolated([describeSize(entry), describeDate(entry)])}
+                            {origin?.location ?? joinIsolated([describeSize(entry), describeListDate(entry)])}
                         </Typography>
                     </Box>
                 </Box>
@@ -362,7 +367,7 @@ const FileRow = memo(
                     {describeType(entry)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" noWrap sx={modifiedCellSx}>
-                    {describeDate(entry)}
+                    {describeListDate(entry)}
                 </Typography>
                 <Box sx={menuCellSx}>
                     {hasActions && (
@@ -397,6 +402,7 @@ const FileRow = memo(
 const FileList = ({
     entries,
     origins,
+    trash,
     lines,
     zoom,
     label,
@@ -423,10 +429,16 @@ const FileList = ({
         <Box sx={listSx} style={{ "--icon-size": `${iconSize}rem` } as CSSProperties} data-located={!!origins}>
             <Box sx={headerRowSx} role="group" aria-label={text.sortBy}>
                 <ColumnHeader sortKey="name" sort={sort} sx={nameHeaderSx} onSortChange={onSortChange} />
-                {origins && <Box>{text.searchLocation}</Box>}
+                {origins && <Box>{trash ? text.trashLocation : text.searchLocation}</Box>}
                 <ColumnHeader sortKey="size" sort={sort} onSortChange={onSortChange} />
                 <ColumnHeader sortKey="type" sort={sort} sx={typeCellSx} onSortChange={onSortChange} />
-                <ColumnHeader sortKey="modified" sort={sort} sx={modifiedHeaderSx} onSortChange={onSortChange} />
+                <ColumnHeader
+                    sortKey="modified"
+                    sort={sort}
+                    label={trash ? text.sortTrashed : undefined}
+                    sx={modifiedHeaderSx}
+                    onSortChange={onSortChange}
+                />
                 <Box />
             </Box>
             <Box

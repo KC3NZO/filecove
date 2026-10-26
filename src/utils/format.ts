@@ -1,5 +1,6 @@
 import { enUS } from "../locales/en-us";
 import { isolate } from "./bidi";
+import { trashedDate } from "./trash";
 
 import type { FileEntry, FileManagerLocaleText, Locale } from "../types";
 
@@ -128,6 +129,11 @@ export const createLocale = (
         formatDuration,
         describeSize,
         describeDate: (entry) => (entry.modifiedAt ? dateFormat.format(entry.modifiedAt) : "—"),
+        describeListDate: (entry) => {
+            const date = trashedDate(entry);
+
+            return date ? dateFormat.format(date) : "—";
+        },
         describeType,
         describeAccepted,
         compareNames: (a, b) => nameCollator.compare(a, b),

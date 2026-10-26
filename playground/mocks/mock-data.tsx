@@ -41,7 +41,8 @@ const datasets: MockNode[] = Array.from({ length: 5_000 }, (_, index) => {
 
 /**
  * One backend serving two unrelated project roots, as in "/server/project/a" and "/server/project/b",
- * sharing its folders over SMB, so names are held to Windows' rules.
+ * sharing its folders over SMB, so names are held to Windows' rules, with a trash of its own, which
+ * the Trash section shows.
  */
 export const serverAdapter = createMockAdapter(
     {
@@ -144,10 +145,10 @@ export const serverAdapter = createMockAdapter(
             folder("archive", "2025-12-01T09:00", []),
         ],
     },
-    { windowsNames: true },
+    { windowsNames: true, trash: "/trash" },
 );
 
-/** A second, unrelated backend, used by one section only. */
+/** A second, unrelated backend, used by one section only. It has no trash, so it deletes for good. */
 const mediaAdapter = createMockAdapter(
     {
         "/": [
@@ -240,6 +241,12 @@ export const sections: SectionGroup[] = [
                 readOnly: true,
             },
         ],
+    },
+    // The server's trash, a plain place at the end, as GNOME Files has it, where what Delete moves
+    // there from the server's sections is restored or deleted for good.
+    {
+        id: "trash",
+        sections: [{ id: "trash", label: "Trash", icon: "delete", rootId: "/trash", trash: true, showFolders: false }],
     },
 ];
 
@@ -367,7 +374,9 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 icon: "paste",
                 shortcut: "Ctrl+V",
                 target: "folder",
-                // Stays in the menu, greyed out, while there is nothing to paste here.
+                // Stays in the menu, greyed out, while there is nothing to paste here, but in the
+                // trash, which nothing is pasted into.
+                visible: (context) => !context.section.trash,
                 disabled: (context) => !context.paste,
                 onSelect: (context) => context.paste?.(),
             },
@@ -377,7 +386,7 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 icon: "paste",
                 target: "selection",
                 single: true,
-                visible: (context) => context.entries[0].kind === "folder",
+                visible: (context) => context.entries[0].kind === "folder" && !context.section.trash,
                 disabled: (context) => !context.pasteInto,
                 onSelect: (context) => context.pasteInto?.(),
             },
@@ -434,15 +443,62 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 label: "Share",
                 icon: "share",
                 target: "selection",
-                // Goes by the entries alone, so it takes a search's results from several folders.
+                // Goes by the entries alone, so it takes a search's results from several folders,
+                // and has nothing to share in the trash.
                 acrossFolders: true,
+                visible: (context) => !context.section.trash,
                 onSelect: (context) => notify(`Share ${names(context)}`),
+            },
+        ],
+    },
+    {
+        id: "trash",
+        actions: [
+            {
+                id: "restore",
+                label: "Restore",
+                icon: "restore",
+                target: "selection",
+                visible: (context) => !!context.restore,
+                onSelect: (context) => context.restore?.(),
+            },
+            {
+                id: "empty-trash",
+                label: "Empty trash…",
+                icon: "deleteForever",
+                target: "folder",
+                destructive: true,
+                visible: (context) => !!context.emptyTrash,
+                onSelect: (context) => context.emptyTrash?.(),
             },
         ],
     },
     {
         id: "danger",
         actions: [
+            // Delete moves to the trash where there's one, as on a desktop, and Shift+Delete deletes
+            // for good; in the trash, and where there's none (the media bucket), Delete deletes for good.
+            {
+                id: "trash",
+                label: "Move to trash",
+                icon: "delete",
+                shortcut: "Delete",
+                target: "selection",
+                acrossFolders: true,
+                visible: (context) => !!context.trash,
+                onSelect: (context) => context.trash?.(),
+            },
+            {
+                id: "delete-for-good",
+                label: "Delete permanently…",
+                icon: "deleteForever",
+                shortcut: "Shift+Delete",
+                target: "selection",
+                acrossFolders: true,
+                destructive: true,
+                visible: (context) => !!context.delete && !!context.trash,
+                onSelect: (context) => context.delete?.(),
+            },
             {
                 id: "delete",
                 label: "Delete…",
@@ -451,7 +507,17 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 target: "selection",
                 acrossFolders: true,
                 destructive: true,
-                visible: (context) => !!context.delete,
+                visible: (context) => !!context.delete && !context.trash && !context.section.trash,
+                onSelect: (context) => context.delete?.(),
+            },
+            {
+                id: "delete-from-trash",
+                label: "Delete permanently…",
+                icon: "deleteForever",
+                shortcut: "Delete",
+                target: "selection",
+                destructive: true,
+                visible: (context) => !!context.delete && !!context.section.trash,
                 onSelect: (context) => context.delete?.(),
             },
         ],
@@ -479,8 +545,9 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
 ];
 
 /**
- * Demo actions for the preview's header: Share, Rename and Delete as buttons, the rest in its "More
- * actions" menu, with "Open in editor" closing the preview as an app's editor would take over.
+ * Demo actions for the preview's header: Share, Rename and "Move to trash", or Delete where there's
+ * no trash, as buttons, the rest in its "More actions" menu, with "Open in editor" closing the
+ * preview as an app's editor would take over.
  */
 export const createPreviewActions = (notify: (message: string) => void): ActionGroup[] => [
     {
@@ -501,12 +568,20 @@ export const createPreviewActions = (notify: (message: string) => void): ActionG
                 onSelect: (context) => context.rename?.(),
             },
             {
+                id: "trash",
+                label: "Move to trash",
+                icon: "delete",
+                shortcut: "Delete",
+                visible: (context) => !!context.trash,
+                onSelect: (context) => context.trash?.(),
+            },
+            {
                 id: "delete",
                 label: "Delete…",
                 icon: "delete",
                 shortcut: "Delete",
                 destructive: true,
-                visible: (context) => !!context.delete,
+                visible: (context) => !!context.delete && !context.trash,
                 onSelect: (context) => context.delete?.(),
             },
         ],

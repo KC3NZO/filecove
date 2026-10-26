@@ -17,6 +17,7 @@ import type {
     SearchResult,
     TransferOptions,
     TransferResult,
+    TrashResult,
 } from "../../src";
 import type { ZipItem } from "./mock-zip";
 
@@ -55,6 +56,21 @@ interface MockAdapterOptions {
     downloadUrls?: Record<string, { url: string; delay?: number }>;
     /** Names are held to Windows' rules, as a server sharing its folders over SMB would hold them. */
     windowsNames?: boolean;
+    /**
+     * The id of the folder entries moved to the trash go to, which a section with `trash` set is
+     * rooted in. Without it, the adapter has no `trash` nor `restore`, and deletes for good.
+     */
+    trash?: string;
+}
+
+/** An entry in the mock's trash: what it was, where from, and when. */
+interface Trashed {
+    /** Its id in the trash, unique there, as two entries of one name may be in it. */
+    id: string;
+    node: MockNode;
+    /** The folder it was in. */
+    from: string;
+    at: Date;
 }
 
 // Windows refuses these characters, and control characters, anywhere in a name.
@@ -357,9 +373,22 @@ const toEntry = (parentPath: string, node: MockNode, locked: boolean): FileEntry
  */
 export const createMockAdapter = (
     roots: Record<string, MockNode[]>,
-    { latency = [250, 700], pageSize = 2500, downloadUrls = {}, windowsNames = false }: MockAdapterOptions = {},
+    {
+        latency = [250, 700],
+        pageSize = 2500,
+        downloadUrls = {},
+        windowsNames = false,
+        trash: trashId,
+    }: MockAdapterOptions = {},
 ): FileAdapter => {
     const folders = new Map<string, MockNode>();
+    const trash = trashId;
+    // What's in the trash, by its id there, in the order it went. The trash's own node holds the
+    // same nodes, for what walks folders (counting, packing), and a folder in it is indexed under
+    // its id there, so it can be opened.
+    const trashed = new Map<string, Trashed>();
+    const trashNode: MockNode = { name: "Trash", children: [] };
+    let trashCount = 0;
 
     const index = (path: string, node: MockNode) => {
         folders.set(path, node);
@@ -376,6 +405,10 @@ export const createMockAdapter = (
     };
 
     Object.entries(roots).forEach(([path, children]) => index(path, { name: path, children }));
+
+    if (trash) {
+        folders.set(trash, trashNode);
+    }
 
     /** Settles with what `work` returns, or rejects with what it throws, after the simulated latency. */
     const respond = <T>(signal: AbortSignal, work: () => T) =>
@@ -452,11 +485,14 @@ export const createMockAdapter = (
         }
     };
 
-    /** An entry's node and the folder it is in. */
+    /** An entry's node and the folder it is in, found in the trash by its id there, and elsewhere by its name. */
     const locate = (entry: FileEntry) => {
         const parentId = parentOf(entry.id);
         const parent = folderAt(parentId);
-        const node = parent.children?.find((child) => child.name === entry.name);
+        const node =
+            parentId === trash
+                ? trashed.get(entry.id)?.node
+                : parent.children?.find((child) => child.name === entry.name);
 
         if (!node) {
             throw new Error(`No file or folder at ${entry.id}`);
@@ -522,7 +558,14 @@ export const createMockAdapter = (
     const detach = (parent: MockNode, parentId: string, node: MockNode) => {
         parent.children = parent.children?.filter((child) => child !== node);
 
-        if (node.children) {
+        if (parentId === trash) {
+            const [id] = [...trashed].find(([, item]) => item.node === node) ?? [];
+
+            if (id !== undefined) {
+                trashed.delete(id);
+                unindex(id);
+            }
+        } else if (node.children) {
             unindex(childId(parentId, node.name));
         }
     };
@@ -620,6 +663,50 @@ export const createMockAdapter = (
     const rootOf = (path: string) =>
         Object.keys(roots).find((root) => path === root || path.startsWith(root === "/" ? "/" : `${root}/`)) ?? "/";
 
+    /** The folders from a path's root down to it, which a trashed entry says it came from. */
+    const trailOf = (path: string): FolderRef[] => {
+        const root = rootOf(path);
+        const names = path.slice(root.length).split("/").filter(Boolean);
+        let at = root;
+
+        return [
+            { id: root, name: root.split("/").filter(Boolean).pop() ?? root },
+            ...names.map((name) => ({ id: (at = childId(at, name)), name })),
+        ];
+    };
+
+    /** An entry of the trash as its root lists it: under its id there, saying where it came from and when. */
+    const trashEntry = ({ id, node, from, at }: Trashed): FileEntry => ({
+        ...toEntry(trash ?? "/", node, false),
+        id,
+        trashed: { trail: trailOf(from), trashedAt: at },
+    });
+
+    /**
+     * The folder at a path, made again, with the folders above it, when it has gone since, as a
+     * desktop's trash puts back the folders an entry was in.
+     */
+    const folderMadeAt = (path: string): MockNode => {
+        const there = folders.get(path);
+
+        if (there || path === rootOf(path)) {
+            return folderAt(path);
+        }
+
+        const parent = folderMadeAt(parentOf(path));
+        const name = path.slice(path.lastIndexOf("/") + 1);
+        const node = folder(name, new Date().toISOString(), []);
+
+        if (locked(parentOf(path))) {
+            throw new Error("This folder is read-only.");
+        }
+
+        parent.children = [...(parent.children ?? []), node];
+        index(path, node);
+
+        return node;
+    };
+
     const adapter: FileAdapter = {
         list: (folderId, { signal, cursor }) =>
             respond<ListResult>(signal, () => {
@@ -627,6 +714,16 @@ export const createMockAdapter = (
                 const start = cursor ? Number(cursor) : 0;
                 const end = start + pageSize;
                 const lockedHere = locked(folderId);
+
+                // The trash lists each entry under its id there, two of one name being two entries.
+                if (folderId === trash) {
+                    const items = [...trashed.values()];
+
+                    return {
+                        entries: items.slice(start, end).map(trashEntry),
+                        nextCursor: end < items.length ? String(end) : undefined,
+                    };
+                }
 
                 return {
                     entries: children.slice(start, end).map((child) => toEntry(folderId, child, lockedHere)),
@@ -872,6 +969,69 @@ export const createMockAdapter = (
                     detach(parent, parentId, node);
                 });
             }),
+
+        // Into the trash's folder, each under an id of its own there, keeping its name, and the
+        // folder it came from, to be put back. Folders go with everything in them, at once.
+        trash: trash
+            ? (entries, { signal }) =>
+                  respond<TrashResult>(signal, () => ({
+                      entries: entries.map((entry) => {
+                          const { parentId, parent, node } = locateChangeable(entry);
+
+                          if (parentId === trash) {
+                              throw new Error(`“${entry.name}” is in the trash already.`);
+                          }
+
+                          detach(parent, parentId, node);
+                          trashCount += 1;
+
+                          const item: Trashed = {
+                              id: childId(trash, String(trashCount)),
+                              node,
+                              from: parentId,
+                              at: new Date(),
+                          };
+
+                          trashed.set(item.id, item);
+                          trashNode.children = [...(trashNode.children ?? []), node];
+
+                          if (node.children) {
+                              index(item.id, node);
+                          }
+
+                          return trashEntry(item);
+                      }),
+                  }))
+            : undefined,
+
+        // Each back in the folder it came from, made again when it has gone, settling a name it has
+        // now by `conflict`, as a move does. Skipped ones stay in the trash.
+        restore: trash
+            ? (entries, { signal, conflict }) =>
+                  respond<TrashResult>(signal, () => ({
+                      entries: entries.flatMap((entry) => {
+                          const item = trashed.get(entry.id);
+
+                          if (!item) {
+                              throw new Error(`“${entry.name}” isn't in the trash any more.`);
+                          }
+
+                          const target = folderMadeAt(item.from);
+
+                          if (locked(item.from)) {
+                              throw new Error("This folder is read-only.");
+                          }
+
+                          if (conflict === "skip" && clashes(target, item.node)) {
+                              return [];
+                          }
+
+                          detach(trashNode, trash, item.node);
+
+                          return [toEntry(item.from, insert(target, item.from, item.node, conflict), false)];
+                      }),
+                  }))
+            : undefined,
 
         // The file itself is kept, for the preview, and its entry handed back, under the name it was
         // kept as. A folder that refuses files does so before anything is sent, and so does a file

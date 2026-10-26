@@ -10,6 +10,7 @@ import CloseSharp from "@mui/icons-material/CloseSharp";
 import ContentCopySharp from "@mui/icons-material/ContentCopySharp";
 import ContentCutSharp from "@mui/icons-material/ContentCutSharp";
 import DeleteSharp from "@mui/icons-material/DeleteSharp";
+import DeleteForeverSharp from "@mui/icons-material/DeleteForeverSharp";
 import DesktopWindowsSharp from "@mui/icons-material/DesktopWindowsSharp";
 import DescriptionSharp from "@mui/icons-material/DescriptionSharp";
 import DownloadSharp from "@mui/icons-material/DownloadSharp";
@@ -40,6 +41,7 @@ import VisibilitySharp from "@mui/icons-material/VisibilitySharp";
 import HistorySharp from "@mui/icons-material/HistorySharp";
 import RefreshSharp from "@mui/icons-material/RefreshSharp";
 import DriveFileRenameOutlineSharp from "@mui/icons-material/DriveFileRenameOutlineSharp";
+import RestoreFromTrashSharp from "@mui/icons-material/RestoreFromTrashSharp";
 import RotateLeftSharp from "@mui/icons-material/RotateLeftSharp";
 import RotateRightSharp from "@mui/icons-material/RotateRightSharp";
 import SearchSharp from "@mui/icons-material/SearchSharp";
@@ -72,6 +74,7 @@ const sharp: IconSet = {
     copy: ContentCopySharp,
     cut: ContentCutSharp,
     delete: DeleteSharp,
+    deleteForever: DeleteForeverSharp,
     desktop: DesktopWindowsSharp,
     documents: DescriptionSharp,
     download: DownloadSharp,
@@ -101,6 +104,7 @@ const sharp: IconSet = {
     recent: HistorySharp,
     refresh: RefreshSharp,
     rename: DriveFileRenameOutlineSharp,
+    restore: RestoreFromTrashSharp,
     rotateLeft: RotateLeftSharp,
     rotateRight: RotateRightSharp,
     search: SearchSharp,

@@ -9,7 +9,9 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
+import { useData } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
+import { listingOf } from "../../../store/folder-store";
 import { dialogActionsSx } from "../../../styles/direction";
 import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
@@ -29,6 +31,11 @@ export interface DeleteRequest {
     groups: DeleteGroup[];
     /** Set when they're the copies a copy made, which undoing it deletes, as the dialog then says. */
     undoesCopy?: boolean;
+    /**
+     * Set to empty the trash, its root being the one group's folder: what it lists is read afresh
+     * as the user confirms, and deleted, whatever `entries` held when the dialog opened.
+     */
+    emptiesTrash?: boolean;
 }
 
 export interface DeleteDialogState {
@@ -64,15 +71,18 @@ const contentSx: SxProps<Theme> = {
 /**
  * Asks to confirm deleting entries, then has the adapter delete them, a folder's at a time, as it
  * takes entries sharing a folder, each through its own section's adapter. Deleting can't be undone,
- * so nothing is deleted without asking, not even the copies undoing a copy deletes. Anything the
- * adapter rejects with is shown in the dialog, which stays open to try again, with only the folders'
- * entries not yet deleted.
+ * so nothing is deleted without asking, not even the copies undoing a copy deletes, nor what's in
+ * the trash as it's emptied. Anything the adapter rejects with is shown in the dialog, which stays
+ * open to try again, with only the folders' entries not yet deleted.
  */
 const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialogProps) => {
-    const { groups } = request;
-    const entries = groupedEntries(groups);
+    const { groups: asked, emptiesTrash } = request;
     const { text } = useLocale();
     const dir = useContext(DirectionContext);
+    const { store } = useData();
+    // Emptying the trash deletes what it lists as the user confirms.
+    const [groups, setGroups] = useState(asked);
+    const entries = groupedEntries(groups);
 
     const [pending, setPending] = useState(false);
     const [failure, setFailure] = useState<string | null>(null);
@@ -121,6 +131,20 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
         }
     };
 
+    // The trash's listing as it is now, so nothing moved there since the dialog opened is left, and
+    // nothing restored meanwhile is deleted.
+    const listTrash = async (signal: AbortSignal) => {
+        const [trash] = asked;
+        const listed = await listingOf(store, trash.section.id, trash.adapter, trash.section.rootId, true, signal);
+        const now = [{ ...trash, entries: listed }];
+
+        if (!signal.aborted) {
+            setGroups(now);
+        }
+
+        return now;
+    };
+
     const confirm = () => {
         if (pending) {
             return;
@@ -134,11 +158,13 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
 
         // One folder's entries after another, leaving out those deleted before a failure. Wrapped so
         // an adapter that throws synchronously still ends up as a failure.
-        const left = groups.filter((group) => !deleted.current.includes(group));
         const deleteGroups = async () => {
+            const given = emptiesTrash ? await listTrash(current.signal) : groups;
+            const left = given.filter((group) => !deleted.current.includes(group) && group.entries.length > 0);
+
             for (const group of left) {
                 if (current.signal.aborted) {
-                    return;
+                    return given;
                 }
 
                 if (!group.adapter.delete) {
@@ -151,16 +177,18 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
                     deleted.current = [...deleted.current, group];
                 }
             }
+
+            return given;
         };
 
         Promise.resolve()
             .then(deleteGroups)
             .then(
-                () => {
+                (given) => {
                     if (!current.signal.aborted) {
                         controller.current = null;
                         refresh();
-                        onDone(request);
+                        onDone({ ...request, groups: given });
                     }
                 },
                 (error: unknown) => {
@@ -172,7 +200,9 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
                         setFailure(
                             error instanceof Error && error.message
                                 ? isolate(error.message)
-                                : text.deleteFailed(entries.length - groupedEntries(deleted.current).length),
+                                : emptiesTrash
+                                  ? text.emptyTrashFailed
+                                  : text.deleteFailed(entries.length - groupedEntries(deleted.current).length),
                         );
                     }
                 },
@@ -180,18 +210,27 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
     };
 
     const hasFolders = entries.some((entry) => entry.kind === "folder");
-    const [first] = groups;
+    const [first] = asked;
+    let title: string;
+    let warning: string;
+
+    if (emptiesTrash) {
+        title = text.emptyTrashTitle;
+        warning = text.emptyTrashWarning;
+    } else if (request.undoesCopy) {
+        title = text.undoCopyTitle(entries.length, isolate(entries[0].name));
+        warning = text.undoCopyWarning(entries.length, isolate(folderOf(first.section, first.trail).name));
+    } else {
+        title = text.deleteTitle(entries.length, isolate(entries[0].name));
+        warning = text.deleteWarning(entries.length, hasFolders);
+    }
 
     return (
         <Dialog dir={dir} open={open} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
-            <DialogTitle>
-                {(request.undoesCopy ? text.undoCopyTitle : text.deleteTitle)(entries.length, isolate(entries[0].name))}
-            </DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
             <DialogContent sx={contentSx}>
                 <Typography variant="body2" color="text.secondary">
-                    {request.undoesCopy
-                        ? text.undoCopyWarning(entries.length, isolate(folderOf(first.section, first.trail).name))
-                        : text.deleteWarning(entries.length, hasFolders)}
+                    {warning}
                 </Typography>
                 {failure && (
                     <Typography variant="body2" color="error">
@@ -204,7 +243,7 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
                     {text.cancel}
                 </Button>
                 <Button ref={confirmRef} variant="contained" color="error" loading={pending} onClick={confirm}>
-                    {text.delete}
+                    {emptiesTrash ? text.emptyTrash : text.delete}
                 </Button>
             </DialogActions>
         </Dialog>

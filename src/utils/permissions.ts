@@ -1,5 +1,6 @@
 import { folderKey } from "../store/folder-store";
 import { folderOf } from "./navigation";
+import { sectionLocked } from "./sections";
 
 import type { FolderStore } from "../store/folder-store";
 import type { EntryPermissions, FileEntry, FileManagerLocaleText, FolderRef, Section } from "../types";
@@ -41,10 +42,10 @@ export const entriesMoving = (
 ) => folderMoving(section, trail, moving) || entries.some((entry) => moving.has(entry.id));
 
 /**
- * Whether what's in the folder at `trail` can change: its section isn't `readOnly`, it isn't being
- * moved (`folderMoving`, by the ids in `moving`), and neither its own listing's permissions nor its
- * entry's, in the listing of the folder above, refuse writing. A folder neither is cached for
- * counts as writable, as the adapter has the final say anyway.
+ * Whether what's in the folder at `trail` can change: its section isn't `readOnly` or the trash
+ * (`sectionLocked`), it isn't being moved (`folderMoving`, by the ids in `moving`), and neither its
+ * own listing's permissions nor its entry's, in the listing of the folder above, refuse writing. A
+ * folder neither is cached for counts as writable, as the adapter has the final say anyway.
  */
 export const folderWritable = (
     store: FolderStore,
@@ -52,7 +53,7 @@ export const folderWritable = (
     trail: FolderRef[],
     moving: ReadonlySet<string>,
 ) => {
-    if (section.readOnly || folderMoving(section, trail, moving)) {
+    if (sectionLocked(section) || folderMoving(section, trail, moving)) {
         return false;
     }
 

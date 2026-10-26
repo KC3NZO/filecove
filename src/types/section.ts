@@ -61,6 +61,18 @@ export interface Section {
      * @default false
      */
     readOnly?: boolean;
+    /**
+     * Whether the section is its adapter's trash: `rootId` is where the adapter's `trash` puts
+     * entries, which its listing hands back with `trashed`. The list shows where each came from and
+     * when it was moved there, the trash's own bar offers to empty it, and entries dropped on it
+     * are moved to the trash. Its root's entries are restored (`ActionContext.restore`, through the
+     * adapter's `restore`) or deleted for good, and nothing else changes in it: nothing is created,
+     * uploaded, pasted, dropped, copied or moved in or out, or renamed, and what's inside its
+     * folders stays as it is. They can still be opened, previewed, downloaded and shown in the
+     * properties. A search everywhere leaves it out.
+     * @default false
+     */
+    trash?: boolean;
 }
 
 /** Sections shown together in the sidebar, divided from the next group by a rule. */

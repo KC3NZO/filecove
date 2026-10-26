@@ -34,6 +34,8 @@ interface ViewMenuProps {
     sort: SortOrder;
     /** Whether a search everywhere's results show, which can be ordered by relevance. */
     resultsShown: boolean;
+    /** Whether the trash's root shows, whose date goes by when its entries were moved there. */
+    trashShown: boolean;
     showHidden: boolean;
     /** Whether the docked sidebar is hidden. */
     sidebarHidden: boolean;
@@ -147,6 +149,7 @@ const ViewMenu = ({
     zoom,
     sort,
     resultsShown,
+    trashShown,
     showHidden,
     sidebarHidden,
     sidebarDocked,
@@ -209,7 +212,9 @@ const ViewMenu = ({
                         <ListItemIcon>
                             <Radio size="small" checked={key === order.key} tabIndex={-1} disableRipple sx={controlSx} />
                         </ListItemIcon>
-                        <ListItemText>{SORT_LABELS[key](text).label}</ListItemText>
+                        <ListItemText>
+                            {trashShown && key === "modified" ? text.sortTrashed : SORT_LABELS[key](text).label}
+                        </ListItemText>
                     </MenuItem>
                 ))}
                 {order.key !== "relevance" && <Divider />}

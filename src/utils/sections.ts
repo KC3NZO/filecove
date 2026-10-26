@@ -17,3 +17,9 @@ export const importsFrom = (target: Section, source: Section) => {
 
     return rule.allow ? rule.allow.includes(source.id) : !rule.deny?.includes(source.id);
 };
+
+/**
+ * Whether nothing in a section changes through the file manager's own operations: it's `readOnly`,
+ * or it's the trash, whose root's entries are only restored or deleted for good.
+ */
+export const sectionLocked = (section: Section) => !!section.readOnly || !!section.trash;

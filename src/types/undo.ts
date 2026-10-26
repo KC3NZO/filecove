@@ -6,7 +6,7 @@ import type { EntryGroup } from "./menu";
 import type { FolderRef, Section } from "./section";
 
 /** A change made through the file manager that can be undone, as the text names it: "Undo rename". */
-export type UndoChange = "rename" | "newFolder" | "copy" | "move";
+export type UndoChange = "rename" | "newFolder" | "copy" | "move" | "trash" | "restore";
 
 /** A folder of a section, by the trail to it. */
 export interface UndoFolder {
@@ -28,6 +28,14 @@ export interface UndoMove {
     names?: string[];
 }
 
+/** Entries in the trash going back into a folder, by a restore that undoes or redoes one. */
+export interface UndoRestore {
+    /** The entries in the trash, as the change left them there. */
+    entries: FileEntry[];
+    /** The folder they were moved to the trash from, which they go back to. */
+    to: UndoFolder;
+}
+
 /**
  * What undoing, or redoing, a change does, with what it acts on as the change left it, which is
  * checked against the folders' listings before anything is done.
@@ -47,7 +55,11 @@ export type UndoAction =
     /** Copies `sources` into `to` again. */
     | { kind: "copy"; sources: EntryGroup[]; to: UndoFolder }
     /** Moves each one's entries into its folder, as many transfers. */
-    | { kind: "move"; moves: UndoMove[] };
+    | { kind: "move"; moves: UndoMove[] }
+    /** Moves each group's entries to the trash, a folder's at a time. */
+    | { kind: "trash"; groups: EntryGroup[] }
+    /** Puts the entries in the trash back, each one's into its folder, together, keeping both. */
+    | { kind: "restore"; restores: UndoRestore[] };
 
 /** A change made through the file manager, which the history undoes, or redoes once undone. */
 export interface UndoStep {

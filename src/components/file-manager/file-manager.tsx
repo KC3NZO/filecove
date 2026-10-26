@@ -78,6 +78,7 @@ import {
 import { previewable } from "../../utils/preview";
 import { RELEVANCE_SORT, entryComparator, folderSort, sameSort } from "../../utils/sort";
 import { isMoving, movingIds, movingThrough, sharesNames } from "../../utils/transfer";
+import { inTrashRoot, trashMade, trashOrigin, trashedLocation, trashesOf } from "../../utils/trash";
 import {
     NO_HISTORY,
     UNDO_STEPS,
@@ -98,11 +99,13 @@ import Announcer from "./announcer";
 import FolderView from "./content/folder-view";
 import NoSections from "./content/no-sections";
 import SearchResults from "./content/search-results";
+import TrashBar from "./content/trash-bar";
 import ContextMenu from "./context-menu/context-menu";
 import DeleteDialog from "./dialogs/delete-dialog";
 import NameDialog from "./dialogs/name-dialog";
 import PasteDialog from "./dialogs/paste-dialog";
 import PreviewDialog from "./dialogs/preview-dialog";
+import RestoreDialog from "./dialogs/restore-dialog";
 import ShortcutsDialog from "./dialogs/shortcuts-dialog";
 import TransferDialog from "./dialogs/transfer-dialog";
 import UploadDialog from "./dialogs/upload-dialog";
@@ -156,6 +159,7 @@ import type {
     SortOrder,
     ToolbarGroup,
     TransferItem,
+    TrashInfo,
     TreeReveal,
     UndoAction,
     UndoChange,
@@ -163,6 +167,7 @@ import type {
     UndoFolder,
     UndoHistory,
     UndoMove,
+    UndoRestore,
     UndoStep,
     UploadItem,
     ViewMode,
@@ -175,6 +180,7 @@ import type { DeleteDialogState, DeleteRequest } from "./dialogs/delete-dialog";
 import type { NameDialogState, NameRequest } from "./dialogs/name-dialog";
 import type { PasteDialogState, PasteRequest } from "./dialogs/paste-dialog";
 import type { PreviewDialogState, PreviewFile, PreviewRequest } from "./dialogs/preview-dialog";
+import type { RestoreDialogState, RestoreRequest } from "./dialogs/restore-dialog";
 import type { TransferDialogState, TransferRequest } from "./dialogs/transfer-dialog";
 import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
 import type { Notice } from "./notice-bar";
@@ -574,6 +580,16 @@ interface UndoRun {
     controller: AbortController;
 }
 
+/** Entries being moved to the trash or restored from it, whose folders show the progress bar meanwhile. */
+interface TrashWork {
+    adapter: FileAdapter;
+    /** The folders it changes: where the entries are, the trash, and where they go back to. */
+    folderIds: string[];
+}
+
+/** Entries to move to the trash, by the folder they're in, each with the adapter serving its section. */
+type TrashGroup = EntryGroup & { adapter: FileAdapter };
+
 /** What the notice under the content says, and the step its button undoes or redoes. */
 interface UndoNotice extends Notice {
     /**
@@ -597,6 +613,15 @@ interface UndoTools {
     text: FileManagerLocaleText;
     applyNamed: (request: NameRequest, entry: FileEntry, message: string | null, reveals?: boolean) => void;
     applyDeleted: (groups: DeleteRequest["groups"]) => void;
+    applyTrashed: (adapter: FileAdapter, group: EntryGroup) => void;
+    applyRestored: (
+        adapter: FileAdapter,
+        trashed: FileEntry[],
+        made: FileEntry[] | undefined,
+        folderIds: string[],
+        merged: string[],
+    ) => void;
+    trashRootIds: (adapter: FileAdapter) => string[];
     askDelete: (request: DeleteRequest) => void;
     relist: (adapter: FileAdapter, folderIds: string[]) => void;
     startTransfer: (
@@ -654,6 +679,9 @@ const ARRIVAL_WAIT = 10_000;
 
 const sameEntries = (a: FileEntry[], b: FileEntry[]) =>
     a === b || (a.length === b.length && a.every((entry, index) => entry === b[index]));
+
+// Why the adapter failed, as its message says it, isolated, or nothing when it doesn't.
+const errorDetail = (error: unknown) => (error instanceof Error && error.message ? isolate(error.message) : undefined);
 
 const folderIdsOf = (entries: FileEntry[]) =>
     entries.filter((entry) => entry.kind === "folder").map((entry) => entry.id);
@@ -1157,6 +1185,11 @@ const FileManager = ({
     const [naming, setNaming] = useState<NameDialogState | null>(null);
     const [transfer, setTransfer] = useState<TransferDialogState | null>(null);
     const [deleting, setDeleting] = useState<DeleteDialogState | null>(null);
+    const [restoring, setRestoring] = useState<RestoreDialogState | null>(null);
+    // Entries going to the trash or coming back from it, without a dialog, while the adapter works.
+    const [trashWork, setTrashWork] = useState<readonly TrashWork[]>([]);
+    // Aborted as the file manager unmounts.
+    const trashControllers = useRef(new Set<AbortController>());
     const [clipboard, setClipboard] = useState<Clipboard | null>(null);
     const [pasting, setPasting] = useState<PasteDialogState | null>(null);
     const [uploadCheck, setUploadCheck] = useState<UploadDialogState | null>(null);
@@ -1185,6 +1218,7 @@ const FileManager = ({
     const undoTools = useRef<UndoTools | null>(null);
 
     useEffect(() => () => undoingNow.current?.controller.abort(), []);
+    useEffect(() => () => trashControllers.current.forEach((controller) => controller.abort()), []);
 
     const changeHistory = useCallback((change: (before: UndoHistory) => UndoHistory) => {
         const after = change(historyNow.current);
@@ -1409,14 +1443,14 @@ const FileManager = ({
 
     // The sections a search everywhere can cover: those whose adapter has `search`, in the
     // sidebar's order, and their groups for the field's sections menu. Without any, there's no
-    // search everywhere.
+    // search everywhere. The trash isn't searched, so what's in it doesn't turn up among the rest.
     const searchTargets = useMemo(
         () =>
             sections.flatMap((group) =>
                 group.sections.flatMap((shown): SearchTarget[] => {
                     const served = shown.adapter ?? adapter;
 
-                    return served.search ? [{ section: shown, adapter: served }] : [];
+                    return served.search && !shown.trash ? [{ section: shown, adapter: served }] : [];
                 }),
             ),
         [sections, adapter],
@@ -2431,6 +2465,12 @@ const FileManager = ({
 
     const closeDelete = useCallback(() => setDeleting((prev) => prev && { ...prev, open: false }), []);
 
+    const askRestore = useCallback((request: RestoreRequest) => {
+        setRestoring((prev) => ({ open: true, id: (prev?.id ?? 0) + 1, request }));
+    }, []);
+
+    const closeRestore = useCallback(() => setRestoring((prev) => prev && { ...prev, open: false }), []);
+
     const askPaste = useCallback((request: PasteRequest) => {
         setPasting((prev) => ({ open: true, id: (prev?.id ?? 0) + 1, request }));
     }, []);
@@ -2545,11 +2585,38 @@ const FileManager = ({
         [adapter, store, moving, pasting?.open, askPaste],
     );
 
+    // Moves entries to the trash, which much made further down does (`trashEntries`), handed over
+    // once that's made.
+    const trashAsked = useRef<((groups: TrashGroup[]) => void) | null>(null);
+
+    // Dropped on the trash's root, entries go to the trash, Ctrl held or not, when they could be
+    // deleted, through its adapter. Nothing else goes into the trash (`canPaste`).
+    const offerTrash = useCallback(
+        (dragged: DraggedEntries, target: Section, trail: FolderRef[]) => {
+            const busyThrough = movingThrough(moving, dragged.adapter);
+
+            return inTrashRoot(target, trail) &&
+                (target.adapter ?? adapter) === dragged.adapter &&
+                dragged.adapter.trash &&
+                dragged.parts.every(
+                    (part) =>
+                        !part.section.trash &&
+                        entriesAllow(store, part.section, part.trail, part.entries, "delete", busyThrough),
+                )
+                ? () => trashAsked.current?.(dragged.parts.map((part) => ({ ...part, adapter: dragged.adapter })))
+                : undefined;
+        },
+        [adapter, store, moving],
+    );
+
     // A drop is pasted like the clipboard, with the dragged entries as a clipboard of their own, so
-    // the real one is left as it was.
+    // the real one is left as it was. Dropped on the trash, they go to it.
     const dropInto = useCallback<DropInto>(
-        (dragged, copy, target, trail) => offerPaste({ ...dragged, kind: copy ? "copy" : "cut" }, target, trail),
-        [offerPaste],
+        (dragged, copy, target, trail) =>
+            target.trash
+                ? offerTrash(dragged, target, trail)
+                : offerPaste({ ...dragged, kind: copy ? "copy" : "cut" }, target, trail),
+        [offerPaste, offerTrash],
     );
 
     // Dragged entries that can't be moved out of their folder are copied, as a paste of them cut
@@ -2570,11 +2637,14 @@ const FileManager = ({
         [store, moving],
     );
 
-    // Entries a move under way is moving aren't dragged, as they can't be pasted anywhere either.
+    // Entries a move under way is moving aren't dragged, as they can't be pasted anywhere either,
+    // nor are those in the trash, which are only restored.
     const heldUp = useCallback(
         (dragged: DraggedEntries) =>
-            dragged.parts.some((part) =>
-                entriesMoving(part.section, part.trail, part.entries, movingThrough(moving, dragged.adapter)),
+            dragged.parts.some(
+                (part) =>
+                    !!part.section.trash ||
+                    entriesMoving(part.section, part.trail, part.entries, movingThrough(moving, dragged.adapter)),
             ),
         [moving],
     );
@@ -2711,6 +2781,12 @@ const FileManager = ({
         (served: FileAdapter) =>
             [...sectionsById.values()].filter((candidate) => (candidate.adapter ?? adapter) === served),
         [adapter, sectionsById],
+    );
+
+    // The roots of the trash sections an adapter serves, which entries go to and come back from.
+    const trashRootIds = useCallback(
+        (served: FileAdapter) => trashesOf(sectionsById.values(), adapter, served).map((trash) => trash.rootId),
+        [sectionsById, adapter],
     );
 
     // Folders a dialog may have changed are listed again wherever they're cached, in every section
@@ -3466,7 +3542,7 @@ const FileManager = ({
     // Folders a copy or move changes show their progress bar while it waits or runs, in any section
     // showing them: the one it goes into, the one listing that folder (where it was dropped onto, or
     // pasted into from its menu), and, for a move, the one the entries leave. So do those of a paste
-    // while its names are checked.
+    // while its names are checked, and those entries go to the trash from or are restored to.
     const busy = useMemo(() => {
         const served = section?.adapter ?? adapter;
 
@@ -3479,6 +3555,10 @@ const FileManager = ({
         }
 
         if (undoing?.step.adapter === served && undoing.folderIds.includes(folder.id)) {
+            return true;
+        }
+
+        if (trashWork.some((work) => work.adapter === served && work.folderIds.includes(folder.id))) {
             return true;
         }
 
@@ -3497,31 +3577,72 @@ const FileManager = ({
                 (item.kind === "move" && item.source.id === folder.id)
             );
         });
-    }, [section, adapter, folder, pasteIds, undoing, transfers.items]);
+    }, [section, adapter, folder, pasteIds, undoing, trashWork, transfers.items]);
 
     // Deleted folders go from the cache (`dropFolders`), and places inside one, in the history too,
     // end at the folder that held it, in every section showing it. Deleted entries leave the clipboard,
-    // and the rest are looked for again when they may be below a deleted folder.
-    const applyDeleted = useCallback(
-        (groups: DeleteRequest["groups"]) => {
-            // Each adapter's entries, as ids mean something only to their own.
-            new Set(groups.map((group) => group.adapter)).forEach((fromAdapter) => {
-                const own = groupedEntries(groups.filter((group) => group.adapter === fromAdapter));
-                const deletedIds = new Set(own.map((entry) => entry.id));
-                const showing = new Set(sectionsOf(fromAdapter).map((shown) => shown.id));
-                const mayBeBelow = mayBeRootedBelow(fromAdapter, folderIdsOf(own));
-                const dropped = dropFolders(fromAdapter, folderIdsOf(own));
+    // and the rest are looked for again when they may be below a deleted folder. So do entries moved
+    // to the trash, and entries of the trash restored, whose ids there name nothing any more.
+    const applyGone = useCallback(
+        (fromAdapter: FileAdapter, gone: FileEntry[]) => {
+            const goneIds = new Set(gone.map((entry) => entry.id));
+            const showing = new Set(sectionsOf(fromAdapter).map((shown) => shown.id));
+            const mayBeBelow = mayBeRootedBelow(fromAdapter, folderIdsOf(gone));
+            const dropped = dropFolders(fromAdapter, folderIdsOf(gone));
 
-                revise((visited) => (showing.has(visited.sectionId) ? outsideDeleted(visited, dropped) : visited));
-                setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, deletedIds, dropped, mayBeBelow));
-                changePreview(fromAdapter, (entry) => (deletedIds.has(entry.id) ? null : entry));
-            });
+            revise((visited) => (showing.has(visited.sectionId) ? outsideDeleted(visited, dropped) : visited));
+            setClipboard((prev) => prev && withoutEntries(prev, fromAdapter, goneIds, dropped, mayBeBelow));
+            changePreview(fromAdapter, (entry) => (goneIds.has(entry.id) ? null : entry));
         },
         [dropFolders, mayBeRootedBelow, revise, sectionsOf, changePreview],
     );
 
+    // Each adapter's entries, as ids mean something only to their own.
+    const applyDeleted = useCallback(
+        (groups: DeleteRequest["groups"]) =>
+            new Set(groups.map((group) => group.adapter)).forEach((fromAdapter) =>
+                applyGone(fromAdapter, groupedEntries(groups.filter((group) => group.adapter === fromAdapter))),
+            ),
+        [applyGone],
+    );
+
+    // Entries moved to the trash, by the user or an undo or redo, go as deleted ones do, and their
+    // folder and the trash are listed again, with the listings holding them.
+    const applyTrashed = useCallback(
+        (served: FileAdapter, group: EntryGroup) => {
+            applyGone(served, group.entries);
+            relist(served, [folderOf(group.section, group.trail).id, ...trashRootIds(served)]);
+        },
+        [applyGone, relist, trashRootIds],
+    );
+
+    // Entries restored, by the user or an undo or redo, leave the trash as deleted ones go, and what
+    // they now are back in their folders (`made`, when the adapter says) may take ids that named
+    // other folders before, as a new folder may. The trash and the folders they went back along
+    // (`folderIds`, those above too, as one gone since may have been made again) are listed again,
+    // and after a Replace or Merge, the folders merged into, all the way down.
+    const applyRestored = useCallback(
+        (
+            served: FileAdapter,
+            trashed: FileEntry[],
+            made: FileEntry[] | undefined,
+            folderIds: string[],
+            merged: string[],
+        ) => {
+            applyGone(served, trashed);
+
+            if (made) {
+                dropFolders(served, folderIdsOf(made), []);
+            }
+
+            relistTransferred(served, [...new Set([...trashRootIds(served), ...folderIds])], merged);
+        },
+        [applyGone, dropFolders, relistTransferred, trashRootIds],
+    );
+
     // Deleting is for good, so it ends the history, unless it's the copies undoing a copy deletes,
-    // whose redo copies them again.
+    // whose redo copies them again. So does emptying the trash, which takes away what restoring
+    // moves to the trash would put back.
     const handleDeleted = useCallback(
         (request: DeleteRequest) => {
             const entries = groupedEntries(request.groups);
@@ -3529,6 +3650,13 @@ const FileManager = ({
 
             closeDelete();
             applyDeleted(request.groups);
+
+            if (request.emptiesTrash) {
+                endHistory();
+                announce(localeValue.text.emptyTrashDone);
+
+                return;
+            }
 
             if (request.undoesCopy && run?.step.action.kind === "removeCopies") {
                 const { group, sources } = run.step.action;
@@ -3559,6 +3687,243 @@ const FileManager = ({
 
         closeDelete();
     }, [deleting?.request.undoesCopy, callOffRun, closeDelete]);
+
+    // Asks to confirm emptying a trash, which the dialog lists afresh as the user confirms.
+    const emptyTrashOf = useCallback(
+        (trash: Section) => {
+            const served = trash.adapter ?? adapter;
+
+            return served.delete
+                ? () =>
+                      askDelete({
+                          groups: [{ section: trash, trail: NO_TRAIL, entries: [], adapter: served }],
+                          emptiesTrash: true,
+                      })
+                : undefined;
+        },
+        [adapter, askDelete],
+    );
+
+    // Starts and ends what shows the progress bar over the folders entries go to the trash from or
+    // are restored to, and over the trash, while the adapter works.
+    const startTrashWork = useCallback((work: TrashWork[]) => {
+        const controller = new AbortController();
+
+        trashControllers.current.add(controller);
+        setTrashWork((prev) => [...prev, ...work]);
+
+        return {
+            signal: controller.signal,
+            end: () => {
+                trashControllers.current.delete(controller);
+                setTrashWork((prev) => prev.filter((each) => !work.includes(each)));
+            },
+        };
+    }, []);
+
+    // Moves entries to the trash at once, a folder's at a time, each through its own adapter, as a
+    // desktop's Delete key does, while their folders and the trash show the progress bar. What went
+    // is said, and goes in the history to be restored, when one adapter served it all, says what it
+    // put in the trash and can restore it; otherwise it ends the history, as deleting does. One
+    // that fails says so in the notice, with why, and ends the history, as part of it may have gone.
+    // What it calls once the adapter has answered is as it is by then (`undoTools`).
+    const trashEntries = useCallback(
+        async (groups: TrashGroup[]) => {
+            const work = [...new Set(groups.map((group) => group.adapter))].map(
+                (served): TrashWork => ({
+                    adapter: served,
+                    folderIds: [
+                        ...groups
+                            .filter((group) => group.adapter === served)
+                            .map((group) => folderOf(group.section, group.trail).id),
+                        ...trashRootIds(served),
+                    ],
+                }),
+            );
+            const { signal, end } = startTrashWork(work);
+            const done: { group: TrashGroup; made?: FileEntry[] }[] = [];
+            let failed: { group: TrashGroup; error: unknown } | null = null;
+
+            for (const group of groups) {
+                try {
+                    if (!group.adapter.trash) {
+                        throw new Error("Not supported here.");
+                    }
+
+                    const result = await group.adapter.trash(group.entries, { signal });
+
+                    if (signal.aborted) {
+                        return;
+                    }
+
+                    done.push({ group, made: trashMade(result) });
+                    undoTools.current?.applyTrashed(group.adapter, group);
+                } catch (error) {
+                    if (signal.aborted) {
+                        return;
+                    }
+
+                    // Some of them may be in the trash all the same.
+                    undoTools.current?.relist(group.adapter, [
+                        folderOf(group.section, group.trail).id,
+                        ...(undoTools.current?.trashRootIds(group.adapter) ?? []),
+                    ]);
+                    failed = { group, error };
+
+                    break;
+                }
+            }
+
+            end();
+
+            const tools = undoTools.current;
+
+            if (!tools) {
+                return;
+            }
+
+            const { text } = tools;
+            const went = done.flatMap(({ group }) => group.entries);
+            const message = went.length > 0 ? text.trashDone(went.length, isolate(went[0].name)) : null;
+
+            if (message) {
+                announce(message);
+            }
+
+            if (failed) {
+                const failure = text.trashFailed(failed.group.entries.length, isolate(failed.group.entries[0].name));
+                const detail = errorDetail(failed.error);
+
+                endHistory();
+                announce(detail ? `${failure}: ${detail}` : failure);
+                showNotice({ message: failure, detail });
+
+                return;
+            }
+
+            const [{ group: first }] = done;
+            const served = first.adapter;
+            const restores = done.flatMap(({ group, made }): UndoRestore[] =>
+                group.adapter === served && made && madePairs(group.entries, made, "keepBoth")
+                    ? [{ entries: made, to: { section: group.section, trail: group.trail } }]
+                    : [],
+            );
+
+            if (message && served.restore && restores.length === done.length) {
+                recordChange("trash", served, { kind: "restore", restores }, message);
+            } else {
+                endHistory();
+            }
+        },
+        [trashRootIds, startTrashWork, recordChange, endHistory, showNotice, announce],
+    );
+
+    useLayoutEffect(() => {
+        trashAsked.current = (groups) => void trashEntries(groups);
+    });
+
+    // Restores entries of the trash once the names of the folders they go back to are settled,
+    // while the trash and those folders show the progress bar. What went is said, and goes in the
+    // history to be moved to the trash again, when the adapter says what it put back, a section
+    // shows every folder it went to, and nothing was replaced; otherwise it ends the history. One
+    // that fails says so in the notice, with why, and ends the history, as part of it may have gone.
+    const restoreEntries = useCallback(
+        async (request: RestoreRequest, conflict: ConflictPolicy, skipped: FileEntry[], merged: string[]) => {
+            const { adapter: served, entries, origins } = request;
+            const folderIds = entries.flatMap((entry) => entry.trashed?.trail.at(-1)?.id ?? []);
+            const alongIds = entries.flatMap((entry) => entry.trashed?.trail.map((step) => step.id) ?? []);
+            const work: TrashWork = { adapter: served, folderIds: [...trashRootIds(served), ...folderIds] };
+            const { signal, end } = startTrashWork([work]);
+            let made: FileEntry[] | undefined;
+            let failure: { error: unknown } | null = null;
+
+            try {
+                if (!served.restore) {
+                    throw new Error("Not supported here.");
+                }
+
+                made = trashMade(await served.restore(entries, { signal, conflict }));
+            } catch (error) {
+                failure = { error };
+            }
+
+            if (signal.aborted) {
+                return;
+            }
+
+            end();
+
+            const tools = undoTools.current;
+
+            if (!tools) {
+                return;
+            }
+
+            const { text } = tools;
+
+            if (failure) {
+                const message = text.restoreFailed(entries.length, isolate(entries[0].name));
+                const detail = errorDetail(failure.error);
+
+                // Some of them may be back all the same.
+                tools.relist(served, work.folderIds);
+                endHistory();
+                announce(detail ? `${message}: ${detail}` : message);
+                showNotice({ message, detail });
+
+                return;
+            }
+
+            const pairs = madePairs(entries, made, conflict);
+            const leftOut = new Set(skipped);
+            const went = pairs ? pairs.map((pair) => pair.from) : entries.filter((entry) => !leftOut.has(entry));
+
+            tools.applyRestored(served, went, made, alongIds, conflict === "replace" ? merged : []);
+
+            // Everything skipped, nothing changed.
+            if (went.length === 0) {
+                return;
+            }
+
+            // Moved to the trash again a folder's at a time, from the folders they went back to.
+            const groups = new Map<string, EntryGroup>();
+            const placed =
+                !!pairs &&
+                pairs.every((pair) => {
+                    const to = origins[entries.indexOf(pair.from)];
+
+                    if (!to) {
+                        return false;
+                    }
+
+                    const key = folderKey(to.section.id, folderOf(to.section, to.trail).id);
+                    const group = groups.get(key) ?? { section: to.section, trail: to.trail, entries: [] };
+
+                    group.entries.push(pair.to);
+                    groups.set(key, group);
+
+                    return true;
+                });
+            const message = text.restoreDone(went.length, isolate(went[0].name));
+
+            announce(message);
+
+            if (placed && served.trash) {
+                recordChange("restore", served, { kind: "trash", groups: [...groups.values()] }, message);
+            } else {
+                endHistory();
+            }
+        },
+        [trashRootIds, startTrashWork, recordChange, endHistory, showNotice, announce],
+    );
+
+    const handleRestoreStart = useCallback(
+        (request: RestoreRequest, conflict: ConflictPolicy, skipped: FileEntry[], merged: string[]) => {
+            closeRestore();
+            void restoreEntries(request, conflict, skipped, merged);
+        },
+        [closeRestore, restoreEntries],
+    );
 
     // The new or renamed entry is selected if its folder is open, in whichever section shows it,
     // unless it's renamed back quietly, as a move undone does, and `message` is said. A renamed
@@ -3894,6 +4259,133 @@ const FileManager = ({
 
                         return;
                     }
+                    case "trash": {
+                        const groups = await Promise.all(
+                            action.groups.map(async (given) => {
+                                const group = placed(given);
+
+                                return { ...group, entries: await asListed(group, false) };
+                            }),
+                        );
+
+                        if (!served.trash || groups.some((group) => !changeable(group, "delete"))) {
+                            throw new UndoRefused();
+                        }
+
+                        // A folder's at a time, each gone from it once it's in the trash.
+                        const restores: UndoRestore[] = [];
+
+                        for (const group of groups) {
+                            const made = trashMade(await served.trash(group.entries, { signal }));
+
+                            tools().applyTrashed(served, group);
+
+                            if (made && madePairs(group.entries, made, "keepBoth")) {
+                                restores.push({ entries: made, to: { section: group.section, trail: group.trail } });
+                            }
+                        }
+
+                        const { text } = tools();
+                        const entries = groupedEntries(groups);
+                        const message =
+                            direction === "undo"
+                                ? text.undone("restore")
+                                : text.trashDone(entries.length, isolate(entries[0].name));
+
+                        announce(message);
+
+                        // Without what's in the trash now, nothing can be restored from here, and
+                        // what's older would have to go back past it.
+                        if (served.restore && restores.length === groups.length) {
+                            endRun(run, { action: { kind: "restore", restores }, message });
+                        } else if (leaveRun(run)) {
+                            endHistory();
+                            showNotice({ message });
+                        }
+
+                        return;
+                    }
+                    case "restore": {
+                        const restores = action.restores.map((restore) => ({ ...restore, to: placed(restore.to) }));
+                        const trashed = restores.flatMap((restore) => restore.entries);
+                        const trashes = trashesOf(tools().sectionsById.values(), tools().adapter, served);
+                        let given = trashed;
+
+                        // Each as the change left it in the trash, where a section shows the trash;
+                        // without one, the adapter has the final say.
+                        if (trashes.length > 0) {
+                            const listed = await Promise.all(
+                                trashes.map((trash) =>
+                                    listingOf(store, trash.id, served, trash.rootId, true, signal).catch(
+                                        (error: unknown) => {
+                                            if (signal.aborted) {
+                                                throw error;
+                                            }
+
+                                            return [];
+                                        },
+                                    ),
+                                ),
+                            );
+                            const { found, changed } = asLeft(listed.flat(), trashed, false);
+
+                            if (changed.length > 0) {
+                                throw new UndoRefused(
+                                    tools().text.undoChanged(changed.length, isolate(changed[0].name)),
+                                );
+                            }
+
+                            given = found;
+                        }
+
+                        const busyThrough = movingThrough(tools().moving, served);
+
+                        if (
+                            !served.restore ||
+                            restores.some(
+                                ({ to }) => !folderWritable(store, to.section, to.trail, busyThrough),
+                            )
+                        ) {
+                            throw new UndoRefused();
+                        }
+
+                        const made = trashMade(await served.restore(given, { signal, conflict: "keepBoth" }));
+                        const pairs = madePairs(given, made, "keepBoth");
+                        const { text, applyRestored: restored } = tools();
+                        const message =
+                            direction === "undo"
+                                ? text.undone("trash")
+                                : text.restoreDone(given.length, isolate(given[0].name));
+
+                        restored(
+                            served,
+                            given,
+                            made,
+                            restores.flatMap(({ to }) => [to.section.rootId, ...to.trail.map((step) => step.id)]),
+                            [],
+                        );
+                        announce(message);
+
+                        // Moved to the trash again a folder's at a time, each from the one it went
+                        // back to, which they came in the order they were given.
+                        if (pairs && served.trash) {
+                            let next = 0;
+                            const groups = restores.map((restore): EntryGroup => {
+                                const entries = pairs.slice(next, next + restore.entries.length).map((pair) => pair.to);
+
+                                next += restore.entries.length;
+
+                                return { section: restore.to.section, trail: restore.to.trail, entries };
+                            });
+
+                            endRun(run, { action: { kind: "trash", groups }, message });
+                        } else if (leaveRun(run)) {
+                            endHistory();
+                            showNotice({ message });
+                        }
+
+                        return;
+                    }
                 }
             } catch (error) {
                 if (signal.aborted) {
@@ -3908,10 +4400,10 @@ const FileManager = ({
 
                 // The adapter may have done some of it all the same.
                 undoTools.current?.relist(served, run.folderIds);
-                failRun(run, error instanceof Error && error.message ? isolate(error.message) : undefined, true);
+                failRun(run, errorDetail(error), true);
             }
         },
-        [store, announce, endRun, failRun],
+        [store, announce, endRun, failRun, leaveRun, endHistory, showNotice],
     );
 
     // Undoes, or redoes, the latest change of `direction`'s list, taking it off, one at a time.
@@ -3924,10 +4416,15 @@ const FileManager = ({
                 return false;
             }
 
+            // Entries going to the trash, or coming back from it, show the progress bar over it too.
+            const { kind } = step.action;
             const run: UndoRun = {
                 step,
                 direction,
-                folderIds: changedFolders(step.action),
+                folderIds: [
+                    ...changedFolders(step.action),
+                    ...(kind === "trash" || kind === "restore" ? trashRootIds(step.adapter) : []),
+                ],
                 epoch: historyEpoch.current,
                 controller: new AbortController(),
             };
@@ -3939,7 +4436,7 @@ const FileManager = ({
 
             return true;
         },
-        [changeHistory, carryOut],
+        [changeHistory, carryOut, trashRootIds],
     );
 
     const contextFor = useCallback(
@@ -3959,12 +4456,14 @@ const FileManager = ({
             // adapters.
             const oneAdapter = groups.every((group) => servedBy(group) === folderAdapter);
             // The sections the entries can go into, taking entries from each of theirs, and their
-            // own. A section nothing can change is offered only when it's one of theirs. The picker
-            // starts where the entries are, or in the first section they can go into.
+            // own. A section nothing can change is offered only when it's one of theirs, and the
+            // trash never, as entries go there only by being moved to it. The picker starts where
+            // the entries are, or in the first section they can go into.
             const destinations = oneAdapter
                 ? [...sectionsById.values()].filter(
                       (candidate) =>
                           (candidate.adapter ?? adapter) === folderAdapter &&
+                          !candidate.trash &&
                           groups.every((group) => importsFrom(candidate, group.section)) &&
                           (groups.some((group) => group.section.id === candidate.id) || !candidate.readOnly),
                   )
@@ -3987,6 +4486,15 @@ const FileManager = ({
             const writable = groups.every((group) => folderWritable(store, group.section, group.trail, busyFor(group)));
             const permits = (what: "rename" | "move" | "delete") =>
                 writable &&
+                !entriesBusy &&
+                entries.length > 0 &&
+                entries.every((entry) => allows(what, entry.permissions));
+            // The trash changes nothing, but its root's entries are restored or deleted for good, as
+            // their own permissions allow; nothing in it is copied out or moved to the trash again.
+            const inTrash = groups.some((group) => !!group.section.trash);
+            const trashRoot = groups.every((group) => inTrashRoot(group.section, group.trail));
+            const trashPermits = (what: "move" | "delete") =>
+                trashRoot &&
                 !entriesBusy &&
                 entries.length > 0 &&
                 entries.every((entry) => allows(what, entry.permissions));
@@ -4107,6 +4615,7 @@ const FileManager = ({
                     folderAdapter.copy &&
                     entries.length > 0 &&
                     !entriesBusy &&
+                    !inTrash &&
                     destinations.some((candidate) => !candidate.readOnly)
                         ? transferTo("copy")
                         : undefined,
@@ -4119,15 +4628,38 @@ const FileManager = ({
                           }
                         : undefined,
                 copy:
-                    folderAdapter.copy && oneAdapter && entries.length > 0 && !entriesBusy
+                    folderAdapter.copy && oneAdapter && entries.length > 0 && !entriesBusy && !inTrash
                         ? () => {
                               setClipboard({ kind: "copy", adapter: folderAdapter, parts: groups });
                               announce(localeValue.text.clipboardCopied(entries.length, isolate(only.name)));
                           }
                         : undefined,
                 delete:
-                    groups.every((group) => !!servedBy(group).delete) && permits("delete")
+                    groups.every((group) => !!servedBy(group).delete) && (permits("delete") || trashPermits("delete"))
                         ? () => askDelete({ groups: groups.map((group) => ({ ...group, adapter: servedBy(group) })) })
+                        : undefined,
+                trash:
+                    !inTrash && groups.every((group) => !!servedBy(group).trash) && permits("delete")
+                        ? () => void trashEntries(groups.map((group) => ({ ...group, adapter: servedBy(group) })))
+                        : undefined,
+                restore:
+                    folderAdapter.restore && trashPermits("move") && entries.every((entry) => !!entry.trashed)
+                        ? () =>
+                              askRestore({
+                                  section: menuSection,
+                                  adapter: folderAdapter,
+                                  entries,
+                                  origins: entries.map((entry) =>
+                                      entry.trashed
+                                          ? trashOrigin(sectionsById.values(), adapter, folderAdapter, entry.trashed)
+                                          : null,
+                                  ),
+                              })
+                        : undefined,
+                emptyTrash:
+                    inTrashRoot(menuSection, trail) &&
+                    store.get(folderKey(menuSection.id, menuFolder.id))?.entries?.length !== 0
+                        ? emptyTrashOf(menuSection)
                         : undefined,
                 download: spread
                     ? downloadSpread()
@@ -4197,6 +4729,9 @@ const FileManager = ({
             askName,
             askDestination,
             askDelete,
+            askRestore,
+            trashEntries,
+            emptyTrashOf,
             askDownload,
             askDownloadAcross,
             askPreview,
@@ -4228,6 +4763,9 @@ const FileManager = ({
             text: localeValue.text,
             applyNamed,
             applyDeleted,
+            applyTrashed,
+            applyRestored,
+            trashRootIds,
             askDelete,
             relist,
             startTransfer,
@@ -4277,6 +4815,15 @@ const FileManager = ({
     }, [notice, runUndo]);
 
     const focusFromNotice = useCallback(() => setFocusContent(true), []);
+
+    // In the trash's root, where each entry was moved there from, as a search's results show where
+    // they are. The trash open is the only one whose list shows it.
+    const trashOpen = section && inTrashRoot(section, place.trail) ? section : undefined;
+    const locateTrashed = useCallback(
+        (info: TrashInfo) =>
+            trashOpen ? trashedLocation(sectionsById.values(), adapter, trashOpen.adapter ?? adapter, info) : "",
+        [trashOpen, sectionsById, adapter],
+    );
 
     // What the app's actions in the preview's header get: the context menu's for the one file shown,
     // in its folder, with what takes the user elsewhere closing the preview first. It isn't
@@ -4682,6 +5229,7 @@ const FileManager = ({
                                                 zoom={zoom}
                                                 sort={sort}
                                                 resultsShown={showsResults}
+                                                trashShown={!!trashOpen && !showsResults}
                                                 showHidden={showHidden}
                                                 selecting={selecting}
                                                 searchScope={searchScope}
@@ -4734,6 +5282,12 @@ const FileManager = ({
                                                                 onSelectionChange={handleResultSelection}
                                                             />
                                                         )}
+                                                        {trashOpen && !showsResults && (
+                                                            <TrashBar
+                                                                section={trashOpen}
+                                                                onEmpty={emptyTrashOf(trashOpen)}
+                                                            />
+                                                        )}
                                                         {/* Keyed by folder, so each opens at the top with nothing
                                                             selected. */}
                                                         <Box
@@ -4776,6 +5330,7 @@ const FileManager = ({
                                                                     onRevealed={handleRevealed}
                                                                     onRevealUnmatched={closeSearch}
                                                                     onArrived={handleArrived}
+                                                                    trashLocation={trashOpen ? locateTrashed : undefined}
                                                                 />
                                                             )}
                                                         </Box>
@@ -4880,6 +5435,15 @@ const FileManager = ({
                                             onClose={handleDeleteClose}
                                             onChanged={relist}
                                             onDone={handleDeleted}
+                                        />
+                                    )}
+                                    {restoring && (
+                                        <RestoreDialog
+                                            key={`restore:${restoring.id}`}
+                                            open={restoring.open}
+                                            request={restoring.request}
+                                            onClose={closeRestore}
+                                            onStart={handleRestoreStart}
                                         />
                                     )}
                                     {pasting && (

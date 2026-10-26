@@ -50,8 +50,28 @@ export interface FileEntry {
      * offer what would only fail. Leave it out to allow everything.
      */
     permissions?: EntryPermissions;
+    /**
+     * Entries right in a trash's root (`Section.trash`): where each was moved to the trash from,
+     * and when, which the trash shows and `restore` puts it back by. An entry without it isn't
+     * offered to restore. Leave it out everywhere else, what's inside a trashed folder included.
+     */
+    trashed?: TrashInfo;
     /** Anything else the adapter wants to carry for custom actions; the file manager ignores it. */
     meta?: Record<string, unknown>;
+}
+
+/** Where an entry in the trash was moved there from, and when (`FileEntry.trashed`). */
+export interface TrashInfo {
+    /**
+     * The folders the entry was in, outermost first, the one holding it last: from the root of a
+     * section of the file manager's, or from above it, such as the top of the backend, down to that
+     * folder. The file manager never parses ids, so this is how it finds the section the entry came
+     * from (the first served by the adapter whose root is among them), shows where it was, and
+     * checks that folder's names before restoring it. It holds that folder at least.
+     */
+    trail: FolderRef[];
+    /** When it was moved to the trash, which the trash shows in place of the date modified. */
+    trashedAt?: Date;
 }
 
 /**
@@ -219,6 +239,28 @@ export interface TransferResult {
      * by, which "keepBoth" may have changed. Those skipped are left out. It's what lets the user
      * undo a copy, deleting the copies, or a move, moving the entries back, as the file manager
      * can't find them by name: a name kept both is the adapter's to choose.
+     */
+    entries: FileEntry[];
+}
+
+/** Passed to `restore`. */
+export interface RestoreOptions extends OperationOptions {
+    /**
+     * Chosen by the user when the listing of a folder the entries go back to showed a clash, and
+     * "keepBoth" otherwise, so a clash the cache missed never overwrites anything, as `copy` and
+     * `move` take it (`ConflictPolicy`).
+     */
+    conflict: ConflictPolicy;
+}
+
+/** What `trash` and `restore` may resolve with. An object, so fields can be added later without a breaking change. */
+export interface TrashResult {
+    /**
+     * The entries as they now are: in the trash, or back in the folders they were moved to the
+     * trash from, one for each entry given that went, in the order they were given, under the name
+     * each went by, which a restore with "keepBoth" may have changed. Those skipped are left out.
+     * It's what lets the user undo it, restoring what went to the trash, or moving what was
+     * restored to the trash again.
      */
     entries: FileEntry[];
 }
@@ -463,10 +505,31 @@ export interface FileAdapter {
     move?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<TransferResult | void>;
     /**
      * Deletes entries for good, folders with everything in them. The entries share a parent, and
-     * the user has already confirmed. Without it, the file manager has no way to delete. Reject
-     * with an `Error` to show its message to the user.
+     * the user has already confirmed. It also empties the trash (`Section.trash`), with every entry
+     * its root lists. Without it, the file manager has no way to delete. Reject with an `Error` to
+     * show its message to the user.
      */
     delete?(entries: FileEntry[], options: OperationOptions): Promise<void>;
+    /**
+     * Moves entries to the backend's trash, folders with everything in them, from where `restore`
+     * puts them back. The entries share a parent. It's done at once, without asking, as it can be
+     * undone: resolve with the entries as they now are in the trash (`TrashResult`), so the user
+     * can, with `restore`; without them, or without `restore`, it can't be undone. A section with
+     * `trash` set shows the trash, its root listing each entry with its `trashed`. Without `trash`,
+     * entries are only deleted, for good. Reject with an `Error` to show its message to the user.
+     */
+    trash?(entries: FileEntry[], options: OperationOptions): Promise<TrashResult | void>;
+    /**
+     * Puts entries of the trash back in the folders they were moved to the trash from
+     * (`FileEntry.trashed`), folders with everything in them: entries right in the root of a section
+     * with `trash` set, which may go back to different folders. Names a folder has now are settled
+     * by `conflict`, as `move` settles them; a folder they came from that's gone is the backend's to
+     * make again, or to refuse with a message. Resolve with the entries as they now are
+     * (`TrashResult`), so the user can undo it, moving them to the trash again; without them, it
+     * can't be undone. Without it, entries in the trash can only be deleted for good. Reject with an
+     * `Error` to show its message to the user.
+     */
+    restore?(entries: FileEntry[], options: RestoreOptions): Promise<TrashResult | void>;
     /**
      * Uploads one file into `folderId`. Files from the browser's file picker or dropped from the
      * desktop are uploaded one call each, a few at a time, so each has its own progress, error and

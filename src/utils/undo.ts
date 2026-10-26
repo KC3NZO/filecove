@@ -104,12 +104,19 @@ export const actionGroups = (action: UndoAction): EntryGroup[] => {
             return action.sources;
         case "move":
             return action.moves.map((move) => move.group);
+        case "trash":
+            return action.groups;
+        // Entries in the trash, which no folder of a section holds.
         case "create":
+        case "restore":
             return [];
     }
 };
 
-/** The folders an action changes, which show the progress bar while it runs. */
+/**
+ * The folders an action changes, which show the progress bar while it runs. The trash an action
+ * moves entries to, or restores them from, isn't named by it, and is the file manager's to add.
+ */
 export const changedFolders = (action: UndoAction) => {
     switch (action.kind) {
         case "create":
@@ -120,6 +127,10 @@ export const changedFolders = (action: UndoAction) => {
                 folderOf(move.group.section, move.group.trail).id,
                 folderOf(move.to.section, move.to.trail).id,
             ]);
+        case "trash":
+            return action.groups.map((group) => folderOf(group.section, group.trail).id);
+        case "restore":
+            return action.restores.map((restore) => folderOf(restore.to.section, restore.to.trail).id);
         default:
             return [folderOf(action.group.section, action.group.trail).id];
     }
@@ -130,6 +141,7 @@ export const actionSections = (action: UndoAction): Section[] => [
     ...actionGroups(action).map((group) => group.section),
     ...(action.kind === "create" || action.kind === "copy" ? [action.to.section] : []),
     ...(action.kind === "move" ? action.moves.map((move) => move.to.section) : []),
+    ...(action.kind === "restore" ? action.restores.map((restore) => restore.to.section) : []),
 ];
 
 /**
@@ -159,4 +171,7 @@ export const heldHistory = (
 
 /** Whether an adapter can undo a change of some kind, for the main menu and the keys to be offered at all. */
 export const canUndoWith = (adapter: FileAdapter) =>
-    !!adapter.rename || !!adapter.move || (!!adapter.delete && (!!adapter.createFolder || !!adapter.copy));
+    !!adapter.rename ||
+    !!adapter.move ||
+    (!!adapter.trash && !!adapter.restore) ||
+    (!!adapter.delete && (!!adapter.createFolder || !!adapter.copy));

@@ -42,6 +42,7 @@ import SelectionBar from "./selection-bar";
 import type {
     Arrival,
     DropTarget,
+    EntryOrigin,
     EntrySelection,
     FileEntry,
     FileManagerLocation,
@@ -54,6 +55,7 @@ import type {
     Section,
     SelectModifiers,
     SortOrder,
+    TrashInfo,
     ViewMode,
 } from "../../../types";
 
@@ -116,6 +118,11 @@ interface FolderViewProps {
     onRevealUnmatched: () => void;
     /** Told the `key`s of the arrivals highlighted, which are done with. */
     onArrived: (keys: number[]) => void;
+    /**
+     * In the trash's root (`Section.trash`): where an entry was moved there from, written out for
+     * the location column.
+     */
+    trashLocation?: (info: TrashInfo) => string;
 }
 
 /** Where the view's focus is among the entries: the entry, and where it was listed. */
@@ -230,6 +237,7 @@ const FolderView = ({
     onRevealed,
     onRevealUnmatched,
     onArrived,
+    trashLocation,
 }: FolderViewProps) => {
     const folder = folderOf(section, trail);
     const { state, reload } = useFolder(section, folder.id, true, true);
@@ -244,9 +252,10 @@ const FolderView = ({
     const locale = useLocale();
     const { text } = locale;
 
-    // A drag moves or copies, so it needs an adapter that does one or the other.
+    // A drag moves or copies, so it needs an adapter that does one or the other. Nothing is moved
+    // or copied out of the trash, whose entries are only restored.
     const adapter = section.adapter ?? data?.adapter;
-    const draggable = !!(adapter?.move || adapter?.copy);
+    const draggable = !section.trash && !!(adapter?.move || adapter?.copy);
 
     // Hidden entries are left out here rather than in the store, since clashing names are looked for
     // among all of them. Sorted here too, since the sidebar tree shares the listing and keeps its own order.
@@ -280,6 +289,21 @@ const FolderView = ({
                 ? shown.filter((entry) => holdsTerms(foldedNames.get(entry.id) ?? "", terms))
                 : shown,
         [shown, foldedNames, terms],
+    );
+
+    // In the trash's root, each entry says where it was moved there from.
+    const origins = useMemo(
+        () =>
+            trashLocation && adapter
+                ? entries?.map(
+                      (entry): EntryOrigin => ({
+                          entry,
+                          adapter,
+                          location: entry.trashed ? trashLocation(entry.trashed) : "",
+                      }),
+                  )
+                : undefined,
+        [trashLocation, adapter, entries],
     );
 
     // Everything in a folder being moved goes with it, so it's all marked as being moved.
@@ -1079,6 +1103,8 @@ const FolderView = ({
         content = (
             <ContentView
                 entries={entries}
+                origins={origins}
+                trash={!!trashLocation}
                 lines={lines}
                 zoom={zoom}
                 label={folder.name}
@@ -1108,10 +1134,12 @@ const FolderView = ({
             </Box>
         );
     } else if (shownSoFar) {
+        const trashRoot = section.trash && trail.length === 0;
+
         content = (
             <Box id={stateId} sx={stateSx}>
-                <Icon name="folderOpen" sx={stateIconSx} />
-                <Typography sx={stateTitleSx}>{text.folderEmpty}</Typography>
+                <Icon name={trashRoot ? "delete" : "folderOpen"} sx={stateIconSx} />
+                <Typography sx={stateTitleSx}>{trashRoot ? text.trashEmpty : text.folderEmpty}</Typography>
             </Box>
         );
     } else if (state?.status === "error") {

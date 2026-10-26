@@ -1,3 +1,5 @@
+import { trashedDate } from "./trash";
+
 import type { FileEntry, FileManagerLocaleText, Locale, SortDirection, SortKey, SortOrder } from "../types";
 
 type Comparator = (a: FileEntry, b: FileEntry) => number;
@@ -55,12 +57,13 @@ export const sameSort = (a: SortOrder, b: SortOrder) => a.key === b.key && a.dir
 /** Folders by item count, files by bytes; unknown sizes sort as the smallest. */
 const sizeOf = (entry: FileEntry) => (entry.kind === "folder" ? entry.childCount : entry.size) ?? -1;
 
-// Each one ascending, names and types in the locale's order. Unknown dates sort as the oldest.
+// Each one ascending, names and types in the locale's order. Unknown dates sort as the oldest. In
+// the trash's root, entries are dated by when they were moved there.
 const comparators = (locale: Locale): Record<FieldKey, Comparator> => ({
     name: (a, b) => locale.compareNames(a.name, b.name),
     size: (a, b) => sizeOf(a) - sizeOf(b),
     type: (a, b) => locale.compareNames(locale.describeType(a), locale.describeType(b)),
-    modified: (a, b) => (a.modifiedAt?.getTime() ?? 0) - (b.modifiedAt?.getTime() ?? 0),
+    modified: (a, b) => (trashedDate(a)?.getTime() ?? 0) - (trashedDate(b)?.getTime() ?? 0),
 });
 
 /**

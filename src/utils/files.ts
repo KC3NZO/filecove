@@ -1,3 +1,5 @@
+import { sectionLocked } from "./sections";
+
 import type { DroppedFiles, FolderContents, FolderSource, Section } from "../types";
 
 // What a folder dropped or pasted holds, read a batch at a time, as a browser hands over at most
@@ -102,10 +104,10 @@ export const pickedFolder = (files: File[]): FolderSource | undefined => {
 };
 
 /**
- * Whether a section takes uploads at all: not when it's `readOnly`, nor when `acceptUploads` is
- * false. An `acceptUploads` string limits which files.
+ * Whether a section takes uploads at all: not when it's `readOnly` or the trash, nor when
+ * `acceptUploads` is false. An `acceptUploads` string limits which files.
  */
-export const takesUploads = (section: Section) => section.acceptUploads !== false && !section.readOnly;
+export const takesUploads = (section: Section) => section.acceptUploads !== false && !sectionLocked(section);
 
 /**
  * The patterns of the section's `acceptUploads` string, as a file input reads its `accept`:

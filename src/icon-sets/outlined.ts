@@ -10,6 +10,7 @@ import CloseOutlined from "@mui/icons-material/CloseOutlined";
 import ContentCopyOutlined from "@mui/icons-material/ContentCopyOutlined";
 import ContentCutOutlined from "@mui/icons-material/ContentCutOutlined";
 import DeleteOutlined from "@mui/icons-material/DeleteOutlined";
+import DeleteForeverOutlined from "@mui/icons-material/DeleteForeverOutlined";
 import DesktopWindowsOutlined from "@mui/icons-material/DesktopWindowsOutlined";
 import DescriptionOutlined from "@mui/icons-material/DescriptionOutlined";
 import DownloadOutlined from "@mui/icons-material/DownloadOutlined";
@@ -40,6 +41,7 @@ import VisibilityOutlined from "@mui/icons-material/VisibilityOutlined";
 import HistoryOutlined from "@mui/icons-material/HistoryOutlined";
 import RefreshOutlined from "@mui/icons-material/RefreshOutlined";
 import DriveFileRenameOutlineOutlined from "@mui/icons-material/DriveFileRenameOutlineOutlined";
+import RestoreFromTrashOutlined from "@mui/icons-material/RestoreFromTrashOutlined";
 import RotateLeftOutlined from "@mui/icons-material/RotateLeftOutlined";
 import RotateRightOutlined from "@mui/icons-material/RotateRightOutlined";
 import SearchOutlined from "@mui/icons-material/SearchOutlined";
@@ -72,6 +74,7 @@ const outlined: IconSet = {
     copy: ContentCopyOutlined,
     cut: ContentCutOutlined,
     delete: DeleteOutlined,
+    deleteForever: DeleteForeverOutlined,
     desktop: DesktopWindowsOutlined,
     documents: DescriptionOutlined,
     download: DownloadOutlined,
@@ -101,6 +104,7 @@ const outlined: IconSet = {
     recent: HistoryOutlined,
     refresh: RefreshOutlined,
     rename: DriveFileRenameOutlineOutlined,
+    restore: RestoreFromTrashOutlined,
     rotateLeft: RotateLeftOutlined,
     rotateRight: RotateRightOutlined,
     search: SearchOutlined,

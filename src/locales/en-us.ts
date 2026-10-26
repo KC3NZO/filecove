@@ -6,6 +6,8 @@ const CHANGES: Record<UndoChange, string> = {
     newFolder: "new folder",
     copy: "copy",
     move: "move",
+    trash: "move to trash",
+    restore: "restore",
 };
 
 const UNDONE: Record<UndoChange, string> = {
@@ -13,6 +15,8 @@ const UNDONE: Record<UndoChange, string> = {
     newFolder: "New folder undone",
     copy: "Copy undone",
     move: "Move undone",
+    trash: "Move to trash undone",
+    restore: "Restore undone",
 };
 
 const itOrThem = (count: number) => (count === 1 ? "it" : "them");
@@ -69,6 +73,7 @@ export const enUS: FileManagerLocaleText = {
     sortLargestFirst: "Largest first",
     sortOldestFirst: "Oldest first",
     sortNewestFirst: "Newest first",
+    sortTrashed: "Trashed",
     sortedColumn: (order) => `, sorted ${order}`,
 
     showSidebar: "Show sidebar",
@@ -151,6 +156,29 @@ export const enUS: FileManagerLocaleText = {
     },
     deleteFailed: (count) => `Couldn't delete ${itOrThem(count)}.`,
     deleteDone: (count, name) => `Deleted ${entries(count, name)}`,
+
+    trashEmpty: "Trash is empty",
+    trashLocation: "Original location",
+    trashHint: "Items in the trash can be restored to where they were, or deleted for good.",
+    trashEmptyButton: "Empty trash…",
+    emptyTrashTitle: "Empty the trash?",
+    emptyTrashWarning: "Everything in the trash is deleted for good. This can't be undone.",
+    emptyTrash: "Empty trash",
+    emptyTrashFailed: "Couldn't empty the trash.",
+    emptyTrashDone: "Emptied the trash",
+    trashDone: (count, name) => `Moved ${entries(count, name)} to the trash`,
+    trashFailed: (count, name) => `Couldn't move ${entries(count, name)} to the trash`,
+    restoreDone: (count, name) => `Restored ${entries(count, name)}`,
+    restoreFailed: (count, name) => `Couldn't restore ${entries(count, name)}`,
+    restoreTitle: (count, name) => `Restore ${entries(count, name)}`,
+    restoreConflictMessage: (count, name) =>
+        count === 1
+            ? `“${name}” already exists in the folder it goes back to.`
+            : `${count} items already exist in the folders they go back to.`,
+    restoreSharedMessage: (count, name) =>
+        count === 1
+            ? `Another item going back to the same folder is also named “${name}”.`
+            : `${count} items going back to the same folders have the same names as others going there.`,
 
     copyToTitle: (count, name) => `Copy ${entries(count, name)} to…`,
     moveToTitle: (count, name) => `Move ${entries(count, name)} to…`,

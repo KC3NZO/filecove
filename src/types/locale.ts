@@ -252,6 +252,11 @@ export interface FileManagerLocaleText
     sortLargestFirst: string;
     sortOldestFirst: string;
     sortNewestFirst: string;
+    /**
+     * In place of `sortModified` in the trash's root, whose date column, and the order by it, goes
+     * by when each entry was moved to the trash.
+     */
+    sortTrashed: string;
     /** Read after the label of the column sorting the list, with its order, e.g. "A to Z". */
     sortedColumn: (order: string) => string;
 
@@ -386,6 +391,46 @@ export interface FileManagerLocaleText
     deleteFailed: (count: number) => string;
     /** Read to screen readers once the entries are deleted. */
     deleteDone: (count: number, name: string) => string;
+
+    // The trash (`Section.trash`)
+    /** In place of `folderEmpty` in the trash's root. */
+    trashEmpty: string;
+    /** The list's column in the trash's root saying which folder each entry was moved there from. */
+    trashLocation: string;
+    /** The bar above the trash's root, beside the button emptying it. */
+    trashHint: string;
+    /** That bar's button, which asks to confirm first. */
+    trashEmptyButton: string;
+    /** The title of the dialog confirming that the trash is emptied. */
+    emptyTrashTitle: string;
+    /** Under `emptyTrashTitle`. */
+    emptyTrashWarning: string;
+    /** The button of the dialog emptying the trash. */
+    emptyTrash: string;
+    /** Why emptying the trash failed, when the adapter didn't say. */
+    emptyTrashFailed: string;
+    /** Read to screen readers once the trash is emptied. */
+    emptyTrashDone: string;
+    /** Read to screen readers, and shown in the notice with Undo, once entries are moved to the trash. */
+    trashDone: (count: number, name: string) => string;
+    /** The notice's title when entries couldn't be moved to the trash, over why. */
+    trashFailed: (count: number, name: string) => string;
+    /** Read to screen readers, and shown in the notice with Undo, once entries are restored from the trash. */
+    restoreDone: (count: number, name: string) => string;
+    /** The notice's title when entries couldn't be restored, over why. */
+    restoreFailed: (count: number, name: string) => string;
+    /** The title of a restore asking about names the folders the entries go back to have now. */
+    restoreTitle: (count: number, name: string) => string;
+    /**
+     * In place of `conflictMessage`, when the names that clash are in different folders the entries
+     * go back to. `name` is the one clashing name, meant for when `count` is 1.
+     */
+    restoreConflictMessage: (count: number, name: string) => string;
+    /**
+     * In place of `conflictSharedMessage`, when entries going back to different folders clash with
+     * each other, as two moved to the trash from one folder under one name do.
+     */
+    restoreSharedMessage: (count: number, name: string) => string;
 
     // Copying and moving
     copyToTitle: (count: number, name: string) => string;
@@ -705,6 +750,11 @@ export interface Locale {
     describeSize: (entry: FileEntry) => string;
     /** When an entry was modified, or a dash when it isn't known. */
     describeDate: (entry: FileEntry) => string;
+    /**
+     * The list's date: as `describeDate`, but for an entry in the trash's root, when it was moved
+     * there, as the column says (`sortTrashed`).
+     */
+    describeListDate: (entry: FileEntry) => string;
     /** A short type label from the MIME type, falling back to the extension. */
     describeType: (entry: FileEntry) => string;
     /**

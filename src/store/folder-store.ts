@@ -39,21 +39,25 @@ const sameValue = (a: unknown, b: unknown, depth: number): boolean =>
     (a instanceof Date && b instanceof Date && a.getTime() === b.getTime()) ||
     (depth > 0 && isPlain(a) && isPlain(b) && Array.isArray(a) === Array.isArray(b) && sameFields(a, b, depth - 1));
 
-const sameFields = (a: object, b: object, depth: number) => {
+// `deeper` gives some of the fields a depth of their own.
+const sameFields = (a: object, b: object, depth: number, deeper?: Readonly<Record<string, number>>) => {
     const left = a as Record<string, unknown>;
     const right = b as Record<string, unknown>;
     const keys = Object.keys(left);
 
     return (
         keys.length === Object.keys(right).length &&
-        keys.every((key) => Object.hasOwn(right, key) && sameValue(left[key], right[key], depth))
+        keys.every((key) => Object.hasOwn(right, key) && sameValue(left[key], right[key], deeper?.[key] ?? depth))
     );
 };
 
+// `trashed` holds its trail, an array of folders, each compared by its fields.
+const ENTRY_DEPTHS = { trashed: 3 };
+
 // An entry a new listing brings as it was: every field the same, `meta`'s, `media`'s and
-// `permissions`' one level down.
+// `permissions`' one level down, and `trashed`'s all the way down.
 const sameEntry = (a: FileEntry, b: FileEntry) =>
-    a === b || (Object.getPrototypeOf(a) === Object.getPrototypeOf(b) && sameFields(a, b, 1));
+    a === b || (Object.getPrototypeOf(a) === Object.getPrototypeOf(b) && sameFields(a, b, 1, ENTRY_DEPTHS));
 
 // A folder's own permissions as a new listing gives them, kept as they were when they're the same.
 const withSamePermissions = (before: EntryPermissions | undefined, given: EntryPermissions | undefined) =>

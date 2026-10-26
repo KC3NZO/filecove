@@ -39,10 +39,12 @@ export interface ActionContext {
     /**
      * Whether nothing in `folder` can be changed: the section is `readOnly`, the folder's
      * permissions refuse writing (`EntryPermissions.write`), or a move under way is moving it
-     * (`moving`). With `byFolder`, whether that's so of any of the entries' folders. Creating,
-     * uploading, pasting, renaming, moving out and deleting are missing then; an action of the
-     * app's own that changes the folder, such as "Compress…" or "New file", can hide with
-     * `visible: (context) => !context.readOnly`.
+     * (`moving`), or it's in the trash (`Section.trash`). With `byFolder`, whether that's so of any
+     * of the entries' folders. Creating, uploading, pasting, renaming, moving out and deleting are
+     * missing then, but for deleting the entries of the trash's root for good, and restoring them;
+     * an action of the app's own that changes the folder, such as "Compress…" or "New file", can
+     * hide with `visible: (context) => !context.readOnly`, and one with nothing to do in the trash,
+     * such as "Share", with `visible: (context) => !context.section.trash`.
      */
     readOnly: boolean;
     /**
@@ -126,8 +128,9 @@ export interface ActionContext {
     rename?: () => void;
     /**
      * Asks for a destination folder and copies `entries` there, among the folders that aren't
-     * read-only. Missing when the section's adapter has no `copy`, there are no entries, or every
-     * section they could go into is `readOnly`. Entries from several folders (`byFolder`) sharing a
+     * read-only. Missing when the section's adapter has no `copy`, there are no entries, they're in
+     * the trash (`Section.trash`), whose entries are only restored, or every section they could go
+     * into is `readOnly`. Entries from several folders (`byFolder`) sharing a
      * name are asked about as names the destination has, the first going in first; entries from
      * sections served by different adapters can't go into one folder, as no copy goes between
      * adapters.
@@ -149,16 +152,41 @@ export interface ActionContext {
     cut?: () => void;
     /**
      * Puts `entries` on the file manager's clipboard to be copied where they're pasted. Missing when
-     * the section's adapter has no `copy`, or there are no entries, as with `copyTo`.
+     * the section's adapter has no `copy`, there are no entries, or they're in the trash, as with
+     * `copyTo`.
      */
     copy?: () => void;
     /**
      * Asks to confirm, then deletes `entries` for good. Missing when the section's adapter has no
      * `delete`, there are no entries, or they can't be deleted: `folder` is read-only, or their
-     * permissions say so. Entries from several folders (`byFolder`) are deleted a folder at a time,
+     * permissions say so. In the trash (`Section.trash`), it deletes the entries of its root, and is
+     * missing below it. Entries from several folders (`byFolder`) are deleted a folder at a time,
      * each through its own section's adapter.
      */
     delete?: () => void;
+    /**
+     * Moves `entries` to their adapter's trash at once, without asking, as they can be restored from
+     * there, and the notice over the content offers to undo it. Missing when the section's adapter
+     * has no `trash`, there are no entries, they can't be deleted (`delete`'s rules), or they're in
+     * the trash already. Entries from several folders (`byFolder`) go a folder at a time, each
+     * through its own section's adapter, so every one of those needs `trash`. A "Delete" action can
+     * call it when it's there, and `delete` otherwise, as a desktop's Delete key does.
+     */
+    trash?: () => void;
+    /**
+     * Puts `entries`, in the trash's root (`Section.trash`), back in the folders they were moved to
+     * the trash from, asking first about names those folders have now, as a paste does. Missing
+     * unless every one of `entries` is right in the trash's root and says where it came from
+     * (`FileEntry.trashed`), and when the adapter has no `restore`.
+     */
+    restore?: () => void;
+    /**
+     * Asks to confirm, then deletes everything in the trash for good, for a context whose `folder` is
+     * the trash's root (`Section.trash`), its empty space, its row in the sidebar or the path bar:
+     * every entry its root lists, hidden or not, through the adapter's `delete`. Missing elsewhere,
+     * when the adapter has no `delete`, and when the trash's listing is empty.
+     */
+    emptyTrash?: () => void;
     /**
      * Uploads `files` into `folder`, or, without them, asks for some with the browser's file picker,
      * which only opens from a click or key press and offers the types the section's `acceptUploads`
@@ -194,8 +222,9 @@ export interface ActionContext {
     /**
      * Undoes the latest change made through the file manager, whatever `entries` and `folder` are,
      * as Ctrl+Z and the main menu's Undo do: renamed back, a new folder deleted while it's empty,
-     * moved back, or a copy's copies deleted once the user confirms. Missing when there's nothing to
-     * undo, or while an undo or redo is under way.
+     * moved back, a copy's copies deleted once the user confirms, entries moved to the trash
+     * restored, or entries restored moved to the trash again. Missing when there's nothing to undo,
+     * or while an undo or redo is under way.
      */
     undo?: () => void;
     /**
