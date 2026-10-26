@@ -148,7 +148,16 @@ export const serverAdapter = createMockAdapter(
     { windowsNames: true, trash: "/trash" },
 );
 
-/** A second, unrelated backend, used by one section only. It has no trash, so it deletes for good. */
+// Pictures, videos and sound, by their type, or else their extension, as a copy from another
+// section may come without a type.
+const MEDIA_TYPES = /^(image|video|audio)\//;
+const MEDIA_EXTENSIONS = /\.(avif|bmp|gif|heic|jpe?g|png|psd|svg|tiff?|webp|mkv|mov|mp4|webm|aac|flac|m4a|mp3|ogg|wav)$/i;
+
+/**
+ * A second, unrelated backend, used by one section only. It has no trash, so it deletes for good, and
+ * it takes only pictures, videos and sound, refusing other files in `upload`, whether uploaded or
+ * copied in from another section, which the file manager hands it the same way.
+ */
 const mediaAdapter = createMockAdapter(
     {
         "/": [
@@ -162,6 +171,10 @@ const mediaAdapter = createMockAdapter(
     },
     {
         latency: [600, 1200],
+        refuses: (file) =>
+            MEDIA_TYPES.test(file.type) || MEDIA_EXTENSIONS.test(file.name)
+                ? undefined
+                : `The media bucket only takes pictures, videos and sound, not “${file.name}”.`,
         // `?downloadUrls`, to see URLs on another origin saved (see `options.ts`).
         downloadUrls: downloadUrls
             ? {
@@ -215,7 +228,8 @@ export const sections: SectionGroup[] = [
                 importFrom: false,
                 acceptUploads: false,
             },
-            // Takes only pictures, videos and sound, to show a section limiting the files uploaded.
+            // Takes only pictures, videos and sound, to show a section limiting the files uploaded. Its
+            // backend refuses the rest copied in from the server's sections too.
             {
                 id: "media",
                 label: "Media bucket",

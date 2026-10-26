@@ -85,7 +85,7 @@ import {
 } from "../../utils/shortcut";
 import { previewable } from "../../utils/preview";
 import { RELEVANCE_SORT, entryComparator, folderSort, sameSort } from "../../utils/sort";
-import { isMoving, movingIds, movingThrough, sharesNames } from "../../utils/transfer";
+import { carries, isMoving, movingIds, movingThrough, sharesNames } from "../../utils/transfer";
 import { inTrashRoot, trashMade, trashOrigin, trashedLocation, trashesOf } from "../../utils/trash";
 import {
     NO_HISTORY,
@@ -99,6 +99,7 @@ import {
     madePairs,
     otherWay,
     stepHolds,
+    wentPairs,
 } from "../../utils/undo";
 import { DEFAULT_ZOOM, canZoom, sameZoom, zoomScale, zoomedBy } from "../../utils/zoom";
 import DownloadPanel from "../downloads/download-panel";
@@ -131,6 +132,7 @@ import type {
     ActionGroup,
     Arrival,
     Clipboard,
+    ClipboardPart,
     ConflictPolicy,
     DraggedEntries,
     DroppedFiles,
@@ -180,6 +182,7 @@ import type {
     UndoMove,
     UndoRestore,
     UndoStep,
+    UndoTarget,
     UploadItem,
     ViewMode,
     ViewZoom,
@@ -1463,10 +1466,12 @@ const FileManager = ({
     const [treeReveal, setTreeReveal] = useState<TreeReveal | null>(null);
     // Copies and moves run in the background while the user browses, a few at once, and the panel
     // shows those that take a moment or failed. What one ending does needs much made further down
-    // (`handleTransferEnded`), which it's handed once that's made.
+    // (`handleTransferEnded`), which it's handed once that's made. A copy into another adapter's
+    // folder names folders kept both, and words a server's error, as the text has it.
     const transferEnded = useRef<TransferEnded | null>(null);
-    const transfers = useTransferQueue((item, outcome, items, made) =>
-        transferEnded.current?.(item, outcome, items, made),
+    const transfers = useTransferQueue(
+        (item, outcome, items, made) => transferEnded.current?.(item, outcome, items, made),
+        localeValue.text,
     );
 
     useLayoutEffect(() => transfers.queue.setMaxActive(transferLimit), [transfers.queue, transferLimit]);
@@ -1759,7 +1764,8 @@ const FileManager = ({
     // A section rooted elsewhere, or served by another adapter, as when the file manager's `adapter`
     // changes, goes back to its root, in the history too, since its trails lead nowhere now. Another
     // adapter's ids mean something else, so the section's listings are dropped and listed again by
-    // what shows them, and a clipboard of entries no section's adapter serves can't be pasted any more.
+    // what shows them, and entries on the clipboard that no section's adapter serves can't be pasted
+    // any more, and leave it.
     useLayoutEffect(() => {
         const before = servedBefore.current;
         const now = new Map(
@@ -1808,7 +1814,15 @@ const FileManager = ({
 
         const adapters = new Set([...now.values()].map((served) => served.adapter));
 
-        setClipboard((prev) => (prev && !adapters.has(prev.adapter) ? null : prev));
+        setClipboard((prev) => {
+            if (!prev || prev.parts.every((part) => adapters.has(part.adapter))) {
+                return prev;
+            }
+
+            const parts = prev.parts.filter((part) => adapters.has(part.adapter));
+
+            return parts.length > 0 ? { ...prev, parts } : null;
+        });
     }, [sectionsById, adapter, store, revise]);
 
     // A step naming a section that's gone, rooted elsewhere or served by another adapter means
@@ -1823,39 +1837,49 @@ const FileManager = ({
     // Entries on the clipboard that a change may have reached are looked for again.
     useClipboardFollow(clipboard, setClipboard, store);
 
-    // Cut entries being found again by name aren't marked, as their ids may name others meanwhile.
-    const cut = useMemo(
-        () =>
-            clipboard?.kind === "cut"
-                ? {
-                      adapter: clipboard.adapter,
-                      ids: new Set(
-                          clipboard.parts.flatMap((part) =>
-                              part.lookup?.by === "name" ? [] : part.entries.map((entry) => entry.id),
-                          ),
-                      ),
-                  }
-                : null,
-        [clipboard],
-    );
+    // Cut entries are marked by the adapter serving them. Those being found again by name aren't, as
+    // their ids may name others meanwhile.
+    const cut = useMemo(() => {
+        if (clipboard?.kind !== "cut") {
+            return null;
+        }
+
+        const ids = new Map<FileAdapter, Set<string>>();
+
+        clipboard.parts.forEach((part) => {
+            const own = ids.get(part.adapter) ?? new Set<string>();
+
+            if (part.lookup?.by !== "name") {
+                part.entries.forEach((entry) => own.add(entry.id));
+            }
+
+            ids.set(part.adapter, own);
+        });
+
+        return ids;
+    }, [clipboard]);
 
     // Folders a paste being checked changes, whose view shows a progress bar meanwhile (`busy`), in
-    // any section showing them: the one it goes into, the one listing that folder (where it was
-    // dropped onto, or pasted into from its menu), and, for a move, the one the entries leave.
-    const pasteIds = useMemo(() => {
+    // any section showing them, by the adapter serving them: the one it goes into, the one listing
+    // that folder (where it was dropped onto, or pasted into from its menu), and, for a move, those
+    // the entries leave, which may be another adapter's.
+    const pasteIds = useMemo((): UndoFolders[] | null => {
         if (!pasting?.open) {
             return null;
         }
 
         const { clipboard: pasted, section: target, trail } = pasting.request;
-        const ids = new Set([folderOf(target, trail).id, folderOf(target, trail.slice(0, -1)).id]);
+        const into = {
+            adapter: target.adapter ?? adapter,
+            folderIds: [folderOf(target, trail).id, folderOf(target, trail.slice(0, -1)).id],
+        };
+        const left = pasted.parts.map((part) => ({
+            adapter: part.adapter,
+            folderIds: [folderOf(part.section, part.trail).id],
+        }));
 
-        if (pasted.kind === "cut") {
-            pasted.parts.forEach((part) => ids.add(folderOf(part.section, part.trail).id));
-        }
-
-        return { adapter: pasted.adapter, ids };
-    }, [pasting]);
+        return pasted.kind === "cut" ? [into, ...left] : [into];
+    }, [pasting, adapter]);
 
     // A reveal may be waiting for its folder to open.
     const revealId = reveal?.key === openKey ? reveal.id : undefined;
@@ -2676,63 +2700,104 @@ const FileManager = ({
     const trashAsked = useRef<((groups: UndoGroup[]) => void) | null>(null);
 
     // Dropped on the trash's root, entries go to the trash, Ctrl held or not, when they could be
-    // deleted, through its adapter. Nothing else goes into the trash (`canPaste`).
+    // deleted, through its adapter, which serves them all. Nothing else goes into the trash
+    // (`canPaste`), nor another adapter's entries into this one's.
     const offerTrash = useCallback(
         (dragged: DraggedEntries, target: Section, trail: FolderRef[]) => {
-            const busyThrough = movingThrough(moving, dragged.adapter);
+            const served = target.adapter ?? adapter;
+            const busyThrough = movingThrough(moving, served);
 
             return inTrashRoot(target, trail) &&
-                (target.adapter ?? adapter) === dragged.adapter &&
-                dragged.adapter.trash &&
+                served.trash &&
                 dragged.parts.every(
                     (part) =>
+                        part.adapter === served &&
                         !part.section.trash &&
                         entriesAllow(store, part.section, part.trail, part.entries, "delete", busyThrough),
                 )
-                ? () => trashAsked.current?.(dragged.parts.map((part) => ({ ...part, adapter: dragged.adapter })))
+                ? () => trashAsked.current?.(dragged.parts)
                 : undefined;
         },
         [adapter, store, moving],
     );
 
-    // A drop is pasted like the clipboard, with the dragged entries as a clipboard of their own, so
-    // the real one is left as it was. Dropped on the trash, they go to it.
-    const dropInto = useCallback<DropInto>(
-        (dragged, copy, target, trail) =>
-            target.trash
-                ? offerTrash(dragged, target, trail)
-                : offerPaste({ ...dragged, kind: copy ? "copy" : "cut" }, target, trail),
-        [offerPaste, offerTrash],
-    );
+    // Whether dragged entries could be moved into a folder `into` serves, as far as their adapters
+    // and permissions go: by their own adapter's `move`, or into another's folder, copied there and
+    // deleted from theirs (`carries`).
+    const movableInto = useCallback(
+        (dragged: DraggedEntries, into: FileAdapter) =>
+            dragged.parts.every((part) => {
+                const busy = movingThrough(moving, part.adapter);
+                const leaves = (what: "move" | "delete") =>
+                    entriesAllow(store, part.section, part.trail, part.entries, what, busy);
 
-    // Dragged entries that can't be moved out of their folder are copied, as a paste of them cut
-    // couldn't go anywhere (`canPaste`).
-    const movable = useCallback(
-        (dragged: DraggedEntries) =>
-            !!dragged.adapter.move &&
-            dragged.parts.every((part) =>
-                entriesAllow(
-                    store,
-                    part.section,
-                    part.trail,
-                    part.entries,
-                    "move",
-                    movingThrough(moving, dragged.adapter),
-                ),
-            ),
+                return (
+                    carries("move", part.adapter, into, part.entries) &&
+                    leaves("move") &&
+                    (part.adapter === into || leaves("delete"))
+                );
+            }),
         [store, moving],
     );
 
-    // Entries a move under way is moving aren't dragged, as they can't be pasted anywhere either,
-    // nor are those in the trash, which are only restored.
-    const heldUp = useCallback(
-        (dragged: DraggedEntries) =>
-            dragged.parts.some(
-                (part) =>
-                    !!part.section.trash ||
-                    entriesMoving(part.section, part.trail, part.entries, movingThrough(moving, dragged.adapter)),
-            ),
-        [moving],
+    // A drop is pasted like the clipboard, with the dragged entries as a clipboard of their own, so
+    // the real one is left as it was. It copies with Ctrl or Option held, where the entries can't be
+    // moved there, and into a folder another adapter serves, as a drop onto another disk does on a
+    // desktop, unless Shift or ⌘ is held; otherwise it moves. Dropped on the trash, they go to it.
+    const dropInto = useCallback<DropInto>(
+        (dragged, keys, target, trail) => {
+            if (target.trash) {
+                const run = offerTrash(dragged, target, trail);
+
+                return run && { run, copy: false };
+            }
+
+            const into = target.adapter ?? adapter;
+            const across = dragged.parts.some((part) => part.adapter !== into);
+            const copy = keys.copy || (across && !keys.move) || !movableInto(dragged, into);
+            const run = offerPaste({ ...dragged, kind: copy ? "copy" : "cut" }, target, trail);
+
+            return run && { run, copy };
+        },
+        [adapter, offerPaste, offerTrash, movableInto],
+    );
+
+    // What can be done with dragged entries: moved, by their adapter or into another's folder, or
+    // else only copied, by it or into another's, or nothing at all. Entries a move under way is
+    // moving aren't dragged, as they can't be pasted anywhere either, nor are those in the trash,
+    // which are only restored.
+    const carried = useCallback(
+        (dragged: DraggedEntries) => {
+            const { parts } = dragged;
+
+            if (
+                parts.some(
+                    (part) =>
+                        !!part.section.trash ||
+                        entriesMoving(part.section, part.trail, part.entries, movingThrough(moving, part.adapter)),
+                )
+            ) {
+                return null;
+            }
+
+            const movable = parts.every((part) => {
+                const busy = movingThrough(moving, part.adapter);
+                const leaves = (what: "move" | "delete") =>
+                    entriesAllow(store, part.section, part.trail, part.entries, what, busy);
+
+                return (
+                    leaves("move") &&
+                    (!!part.adapter.move || (!!part.adapter.delete && !!part.adapter.content && leaves("delete")))
+                );
+            });
+
+            if (movable) {
+                return "move";
+            }
+
+            return parts.every((part) => !!(part.adapter.copy || part.adapter.content)) ? "copy" : null;
+        },
+        [store, moving],
     );
 
     // Uploads into the folder at `trail`, when its section and adapter take uploads, the folder can
@@ -2768,9 +2833,8 @@ const FileManager = ({
             const served = target.adapter ?? adapter;
             const ownFirst =
                 clipboard &&
-                (clipboard.parts.some((part) => part.lookup)
-                    ? clipboard.adapter === served
-                    : canPaste(clipboard, served, target, trail, store, moving));
+                (clipboard.parts.some((part) => part.lookup) ||
+                    canPaste(clipboard, served, target, trail, store, moving));
             const upload = ownFirst ? undefined : offerUpload(target, trail);
 
             if (!upload || !event.clipboardData.types.includes("Files")) {
@@ -2818,7 +2882,7 @@ const FileManager = ({
         }
     };
 
-    const drag = useEntryDrag(adapter, dropInto, uploadInto, movable, heldUp, rootRef);
+    const drag = useEntryDrag(adapter, dropInto, uploadInto, carried, rootRef);
     const dragging = !!drag.context.dragged;
 
     // Shows the sidebar for the drag under way, unless it shows already, leaving the overlay open
@@ -3224,9 +3288,11 @@ const FileManager = ({
 
     // A move undone puts back the name each entry had where it came from, when it was kept both on
     // the way in under another and the name is still free there; one it can't keeps the one it has.
+    // Each goes through the adapter serving where it went back to.
     const renameBack = useCallback(
-        async (served: FileAdapter, settled: SettledTransfer[], signal: AbortSignal) => {
+        async (settled: SettledTransfer[], signal: AbortSignal) => {
             for (const { end, place, pairs } of settled) {
+                const served = end.item.targetAdapter;
                 const names = place.names;
                 const wanted = new Map(end.item.entries.map((entry, index) => [entry.id, names?.[index]] as const));
                 const off = pairs.filter((pair) => {
@@ -3282,41 +3348,73 @@ const FileManager = ({
 
     // Once the last copy or move of a batch has ended, what's done is said, and goes in the history,
     // to be undone by what the adapter says it made: the copies deleted, or the entries moved back
-    // where each came from. A change that can't be undone that way, as Replace or Merge was chosen,
-    // the adapter said nothing, or part of it failed or was called off once under way, ends the
-    // history. A batch carrying out an undo or redo ends it, with what redoes or undoes it in turn,
-    // or says it failed, the panel showing why with Try again.
+    // where each came from, between adapters as they went. A change that can't be undone that way, as
+    // Replace or Merge was chosen or the adapter said nothing, ends the history, and so does one that
+    // failed, or was called off once under way, as the entry it stopped at may have gone in part; what
+    // went before it then goes in as a change of its own, when the adapter reported each entry as it
+    // went (`went`). A batch carrying out an undo or redo ends it, with what redoes or undoes it in
+    // turn, or says it failed, the panel showing why with Try again, and what went before that going
+    // on the other list.
     const settleBatch = useCallback(
         (batch: TransferBatch, skipped: readonly FileEntry[], target: FolderRef) => {
             const { ended, run } = batch;
-            const { kind, adapter: served } = ended[0].item;
+            const { kind } = ended[0].item;
             const { text } = localeValue;
-            const message = transferMessage(kind, batch.done, skipped, target);
-            const settled = ended.flatMap((end): SettledTransfer[] => {
+            // Those that reached the adapter, which may have changed something, and whether any of
+            // them stopped partway.
+            const reached = ended.filter((end) => end.outcome !== "cancelled" || end.item.status !== "queued");
+            const partway = reached.some((end) => end.outcome !== "done");
+            // Stopped partway, it says how many of those asked for went.
+            const leftOut = new Set(skipped);
+            const done = batch.done.filter((entry) => !leftOut.has(entry));
+            const asked = ended.flatMap((end) => end.item.entries).filter((entry) => !leftOut.has(entry));
+            let message = transferMessage(kind, batch.done, skipped, target);
+
+            if (message && partway && done.length < asked.length) {
+                message = (kind === "copy" ? text.copyPartlyDone : text.movePartlyDone)(
+                    done.length,
+                    asked.length,
+                    isolate(target.name),
+                );
+            }
+
+            const settled = reached.flatMap((end): SettledTransfer[] => {
                 const { item, outcome, made, place } = end;
-                const pairs = outcome === "done" && place ? madePairs(item.entries, made, item.conflict) : null;
+                const pairs =
+                    outcome === "done"
+                        ? madePairs(item.entries, made, item.conflict)
+                        : wentPairs(item.went, item.conflict);
 
                 return pairs && place ? [{ end, place, pairs }] : [];
             });
-            const undoable = settled.length === ended.length && (kind === "move" || !!served.delete);
+            // Copies are undone by deleting them, through the adapter they went into, and moves by
+            // moving them back, across again when they went into another adapter's folder, which
+            // takes that one handing them over and theirs taking them.
+            const undoable =
+                settled.length === reached.length &&
+                settled.every(({ end, pairs }) => {
+                    const { adapter: from, targetAdapter: to } = end.item;
+
+                    return kind === "copy"
+                        ? !!to.delete
+                        : from === to || carries("move", to, from, pairs.map((pair) => pair.to));
+                });
             const went = undoable ? settled.filter((transfer) => transfer.pairs.length > 0) : [];
+            const failed = ended.find((end) => end.outcome === "failed");
 
             if (message && run?.direction !== "undo") {
                 announce(message);
             }
 
             if (went.length === 0) {
-                const failed = ended.find((end) => end.outcome === "failed");
-                const reached = ended.some((end) => end.outcome !== "cancelled" || end.item.status !== "queued");
-
                 // Called off before any of it reached the adapter, an undo or redo is put back.
                 if (run && failed) {
                     failRun(run, failed.item.error && isolate(failed.item.error), false);
-                } else if (run && !reached) {
+                } else if (run && reached.length === 0) {
                     callOffRun(run);
                 } else if (run) {
                     leaveRun(run);
-                } else if (!undoable && reached) {
+                } else if (reached.length > 0 && (!undoable || partway)) {
                     endHistory();
                 }
 
@@ -3331,27 +3429,33 @@ const FileManager = ({
 
                     return {
                         kind: "removeCopies",
-                        group: { section: into, trail, entries: copies },
+                        group: { section: into, trail, entries: copies, adapter: went[0].end.item.targetAdapter },
                         sources: went.map(({ place, pairs }) => {
-                            const [{ section: from, trail: fromTrail }] = place.request.clipboard.parts;
+                            const [part] = place.request.clipboard.parts;
 
-                            return { section: from, trail: fromTrail, entries: pairs.map((pair) => pair.from) };
+                            return {
+                                section: part.section,
+                                trail: part.trail,
+                                adapter: part.adapter,
+                                entries: pairs.map((pair) => pair.from),
+                            };
                         }),
                     };
                 }
 
                 return {
                     kind: "move",
-                    moves: went.map(({ place, pairs }): UndoMove => {
+                    moves: went.map(({ end, place, pairs }): UndoMove => {
                         const [part] = place.request.clipboard.parts;
 
                         return {
                             group: {
                                 section: place.request.section,
                                 trail: place.request.trail,
+                                adapter: end.item.targetAdapter,
                                 entries: pairs.map((pair) => pair.to),
                             },
-                            to: { section: part.section, trail: part.trail },
+                            to: { section: part.section, trail: part.trail, adapter: part.adapter },
                             names: run?.direction === "undo" ? undefined : pairs.map((pair) => pair.from.name),
                         };
                     }),
@@ -3365,13 +3469,34 @@ const FileManager = ({
                     isolate(madeFrom[0].name),
                     isolate(target.name),
                 );
+            const served = went[0].end.item.adapter;
 
             if (!run) {
+                // Nothing older can be undone past the entry it stopped at, which may have gone in
+                // part, but what went before it still can be.
+                if (partway) {
+                    endHistory();
+                }
+
                 recordChange(kind, served, actionOf(), doneMessage);
+            } else if (partway) {
+                // What went goes on the other list, as a run done does, unless an undo ends after
+                // another change was made, which left nothing to redo; the panel tries the rest again.
+                const back = otherWay(run.direction);
+
+                if (back === "undo" || historyEpoch.current === run.epoch) {
+                    putDone(run, back, actionOf());
+                }
+
+                if (failed) {
+                    failRun(run, failed.item.error && isolate(failed.item.error), false);
+                } else {
+                    leaveRun(run);
+                }
             } else if (run.direction === "redo") {
                 endRun(run, { action: actionOf(), message: doneMessage });
             } else {
-                void renameBack(served, went, run.controller.signal).then(() => {
+                void renameBack(went, run.controller.signal).then(() => {
                     if (!run.controller.signal.aborted) {
                         announce(text.undone(kind));
                         endRun(run, { action: actionOf(), message: text.undone(kind) });
@@ -3384,6 +3509,7 @@ const FileManager = ({
             renameBack,
             recordChange,
             endRun,
+            putDone,
             failRun,
             callOffRun,
             leaveRun,
@@ -3394,17 +3520,20 @@ const FileManager = ({
     );
 
     // As a copy or move ends, what it may have changed is listed again, however it ended, since the
-    // adapter can't take back what it has done: the destination, the source after a move, and after
-    // a Replace or Merge, the folders merged into, all the way down. Once it's done, moved entries
-    // leave the cache, the clipboard and the preview (`handleMoved`). Once its batch has all ended,
-    // it's announced and goes in the history (`settleBatch`). A failure stays in the panel to be
-    // tried again, and is announced unless the panel was showing already, since a panel just shown
-    // isn't read out, while its title is once it shows.
+    // adapter can't take back what it has done: the destination, through the adapter serving it, the
+    // source after a move, and after a Replace or Merge, the folders merged into, all the way down.
+    // Moved entries, all of them once it's done, or those reported gone before it failed or was
+    // called off (`went`), leave the cache, the clipboard and the preview (`handleMoved`). Once its
+    // batch has all ended, it's announced and goes in the history (`settleBatch`). A failure stays in
+    // the panel to be tried again, and is announced unless the panel was showing already, since a
+    // panel just shown isn't read out, while its title is once it shows, or something of it went,
+    // which the batch says.
     const handleTransferEnded = useCallback<TransferEnded>(
         (item, outcome, items, made) => {
             const transfer = transferPlaces.current.get(item.id);
-            const { kind, adapter: served, entries, source, target } = item;
+            const { kind, adapter: served, targetAdapter, entries, source, target, went } = item;
             const batch: TransferBatch = transfer?.batch ?? { left: 1, done: [], ended: [] };
+            const gone = outcome === "done" ? entries : went.map((each) => each.entry);
 
             if (outcome !== "failed") {
                 transferPlaces.current.delete(item.id);
@@ -3412,26 +3541,33 @@ const FileManager = ({
 
             batch.left -= 1;
             batch.ended.push({ item, outcome, made, place: transfer });
-
-            if (outcome === "done") {
-                batch.done.push(...entries);
-            }
+            batch.done.push(...gone);
 
             // Cancelled while it waited, it never reached the adapter.
             if (!(outcome === "cancelled" && item.status === "queued")) {
+                const across = served !== targetAdapter;
+
                 relistTransferred(
-                    served,
-                    kind === "move" ? [target.id, source.id] : [target.id],
+                    targetAdapter,
+                    kind === "move" && !across ? [target.id, source.id] : [target.id],
                     item.conflict === "replace" ? transfer?.merged : undefined,
                 );
 
-                if (outcome === "done") {
-                    if (kind === "move" && transfer) {
-                        const { section: into, trail } = transfer.request;
+                if (kind === "move" && across) {
+                    relist(served, [source.id]);
+                }
 
-                        handleMoved(served, entries, { sectionId: into.id, trail });
-                    }
-                } else if (outcome === "failed" && !items.some((other) => other.shown && other.id !== item.id)) {
+                if (kind === "move" && transfer && gone.length > 0) {
+                    const { section: into, trail } = transfer.request;
+
+                    handleMoved(served, gone, { sectionId: into.id, trail });
+                }
+
+                if (
+                    outcome === "failed" &&
+                    went.length === 0 &&
+                    !items.some((other) => other.shown && other.id !== item.id)
+                ) {
                     announce(
                         (kind === "copy" ? localeValue.text.copyFailedNotice : localeValue.text.moveFailedNotice)(
                             entries.length,
@@ -3446,7 +3582,7 @@ const FileManager = ({
                 settleBatch(batch, transfer?.skipped ?? [], target);
             }
         },
-        [relistTransferred, handleMoved, settleBatch, announce, localeValue],
+        [relist, relistTransferred, handleMoved, settleBatch, announce, localeValue],
     );
 
     useLayoutEffect(() => {
@@ -3464,7 +3600,8 @@ const FileManager = ({
 
     // A copy or move asked for, by the picker, a paste or a drop, once its names are settled, or by
     // an undo or redo, one per folder the entries are in, as the adapter takes entries sharing a
-    // folder: those already in the target are left there by a move, and kept both by a copy.
+    // folder, through the adapter serving them, into a folder of its own or another's: those
+    // already in the target are left there by a move, and kept both by a copy.
     // Entries of several folders sharing names go one folder after another, so each lands before
     // the next is settled against it. A cut leaves the clipboard as its paste starts, so it isn't
     // pasted twice while it runs; a copy can be pasted again. One that fails is tried again from the
@@ -3480,14 +3617,16 @@ const FileManager = ({
         ) => {
             const { clipboard: pasted, section: target, trail, retrying } = request;
             const into = folderOf(target, trail);
+            const intoAdapter = target.adapter ?? adapter;
+            // Only the target's own adapter's entries can be in it already.
+            const there = (part: ClipboardPart) =>
+                part.adapter === intoAdapter && folderOf(part.section, part.trail).id === into.id;
 
             if (retrying !== undefined) {
                 forgetTransfer(retrying);
             }
 
-            const parts = pasted.parts.filter(
-                (part) => pasted.kind === "copy" || folderOf(part.section, part.trail).id !== into.id,
-            );
+            const parts = pasted.parts.filter((part) => pasted.kind === "copy" || !there(part));
             const batch: TransferBatch = given ?? { left: 0, done: [], ended: [] };
 
             batch.left += parts.length;
@@ -3495,14 +3634,14 @@ const FileManager = ({
             let before: number | undefined;
 
             parts.forEach((part) => {
-                const source = folderOf(part.section, part.trail);
                 const id = transfers.queue.add(
                     pasted.kind === "cut" ? "move" : "copy",
-                    pasted.adapter,
+                    part.adapter,
+                    intoAdapter,
                     part.entries,
-                    source,
+                    folderOf(part.section, part.trail),
                     into,
-                    source.id === into.id ? "keepBoth" : conflict,
+                    there(part) ? "keepBoth" : conflict,
                     inTurn ? before : undefined,
                 );
 
@@ -3522,21 +3661,21 @@ const FileManager = ({
                 setClipboard((prev) => (prev === pasted ? null : prev));
             }
         },
-        [transfers.queue, forgetTransfer],
+        [adapter, transfers.queue, forgetTransfer],
     );
 
     // The picker's destination is one of the sections it was opened with, as a dialog finishes with
     // the sections it was opened for.
     const handleTransferStart = useCallback(
         (
-            { kind, section: from, adapter: served, groups, destinations }: TransferRequest,
+            { kind, section: from, groups, destinations }: TransferRequest,
             destination: FileManagerLocation,
             conflict: ConflictPolicy,
             skipped: FileEntry[],
             merged: string[],
         ) => {
             const target = destinations.find((candidate) => candidate.id === destination.sectionId) ?? from;
-            const pasted: Clipboard = { kind: kind === "move" ? "cut" : "copy", adapter: served, parts: groups };
+            const pasted: Clipboard = { kind: kind === "move" ? "cut" : "copy", parts: groups };
 
             closeTransfer();
             startTransfer({ clipboard: pasted, section: target, trail: destination.trail }, conflict, skipped, merged);
@@ -3565,17 +3704,19 @@ const FileManager = ({
 
             const { clipboard: pasted, section: target, trail } = transfer.request;
             const into = sectionsById.get(target.id);
-            const busy = movingThrough(moving, item.adapter);
-            const servedAsBefore = (shown: Section | undefined): shown is Section =>
-                !!shown && (shown.adapter ?? adapter) === item.adapter;
+            const servedAsBefore = (shown: Section | undefined, served: FileAdapter): shown is Section =>
+                !!shown && (shown.adapter ?? adapter) === served;
 
             return (
-                servedAsBefore(into) &&
-                !folderMoving(into, trail, busy) &&
+                servedAsBefore(into, item.targetAdapter) &&
+                !folderMoving(into, trail, movingThrough(moving, item.targetAdapter)) &&
                 pasted.parts.every((part) => {
                     const from = sectionsById.get(part.section.id);
 
-                    return servedAsBefore(from) && !entriesMoving(from, part.trail, part.entries, busy);
+                    return (
+                        servedAsBefore(from, part.adapter) &&
+                        !entriesMoving(from, part.trail, part.entries, movingThrough(moving, part.adapter))
+                    );
                 })
             );
         },
@@ -3584,9 +3725,10 @@ const FileManager = ({
 
     // Tries a failed copy or move again as a paste, so the destination's names are checked again,
     // since part of it may have gone through, and the user chooses afresh; it stays in the panel
-    // until the new one starts, as the user may cancel. Only the entries their folder still lists
-    // go, when it's listed, so a move doesn't ask again for what it moved. With none left, there's
-    // nothing to try again, and it's forgotten.
+    // until the new one starts, as the user may cancel. The entries the adapter reported gone before
+    // it failed (`went`) are left out, and of the rest, only those their folder still lists go, when
+    // it's listed, so a move doesn't ask again for what it moved. With none left, there's nothing
+    // to try again, and it's forgotten.
     const retryTransfer = useCallback(
         (item: TransferItem) => {
             const transfer = transferPlaces.current.get(item.id);
@@ -3598,11 +3740,14 @@ const FileManager = ({
 
             // Each part in its section as it is now, which `canRetryTransfer` found there.
             const { clipboard: pasted, trail } = transfer.request;
+            const wentIds = new Set(item.went.map((each) => each.entry.id));
             const parts = pasted.parts.flatMap((part) => {
                 const from = sectionsById.get(part.section.id) ?? part.section;
                 const listed = store.get(folderKey(from.id, folderOf(from, part.trail).id))?.entries;
                 const listedIds = listed && new Set(listed.map((entry) => entry.id));
-                const entries = listedIds ? part.entries.filter((entry) => listedIds.has(entry.id)) : part.entries;
+                const entries = part.entries.filter(
+                    (entry) => !wentIds.has(entry.id) && (!listedIds || listedIds.has(entry.id)),
+                );
 
                 return entries.length > 0 ? [{ ...part, section: from, entries }] : [];
             });
@@ -3636,7 +3781,7 @@ const FileManager = ({
             return false;
         }
 
-        if (pasteIds?.adapter === served && pasteIds.ids.has(folder.id)) {
+        if (pasteIds?.some((each) => each.adapter === served && each.folderIds.includes(folder.id))) {
             return true;
         }
 
@@ -3648,19 +3793,19 @@ const FileManager = ({
             return true;
         }
 
+        // The target by the adapter serving it, and the source by the entries', which may differ.
         return transfers.items.some((item) => {
             const transfer = transferPlaces.current.get(item.id);
 
-            if (item.status === "failed" || item.adapter !== served) {
+            if (item.status === "failed") {
                 return false;
             }
 
             const above = transfer && folderOf(transfer.request.section, transfer.request.trail.slice(0, -1));
 
             return (
-                item.target.id === folder.id ||
-                above?.id === folder.id ||
-                (item.kind === "move" && item.source.id === folder.id)
+                (item.targetAdapter === served && (item.target.id === folder.id || above?.id === folder.id)) ||
+                (item.kind === "move" && item.adapter === served && item.source.id === folder.id)
             );
         });
     }, [section, adapter, folder, pasteIds, undoing, trashWork, transfers.items]);
@@ -3776,7 +3921,11 @@ const FileManager = ({
 
                 announce(message);
                 endRun(run, {
-                    action: { kind: "copy", sources, to: { section: group.section, trail: group.trail } },
+                    action: {
+                        kind: "copy",
+                        sources,
+                        to: { section: group.section, trail: group.trail, adapter: group.adapter },
+                    },
                     message,
                 });
 
@@ -4213,9 +4362,10 @@ const FileManager = ({
                     (!what || group.entries.every((entry) => allows(what, entry.permissions)))
                 );
             };
-            // Whether entries can go into a folder, as a paste of them could.
-            const goes = (pasted: Clipboard, to: UndoFolder) =>
-                canPaste(pasted, served, to.section, to.trail, store, tools().moving);
+            // Whether entries can go into a folder, as a paste of them could, through the adapter
+            // serving it, which may not be theirs.
+            const goes = (pasted: Clipboard, to: UndoTarget) =>
+                canPaste(pasted, to.adapter, to.section, to.trail, store, tools().moving);
 
             try {
                 if (!stepHolds(step, tools().sectionsById, tools().adapter)) {
@@ -4322,16 +4472,19 @@ const FileManager = ({
                         return;
                     }
                     case "removeCopies": {
+                        // Through the adapter the copies went into, which may not be the one they
+                        // were copied from.
                         const group = placed(action.group);
-                        const copies = await asListed(group, true);
+                        const through = group.adapter;
+                        const copies = await asListed(group, true, through);
 
-                        if (!served.delete || !changeable({ ...group, entries: copies }, "delete")) {
+                        if (!through.delete || !changeable({ ...group, entries: copies }, "delete", through)) {
                             throw new UndoRefused();
                         }
 
                         // The dialog ends the run, done (`handleDeleted`) or called off (`handleDeleteClose`).
                         tools().askDelete({
-                            groups: [{ ...group, entries: copies, adapter: served }],
+                            groups: [{ ...group, entries: copies }],
                             undoesCopy: true,
                         });
 
@@ -4343,10 +4496,10 @@ const FileManager = ({
                             action.sources.map(async (source) => {
                                 const group = placed(source);
 
-                                return { ...group, entries: await asListed(group, false) };
+                                return { ...group, entries: await asListed(group, false, group.adapter) };
                             }),
                         );
-                        const pasted: Clipboard = { kind: "copy", adapter: served, parts: sources };
+                        const pasted: Clipboard = { kind: "copy", parts: sources };
 
                         if (!goes(pasted, to)) {
                             throw new UndoRefused();
@@ -4369,8 +4522,7 @@ const FileManager = ({
                                 const group = placed(move.group);
                                 const pasted: Clipboard = {
                                     kind: "cut",
-                                    adapter: served,
-                                    parts: [{ ...group, entries: await asListed(group, false) }],
+                                    parts: [{ ...group, entries: await asListed(group, false, group.adapter) }],
                                 };
 
                                 return { ...move, pasted, to: placed(move.to) };
@@ -4724,34 +4876,48 @@ const FileManager = ({
             const groups = requestGroups(request);
             const spread = groups.length > 1;
             const servedBy = (group: EntryGroup) => group.section.adapter ?? adapter;
-            // Copying and moving need one adapter serving them all, as nothing is copied between
-            // adapters.
-            const oneAdapter = groups.every((group) => servedBy(group) === folderAdapter);
-            // The sections the entries can go into, taking entries from each of theirs, and their
-            // own. A section nothing can change is offered only when it's one of theirs, and the
-            // trash never, as entries go there only by being moved to it. The picker starts where
-            // the entries are, or in the first section they can go into.
-            const destinations = oneAdapter
-                ? [...sectionsById.values()].filter(
-                      (candidate) =>
-                          (candidate.adapter ?? adapter) === folderAdapter &&
-                          !candidate.trash &&
-                          groups.every((group) => importsFrom(candidate, group.section)) &&
-                          (groups.some((group) => group.section.id === candidate.id) || !candidate.readOnly),
-                  )
-                : [];
-            const pickerStart = destinations.some((candidate) => candidate.id === menuSection.id)
-                ? { section: menuSection, trail }
-                : destinations[0] && { section: destinations[0], trail: [] };
-            const transferTo = (kind: TransferRequest["kind"]) =>
-                pickerStart
-                    ? () => askDestination({ ...pickerStart, adapter: folderAdapter, kind, groups, destinations })
-                    : undefined;
+            // The entries by their folder, each with the adapter serving it, as the clipboard and
+            // the picker take them, which may be several, for a search's results.
+            const parts = groups.map((group): ClipboardPart => ({ ...group, adapter: servedBy(group) }));
 
             // What the folders and the entries' own permissions allow, while no move under way is
             // moving them, or their folders, through their own adapter.
             const busy = movingThrough(moving, folderAdapter);
             const busyFor = (group: EntryGroup) => movingThrough(moving, servedBy(group));
+
+            // The sections the entries can be copied or moved (`kind`) into, by their own adapter or
+            // into another's (`carries`), which takes deleting them from theirs for a move, taking
+            // entries from each of theirs, and their own. A section nothing can change is offered
+            // only when it's one of theirs, and the trash never, as entries go there only by being
+            // moved to it. The picker starts where the entries are, or in the first section they can
+            // go into.
+            const deletable = (part: ClipboardPart) =>
+                entriesAllow(store, part.section, part.trail, part.entries, "delete", busyFor(part));
+            const destinationsFor = (kind: TransferRequest["kind"]) =>
+                [...sectionsById.values()].filter((candidate) => {
+                    const into = candidate.adapter ?? adapter;
+
+                    return (
+                        !candidate.trash &&
+                        (groups.some((group) => group.section.id === candidate.id) || !candidate.readOnly) &&
+                        parts.every(
+                            (part) =>
+                                carries(kind, part.adapter, into, part.entries) &&
+                                importsFrom(candidate, part.section) &&
+                                (kind === "copy" || part.adapter === into || deletable(part)),
+                        )
+                    );
+                });
+            const transferTo = (kind: TransferRequest["kind"], destinations: Section[]) => {
+                const pickerStart = destinations.some((candidate) => candidate.id === menuSection.id)
+                    ? { section: menuSection, trail }
+                    : destinations[0] && { section: destinations[0], trail: [] };
+
+                return pickerStart
+                    ? () => askDestination({ ...pickerStart, kind, groups: parts, destinations })
+                    : undefined;
+            };
+            const copyDestinations = destinationsFor("copy");
             const entriesBusy = groups.some((group) =>
                 entriesMoving(group.section, group.trail, group.entries, busyFor(group)),
             );
@@ -4899,25 +5065,30 @@ const FileManager = ({
                         ? () => askName({ ...base, kind: "rename", entry: entries[0] })
                         : undefined,
                 copyTo:
-                    folderAdapter.copy &&
                     entries.length > 0 &&
                     !entriesBusy &&
                     !inTrash &&
-                    destinations.some((candidate) => !candidate.readOnly)
-                        ? transferTo("copy")
+                    copyDestinations.some((candidate) => !candidate.readOnly)
+                        ? transferTo("copy", copyDestinations)
                         : undefined,
-                moveTo: folderAdapter.move && permits("move") ? transferTo("move") : undefined,
+                moveTo: permits("move") ? transferTo("move", destinationsFor("move")) : undefined,
+                // Cut and copied entries may be pasted into another adapter's folder, copied across,
+                // which takes reading them, and deleting them for a cut.
                 cut:
-                    folderAdapter.move && oneAdapter && permits("move")
+                    permits("move") &&
+                    parts.every((part) => !!part.adapter.move || (!!part.adapter.delete && !!part.adapter.content))
                         ? () => {
-                              setClipboard({ kind: "cut", adapter: folderAdapter, parts: groups });
+                              setClipboard({ kind: "cut", parts });
                               announce(localeValue.text.clipboardCut(entries.length, isolate(only.name)));
                           }
                         : undefined,
                 copy:
-                    folderAdapter.copy && oneAdapter && entries.length > 0 && !entriesBusy && !inTrash
+                    entries.length > 0 &&
+                    !entriesBusy &&
+                    !inTrash &&
+                    parts.every((part) => !!(part.adapter.copy || part.adapter.content))
                         ? () => {
-                              setClipboard({ kind: "copy", adapter: folderAdapter, parts: groups });
+                              setClipboard({ kind: "copy", parts });
                               announce(localeValue.text.clipboardCopied(entries.length, isolate(only.name)));
                           }
                         : undefined,

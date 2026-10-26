@@ -137,32 +137,36 @@ export interface ActionContext {
     rename?: () => void;
     /**
      * Asks for a destination folder and copies `entries` there, among the folders that aren't
-     * read-only. Missing when the section's adapter has no `copy`, there are no entries, they're in
-     * the trash (`Section.trash`), whose entries are only restored, or every section they could go
-     * into is `readOnly`. Entries from several folders (`byFolder`) sharing a
-     * name are asked about as names the destination has, the first going in first; entries from
-     * sections served by different adapters can't go into one folder, as no copy goes between
-     * adapters.
+     * read-only, in a section of their own adapter, which copies them with `copy`, or of another,
+     * which the file manager copies them into, reading them with their adapter's `list` and
+     * `content` and writing them with the other's `upload` and `createFolder`. Missing when there's
+     * no such section, there are no entries, they're in the trash (`Section.trash`), whose entries
+     * are only restored, or every section they could go into is `readOnly`. Entries from several
+     * folders (`byFolder`), of one adapter or several, sharing a name are asked about as names the
+     * destination has, the first going in first.
      */
     copyTo?: () => void;
     /**
      * Asks for a destination folder and moves `entries` there, among the folders that aren't
-     * read-only. Missing when the section's adapter has no `move`, there are no entries, or they
-     * can't be moved out: `folder` is read-only, or their permissions say so. Entries from several
-     * folders (`byFolder`) go as with `copyTo`, and those already in the folder chosen stay where
-     * they are.
+     * read-only, in a section of their own adapter, which moves them with `move`, or of another,
+     * which the file manager copies them into as `copyTo` does, deleting each from theirs with their
+     * adapter's `delete` once it's there, which their permissions have to allow too. Missing when
+     * there's no such section, there are no entries, or they can't be moved out: `folder` is
+     * read-only, or their permissions say so. Entries from several folders (`byFolder`) go as with
+     * `copyTo`, and those already in the folder chosen stay where they are.
      */
     moveTo?: () => void;
     /**
      * Puts `entries` on the file manager's clipboard to be moved where they're pasted, and shows
-     * them as cut meanwhile. Missing when the section's adapter has no `move`, there are no entries,
-     * or they can't be moved out, as with `moveTo`.
+     * them as cut meanwhile. Missing when their adapter can move them neither itself (`move`) nor
+     * into another's folder (`content` and `delete`), there are no entries, or they can't be moved
+     * out, as with `moveTo`.
      */
     cut?: () => void;
     /**
      * Puts `entries` on the file manager's clipboard to be copied where they're pasted. Missing when
-     * the section's adapter has no `copy`, there are no entries, or they're in the trash, as with
-     * `copyTo`.
+     * their adapter can copy them neither itself (`copy`) nor into another's folder (`content`),
+     * there are no entries, or they're in the trash, as with `copyTo`.
      */
     copy?: () => void;
     /**
@@ -217,10 +221,12 @@ export interface ActionContext {
      */
     uploadFolder?: () => void;
     /**
-     * Moves or copies what was cut or copied into `folder`. Missing when there is nothing to paste
-     * here: the clipboard is empty, its entries came from another adapter, `folder` is one of them
-     * or inside one or is read-only, cut entries are already in `folder` or can no longer be moved
-     * out of theirs, or a paste is still running. An action can stay in the menu, greyed out, with
+     * Moves or copies what was cut or copied into `folder`, by their own adapter, or into another
+     * adapter's folder as `copyTo` and `moveTo` do. Missing when there is nothing to paste here: the
+     * clipboard is empty, its entries can't go into a folder `folder`'s adapter serves, `folder` is
+     * one of them or inside one or is read-only, its section doesn't take entries from theirs
+     * (`Section.importFrom`), cut entries are already in `folder` or can no longer be moved out of
+     * theirs, or a paste is still running. An action can stay in the menu, greyed out, with
      * `disabled: (context) => !context.paste`.
      */
     paste?: () => void;

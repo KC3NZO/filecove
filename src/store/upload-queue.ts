@@ -170,8 +170,11 @@ const toSteps = (
     return folder;
 };
 
-/** Everything a folder holds, every page of it, by name, and its own permissions. */
-const listAll = async (adapter: FileAdapter, folderId: string, signal: AbortSignal) => {
+/**
+ * Everything a folder holds, every page of it, by name, and its own permissions, as an upload, or a
+ * copy from another adapter (`transferAcross`), merging into it or reading it needs it.
+ */
+export const listAll = async (adapter: FileAdapter, folderId: string, signal: AbortSignal) => {
     const holds = new Map<string, FileEntry>();
     let permissions: EntryPermissions | undefined;
     let cursor: string | undefined;

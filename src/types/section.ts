@@ -30,10 +30,12 @@ export interface Section {
     showFolders?: boolean;
     /**
      * Which other sections entries can be moved or copied into this one from, by dragging,
-     * pasting, "Move to…" or "Copy to…". Only sections served by the same adapter can ever be
-     * among them, since another adapter's ids mean nothing to this one's, and moving or copying
-     * within the section is always allowed. A `readOnly` section, or a folder whose permissions
-     * refuse writing, takes nothing either way.
+     * pasting, "Move to…" or "Copy to…": sections served by the same adapter, which moves or copies
+     * them itself, and those served by another, which the file manager copies into this section's
+     * folders, reading them through their adapter and writing them through this one's `upload` and
+     * `createFolder`, and for a move deleting them from theirs. Moving or copying within the
+     * section is always allowed. A `readOnly` section, or a folder whose permissions refuse writing,
+     * takes nothing either way.
      *
      * - `true`: every other section.
      * - `false`: none.
@@ -48,7 +50,9 @@ export interface Section {
      * in the file input's `accept` syntax, extensions, MIME types and their wildcards, such as
      * `"image/*,.pdf"`. The picker offers only those, and files of other types picked anyway,
      * dropped or pasted are left out, saying which types the section takes. Uploading also needs
-     * the section's adapter to have `upload`, which still has the final say.
+     * the section's adapter to have `upload`, which still has the final say. It's about files from
+     * outside the file manager: entries copied in from a section another adapter serves are
+     * `importFrom`'s, though they arrive through `upload` too, which can refuse what it won't take.
      * @default true
      */
     acceptUploads?: boolean | string;

@@ -33,9 +33,9 @@ export type {
     TrashResult,
     UploadOptions,
 } from "./adapter";
-export type { Clipboard, ClipboardLookup, ClipboardPart } from "./clipboard";
+export type { AdapterIds, Clipboard, ClipboardLookup, ClipboardPart } from "./clipboard";
 export type { DownloadItem, DownloadStatus, PreparedDownload } from "./download";
-export type { DraggedEntries, DragSource, DropEffect, DropInto, DropTarget, HeldPress } from "./drag";
+export type { DraggedEntries, DragSource, Drop, DropEffect, DropInto, DropKeys, DropTarget, HeldPress } from "./drag";
 export type { Clash, EntryClash, FolderState } from "./folder";
 export type { IconComponent, IconName, IconOverrides, IconSet, IconSource, IconVariant } from "./icon";
 export type {
@@ -64,7 +64,15 @@ export type { FilePreviewer, PreviewerProps, PreviewerReads } from "./previewer"
 export type { CountTarget, PropertiesItem, PropertiesSubject, Requested, SubjectEntry } from "./properties";
 export type { FileManagerSearch, SearchHit, SearchScope, SearchTarget, SectionSearch } from "./search";
 export type { FolderRef, Section, SectionFolder, SectionGroup, SectionImports } from "./section";
-export type { MovingIds, MovingKind, MovingKinds, TransferItem, TransferKind, TransferStatus } from "./transfer";
+export type {
+    MovingIds,
+    MovingKind,
+    MovingKinds,
+    TransferItem,
+    TransferKind,
+    TransferStatus,
+    WentEntry,
+} from "./transfer";
 export type {
     MadePair,
     UndoAction,
@@ -77,6 +85,7 @@ export type {
     UndoMove,
     UndoRestore,
     UndoStep,
+    UndoTarget,
 } from "./undo";
 export type { EntrySelection, SelectionDetails, SelectModifiers, TreeSelection, TreeTarget } from "./selection";
 export type {

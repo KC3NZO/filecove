@@ -50,9 +50,9 @@ import NameDialog from "./name-dialog";
 
 import type {
     Clash,
+    ClipboardPart,
     ConflictPolicy,
     EntryClash,
-    EntryGroup,
     FileAdapter,
     FileEntry,
     FileManagerLocation,
@@ -65,16 +65,18 @@ import type { NameDialogState, NameRequest } from "./name-dialog";
 
 export interface TransferRequest {
     kind: "copy" | "move";
+    /** The section the picker starts in. */
     section: Section;
-    /** The section's adapter, already known to support the request. */
-    adapter: FileAdapter;
     /** Trail to the folder the picker starts in: the entries', or the nearest holding them all. */
     trail: FolderRef[];
-    /** The entries by the folder they're in: one, or several for a search's results. */
-    groups: EntryGroup[];
     /**
-     * Sections served by the same adapter, the only ones whose ids it understands, that take
-     * entries from `section`, which is always among them.
+     * The entries by the folder they're in, each with the adapter serving it: one, or several for a
+     * search's results, of one section or more.
+     */
+    groups: ClipboardPart[];
+    /**
+     * Sections the entries can go into, of their own adapter or another, which copies them across,
+     * that take entries from each of theirs, `section` among them.
      */
     destinations: Section[];
 }
@@ -251,12 +253,12 @@ const isFolder = (entry: FileEntry) => entry.kind === "folder";
 
 /**
  * Asks where to copy or move entries, then has the adapter do it. It browses folders only, across
- * the sections the adapter serves that take entries from theirs, starting in the entries' own
- * folder, or for a search's results from several, the nearest holding them all. The entries
- * themselves can't be opened, so a folder can never go into itself, and a folder that can't change
- * (`folderWritable`) can be gone through but not chosen. Names the destination already has are
- * settled in a second step: replace or merge, keep both, or skip. Then it closes, and the copy or
- * move runs in the background, shown in the transfer panel.
+ * the sections that can take them, served by their adapter or another, which they're copied into
+ * across, starting in the entries' own folder, or for a search's results from several, the nearest
+ * holding them all. The entries themselves can't be opened, so a folder can never go into itself,
+ * and a folder that can't change (`folderWritable`) can be gone through but not chosen. Names the
+ * destination already has are settled in a second step: replace or merge, keep both, or skip. Then
+ * it closes, and the copy or move runs in the background, shown in the transfer panel.
  *
  * The list of folders is one stop in the tab order, focused once the dialog has faded in. The
  * arrows, Home, End, PageUp and PageDown move between the rows that can be opened, and typing
@@ -277,8 +279,8 @@ const TransferDialog = ({
     onStart,
     onFolderCreated,
 }: TransferDialogProps) => {
-    const { kind, section, adapter, trail, groups, destinations } = request;
-    const { store } = useData();
+    const { kind, section, trail, groups, destinations } = request;
+    const { store, adapter: defaultAdapter } = useData();
     const entries = useMemo(() => groupedEntries(groups), [groups]);
     const locale = useLocale();
     const { text } = locale;
@@ -290,6 +292,8 @@ const TransferDialog = ({
     const clashes = useMemo(() => conflicts?.map(({ clash }) => clash) ?? NO_CLASHES, [conflicts]);
 
     const target = destinations.find((candidate) => candidate.id === place?.sectionId) ?? section;
+    // The folders shown, and those made, are this adapter's, which may not be the entries'.
+    const adapter: FileAdapter = target.adapter ?? defaultAdapter;
     const targetFolder = folderOf(target, place?.trail ?? []);
     const { state } = useFolder(target, targetFolder.id, place !== null, true);
 
@@ -300,10 +304,19 @@ const TransferDialog = ({
                 .sort(nameOrder(locale)),
         [state?.entries, showHidden, locale],
     );
-    const pickedIds = useMemo(() => new Set(entries.map((entry) => entry.id)), [entries]);
-    // Folders moves under way are moving, which take nothing in meanwhile. The sections offered
-    // share the entries' adapter.
-    const movingIds = useMovingIds(section);
+    // Ids only mean something to their own adapter, so only entries the target's adapter serves can
+    // be among its folders.
+    const pickedIds = useMemo(
+        () =>
+            new Set(
+                groups
+                    .filter((group) => group.adapter === adapter)
+                    .flatMap((group) => group.entries.map((entry) => entry.id)),
+            ),
+        [groups, adapter],
+    );
+    // Folders moves under way are moving, which take nothing in meanwhile, by the target's adapter.
+    const movingIds = useMovingIds(target);
     // All of the folder has come, not just some of its pages, so its names can be checked for clashes.
     const listed = !!state?.entries && !state.partial;
     const failed = state?.status === "error";
@@ -314,11 +327,10 @@ const TransferDialog = ({
 
     // Ids are unique within an adapter, so the same folder is the same id whichever section shows it.
     // Entries already in the folder clash with themselves: a copy keeps both, and a move leaves them,
-    // so there's nothing to move when they all are.
-    const incoming =
-        place === null
-            ? entries
-            : groupedEntries(groups.filter((group) => folderOf(group.section, group.trail).id !== targetFolder.id));
+    // so there's nothing to move when they all are. Another adapter's are never there.
+    const elsewhere = (group: ClipboardPart) =>
+        group.adapter !== adapter || folderOf(group.section, group.trail).id !== targetFolder.id;
+    const incoming = place === null ? entries : groupedEntries(groups.filter(elsewhere));
     const allThere = place !== null && incoming.length === 0;
     const title = (kind === "copy" ? text.copyToTitle : text.moveToTitle)(entries.length, isolate(entries[0].name));
 

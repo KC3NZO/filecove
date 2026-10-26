@@ -4,7 +4,7 @@ import type { DragEvent } from "react";
 import { DragContext } from "../contexts/drag-context";
 import { filesIn } from "../utils/files";
 
-import type { DropTarget } from "../types";
+import type { DropKeys, DropTarget } from "../types";
 
 interface DropTargetOptions {
     /**
@@ -28,8 +28,13 @@ interface Over {
 /** How long a drag rests on a target before `onHold`, in ms. */
 export const HOLD_DELAY = 700;
 
-// Ctrl copies rather than moves, as in Windows and GNOME, and so does Option (Alt), as in the macOS Finder.
-const copies = (event: DragEvent) => event.ctrlKey || event.altKey;
+// Ctrl copies rather than moves, as in Windows and GNOME, and so does Option (Alt), as in the macOS
+// Finder; Shift moves, as in Windows and GNOME, and so does ⌘, as in the Finder, where a drop would
+// copy otherwise, as into a folder another adapter serves.
+const keysOf = (event: DragEvent): DropKeys => ({
+    copy: event.ctrlKey || event.altKey,
+    move: event.shiftKey || event.metaKey,
+});
 
 /**
  * Whether files are dragged in from outside, such as from the desktop. Only that there are some can
@@ -82,23 +87,22 @@ export const useDropTarget = ({ targetsAt, onHold }: DropTargetOptions) => {
 
     const handles = (event: DragEvent) => !!drag?.dragged || carriesFiles(event);
 
-    // Entries that can't be moved are copied with no key held.
-    const copying = (event: DragEvent) => copies(event) || !!drag?.dragged?.copyOnly;
-
-    // The drop that letting go now would make, if any. Dropped files are read only when it's run.
+    // The drop that letting go now would make, if any, and whether it copies, which the file
+    // manager decides by the keys held and where the entries go. Dropped files are read only when
+    // it's run, and are always copied in.
     const dropAmong = (event: DragEvent, targets: DropTarget[]) => {
         for (const target of targets) {
             if (drag?.dragged) {
-                const run = drag.dropInto(target, copying(event));
+                const drop = drag.dropInto(target, keysOf(event));
 
-                if (run) {
-                    return { key: target.key, run };
+                if (drop) {
+                    return { key: target.key, ...drop };
                 }
             } else {
                 const upload = drag?.uploadInto(target, event.dataTransfer.items);
 
                 if (upload) {
-                    return { key: target.key, run: () => upload(filesIn(event.dataTransfer)) };
+                    return { key: target.key, run: () => upload(filesIn(event.dataTransfer)), copy: true };
                 }
             }
         }
@@ -119,7 +123,7 @@ export const useDropTarget = ({ targetsAt, onHold }: DropTargetOptions) => {
 
         if (drop) {
             event.preventDefault();
-            event.dataTransfer.dropEffect = drag?.dragged && !copying(event) ? "move" : "copy";
+            event.dataTransfer.dropEffect = drop.copy ? "copy" : "move";
         }
 
         // Dragover repeats while the pointer rests, so the state is only replaced when it changes.

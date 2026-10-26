@@ -83,9 +83,14 @@ const PasteDialog = ({ open, request, onClose, onStart }: PasteDialogProps) => {
     const kind = clipboard.kind === "cut" ? "move" : "copy";
     const target = folderOf(section, trail);
     const entries = groupedEntries(clipboard.parts);
+    const { store, adapter: defaultAdapter } = useData();
+    const adapter = section.adapter ?? defaultAdapter;
     // Entries already in the target clash with themselves: a copy keeps both, and a move leaves them.
+    // Another adapter's are never there, as ids only name its own folders.
     const incoming = groupedEntries(
-        clipboard.parts.filter((part) => folderOf(part.section, part.trail).id !== target.id),
+        clipboard.parts.filter(
+            (part) => part.adapter !== adapter || folderOf(part.section, part.trail).id !== target.id,
+        ),
     );
     const { text } = useLocale();
     const dir = useContext(DirectionContext);
@@ -94,7 +99,6 @@ const PasteDialog = ({ open, request, onClose, onStart }: PasteDialogProps) => {
     // opened, and its clashes are only looked for once all its pages have come.
     const { state } = useFolder(section, target.id, true);
     const listed = (!!state?.entries && !state.partial) || state?.status === "error";
-    const { store } = useData();
     // Whether an entry the folder has can be replaced or merged into, as its permissions say.
     const changes = (entry: FileEntry) => replaceable(store, section, entry);
 

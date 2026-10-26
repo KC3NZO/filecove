@@ -229,6 +229,15 @@ export interface TransferOptions extends OperationOptions {
      * a move that only renames on the backend would.
      */
     onProgress: (loaded: number, total: number) => void;
+    /**
+     * Reports an entry given that has gone into the target, all of it, as soon as it has, with what
+     * it now is there (`made`) when the backend can say, as `TransferResult` gives it. Leave out the
+     * entries skipped. Calling it is optional, and it's what tells, should the copy or move then
+     * fail or be cancelled, which entries went: the transfer panel says how many, Try again goes for
+     * the rest only, and what went can be undone when each came with `made`. Without it, a copy that
+     * failed is tried again for every entry, and a move for those still in their folder.
+     */
+    onEntryDone: (entry: FileEntry, made?: FileEntry) => void;
 }
 
 /** What `copy` and `move` may resolve with. An object, so fields can be added later without a breaking change. */
@@ -291,19 +300,21 @@ export interface ContentOptions {
      */
     signal: AbortSignal;
     /**
-     * What the contents are for: "preview", to show them in the preview, or "download", to save
-     * them. A URL on another origin is only saved when its server answers with
+     * What the contents are for: "preview", to show them in the preview, "download", to save them,
+     * or "copy", to copy the file into a folder another adapter serves, whose `upload` is handed
+     * the bytes. A URL on another origin is only saved when its server answers with
      * `Content-Disposition: attachment`, so a backend whose preview URLs don't, such as signed links
-     * to a bucket, hands over one that does for "download".
+     * to a bucket, hands over one that does for "download". For "copy", hand over the file as it
+     * is, as for "download", and a URL is fetched by the page, so on another origin it needs CORS.
      */
-    purpose: "preview" | "download";
+    purpose: "preview" | "download" | "copy";
     /**
      * Reports how much of the file has come, while it's being downloaded and handed over as a blob,
      * e.g. from `XMLHttpRequest`'s `onprogress` with `event.loaded` and `event.total`, or by
      * counting the bytes of a `fetch` response's body as they're read. The download panel shows
-     * it; the preview doesn't. Calling it is optional, and pointless for a URL, which the browser
-     * downloads itself and shows the progress of. Without it, or while the total isn't known, the
-     * download shows as being prepared with no figure.
+     * it, and the transfer panel for a copy; the preview doesn't. Calling it is optional, and
+     * pointless for a URL, which the browser downloads itself and shows the progress of. Without it,
+     * or while the total isn't known, the download shows as being prepared with no figure.
      */
     onProgress: (loaded: number, total: number) => void;
 }
@@ -459,13 +470,15 @@ export interface FileAdapter {
      * Lists the direct children of a folder, all at once or a page at a time (`nextCursor`). Reject
      * to show the folder as failed to load. It's called again, in the background, for a folder
      * opened again, so changes made elsewhere show. Entries that come back with the same fields
-     * are kept as they were, so nothing showing them renders again.
+     * are kept as they were, so nothing showing them renders again. A folder copied or moved into a
+     * folder another adapter serves is walked with it, all the way down.
      */
     list(folderId: string, options: ListOptions): Promise<ListResult>;
     /**
      * Creates a folder named `name` in `parentId` and resolves with its entry. Without it, the file
-     * manager has no way to create folders. Reject with an `Error` to show its message to the user,
-     * e.g. when the name is taken or not allowed.
+     * manager has no way to create folders, nor to upload folders or copy them in from another
+     * adapter, which it makes with it. Reject with an `Error` to show its message to the user, e.g.
+     * when the name is taken or not allowed.
      */
     createFolder?(parentId: string, name: string, options: OperationOptions): Promise<FileEntry>;
     /**
@@ -488,26 +501,33 @@ export interface FileAdapter {
      */
     checkName?(name: string, check: NameCheck): string | null | undefined;
     /**
-     * Copies entries, folders with everything in them, into `targetId`. The entries share a
-     * parent. It runs in the background while the user browses, shown in a panel once it takes a
-     * moment, and several may run at once. Resolve with the copies' entries (`TransferResult`), so
-     * the user can undo the copy; without them, it can't be undone. Without `copy`, the file manager
-     * has no way to copy. Reject with an `Error` to show its message to the user.
+     * Copies entries, folders with everything in them, into `targetId`, a folder this adapter
+     * serves. The entries share a parent. It runs in the background while the user browses, shown
+     * in a panel once it takes a moment, and several may run at once. Report each entry as it's
+     * done (`onEntryDone`), so a copy failing partway says what went. Resolve with the copies'
+     * entries (`TransferResult`), so the user can undo the copy; without them, it can't be undone.
+     * Without `copy`, the file manager has no way to copy within this adapter. Reject with an
+     * `Error` to show its message to the user. A copy into a folder another adapter serves is the
+     * file manager's, reading through `list` and `content` and writing through the other's `upload`
+     * and `createFolder`.
      */
     copy?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<TransferResult | void>;
     /**
-     * Moves entries into `targetId`; never into themselves, nor into the folder they're in. The
-     * entries share a parent. It runs in the background as `copy` does. Resolve with the entries as
-     * they now are (`TransferResult`), so the user can undo the move; without them, it can't be
-     * undone. Without `move`, the file manager has no way to move. Reject with an `Error` to show
-     * its message to the user.
+     * Moves entries into `targetId`, a folder this adapter serves; never into themselves, nor into
+     * the folder they're in. The entries share a parent. It runs in the background as `copy` does.
+     * Resolve with the entries as they now are (`TransferResult`), so the user can undo the move;
+     * without them, it can't be undone. Without `move`, the file manager has no way to move within
+     * this adapter. Reject with an `Error` to show its message to the user. A move into a folder
+     * another adapter serves is copied as `copy` says, and each entry deleted here with `delete`
+     * once all of it is there.
      */
     move?(entries: FileEntry[], targetId: string, options: TransferOptions): Promise<TransferResult | void>;
     /**
      * Deletes entries for good, folders with everything in them. The entries share a parent, and
      * the user has already confirmed. It also empties the trash (`Section.trash`), with every entry
-     * its root lists. Without it, the file manager has no way to delete. Reject with an `Error` to
-     * show its message to the user.
+     * its root lists, and deletes an entry moved into a folder another adapter serves once it has
+     * been copied there, one entry a call. Without it, the file manager has no way to delete, nor to
+     * move entries to another adapter. Reject with an `Error` to show its message to the user.
      */
     delete?(entries: FileEntry[], options: OperationOptions): Promise<void>;
     /**
@@ -533,11 +553,13 @@ export interface FileAdapter {
     /**
      * Uploads one file into `folderId`. Files from the browser's file picker or dropped from the
      * desktop are uploaded one call each, a few at a time, so each has its own progress, error and
-     * cancel. Resolve with the file's entry as it now is, so the file manager can show where it
-     * went, even when it was kept under another name beside one of the same name; without it, the
-     * file is found by its name, which a file kept both no longer has. Without `upload`, the file
-     * manager has no way to upload. Reject with an `Error` to show its message beside the file,
-     * e.g. when it's too large or not allowed.
+     * cancel, and so are the files of entries copied or moved in from a section another adapter
+     * serves, one after another, read through that adapter's `content`. Resolve with the file's
+     * entry as it now is, so the file manager can show where it went, even when it was kept under
+     * another name beside one of the same name, and undo a copy from another adapter; without it,
+     * the file is found by its name, which a file kept both no longer has. Without `upload`, the
+     * file manager has no way to upload, nor to take entries from another adapter. Reject with an
+     * `Error` to show its message beside the file, e.g. when it's too large or not allowed.
      */
     upload?(file: File, folderId: string, options: UploadOptions): Promise<FileEntry | void>;
     /**
@@ -547,9 +569,11 @@ export interface FileAdapter {
      * origin; it's only called for files the preview can show. To download, a URL on the page's
      * origin is saved under the file's name, and one on another origin opens in a new tab, which the
      * browser closes as it saves the file, provided the server answers with
-     * `Content-Disposition: attachment`; otherwise the file shows in that tab. Without it, the file
-     * manager has no way to show what's in a file, and downloads files through `download`, if
-     * there. Reject with an `Error` to show its message to the user.
+     * `Content-Disposition: attachment`; otherwise the file shows in that tab. To copy the file into
+     * a folder another adapter serves (`purpose` "copy"), the bytes are handed to that adapter's
+     * `upload`, a URL fetched by the page first. Without it, the file manager has no way to show
+     * what's in a file, nor to copy it to another adapter, and downloads files through `download`,
+     * if there. Reject with an `Error` to show its message to the user.
      */
     content?(entry: FileEntry, options: ContentOptions): Promise<FileContent>;
     /**

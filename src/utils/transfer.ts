@@ -7,6 +7,7 @@ import type {
     MovingKind,
     MovingKinds,
     TransferItem,
+    TransferKind,
 } from "../types";
 
 const NONE: MovingKinds = new Map();
@@ -59,6 +60,27 @@ export const entryClashes = (
         return earlier ? [{ entry, clash: { name, kind, there: earlier.kind, locked: false, shared: true } }] : [];
     });
 };
+
+/**
+ * Whether entries `from` serves can be copied, or moved (`kind`), into a folder `to` serves: by the
+ * adapter's own `copy` or `move` when it's the same one, and otherwise by the file manager, which
+ * reads them through `from`'s `list` and `content`, writes them through `to`'s `upload`, and
+ * `createFolder` for folders, and for a move deletes each through `from`'s `delete` once it's there
+ * (see `transferAcross`).
+ */
+export const carries = (kind: TransferKind, from: FileAdapter, to: FileAdapter, entries: readonly FileEntry[]) =>
+    from === to
+        ? !!(kind === "copy" ? from.copy : from.move)
+        : !!from.content &&
+          !!to.upload &&
+          (!!to.createFolder || entries.every((entry) => entry.kind === "file")) &&
+          (kind === "copy" || !!from.delete);
+
+/**
+ * Whether entries an adapter serves can be carried anywhere at all, so they're dragged: moved or
+ * copied by it, or read to be copied into another adapter's folder.
+ */
+export const canCarry = (adapter: FileAdapter) => !!(adapter.move || adapter.copy || adapter.content);
 
 /** Whether two of the entries share a name, so they have to go into one folder one after another. */
 export const sharesNames = (entries: readonly FileEntry[]) =>

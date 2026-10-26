@@ -11,13 +11,25 @@ export type TransferKind = "copy" | "move";
  */
 export type TransferStatus = "queued" | "running" | "failed";
 
+/** An entry of a copy or move that has gone into the target, and what it is there when that's known. */
+export interface WentEntry {
+    entry: FileEntry;
+    made?: FileEntry;
+}
+
 /** A copy or move in the transfer queue. Replaced, never mutated, as it moves along. */
 export interface TransferItem {
     /** Unique within its queue. */
     id: number;
     kind: TransferKind;
-    /** Already known to support `kind`. */
+    /** The adapter serving the entries, whose ids they are. */
     adapter: FileAdapter;
+    /**
+     * The adapter serving `target`: `adapter` itself, already known to support `kind`, or another,
+     * which the queue copies the entries into itself, reading them through `adapter` (see
+     * `transferAcross`).
+     */
+    targetAdapter: FileAdapter;
     /** Sharing a parent, as the adapter takes them. */
     entries: FileEntry[];
     /** The folder the entries are in. */
@@ -37,6 +49,11 @@ export interface TransferItem {
     shown: boolean;
     /** How much the adapter has reported while carrying it out, in bytes, once it has reported any. */
     progress?: { loaded: number; total: number };
+    /**
+     * The entries reported gone into the target so far (`TransferOptions.onEntryDone`), in the
+     * order reported, which a failed or cancelled one keeps, as what went before it stopped.
+     */
+    went: WentEntry[];
     /** Why it failed, as the adapter said, to show beside it. */
     error?: string;
 }

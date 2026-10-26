@@ -57,6 +57,11 @@ interface MockAdapterOptions {
     /** Names are held to Windows' rules, as a server sharing its folders over SMB would hold them. */
     windowsNames?: boolean;
     /**
+     * Why `upload` won't take a file, or undefined when it will, as a bucket only for some kinds of
+     * files refuses the rest, whether uploaded or copied in from another adapter.
+     */
+    refuses?: (file: File) => string | undefined;
+    /**
      * The id of the folder entries moved to the trash go to, which a section with `trash` set is
      * rooted in. Without it, the adapter has no `trash` nor `restore`, and deletes for good.
      */
@@ -378,6 +383,7 @@ export const createMockAdapter = (
         pageSize = 2500,
         downloadUrls = {},
         windowsNames = false,
+        refuses,
         trash: trashId,
     }: MockAdapterOptions = {},
 ): FileAdapter => {
@@ -625,35 +631,46 @@ export const createMockAdapter = (
 
     /**
      * Copies or moves entries into a folder at `COPY_SPEED`, reporting how far it has got, as a
-     * backend copying the bytes would. Something below an entry that can't be read stops it halfway
-     * through that entry, with the entries before it done, as a backend failing partway leaves them.
-     * `put` puts each entry where it goes once its bytes have come, and says where it went, so the
-     * entries come back as they are there, for the file manager to undo the copy or move with.
+     * backend copying the bytes would, an entry at a time, each put where it goes once its bytes
+     * have come and reported done (`onEntryDone`). Something below an entry that can't be read stops
+     * it halfway through that entry, with the entries before it done, as a backend failing partway
+     * leaves them. `put` says where each went, so the entries come back as they are there, for the
+     * file manager to undo the copy or move with.
      */
     const carry = async (
         entries: FileEntry[],
         targetId: string,
-        { signal, conflict, onProgress }: TransferOptions,
+        { signal, conflict, onProgress, onEntryDone }: TransferOptions,
         put: (target: MockNode, located: ReturnType<typeof locate>) => MockNode,
         find: (entry: FileEntry) => ReturnType<typeof locate> = locate,
     ): Promise<TransferResult> => {
         const target = writableAt(targetId);
-        const located = entries.map(find).filter(({ node }) => !(conflict === "skip" && clashes(target, node)));
+        const located = entries
+            .map((entry) => ({ entry, ...find(entry) }))
+            .filter(({ node }) => !(conflict === "skip" && clashes(target, node)));
         const sizes = located.map(({ node }) => sizeOf(node));
         const total = sizes.reduce((sum, size) => sum + size, 0);
-        const stuckAt = located.findIndex(({ node }) => unreadableIn(node));
-        const done = stuckAt < 0 ? located : located.slice(0, stuckAt);
-        const reached =
-            stuckAt < 0 ? total : sizes.slice(0, stuckAt).reduce((sum, size) => sum + size, 0) + sizes[stuckAt] / 2;
         const duration = clamp((total / COPY_SPEED) * 1000, COPY_TIME);
+        const made: FileEntry[] = [];
+        let loaded = 0;
 
-        await transfer(signal, reached, total > 0 ? (duration * reached) / total : duration, (loaded) =>
-            onProgress(loaded, total),
-        );
-        const made = done.map((item) => toEntry(targetId, put(target, item), locked(targetId)));
+        for (const [index, item] of located.entries()) {
+            const stuck = unreadableIn(item.node);
+            const size = stuck ? sizes[index] / 2 : sizes[index];
+            const time = total > 0 ? (duration * size) / total : duration / located.length;
 
-        if (stuckAt >= 0) {
-            throw new Error(`Couldn't read “${unreadableIn(located[stuckAt].node)?.name}”.`);
+            await transfer(signal, size, time, (bytes) => onProgress(loaded + bytes, total));
+
+            if (stuck) {
+                throw new Error(`Couldn't read “${stuck.name}”.`);
+            }
+
+            loaded += size;
+
+            const went = toEntry(targetId, put(target, item), locked(targetId));
+
+            made.push(went);
+            onEntryDone(item.entry, went);
         }
 
         return { entries: made };
@@ -1035,7 +1052,8 @@ export const createMockAdapter = (
 
         // The file itself is kept, for the preview, and its entry handed back, under the name it was
         // kept as. A folder that refuses files does so before anything is sent, and so does a file
-        // with "fail" in its name, to show a file failing inside a folder uploaded.
+        // with "fail" in its name, to show a file failing inside a folder uploaded, and one of a kind
+        // the backend doesn't take (`refuses`).
         upload: (file, folderId, { signal, conflict, onProgress }) =>
             Promise.resolve()
                 .then(() => {
@@ -1044,6 +1062,12 @@ export const createMockAdapter = (
 
                     if (/fail/i.test(file.name)) {
                         throw new Error(`The server refused "${file.name}".`);
+                    }
+
+                    const refused = refuses?.(file);
+
+                    if (refused) {
+                        throw new Error(refused);
                     }
                 })
                 .then(() =>
@@ -1071,10 +1095,12 @@ export const createMockAdapter = (
                 ),
 
         // An uploaded file is handed back as it was; the rest get contents made up from their names.
-        // To download, a file is handed over as bytes after a simulated fetch at `DOWNLOAD_SPEED`,
-        // reporting progress as it goes, as an adapter fetching a blob would, or as its URL in
-        // `downloadUrls`. A video's URL, one of MDN's samples, isn't sent as an attachment, so the
-        // browser would play it in a tab rather than save it, and it's fetched too.
+        // To download, or to copy into another adapter's folder, a file is handed over as bytes after
+        // a simulated fetch at `DOWNLOAD_SPEED`, reporting progress as it goes, as an adapter fetching
+        // a blob would, or, to download, as its URL in `downloadUrls`, which isn't fetched to copy, as
+        // those servers don't allow the page to read them. A video's URL, one of MDN's samples, isn't
+        // sent as an attachment, so the browser would play it in a tab rather than save it, and it's
+        // fetched too.
         content: (entry, { signal, purpose, onProgress }) =>
             respond(signal, () => {
                 const { node } = locate(entry);
@@ -1089,7 +1115,7 @@ export const createMockAdapter = (
                     return contentOf(node);
                 }
 
-                const handed = downloadUrls[entry.id];
+                const handed = purpose === "download" ? downloadUrls[entry.id] : undefined;
 
                 if (handed) {
                     await wait(signal, handed.delay ?? 0);

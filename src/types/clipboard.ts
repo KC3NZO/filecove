@@ -19,8 +19,10 @@ export type ClipboardLookup =
      */
     | { by: "id" };
 
-/** The clipboard's entries of one folder, with its section and the trail to it. */
+/** The clipboard's entries of one folder, with its section, the trail to it and the adapter serving it. */
 export interface ClipboardPart extends EntryGroup {
+    /** The adapter serving the section, the only one the entries' ids mean anything to. */
+    adapter: FileAdapter;
     /** Set while the entries are looked for again (`useClipboardFollow`); nothing is pasted meanwhile. */
     lookup?: ClipboardLookup;
 }
@@ -32,11 +34,13 @@ export interface ClipboardPart extends EntryGroup {
 export interface Clipboard {
     /** "cut" moves the entries when they're pasted, "copy" copies them. */
     kind: "cut" | "copy";
-    /** The adapter serving every part's section, the only one their ids mean anything to. */
-    adapter: FileAdapter;
     /**
      * The entries by the folder they're in: one part, or several for a search's results from
-     * several folders, of one section or more. Never empty, nor is any part.
+     * several folders, of one section or more, served by one adapter or several. Never empty, nor
+     * is any part.
      */
     parts: ClipboardPart[];
 }
+
+/** Ids of entries by the adapter serving them, as ids are only unique within an adapter. */
+export type AdapterIds = ReadonlyMap<FileAdapter, ReadonlySet<string>>;

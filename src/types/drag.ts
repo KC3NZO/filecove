@@ -35,6 +35,22 @@ export interface HeldPress {
 /** What letting go of a drag now does: move the entries, copy them, or nothing. */
 export type DropEffect = "move" | "copy" | "none";
 
+/**
+ * The modifier keys held over a drop target: Ctrl or Option (Alt) to copy, as in Windows, GNOME
+ * and the macOS Finder, and Shift or ⌘ to move, which a drop into a folder another adapter serves
+ * needs, as it copies otherwise, as dropping onto another disk does on a desktop.
+ */
+export interface DropKeys {
+    copy: boolean;
+    move: boolean;
+}
+
+/** What letting go of dragged entries on a folder does, to be run on drop, and whether it copies them. */
+export interface Drop {
+    run: () => void;
+    copy: boolean;
+}
+
 /** A folder that dragged entries could be dropped into. */
 export interface DropTarget {
     /** Tells the folder apart from a view's other drop targets, so the view can mark it. */
@@ -45,13 +61,12 @@ export interface DropTarget {
 }
 
 /**
- * What dropping `dragged` into the folder at `trail` of `section` does, copying them when `copy`
- * is set and moving them otherwise, to be called on drop, or undefined when they can't go there,
- * so the folder doesn't take the drop.
+ * What dropping `dragged` into the folder at `trail` of `section` does with `keys` held, or
+ * undefined when they can't go there, so the folder doesn't take the drop.
  */
 export type DropInto = (
     dragged: DraggedEntries,
-    copy: boolean,
+    keys: DropKeys,
     section: Section,
     trail: FolderRef[],
-) => (() => void) | undefined;
+) => Drop | undefined;

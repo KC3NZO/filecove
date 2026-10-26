@@ -14,12 +14,17 @@ export interface UndoFolder {
     trail: FolderRef[];
 }
 
+/** A folder entries go into, with the adapter serving its section, which a copy or move may change. */
+export interface UndoTarget extends UndoFolder {
+    adapter: FileAdapter;
+}
+
 /** Entries going into a folder, by a move that undoes or redoes one. */
 export interface UndoMove {
-    /** The entries where they are now, sharing a folder. */
-    group: EntryGroup;
-    /** The folder they go into. */
-    to: UndoFolder;
+    /** The entries where they are now, sharing a folder, with the adapter serving it. */
+    group: UndoGroup;
+    /** The folder they go into, which may be another adapter's. */
+    to: UndoTarget;
     /**
      * The name each of `group.entries` had there, in their order, taken back once it's there when
      * it was kept both on the way in under another; missing for a redo, which leaves the names to
@@ -30,7 +35,7 @@ export interface UndoMove {
 
 /**
  * Entries sharing a folder, with the adapter serving its section, for a change that may go through
- * several, as a move to the trash of a search's results does.
+ * several, as a move to the trash of a search's results does, or a copy or move between adapters.
  */
 export interface UndoGroup extends EntryGroup {
     adapter: FileAdapter;
@@ -59,11 +64,12 @@ export type UndoAction =
     | { kind: "create"; to: UndoFolder; name: string }
     /**
      * Deletes the copies `group` holds, once the user confirms, as it's for good, while each is as
-     * it was made. `sources` are the entries they were copied from, by folder, to copy again.
+     * it was made. `sources` are the entries they were copied from, by folder, to copy again, each
+     * with its own adapter, which may not be `group`'s.
      */
-    | { kind: "removeCopies"; group: EntryGroup; sources: EntryGroup[] }
-    /** Copies `sources` into `to` again. */
-    | { kind: "copy"; sources: EntryGroup[]; to: UndoFolder }
+    | { kind: "removeCopies"; group: UndoGroup; sources: UndoGroup[] }
+    /** Copies `sources` into `to` again, from whichever adapters serve them. */
+    | { kind: "copy"; sources: UndoGroup[]; to: UndoTarget }
     /** Moves each one's entries into its folder, as many transfers. */
     | { kind: "move"; moves: UndoMove[] }
     /** Moves each group's entries to the trash, a folder's at a time, each through its own adapter. */
@@ -80,8 +86,9 @@ export interface UndoStep {
     id: number;
     change: UndoChange;
     /**
-     * The adapter serving every section the action names, but a move to the trash's or a
-     * restore's, which may go through several, each part naming its own; the first of those.
+     * The adapter serving every section the action names, but a move to the trash's, a restore's,
+     * a copy's or a move's, which may go through several, each part naming its own; the first of
+     * those.
      */
     adapter: FileAdapter;
     /** What undoing it does, on the undo list, or redoing it, on the redo list. */

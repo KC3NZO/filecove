@@ -41,6 +41,7 @@ import { belowElement, pointerPosition, pressPosition } from "../../../utils/men
 import { folderOf } from "../../../utils/navigation";
 import { drawnState, heldBy, heldText, lockedFolder } from "../../../utils/permissions";
 import { selectModifiers } from "../../../utils/selection";
+import { canCarry } from "../../../utils/transfer";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import IconSlot from "../../icons/icon-slot";
@@ -550,9 +551,10 @@ const FolderItem = memo(
         const locked = lockedFolder(entry);
         const moving = heldBy(section, parentTrail, entry, movingIds);
 
-        // A drag moves or copies, so it needs an adapter that does one or the other.
+        // A drag moves or copies, so it needs an adapter that does one or the other, or hands files
+        // over to be copied into another's folders.
         const adapter = section.adapter ?? data?.adapter;
-        const draggable = !!(adapter?.move || adapter?.copy);
+        const draggable = !!adapter && canCarry(adapter);
 
         const selected = selection ? selection.ids.has(key) : key === openKey;
 

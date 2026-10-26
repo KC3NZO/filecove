@@ -1,3 +1,5 @@
+import { transferAcross } from "./transfer-across";
+
 import type {
     ConflictPolicy,
     FileAdapter,
@@ -8,6 +10,7 @@ import type {
     TransferOptions,
     TransferResult,
 } from "../types";
+import type { AcrossText } from "./transfer-across";
 
 /** How many copies and moves the adapter carries out at once by default; the rest wait their turn. */
 const MAX_ACTIVE = 3;
@@ -28,8 +31,9 @@ const PROGRESS_INTERVAL = 100;
 export type TransferOutcome = "done" | "failed" | "cancelled";
 
 /**
- * Told as a copy or move ends: the item as it was, how it ended, the items as they are now, and for
- * one done, the entries as the adapter says they now are in the target, when it says.
+ * Told as a copy or move ends: the item as it was, with the entries that went before a failure or a
+ * cancel (`went`), how it ended, the items as they are now, and for one done, the entries as the
+ * adapter says they now are in the target, when it says.
  */
 export type TransferEnded = (
     item: TransferItem,
@@ -40,10 +44,16 @@ export type TransferEnded = (
 
 const isActive = (item: TransferItem) => item.status === "queued" || item.status === "running";
 
+// Within an adapter, its own `copy` or `move`; into a folder another serves, the queue's own.
 const call = (
-    { kind, adapter, entries, target }: TransferItem,
+    { kind, adapter, targetAdapter, entries, target }: TransferItem,
     options: TransferOptions,
+    text: AcrossText,
 ): Promise<TransferResult | void> => {
+    if (targetAdapter !== adapter) {
+        return transferAcross(kind, adapter, targetAdapter, entries, target.id, options, text);
+    }
+
     const run = kind === "copy" ? adapter.copy : adapter.move;
 
     if (!run) {
@@ -54,20 +64,40 @@ const call = (
 };
 
 /**
+ * What a copy or move made, in the order of its entries: what the adapter resolved with, or else
+ * what it reported of each entry as it went, when it said what each became.
+ */
+const madeBy = (item: TransferItem, result: TransferResult | void) => {
+    if (result && Array.isArray(result.entries)) {
+        return result.entries;
+    }
+
+    const { went } = item;
+
+    if (went.length === 0 || went.some(({ made }) => !made)) {
+        return undefined;
+    }
+
+    return item.entries.flatMap((entry) => went.find((each) => each.entry.id === entry.id)?.made ?? []);
+};
+
+/**
  * Copies and moves waiting their turn, being carried out by the adapter, or failed, independent of
- * any view, so they carry on while the user browses. Each is one call to the adapter, with
- * `MAX_ACTIVE` running at once unless `setMaxActive` says otherwise, and one asked to wait for another (`after`) starting once that one
- * has ended, however it did. One that's done or cancelled leaves the queue; a failed one stays
- * until it's forgotten. The item list is replaced, never mutated, so `useSyncExternalStore` can
- * compare it by identity.
+ * any view, so they carry on while the user browses. Each is one call to the adapter, or, into a
+ * folder another adapter serves, the queue's own copy between them (`transferAcross`), worded by
+ * `text`, with `MAX_ACTIVE` running at once unless `setMaxActive` says otherwise, and one asked to
+ * wait for another (`after`) starting once that one has ended, however it did. One that's done or
+ * cancelled leaves the queue; a failed one stays until it's forgotten. The item list is replaced,
+ * never mutated, so `useSyncExternalStore` can compare it by identity.
  *
  * `onEnded` is told as each ends, with the item as it was, and the items as they are now: done,
- * with what the adapter made when it said (`TransferResult`), failed, or cancelled, when its status
- * says whether it had reached the adapter ("running") or was still waiting ("queued"). The adapter
- * can't take back what it has done, so whatever reached it may have changed folders, however it
- * ended.
+ * with what the adapter made when it said (`TransferResult`, or what it reported of each entry as
+ * it went), failed, or cancelled, when its status says whether it had reached the adapter
+ * ("running") or was still waiting ("queued"), and its `went` what it had done by then. The
+ * adapter can't take back what it has done, so whatever reached it may have changed folders,
+ * however it ended.
  */
-export const createTransferQueue = (onEnded: TransferEnded) => {
+export const createTransferQueue = (onEnded: TransferEnded, text: AcrossText) => {
     let items: TransferItem[] = [];
     let nextId = 1;
     const controllers = new Map<number, AbortController>();
@@ -162,21 +192,39 @@ export const createTransferQueue = (onEnded: TransferEnded) => {
             .then(() => {
                 signal.throwIfAborted();
 
-                return call(item, {
-                    signal,
-                    conflict: item.conflict,
-                    onProgress: (loaded, total) => {
-                        if (owns() && total > 0) {
-                            update(item.id, { progress: { loaded: Math.min(Math.max(loaded, 0), total), total } });
-                            notifyProgress();
-                        }
+                return call(
+                    item,
+                    {
+                        signal,
+                        conflict: item.conflict,
+                        onProgress: (loaded, total) => {
+                            if (owns() && total > 0) {
+                                update(item.id, { progress: { loaded: Math.min(Math.max(loaded, 0), total), total } });
+                                notifyProgress();
+                            }
+                        },
+                        // Each of its own entries once, as the adapter reports it.
+                        onEntryDone: (entry, made) => {
+                            const now = find(item.id);
+
+                            if (
+                                owns() &&
+                                now &&
+                                item.entries.some((given) => given.id === entry.id) &&
+                                !now.went.some((each) => each.entry.id === entry.id)
+                            ) {
+                                update(item.id, { went: [...now.went, { entry, made }] });
+                                notifyProgress();
+                            }
+                        },
                     },
-                });
+                    text,
+                );
             })
             .then(
-                // An adapter resolving with nothing says nothing of what it made.
-                (result) =>
-                    settle("done", undefined, result && Array.isArray(result.entries) ? result.entries : undefined),
+                // An adapter resolving with nothing says nothing of what it made, unless it said so
+                // of each entry as it went.
+                (result) => settle("done", undefined, madeBy(find(item.id) ?? item, result)),
                 (error: unknown) =>
                     settle("failed", {
                         status: "failed",
@@ -225,13 +273,15 @@ export const createTransferQueue = (onEnded: TransferEnded) => {
         },
 
         /**
-         * Asks `adapter` to copy or move `entries`, which are in `source`, into `target`, settling
-         * names it already has by `conflict`, once the one with the id `after` has ended, when
-         * given. Returns its id, for a host keeping something of its own about it.
+         * Asks `adapter` to copy or move `entries`, which are in `source`, into `target`, which
+         * `targetAdapter` serves, the same adapter or another, settling names it already has by
+         * `conflict`, once the one with the id `after` has ended, when given. Returns its id, for a
+         * host keeping something of its own about it.
          */
         add(
             kind: TransferKind,
             adapter: FileAdapter,
+            targetAdapter: FileAdapter,
             entries: FileEntry[],
             source: FolderRef,
             target: FolderRef,
@@ -242,7 +292,20 @@ export const createTransferQueue = (onEnded: TransferEnded) => {
 
             items = [
                 ...items,
-                { id, kind, adapter, entries, source, target, conflict, after, status: "queued", shown: false },
+                {
+                    id,
+                    kind,
+                    adapter,
+                    targetAdapter,
+                    entries,
+                    source,
+                    target,
+                    conflict,
+                    after,
+                    status: "queued",
+                    shown: false,
+                    went: [],
+                },
             ];
             showLater(id);
             pump();

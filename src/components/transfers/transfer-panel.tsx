@@ -51,9 +51,14 @@ interface TransferRowProps {
 
 const isActive = (item: TransferItem) => item.status === "queued" || item.status === "running";
 
+/** The entries of a copy or move that haven't gone yet: those a failed one couldn't copy or move. */
+const leftOf = ({ entries, went }: TransferItem) =>
+    went.length === 0 ? entries : entries.filter((entry) => !went.some((each) => each.entry.id === entry.id));
+
 /**
- * How many entries are being copied and moved, and how many couldn't be, and how much of what's
- * waiting or under way has been done, measured only once every one of them has reported its total.
+ * How many entries are being copied and moved, and how many couldn't be, those that went before a
+ * failure left out, and how much of what's waiting or under way has been done, measured only once
+ * every one of them has reported its total.
  */
 const summarize = (items: TransferItem[]) => {
     const active = { copy: 0, move: 0 };
@@ -66,7 +71,7 @@ const summarize = (items: TransferItem[]) => {
         const count = item.entries.length;
 
         if (item.status === "failed") {
-            failed[item.kind] += count;
+            failed[item.kind] += count - item.went.length;
 
             return;
         }
@@ -82,7 +87,9 @@ const summarize = (items: TransferItem[]) => {
     return { active, failed, busy, loaded, total, measured: busy && measured && total > 0 };
 };
 
-const describeRow = ({ kind, entries, target, status, progress, error }: TransferItem, locale: Locale) => {
+// How far it has got: its bytes once the adapter reports them, or else its entries once it reports
+// any of them gone.
+const describeRow = ({ kind, entries, target, status, progress, error, went }: TransferItem, locale: Locale) => {
     const { text, formatSize } = locale;
     const folderName = isolate(target.name);
 
@@ -92,31 +99,49 @@ const describeRow = ({ kind, entries, target, status, progress, error }: Transfe
         case "running": {
             const doing = (kind === "copy" ? text.transferCopying : text.transferMoving)(folderName);
 
-            return progress
-                ? joinIsolated([
-                      doing,
-                      text.transferProgress(
-                          isolate(formatSize(progress.loaded)),
-                          isolate(formatSize(progress.total)),
-                      ),
-                  ])
-                : doing;
-        }
-        case "failed":
-            if (error !== undefined) {
-                return isolate(error);
+            if (progress) {
+                return joinIsolated([
+                    doing,
+                    text.transferProgress(isolate(formatSize(progress.loaded)), isolate(formatSize(progress.total))),
+                ]);
             }
 
-            return (kind === "copy" ? text.transferCopyFailed : text.transferMoveFailed)(entries.length);
+            return went.length > 0
+                ? joinIsolated([doing, text.transferItemsDone(went.length, entries.length)])
+                : doing;
+        }
+        case "failed": {
+            const why =
+                error !== undefined
+                    ? isolate(error)
+                    : (kind === "copy" ? text.transferCopyFailed : text.transferMoveFailed)(
+                          entries.length - went.length,
+                      );
+
+            return went.length > 0
+                ? joinIsolated([
+                      why,
+                      (kind === "copy" ? text.transferCopiedSome : text.transferMovedSome)(
+                          went.length,
+                          entries.length,
+                      ),
+                  ])
+                : why;
+        }
     }
 };
 
 const TransferRow = ({ item, onCancel, onRetry }: TransferRowProps) => {
-    const { id, kind, entries, status, progress } = item;
+    const { id, kind, entries, status, progress, went } = item;
     const locale = useLocale();
     const { text } = locale;
-    const [only] = entries;
-    const count = entries.length;
+    // A failed one names what's left of it, which Try again goes for.
+    const left = status === "failed" ? leftOf(item) : entries;
+    const named = left.length > 0 ? left : entries;
+    const [only] = named;
+    const count = named.length;
+    // Without bytes, the bar fills with the entries gone, once the adapter reports any.
+    const filled = progress ? progress.loaded / progress.total : went.length > 0 ? went.length / entries.length : null;
     const name = isolate(only.name);
 
     let icon: ReactNode;
@@ -162,8 +187,8 @@ const TransferRow = ({ item, onCancel, onRetry }: TransferRowProps) => {
                 </Typography>
                 {status === "running" && (
                     <LinearProgress
-                        variant={progress ? "determinate" : "indeterminate"}
-                        value={progress ? (progress.loaded / progress.total) * 100 : 0}
+                        variant={filled === null ? "indeterminate" : "determinate"}
+                        value={(filled ?? 0) * 100}
                         sx={panelBarSx}
                     />
                 )}

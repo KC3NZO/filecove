@@ -1,18 +1,19 @@
 import { folderOf } from "./navigation";
 import { entriesAllow, entriesMoving, folderWritable } from "./permissions";
 import { importsFrom } from "./sections";
-import { movingThrough } from "./transfer";
+import { carries, movingThrough } from "./transfer";
 
 import type { FolderStore } from "../store/folder-store";
 import type { Clipboard, ClipboardPart, FileAdapter, FileEntry, FolderRef, MovingIds, Section } from "../types";
 
 /**
- * Whether the clipboard can be pasted into the folder at `trail`: only through the adapter its
- * entries came from, into a section that takes entries from each of theirs and a folder that can change
- * (`folderWritable`), never into one of them or below one, when cut, not when they're all in it
- * already, nor when they can't be moved out of their folders (`entriesAllow`), not while a move
- * under way is moving them (`entriesMoving`, by `moving`), whose ids may name nothing once it's
- * done, and not while they're looked for again.
+ * Whether the clipboard can be pasted into the folder at `trail`, which `adapter` serves: into a
+ * section that takes entries from each of theirs and a folder that can change (`folderWritable`),
+ * through their own adapter's `copy` or `move`, or for entries another adapter serves, by copying
+ * them across (`carries`), never into one of them or below one, when cut, not when they're all in
+ * it already, nor when they can't be moved out of their folders (`entriesAllow`), or across, deleted
+ * from them, not while a move under way is moving them (`entriesMoving`, by `moving`), whose ids
+ * may name nothing once it's done, and not while they're looked for again.
  */
 export const canPaste = (
     clipboard: Clipboard,
@@ -22,26 +23,32 @@ export const canPaste = (
     store: FolderStore,
     moving: MovingIds,
 ) => {
-    const busy = movingThrough(moving, adapter);
-    const { parts } = clipboard;
+    const { kind, parts } = clipboard;
 
     if (
         parts.some((part) => part.lookup) ||
-        clipboard.adapter !== adapter ||
-        !(clipboard.kind === "cut" ? adapter.move : adapter.copy) ||
-        !folderWritable(store, section, trail, busy) ||
-        parts.some(
-            (part) =>
+        !folderWritable(store, section, trail, movingThrough(moving, adapter)) ||
+        parts.some((part) => {
+            const busy = movingThrough(moving, part.adapter);
+            const leaves = (what: "move" | "delete") =>
+                entriesAllow(store, part.section, part.trail, part.entries, what, busy);
+
+            return (
+                !carries(kind === "cut" ? "move" : "copy", part.adapter, adapter, part.entries) ||
                 !importsFrom(section, part.section) ||
                 entriesMoving(part.section, part.trail, part.entries, busy) ||
-                (clipboard.kind === "cut" && !entriesAllow(store, part.section, part.trail, part.entries, "move", busy)),
-        )
+                (kind === "cut" && !leaves("move")) ||
+                (kind === "cut" && part.adapter !== adapter && !leaves("delete"))
+            );
+        })
     ) {
         return false;
     }
 
-    // The trail holds the ids of every folder above the target, so no id has to be parsed.
-    const ids = new Set(parts.flatMap((part) => part.entries.map((entry) => entry.id)));
+    // The trail holds the ids of every folder above the target, so no id has to be parsed. Only the
+    // ids of the target's own adapter name its folders.
+    const own = parts.filter((part) => part.adapter === adapter);
+    const ids = new Set(own.flatMap((part) => part.entries.map((entry) => entry.id)));
 
     if ([section.rootId, ...trail.map((step) => step.id)].some((id) => ids.has(id))) {
         return false;
@@ -50,7 +57,10 @@ export const canPaste = (
     // Ids are unique within an adapter, so the same folder has the same id in any section.
     const targetId = folderOf(section, trail).id;
 
-    return clipboard.kind === "copy" || parts.some((part) => folderOf(part.section, part.trail).id !== targetId);
+    return (
+        kind === "copy" ||
+        parts.some((part) => !own.includes(part) || folderOf(part.section, part.trail).id !== targetId)
+    );
 };
 
 /** The clipboard with its parts as `change` makes them, null for a part gone; null once none is left. */
@@ -87,7 +97,8 @@ const reaches = (part: ClipboardPart, dropped: ReadonlySet<string>, mayBeBelow: 
  * once it's empty. When the folders moved or deleted may have reached the rest, their folder is
  * listed again for them (`lookup` by id), since a moved folder may have taken a free name, or been
  * merged where a same-named entry was kept both, so they can't be found by name. Entries being
- * found by name then can't be found, and leave. Each part goes by its own folder.
+ * found by name then can't be found, and leave. Each part goes by its own folder, and only the
+ * parts `adapter` serves can be reached.
  */
 export const withoutEntries = (
     clipboard: Clipboard,
@@ -95,12 +106,12 @@ export const withoutEntries = (
     ids: ReadonlySet<string>,
     dropped: ReadonlySet<string>,
     mayBeBelow: (sectionId: string) => boolean,
-): Clipboard | null => {
-    if (clipboard.adapter !== adapter) {
-        return clipboard;
-    }
+): Clipboard | null =>
+    withParts(clipboard, (part) => {
+        if (part.adapter !== adapter) {
+            return part;
+        }
 
-    return withParts(clipboard, (part) => {
         const reached = reaches(part, dropped, mayBeBelow);
 
         // Entries being found by name hold ids that may name others now.
@@ -120,7 +131,6 @@ export const withoutEntries = (
 
         return entries.length < part.entries.length ? { ...part, entries } : part;
     });
-};
 
 /**
  * The clipboard with an entry that `adapter` renamed as it is now, so pasting still finds it. A
@@ -128,7 +138,7 @@ export const withoutEntries = (
  * changed, as path ids do, the ids below it are found again by name (`lookup`). A folder renamed
  * to a new id outside the trail that may still be above them (`reaches`), as when it's the
  * section's root or above it, has their folder listed again for them. Each part goes by its own
- * trail.
+ * trail, and only the parts `adapter` serves can be reached.
  */
 export const withRenamed = (
     clipboard: Clipboard,
@@ -137,12 +147,12 @@ export const withRenamed = (
     after: FileEntry,
     dropped: ReadonlySet<string>,
     mayBeBelow: (sectionId: string) => boolean,
-): Clipboard | null => {
-    if (clipboard.adapter !== adapter) {
-        return clipboard;
-    }
+): Clipboard | null =>
+    withParts(clipboard, (part) => {
+        if (part.adapter !== adapter) {
+            return part;
+        }
 
-    return withParts(clipboard, (part) => {
         if (part.lookup?.by !== "name" && part.entries.some((entry) => entry.id === before.id)) {
             return { ...part, entries: part.entries.map((entry) => (entry.id === before.id ? after : entry)) };
         }
@@ -170,4 +180,3 @@ export const withRenamed = (
 
         return part.lookup?.by === "name" ? null : { ...part, lookup: { by: "id" } };
     });
-};

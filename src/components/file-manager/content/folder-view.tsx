@@ -34,6 +34,7 @@ import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from
 import { sameIds } from "../../../utils/sets";
 import { pressesKey } from "../../../utils/shortcut";
 import { entryComparator } from "../../../utils/sort";
+import { canCarry } from "../../../utils/transfer";
 import Icon from "../../icons/icon";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
@@ -255,10 +256,11 @@ const FolderView = ({
     const locale = useLocale();
     const { text } = locale;
 
-    // A drag moves or copies, so it needs an adapter that does one or the other. Nothing is moved
-    // or copied out of the trash, whose entries are only restored.
+    // A drag moves or copies, so it needs an adapter that does one or the other, or hands files
+    // over to be copied into another's folders. Nothing is moved or copied out of the trash, whose
+    // entries are only restored.
     const adapter = section.adapter ?? data?.adapter;
-    const draggable = !section.trash && !!(adapter?.move || adapter?.copy);
+    const draggable = !section.trash && !!adapter && canCarry(adapter);
 
     // Hidden entries are left out here rather than in the store, since clashing names are looked for
     // among all of them. Sorted here too, since the sidebar tree shares the listing and keeps its own order.

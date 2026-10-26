@@ -12,6 +12,7 @@ import type {
     UndoFolders,
     UndoHistory,
     UndoStep,
+    WentEntry,
 } from "../types";
 
 /** How many changes are kept to undo, unless `FileManagerLimits.undoSteps` says otherwise. */
@@ -68,6 +69,16 @@ export const madePairs = (
 
     return pairs.length === made.length ? pairs : null;
 };
+
+/**
+ * What each entry a copy or move that stopped partway took became, from what the adapter reported
+ * of each as it went (`WentEntry`), or null when that can't be told: it didn't say what one became,
+ * or "replace" took the place of what was there.
+ */
+export const wentPairs = (went: readonly WentEntry[], conflict: ConflictPolicy): MadePair[] | null =>
+    conflict === "replace" || went.some(({ made }) => !made)
+        ? null
+        : went.flatMap(({ entry, made }) => (made ? [{ from: entry, to: made }] : []));
 
 // Whether two values an entry may leave out are the same, or either isn't known.
 const sameOrUnknown = <T>(a: T | undefined, b: T | undefined, same: (a: T, b: T) => boolean = Object.is) =>
@@ -134,18 +145,21 @@ export const actionGroups = (action: UndoAction): EntryGroup[] => {
 export const changedFolders = ({ action, adapter }: UndoStep): UndoFolders[] => {
     switch (action.kind) {
         case "create":
-        case "copy":
             return [{ adapter, folderIds: [folderOf(action.to.section, action.to.trail).id] }];
-        case "move":
+        case "copy":
+            return [{ adapter: action.to.adapter, folderIds: [folderOf(action.to.section, action.to.trail).id] }];
+        case "removeCopies":
             return [
                 {
-                    adapter,
-                    folderIds: action.moves.flatMap((move) => [
-                        folderOf(move.group.section, move.group.trail).id,
-                        folderOf(move.to.section, move.to.trail).id,
-                    ]),
+                    adapter: action.group.adapter,
+                    folderIds: [folderOf(action.group.section, action.group.trail).id],
                 },
             ];
+        case "move":
+            return action.moves.flatMap((move) => [
+                { adapter: move.group.adapter, folderIds: [folderOf(move.group.section, move.group.trail).id] },
+                { adapter: move.to.adapter, folderIds: [folderOf(move.to.section, move.to.trail).id] },
+            ]);
         case "trash":
             return action.groups.map((group) => ({
                 adapter: group.adapter,
@@ -166,16 +180,26 @@ export const changedFolders = ({ action, adapter }: UndoStep): UndoFolders[] => 
  * it puts what it makes or moves.
  */
 export const stepSections = ({ action, adapter }: UndoStep): { section: Section; adapter: FileAdapter }[] => {
+    const served = ({ section, adapter: through }: { section: Section; adapter: FileAdapter }) => ({
+        section,
+        adapter: through,
+    });
+
     switch (action.kind) {
         case "trash":
-            return action.groups.map((group) => ({ section: group.section, adapter: group.adapter }));
+            return action.groups.map(served);
         case "restore":
             return action.restores.map((restore) => ({ section: restore.to.section, adapter: restore.adapter }));
+        case "removeCopies":
+            return [action.group, ...action.sources].map(served);
+        case "copy":
+            return [...action.sources, action.to].map(served);
+        case "move":
+            return action.moves.flatMap((move) => [served(move.group), served(move.to)]);
         default:
             return [
                 ...actionGroups(action).map((group) => group.section),
-                ...(action.kind === "create" || action.kind === "copy" ? [action.to.section] : []),
-                ...(action.kind === "move" ? action.moves.map((move) => move.to.section) : []),
+                ...(action.kind === "create" ? [action.to.section] : []),
             ].map((section) => ({ section, adapter }));
     }
 };

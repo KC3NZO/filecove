@@ -34,17 +34,17 @@ import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from
 import { pressesKey } from "../../../utils/shortcut";
 import { relevanceOf, resultKey, searchTerms } from "../../../utils/search";
 import { entryComparator } from "../../../utils/sort";
-import { movingThrough } from "../../../utils/transfer";
+import { canCarry, movingThrough } from "../../../utils/transfer";
 import Icon from "../../icons/icon";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
 import SearchTabs, { tabId } from "./search-tabs";
 
 import type {
+    AdapterIds,
     DropTarget,
     EntryOrigin,
     EntrySelection,
-    FileAdapter,
     FileEntry,
     FileManagerLocation,
     MenuPosition,
@@ -267,12 +267,8 @@ const SearchResults = ({
 
     // Cut and dragged entries are marked by their adapter and id, as the views mark them by key.
     const marked = useCallback(
-        (by: { adapter: FileAdapter; ids: ReadonlySet<string> } | null | undefined) =>
-            new Set(
-                by
-                    ? hits.filter((hit) => hit.adapter === by.adapter && by.ids.has(hit.entry.id)).map((hit) => hit.key)
-                    : [],
-            ),
+        (by: AdapterIds | null | undefined) =>
+            new Set(by ? hits.filter((hit) => by.get(hit.adapter)?.has(hit.entry.id)).map((hit) => hit.key) : []),
         [hits],
     );
     const cutKeys = useMemo(() => marked(cut), [marked, cut]);
@@ -290,7 +286,7 @@ const SearchResults = ({
             ),
         [hits, moving],
     );
-    const draggable = targets.some((target) => !!(target.adapter.move || target.adapter.copy));
+    const draggable = targets.some((target) => canCarry(target.adapter));
 
     const { selection, selectedIds, selected, select, replace, selectAll, clear } = useSelection(entries);
     const selectedHits = useMemo(
@@ -588,9 +584,7 @@ const SearchResults = ({
 
                 return { parts: groupByFolder(carried), grabbed: hit.entry };
             };
-            const movable = !!(hit.adapter.move || hit.adapter.copy);
-
-            drag?.touch(press, movable ? pick : null, () => handleEntryMenu(position, entry));
+            drag?.touch(press, canCarry(hit.adapter) ? pick : null, () => handleEntryMenu(position, entry));
         },
     });
 

@@ -7,17 +7,12 @@ import type { Dispatch, SetStateAction } from "react";
 import type { FolderStore } from "../store/folder-store";
 import type { Clipboard, ClipboardPart } from "../types";
 
-// A part of the clipboard with its entries as they are now: by name, the folders from the first
-// step not known, under the renamed folder's new id, and then the entries, a listing at a time; by
-// id, the entries still in their folder. Null when a folder on the way is gone, or none of the
-// entries is there.
-const lookUp = async (
-    { adapter }: Clipboard,
-    part: ClipboardPart,
-    store: FolderStore,
-    signal: AbortSignal,
-): Promise<ClipboardPart | null> => {
-    const { section, lookup } = part;
+// A part of the clipboard with its entries as they are now, through its own adapter: by name, the
+// folders from the first step not known, under the renamed folder's new id, and then the entries, a
+// listing at a time; by id, the entries still in their folder. Null when a folder on the way is
+// gone, or none of the entries is there.
+const lookUp = async (part: ClipboardPart, store: FolderStore, signal: AbortSignal): Promise<ClipboardPart | null> => {
+    const { section, adapter, lookup } = part;
     const list = (folderId: string, fresh: boolean) => listingOf(store, section.id, adapter, folderId, fresh, signal);
 
     if (lookup?.by !== "name") {
@@ -25,7 +20,7 @@ const lookUp = async (
         const byId = new Map(listed.map((entry) => [entry.id, entry] as const));
         const entries = part.entries.flatMap((entry) => byId.get(entry.id) ?? []);
 
-        return entries.length > 0 ? { section, trail: part.trail, entries } : null;
+        return entries.length > 0 ? { section, adapter, trail: part.trail, entries } : null;
     }
 
     // The renamed folder's listings went with its old id, so what's listed below it is new.
@@ -47,7 +42,7 @@ const lookUp = async (
     const byName = new Map(listed.map((entry) => [`${entry.kind}/${entry.name}`, entry] as const));
     const entries = part.entries.flatMap((entry) => byName.get(`${entry.kind}/${entry.name}`) ?? []);
 
-    return entries.length > 0 ? { section, trail, entries } : null;
+    return entries.length > 0 ? { section, adapter, trail, entries } : null;
 };
 
 /**
@@ -70,7 +65,7 @@ export const useClipboardFollow = (
 
         const controller = new AbortController();
         const found = clipboard.parts.map((part) =>
-            part.lookup ? lookUp(clipboard, part, store, controller.signal).catch(() => null) : part,
+            part.lookup ? lookUp(part, store, controller.signal).catch(() => null) : part,
         );
 
         Promise.all(found).then((parts) => {

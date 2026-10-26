@@ -147,6 +147,15 @@ export interface TransferLocaleText {
     transferCopying: (folderName: string) => string;
     /** A move's status while it's under way, beside how far it has got once the adapter says. */
     transferMoving: (folderName: string) => string;
+    /**
+     * Beside a copy's or move's status while it's under way, how many of its `count` entries have
+     * gone, when the adapter says so of each but not how many bytes.
+     */
+    transferItemsDone: (done: number, count: number) => string;
+    /** Beside why a copy failed, how many of its `count` entries were copied before it stopped. */
+    transferCopiedSome: (done: number, count: number) => string;
+    /** Beside why a move failed, how many of its `count` entries were moved before it stopped. */
+    transferMovedSome: (done: number, count: number) => string;
     /** Why a copy failed, when the adapter didn't say. */
     transferCopyFailed: (count: number) => string;
     /** Why a move failed, when the adapter didn't say. */
@@ -486,6 +495,13 @@ export interface FileManagerLocaleText
     copyDone: (count: number, name: string, folderName: string) => string;
     /** Read to screen readers once entries are moved, by a paste, a drop or "Move to…". */
     moveDone: (count: number, name: string, folderName: string) => string;
+    /**
+     * Read to screen readers, and shown over the content, once a copy that failed or was cancelled
+     * partway has copied `done` of its `count` entries, the transfer panel showing why.
+     */
+    copyPartlyDone: (done: number, count: number, folderName: string) => string;
+    /** As `copyPartlyDone`, for a move. */
+    movePartlyDone: (done: number, count: number, folderName: string) => string;
     /** Read to screen readers as entries are cut, to be moved where they're pasted. */
     clipboardCut: (count: number, name: string) => string;
     /** Read to screen readers as entries are copied, to be copied where they're pasted. */
