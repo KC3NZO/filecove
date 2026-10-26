@@ -20,7 +20,7 @@ paths:
 
 # Keyboard and screen readers
 
-Everything a pointer does in the content and the sidebar tree can be done from the keyboard, and both panes tell screen readers what they hold and what is selected. Plain key logic lives in `utils/keyboard.ts` (`stepIndex`, `matchName`, `isMenuKey`, `focusTreeItem`), and `hooks/use-type-ahead.ts` collects the letters typed in quick succession.
+Everything a pointer does in the content and the sidebar tree can be done from the keyboard, and both panes tell screen readers what they hold and what is selected. Plain key logic lives in `utils/keyboard.ts` (`stepIndex`, `matchName`, `isMenuKey`), and `hooks/use-type-ahead.ts` collects the letters typed in quick succession.
 
 ## Order of keys
 
@@ -68,7 +68,7 @@ Limit: no browser can tell what's printed on a keyboard, only what a layout type
 
 The list and the grid are each a `listbox` (`aria-multiselectable`, named by the folder) with an `option` per entry carrying `aria-selected`, and `aria-setsize` and `aria-posinset`, since only the entries in or near view are rendered (see `virtualization.md`). The column headers are a `group` named "Sort by", and the active one reads its direction ("Name, sorted A to Z") from visually hidden text (`visuallyHiddenSx`).
 
-- Roving focus: only the focused entry (`focusId` in `FileViewProps`) has `tabIndex={0}`, and it stays rendered however far the panel scrolls. Moving the focus to an entry that isn't rendered yet focuses it and scrolls to it a render later (`pendingScroll`). `FolderView` keeps it with where it was listed, so when it's removed (deleted, moved away) the entry now at that place takes over. Without one, the first selected entry, or the first, has the Tab stop.
+- Roving focus: only the focused entry (`focusId` in `FileViewProps`) has `tabIndex={0}`, and it stays rendered however far the panel scrolls. The browser's find in page coming to an entry gives it the Tab stop, as it does a tree row and a picker row, without taking the focus from the browser's find bar (see "Find in page" in `virtualization.md`). Moving the focus to an entry that isn't rendered yet focuses it and scrolls to it a render later (`pendingScroll`). `FolderView` keeps it with where it was listed, so when it's removed (deleted, moved away) the entry now at that place takes over. Without one, the first selected entry, or the first, has the Tab stop.
 - Plain arrows select the entry moved to, as a click does; Shift extends from the anchor (from the entry focused until then when there's none yet, `select`'s `fallbackAnchor` in `use-selection.ts`); Ctrl or ⌘ moves without selecting, and Space then toggles. Selection mode moves without selecting too. In the grid, Up and Down move by its columns (`lines.columns`, read from its tracks), and Down from the row above a shorter last row lands on the last entry. PageUp and PageDown move by what fits in the panel.
 - Enter and Alt+Down open the focused entry: a folder here, a file with `onOpenFile` or else in the preview (see `preview.md`). A file nothing can open leaves the key to the consumer's actions. Backspace and Alt+Up go to the folder above.
 - Typing goes to the next entry whose name starts with the letters typed within 500 ms, case and accents aside, as the `locale` prop's language counts them (`matchName` with `Locale.sameLetters`); one letter repeated steps through the names starting with it, and a space mid-query is part of it, so it never runs a shortcut bound to Space, such as the playground's Preview.
