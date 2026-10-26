@@ -28,6 +28,7 @@ import { useTransferQueue } from "../../hooks/use-transfer-queue";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { useWheelZoom } from "../../hooks/use-wheel-zoom";
 import { createFolderStore, folderKey, keyFolder, listingOf } from "../../store/folder-store";
+import { watchKeyboardLayout } from "../../store/keyboard-layout";
 import { createPropertiesCache } from "../../store/properties-cache";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
 import {
@@ -2546,6 +2547,9 @@ const FileManager = ({
 
     // Ctrl+wheel and a touchpad's pinch over the content zoom it rather than the page.
     useWheelZoom(panelRef, zoomContent);
+
+    // Learns the letters printed on the keyboard, so shortcuts follow them on a non-Latin layout.
+    useEffect(watchKeyboardLayout, []);
 
     const toggleHidden = useCallback(() => setShowHidden(!showHidden), [showHidden, setShowHidden]);
     const closeMenu = useCallback(() => setMenu((prev) => prev && { ...prev, open: false }), []);

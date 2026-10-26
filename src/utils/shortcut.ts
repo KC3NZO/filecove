@@ -1,5 +1,7 @@
 import type { KeyboardEvent } from "react";
 
+import { printedAt } from "../store/keyboard-layout";
+
 import type { FileManagerLocaleText, UndoDirection, ZoomStep } from "../types";
 
 const LATIN = /^[a-z0-9]$/;
@@ -14,16 +16,23 @@ const PLACE = /^(?:Key([A-Z])|Digit([0-9]))$/;
  * The key the layout types comes first, so a shortcut follows the letters printed on the keyboard:
  * Ctrl+Z is the key marked Z on QWERTY, AZERTY, QWERTZ and Dvorak alike, wherever it sits. When
  * that isn't a Latin letter or digit, as on a Russian, Arabic, Hebrew or Greek layout, or what
- * Shift, AltGr or Option make of a key ("!", "&", "é", "˙"), the Latin letter or digit at the key's
- * place follows, since those keyboards print it beside their own letter. Named keys (F2, Delete,
- * the arrows) are the same on every layout.
+ * Shift, AltGr or Option make of a key ("!", "&", "é", "˙"), the Latin letter or digit printed on
+ * the key follows, since those keyboards print it beside their own letter: the one this keyboard's
+ * Latin layout was seen typing there (`printedAt`), or else the one at that place on a US keyboard.
+ * Named keys (F2, Delete, the arrows) are the same on every layout.
  */
 export const pressedKeys = (event: Pick<KeyboardEvent, "key" | "code">) => {
     // Menus name the space bar, which the event gives as the character it types.
     const typed = event.key === " " ? "space" : event.key.toLowerCase();
-    const place = PLACE.exec(event.code);
 
-    return place && !LATIN.test(typed) ? [typed, (place[1] ?? place[2]).toLowerCase()] : [typed];
+    if (LATIN.test(typed)) {
+        return [typed];
+    }
+
+    const place = PLACE.exec(event.code);
+    const printed = printedAt(event.code) ?? (place ? (place[1] ?? place[2]).toLowerCase() : undefined);
+
+    return printed ? [typed, printed] : [typed];
 };
 
 /** Whether a press stands for `key` ("h", "1", "+") on the layout it was typed on. */
