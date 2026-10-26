@@ -111,7 +111,7 @@ The content's selection is the folder view's (`selection.md`), and is what `sele
 What the checklist leaves internal, and why. Anything not listed here or above is a gap.
 
 - **The overlay sidebar's and the properties' overlay's open states, the context menu, every dialog (name, delete, transfer, paste, upload check, preview, keyboard shortcuts), the view menu and the main menu**, and what's passing inside them, such as the preview's zoom, turn and full screen: passing states, opened and closed within one task. Their operations are reached from outside through `actionContext`, the shortcuts through `showShortcuts`, and the main menu's items are the consumer's own.
-- **Touch selection mode**: tied to the open folder and to touch, and ends as another folder opens.
+- **Touch selection mode**, the content's and the tree's: tied to the open folder and to touch, and ends as another folder opens. `ActionContext.select`, which starts the tree's, is only in a menu a long-press on a tree folder opened, never in `actionContext()`, as it starts from that press.
 - **What `ActionContext.properties` asked the properties to show** in place of the selection: passing, it ends as the selection or the location changes, and a consumer gives the panel something else to show through `actionContext(entries, location).properties()`.
 - **The sidebar tree's selection**: a passing selection for acting on folders there (see "Selection").
 - **A search everywhere's selection and open tab**: the results come from many folders, and `SelectionDetails` has one location (see "Selection").

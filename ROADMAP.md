@@ -89,7 +89,7 @@ What's left in the features already built, what packaging needs before a release
 - [x] **new:** The trash couldn't be ordered by its Original location column, nor a search's results by their Location, as GNOME's and Windows' trashes are. *Done 2026-10-26: the `sort` key "location", from the column's header and the view menu where the column shows; name A to Z in any other folder.*
 
 ### Selection
-- [ ] The sidebar tree has no touch selection mode.
+- [x] The sidebar tree has no touch selection mode. *Done 2026-10-26: a long-press on a tree folder still opens its menu, which offers `ActionContext.select()` for the app's "Select" (the playground's), starting the mode with the folder, or the tree's selection it's in. In it every tap toggles a folder (under another parent starting anew), a long-press adds it so the finger moving on drags the selection, the folders' icons show check badges, and the content's selection bar sits at the sidebar's bottom (✕, the count, Select all or none of the folders beside them, ⋮ for their menu). Opening a folder, Escape, or the sidebar being closed or hidden ends it.*
 
 ### Keyboard
 - [ ] Two layout cases miss: a non-Latin layout on a non-US keyboard, and Option+letter on a non-QWERTY Mac. Fixing them needs `getLayoutMap()`, which only Chromium has.

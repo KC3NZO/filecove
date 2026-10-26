@@ -44,22 +44,34 @@ The keyboard selects too (see `keyboard.md`): in the content, plain arrows selec
 
 ## Touch selection mode
 
-There are no modifier keys on touch, so the content has a selection mode instead. It is on while `file-manager.tsx`'s `selectingKey` equals the open folder's key, so opening another folder ends it.
+There are no modifier keys on touch, so the content and the sidebar tree each have a selection mode instead, apart, as their selections are. The content's is on while `file-manager.tsx`'s `selectingKey` equals the open folder's key, so opening another folder ends it; the tree's is below ("In the sidebar tree").
 
 - Two ways in:
   - Long-pressing an entry (`hooks/use-long-press.ts`, 500 ms on its own timer, since iOS never fires `contextmenu` for a long-press), which selects it. The finger moving on from there drags it (see "Drag and drop" in `file-manager.md`).
   - The header's Select button, shown only under `@media (hover: none)`.
-- In the mode every tap toggles, and a tap on empty space does nothing. A long-press adds the entry to the selection, or keeps it there, rather than toggling, so the finger moving on drags the whole selection, as in the phones' and tablets' file apps. `content/selection-bar.tsx` (sticky at the panel's bottom) offers ✕, the count, Select all or none, and ⋮ for the selection's menu. Leaving the mode clears the selection.
-- Rows and tiles show check badges (`content/item-icon.tsx`, keyed off `data-selecting` and `data-selected`).
+- In the mode every tap toggles, and a tap on empty space does nothing. A long-press adds the entry to the selection, or keeps it there, rather than toggling, so the finger moving on drags the whole selection, as in the phones' and tablets' file apps. `file-manager/selection-bar.tsx` (sticky at the panel's bottom) offers ✕, the count, Select all or none, and ⋮ for the selection's menu. Leaving the mode clears the selection.
+- Rows and tiles show check badges (`CheckBadge`, `components/icons/check-badge.tsx`, in `content/item-icon.tsx`, keyed off `data-selecting` and `data-selected`).
 - Outside the mode, a touch tap opens a folder or a file rather than selecting it, and selects only a file nothing can open (see `preview.md`).
 - `folder-view.tsx` reads each press's `pointerType` rather than the device, so hybrid devices get both behaviours. A touch press's `contextmenu` is swallowed, since a long-press means select.
-- The sidebar tree has no touch selection: a long-press on a row opens its menu once the finger lifts, or drags the folder as the finger moves on (see "Drag and drop" in `file-manager.md`).
+
+### In the sidebar tree
+
+The tree's mode is the content's, made for folders that are always siblings, and reached another way: a long-press on a tree folder opens its menu, since acting on that one folder is what's usually wanted there, and the menu offers `ActionContext.select()`, for the consumer to place as a "Select" action (the playground's, with the `selectMode` icon). The file manager adds nothing to the menu itself, so without such an action the tree has no mode on touch. `select` is only there in a menu a long-press (touch or pen) on a tree folder opened (`MenuRequest.select`, from `FolderItem`'s `handleMenu`), not on a right-click or the Menu key, where Ctrl, Shift and Space select, nor in the content, which has its own Select button.
+
+The mode is `TreeSelection.selecting`, set by `useTreeSelection`'s `startSelecting`, and lasts while the selection it was made with does, carried on by `nextTreeSelection`: opening a folder, by any route, ends it, as does a section's menu, which selects the section, and `reset`.
+
+- `select()` starts it with the folders the menu was for: the tree's selection the folder is in, or the folder alone (not the open folder with it).
+- In the mode every tap on a folder toggles it, under another parent starting a new selection, while the chevrons still expand and collapse. A long-press adds the folder to the selection, or keeps it there, rather than opening its menu, one under another parent starting a new selection, so the finger moving on drags the selection (see "Drag and drop" in `file-manager.md`); lifting it leaves the mode on. A tap on a section row opens it, which ends the mode, and a long-press on one still opens its menu once the finger lifts, ending it too.
+- The same `SelectionBar` sits at the sidebar's bottom, below the tree's scroller: ✕, the count, Select all or none of the folders beside them, and ⋮ for their menu, as a right-click on one of them opens it. What it counts are the selected folders the tree shows (`among` in `sidebar.tsx`, the first folder row of the selection's parent, with its `siblings`), so while their parent is collapsed none count, and they come back as it's expanded, as selected entries a search leaves out do in the content.
+- The tree's `data-selecting` shows the check badges on the folder rows' icons (`CheckBadge`), and hides their locks, as in the content. Section rows get none.
+- Escape anywhere in the sidebar leaves the mode, and only then closes the overlay.
+- Putting the sidebar away ends it too, so it doesn't come back with the sidebar: the overlay closing, by its backdrop or anything else, and the docked sidebar being hidden (`wasShown` in `sidebar.tsx`). The overlay closing as it docks doesn't, as the sidebar stays in view, found by its computed `position`, no longer `absolute` once it docks.
 
 ## Sidebar
 
 `sidebar/sidebar.tsx` holds the selection through `hooks/use-tree-selection.ts`, keyed by `folderKey`.
 
-- A plain click opens a folder; only Ctrl and Shift select without opening.
+- A plain click opens a folder; only Ctrl and Shift select without opening, and in the touch selection mode a tap.
 - Until then, and again after any navigation, the open folder alone counts as selected.
 - Selected folders are always siblings, so a menu's `ActionContext` has one parent `folder`, and a drag from one of them carries them all from that folder. A modifier click under another parent starts a new selection.
 - Section rows are roots and never join a folder selection.
