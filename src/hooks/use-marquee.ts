@@ -109,6 +109,16 @@ export const useMarquee = ({ enabled, entriesIn, onStart, onChange }: MarqueeOpt
                     }
 
                     drag.active = true;
+
+                    // Captured from here, the pointer is still followed once it leaves the window,
+                    // however fast, which browsers otherwise stop reporting, so the marquee would
+                    // stop short. Not before: see the window listeners below.
+                    try {
+                        surface.setPointerCapture(drag.pointerId);
+                    } catch {
+                        // The press is already over; its pointerup ends the drag.
+                    }
+
                     callbacks.current.onStart();
                 }
 
@@ -164,8 +174,10 @@ export const useMarquee = ({ enabled, entriesIn, onStart, onChange }: MarqueeOpt
                 drag.frame = requestAnimationFrame(tick);
             };
 
-            // Window listeners rather than pointer capture: capture would retarget the click that
-            // ends a press without a drag, and rows rely on that click to be selected.
+            // Window listeners, with pointer capture only once the press is a marquee: capture would
+            // retarget the click that ends a press without a drag, and rows rely on that click to be
+            // selected, while the click ending a marquee is swallowed anyway. Captured events still
+            // bubble up to the window.
             const handleMove = (moveEvent: PointerEvent) => {
                 if (moveEvent.pointerId === drag.pointerId) {
                     drag.clientX = moveEvent.clientX;
