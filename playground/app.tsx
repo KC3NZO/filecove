@@ -161,6 +161,12 @@ const App = () => {
     // the location and the selection controlled, both are asked of the playground, and it takes them.
     const showFile = () => apiRef.current?.reveal(SHOWN.id, SHOWN.location);
 
+    const editPath = () => {
+        if (apiRef.current?.editPath() === false) {
+            setNotice({ open: true, message: "There is no folder to go from" });
+        }
+    };
+
     // Downloads the selection, or with nothing selected, the open folder, as a toolbar of an app's
     // own would, through the download panel.
     const selected = selection.entries.length > 0;
@@ -321,6 +327,9 @@ const App = () => {
                 </Button>
                 <Button size="small" color="inherit" onClick={searchFor}>
                     Search "record"
+                </Button>
+                <Button size="small" color="inherit" onClick={editPath}>
+                    Go to path
                 </Button>
                 <Button size="small" color="inherit" onClick={showFile}>
                     Show a file

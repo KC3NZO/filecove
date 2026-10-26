@@ -18,6 +18,11 @@ interface PathBarProps {
     hasActions: boolean;
     onNavigate: (place: FileManagerLocation) => void;
     onOpenMenu: OpenMenu;
+    /**
+     * Types a path in the bar's place, from a press on its empty space or the touch screens' button.
+     * Without it, the bar has neither, as in the transfer picker.
+     */
+    onEdit?: () => void;
 }
 
 interface Segment {
@@ -36,7 +41,7 @@ interface CrumbProps {
     onNavigate: (place: FileManagerLocation) => void;
 }
 
-const barSx: SxProps<Theme> = {
+const barSx = {
     display: "flex",
     alignItems: "center",
     minWidth: 0,
@@ -44,7 +49,10 @@ const barSx: SxProps<Theme> = {
     px: 0.5,
     borderRadius: 2,
     bgcolor: "action.hover",
-};
+} satisfies SxProps<Theme>;
+
+// Its empty space edits the path, as the address bars of Windows' and KDE's file managers do.
+const editableBarSx = { ...barSx, cursor: "text" } satisfies SxProps<Theme>;
 
 // The track sits in a reversed flex row, which lines it up with the scroller's end and starts
 // scrolled there, so a path too long to fit shows its last segments and scrolls back towards the
@@ -110,6 +118,17 @@ const menuButtonSx: SxProps<Theme> = {
     marginInlineStart: 0.25,
 };
 
+// Touch screens only, which have no Ctrl+L. This asks what the input can do, not how wide the
+// screen is, so it is a media query rather than a container one, as the header's Select button is.
+const editButtonSx: SxProps<Theme> = {
+    display: "none",
+    marginInlineStart: 0.25,
+    "@media (hover: none)": { display: "inline-flex" },
+};
+
+// A press on the bar itself rather than on a segment or a button.
+const onEmptySpace = (target: EventTarget) => target instanceof Element && !target.closest("button");
+
 /**
  * A segment of the path, which opens its folder. Entries dragged onto it go into the folder, by the
  * same rules as pasting, and so do files from outside, as a tree row takes them. A drag resting on
@@ -138,8 +157,11 @@ const Crumb = ({ section, segment, trail, current, onNavigate }: CrumbProps) => 
     );
 };
 
-/** The section's name first, then the folders opened below its root. */
-const PathBar = ({ section, trail, hasActions, onNavigate, onOpenMenu }: PathBarProps) => {
+/**
+ * The section's name first, then the folders opened below its root. Its empty space, Ctrl+L and, on
+ * touch screens, a button edit the path.
+ */
+const PathBar = ({ section, trail, hasActions, onNavigate, onOpenMenu, onEdit }: PathBarProps) => {
     const { text } = useLocale();
     const segments: Segment[] = [
         { id: section.rootId, label: section.label, icon: section.icon },
@@ -147,7 +169,14 @@ const PathBar = ({ section, trail, hasActions, onNavigate, onOpenMenu }: PathBar
     ];
 
     return (
-        <Box component="nav" aria-label={text.path} sx={barSx}>
+        <Box
+            component="nav"
+            aria-label={text.path}
+            sx={onEdit ? editableBarSx : barSx}
+            // Keeps the focus where it is, to go back to as the field closes.
+            onMouseDown={onEdit && ((event) => onEmptySpace(event.target) && event.preventDefault())}
+            onClick={onEdit && ((event) => onEmptySpace(event.target) && onEdit())}
+        >
             <Box sx={scrollerSx}>
                 <Box component="ol" sx={trackSx}>
                     {segments.map((segment, index) => (
@@ -168,6 +197,17 @@ const PathBar = ({ section, trail, hasActions, onNavigate, onOpenMenu }: PathBar
                     ))}
                 </Box>
             </Box>
+            {onEdit && (
+                <TooltipIconButton
+                    size="small"
+                    label={text.editPath}
+                    aria-keyshortcuts="Control+L Meta+L"
+                    sx={editButtonSx}
+                    onClick={onEdit}
+                >
+                    <Icon name="edit" fontSize="small" />
+                </TooltipIconButton>
+            )}
             {hasActions && (
                 <TooltipIconButton
                     size="small"

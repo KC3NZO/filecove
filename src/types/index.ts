@@ -59,7 +59,15 @@ export type {
     ToolbarAction,
     ToolbarGroup,
 } from "./menu";
-export type { FileManagerLocation, HistoryStop, LocationChangeReason, PlaceName } from "./navigation";
+export type {
+    FileManagerLocation,
+    GoToPathResult,
+    HistoryStop,
+    LocationChangeReason,
+    PathProblem,
+    PathResult,
+    PlaceName,
+} from "./navigation";
 export type { PreviewContent, PreviewKind, PreviewPlan, TextExcerpt } from "./preview";
 export type { FilePreviewer, PreviewerProps, PreviewerReads } from "./previewer";
 export type {

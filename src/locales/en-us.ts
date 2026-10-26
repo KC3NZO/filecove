@@ -101,6 +101,12 @@ export const enUS: FileManagerLocaleText = {
     zoomChanged: (percent) => `Zoom ${percent}`,
     path: "Path",
     folderMenu: "Folder menu",
+    editPath: "Go to path",
+    pathPlaceholder: "Type a path and press Enter",
+    pathNoSection: (name) => `There is no section called “${name}”.`,
+    pathNotFound: (name, folder) => `“${name}” isn't in “${folder}”.`,
+    pathNotFolder: (name) => `“${name}” isn't a folder.`,
+    pathListFailed: (folder, reason) => `Couldn't open “${folder}”${reason ? `: ${reason}` : "."}`,
 
     sidebarTitle: "Files",
     mainMenu: "Main menu",

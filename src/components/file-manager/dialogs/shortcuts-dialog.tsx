@@ -133,6 +133,7 @@ const ownSections = ({
                 { label: text.back, combos: [["Alt", start]] },
                 { label: text.forward, combos: [["Alt", end]] },
                 { label: text.shortcutGoUp, combos: [["Alt", "ArrowUp"], ["Backspace"]] },
+                { label: text.editPath, combos: [["Ctrl", "L"]] },
                 { label: text.shortcutOpen, combos: [["Enter"], ["Alt", "ArrowDown"]] },
                 { label: text.shortcutMove, combos: [[ARROWS]] },
                 { label: text.shortcutFirstLast, combos: [["Home"], ["End"]] },

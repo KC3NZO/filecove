@@ -27,6 +27,7 @@ export type {
     FileManagerSearch,
     FilePreviewer,
     FolderRef,
+    GoToPathResult,
     IconName,
     IconOverrides,
     IconSource,

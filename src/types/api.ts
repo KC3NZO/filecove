@@ -1,6 +1,6 @@
 import type { ActionContext } from "./action";
 import type { FileAdapter, FileEntry } from "./adapter";
-import type { FileManagerLocation } from "./navigation";
+import type { FileManagerLocation, GoToPathResult } from "./navigation";
 import type { SearchScope } from "./search";
 
 export interface RefreshOptions {
@@ -73,6 +73,21 @@ export interface FileManagerApi {
     search: (scope: SearchScope, query?: string) => boolean;
     /** Closes the search field, as Escape does, which gives the focus back if it had it. */
     closeSearch: () => void;
+    /**
+     * Opens the path field in the path bar's place, as Ctrl+L does, with the open folder's path
+     * selected, and focuses it; open already, it focuses it again. It ends a search, which the field
+     * takes the place of. Returns false when no section is shown.
+     */
+    editPath: () => boolean;
+    /**
+     * Goes where a path leads, as typing it in the path field does: the folder it names, or for a
+     * file the folder holding it, with the file selected. A path starting with "/" begins with a
+     * section's label, as the path bar writes it ("/Documents/Reports"); any other begins in the open
+     * folder, where ".." is the folder above. It's asked of the adapters' listings folder by folder,
+     * so no ids are parsed. Resolves once it has gone, as `navigate` does, or with `ok: false` and
+     * why, in the file manager's text. A controlled `location` is asked for it.
+     */
+    goToPath: (path: string) => Promise<GoToPathResult>;
     /** Moves the focus to the content, as F6 does, e.g. once the file manager shows in a dialog. */
     focus: () => void;
     /**

@@ -61,6 +61,7 @@ import { groupedEntries, requestGroups, selectionRequest } from "../../utils/gro
 import { isHidden } from "../../utils/hidden";
 import { countLimit, delayLimit } from "../../utils/limits";
 import { folderLeft, folderOf, outsideDeleted, placeName, renameInPlace, samePlace } from "../../utils/navigation";
+import { pathOf, pathProblemText, resolvePath } from "../../utils/path";
 import {
     allows,
     entriesAllow,
@@ -123,6 +124,7 @@ import UploadDialog from "./dialogs/upload-dialog";
 import DragPreview from "./drag-preview";
 import HeaderBar from "./header-bar/header-bar";
 import PathBar from "./header-bar/path-bar";
+import PathField from "./header-bar/path-field";
 import SearchField from "./header-bar/search-field";
 import NoticeBar from "./notice-bar";
 import PropertiesPane from "./properties-pane";
@@ -150,6 +152,7 @@ import type {
     FilePreviewer,
     FolderRef,
     FolderUpload,
+    GoToPathResult,
     HistoryStop,
     LocationChangeReason,
     MadePair,
@@ -159,6 +162,7 @@ import type {
     OpenMenu,
     RefreshOptions,
     PasteFiles,
+    PathResult,
     PropertiesSubject,
     RunShortcut,
     SearchHit,
@@ -1650,6 +1654,11 @@ const FileManager = ({
     const searchInputRef = useRef<HTMLInputElement>(null);
     // What had the focus when the search opened, which gets it back as the search closes.
     const searchOpener = useRef<HTMLElement | null>(null);
+    // Whether the path field, to type a path in, is in the path bar's place, as the search field is.
+    const [pathEditing, setPathEditing] = useState(false);
+    const pathInputRef = useRef<HTMLInputElement>(null);
+    // What had the focus when the path field opened, which gets it back as the field closes.
+    const pathOpener = useRef<HTMLElement | null>(null);
 
     // Going up to a folder the open one is in, however it's reached, the user's way or the
     // consumer's, selects the folder it was left through, as desktop file managers do. A place
@@ -1686,6 +1695,23 @@ const FileManager = ({
 
         searchedPlace.current = place;
     }, [place, setSearch]);
+
+    // Another folder ends the path field too, however it's opened, handing the focus on to the
+    // content when it was in the field, which goes with it.
+    const pathPlace = useRef(place);
+
+    useLayoutEffect(() => {
+        if (pathEditing && !samePlace(pathPlace.current, place)) {
+            if (document.activeElement === pathInputRef.current) {
+                setFocusContent(true);
+            }
+
+            pathOpener.current = null;
+            setPathEditing(false);
+        }
+
+        pathPlace.current = place;
+    }, [place, pathEditing]);
 
     // The consumer's selected ids, as a set that stays the same while they hold the same ids, so
     // passing a new array of them doesn't count as selecting them anew.
@@ -2124,10 +2150,18 @@ const FileManager = ({
                 return false;
             }
 
+            // The path field has the search field's place, so it gives way, handing over what had
+            // the focus before it.
             if (!searchScope) {
-                searchOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                searchOpener.current = pathEditing
+                    ? pathOpener.current
+                    : document.activeElement instanceof HTMLElement
+                      ? document.activeElement
+                      : null;
             }
 
+            pathOpener.current = null;
+            setPathEditing(false);
             focusSearchAsked.current = true;
             setSearch((before) => ({ scope, query: typed ?? before?.query ?? "" }));
 
@@ -2141,7 +2175,7 @@ const FileManager = ({
 
             return true;
         },
-        [section, canSearchEverywhere, searchScope, setSearch],
+        [section, canSearchEverywhere, searchScope, pathEditing, setSearch],
     );
 
     const stopSearching = useCallback(() => {
@@ -2183,6 +2217,59 @@ const FileManager = ({
     const searchEverywhere = useCallback(() => toggleSearch("everywhere"), [toggleSearch]);
 
     const focusFromSearch = useCallback(() => setFocusContent(true), []);
+
+    // Opens the path field in the path bar's place, with the open folder's path selected, or
+    // focuses it again when it's open. It ends a search, which has the same place, and keeps what had
+    // the focus before to give it back as the field closes. Returns whether it could be opened.
+    const openPath = useCallback(() => {
+        if (!section) {
+            return false;
+        }
+
+        if (!pathEditing) {
+            pathOpener.current = searchScope
+                ? searchOpener.current
+                : document.activeElement instanceof HTMLElement
+                  ? document.activeElement
+                  : null;
+        }
+
+        searchOpener.current = null;
+        setSearch(null);
+        setPathEditing(true);
+
+        const input = pathInputRef.current;
+
+        if (input) {
+            input.focus();
+            input.select();
+        }
+
+        return true;
+    }, [section, pathEditing, searchScope, setSearch]);
+
+    // Escape or the ✕, with the focus in the field, gives it back to what had it before the field
+    // opened, or else to the content, as closing a search does.
+    const closePath = useCallback(() => {
+        const opener = pathOpener.current;
+
+        pathOpener.current = null;
+        setPathEditing(false);
+
+        if (opener && opener !== document.body && opener !== rootRef.current && opener.isConnected) {
+            opener.focus();
+        }
+
+        if (!opener || document.activeElement !== opener) {
+            setFocusContent(true);
+        }
+    }, []);
+
+    // The focus went elsewhere, where it stays.
+    const dismissPath = useCallback(() => {
+        pathOpener.current = null;
+        setPathEditing(false);
+    }, []);
 
     // F6 moves the focus between the sidebar tree, the content and the docked properties, as in
     // GNOME Files. While the sidebar is collapsed, it opens the overlay, which takes the focus.
@@ -2454,7 +2541,7 @@ const FileManager = ({
     };
 
     // Keys that work anywhere in the file manager: the main menu's shortcuts, F6, F9, Ctrl+?, Ctrl+H,
-    // Ctrl+F, Ctrl+Shift+F, Ctrl+Z, Shift+Ctrl+Z and Ctrl+Y outside fields, Alt+Enter, and Alt+Left
+    // Ctrl+F, Ctrl+Shift+F, Ctrl+L, Ctrl+Z, Shift+Ctrl+Z and Ctrl+Y outside fields, Alt+Enter, and Alt+Left
     // and Alt+Right for back and forward, the other way round right to left, as the arrows on the
     // buttons are.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -2506,6 +2593,16 @@ const FileManager = ({
             (!event.shiftKey || canSearchEverywhere)
         ) {
             openSearch(event.shiftKey ? "everywhere" : "folder");
+        } else if (
+            // Ctrl+L or ⌘L types a path to go to, as in GNOME Files, in place of the browser's
+            // address bar while the focus is in here. With no section, it stays the browser's.
+            pressesKey(event, "l") &&
+            (event.ctrlKey || event.metaKey) &&
+            !event.shiftKey &&
+            !event.altKey &&
+            section
+        ) {
+            openPath();
         } else if (undoWay) {
             // With nothing to undo or redo, the key is the browser's.
             handled = runUndo(undoWay);
@@ -5475,6 +5572,80 @@ const FileManager = ({
         [place, sectionsById, goTo],
     );
 
+    // Aborts the paths still being looked for, with the file manager unmounting. Made as it mounts,
+    // so the development double mount leaves a signal that isn't aborted.
+    const mounted = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+        const controller = new AbortController();
+
+        mounted.current = controller;
+
+        return () => controller.abort();
+    }, []);
+
+    const allSections = useMemo(() => [...sectionsById.values()], [sectionsById]);
+
+    // Goes where a typed path leads (`resolvePath`): the folder it names, or for a file the folder
+    // holding it, with the file revealed there. Resolves with where it went, or why it couldn't, in
+    // the text. It goes through `api` for the places it asks, since the file manager may have moved
+    // on while the adapters' listings were asked.
+    const followPath = useCallback(
+        async (typed: string, signal: AbortSignal): Promise<GoToPathResult> => {
+            if (!section) {
+                return { ok: false, message: localeValue.text.noSections };
+            }
+
+            let result: PathResult;
+
+            try {
+                result = await resolvePath(
+                    typed,
+                    { place, section, sections: allSections, adapter, store, fold: localeValue.foldLetters },
+                    signal,
+                );
+            } catch {
+                // Only the signal rejects, with nobody left to tell.
+                return { ok: false, message: "" };
+            }
+
+            if (signal.aborted) {
+                return { ok: false, message: "" };
+            }
+
+            if (!result.found) {
+                return { ok: false, message: pathProblemText(result.problem, localeValue.text) };
+            }
+
+            const { location, entryId } = result;
+
+            if (entryId) {
+                api.current.revealEntry(entryId, location);
+            } else {
+                api.current.goTo(location);
+            }
+
+            return { ok: true, location, entryId };
+        },
+        [section, place, allSections, adapter, store, localeValue],
+    );
+
+    // What the path field does with a path typed: goes there, closing the field and taking the focus
+    // on into the content, or says why it can't, to show under the field.
+    const submitPath = useCallback(async (typed: string, signal: AbortSignal) => {
+        const result = await api.current.followPath(typed, signal);
+
+        if (!result.ok) {
+            return result.message;
+        }
+
+        pathOpener.current = null;
+        setPathEditing(false);
+        setFocusContent(true);
+
+        return null;
+    }, []);
+
     // `FileManagerApi.download`: as the context menu's Download, for entries of the open folder or
     // the one at `target`, or with none, that folder itself.
     const downloadFrom = useCallback(
@@ -5545,6 +5716,8 @@ const FileManager = ({
         actionContextAt,
         openSearch,
         closeSearch,
+        openPath,
+        followPath,
         showShortcuts,
         runUndo,
     });
@@ -5560,6 +5733,8 @@ const FileManager = ({
             actionContextAt,
             openSearch,
             closeSearch,
+            openPath,
+            followPath,
             showShortcuts,
             runUndo,
         };
@@ -5614,6 +5789,8 @@ const FileManager = ({
             actionContext: (entries, target) => api.current.actionContextAt(entries, target),
             search: (scope, typed) => api.current.openSearch(scope, typed),
             closeSearch: () => api.current.closeSearch(),
+            editPath: () => api.current.openPath(),
+            goToPath: (typed) => api.current.followPath(typed, mounted.current?.signal ?? new AbortController().signal),
             focus: () => setFocusContent(true),
             showShortcuts: () => api.current.showShortcuts(),
             undo: () => api.current.runUndo("undo"),
@@ -5742,6 +5919,14 @@ const FileManager = ({
                                                             onDismiss={stopSearching}
                                                             onFocusContent={focusFromSearch}
                                                         />
+                                                    ) : section && pathEditing ? (
+                                                        <PathField
+                                                            initial={pathOf(section, place.trail)}
+                                                            inputRef={pathInputRef}
+                                                            onGo={submitPath}
+                                                            onClose={closePath}
+                                                            onDismiss={dismissPath}
+                                                        />
                                                     ) : section ? (
                                                         <PathBar
                                                             section={section}
@@ -5749,6 +5934,7 @@ const FileManager = ({
                                                             hasActions={hasActions}
                                                             onNavigate={goTo}
                                                             onOpenMenu={openMenu}
+                                                            onEdit={openPath}
                                                         />
                                                     ) : (
                                                         <span />

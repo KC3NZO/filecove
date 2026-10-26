@@ -25,6 +25,40 @@ export interface FileManagerLocation {
  */
 export type LocationChangeReason = "navigate" | "back" | "forward" | "replace";
 
+/**
+ * What `FileManagerApi.goToPath` came to: either it went where the path leads, or it says why it
+ * couldn't.
+ */
+export type GoToPathResult =
+    | {
+          ok: true;
+          /** Where it went: the folder the path names, or for a file, the folder holding it. */
+          location: FileManagerLocation;
+          /** The file the path names, which is selected in `location`, or undefined for a folder. */
+          entryId?: string;
+      }
+    | {
+          ok: false;
+          /** Why, in the file manager's text (`localeText`), as the path field shows it. */
+          message: string;
+      };
+
+/** Internal: why a typed path leads nowhere. */
+export type PathProblem =
+    /** It starts with a name that is no section's label. */
+    | { kind: "section"; name: string }
+    /** A folder on the way has nothing of that name. */
+    | { kind: "missing"; name: string; folder: string }
+    /** A name before the path's end is a file. */
+    | { kind: "notFolder"; name: string }
+    /** A folder on the way couldn't be listed. */
+    | { kind: "failed"; folder: string; error: unknown };
+
+/** Internal: where a typed path leads, or why it doesn't. */
+export type PathResult =
+    | { found: true; location: FileManagerLocation; entryId?: string }
+    | { found: false; problem: PathProblem };
+
 /** Internal: a folder of a section as a menu lists it, by its name, with where it is under it. */
 export interface PlaceName {
     /** The folder's name, or its section's label at the root. */

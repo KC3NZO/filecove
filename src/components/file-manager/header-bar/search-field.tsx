@@ -3,10 +3,9 @@ import type { FocusEvent, KeyboardEvent, RefObject } from "react";
 
 import Box from "@mui/material/Box";
 import InputBase from "@mui/material/InputBase";
-import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../../hooks/use-locale";
-import { focusOutline } from "../../../styles/mixins";
+import { headerFieldSx, headerInputSx } from "../../../styles/header-field";
 import { isolate } from "../../../utils/bidi";
 import { isRtl } from "../../../utils/dom";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
@@ -35,33 +34,6 @@ interface SearchFieldProps {
     /** Down or Enter, on to the content. */
     onFocusContent: () => void;
 }
-
-// The path bar's shape, in its place, so the header doesn't move as one swaps for the other.
-const fieldSx: SxProps<Theme> = {
-    flex: 1,
-    display: "flex",
-    alignItems: "center",
-    gap: 0.75,
-    minWidth: 0,
-    height: 34,
-    paddingInlineStart: 1.25,
-    paddingInlineEnd: 0.25,
-    borderRadius: 2,
-    bgcolor: "action.hover",
-    color: "text.secondary",
-    "&:has(input:focus)": focusOutline,
-};
-
-// The browser's own clear button is left out, for the ✕ beside it. Each line of the query runs the
-// way its own letters do, or else the way the page does.
-const inputSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    color: "text.primary",
-    fontSize: "0.875rem",
-    "& input": { unicodeBidi: "plaintext" },
-    "& input::-webkit-search-cancel-button, & input::-webkit-search-decoration": { appearance: "none" },
-};
 
 /**
  * The search field, shown in the path bar's place while searching, the open folder or every
@@ -167,7 +139,7 @@ const SearchField = ({
     };
 
     return (
-        <Box role="search" sx={fieldSx} onKeyDown={handleFieldKeyDown} onBlur={handleBlur}>
+        <Box role="search" sx={headerFieldSx} onKeyDown={handleFieldKeyDown} onBlur={handleBlur}>
             <Icon name={scope === "folder" ? "searchFolder" : "search"} fontSize="small" />
             <InputBase
                 inputRef={inputRef}
@@ -176,7 +148,7 @@ const SearchField = ({
                 placeholder={placeholder}
                 autoComplete="off"
                 spellCheck={false}
-                sx={inputSx}
+                sx={headerInputSx}
                 slotProps={{ input: { "aria-label": text.search } }}
                 onChange={(event) => onQueryChange(event.target.value)}
                 onKeyDown={handleKeyDown}

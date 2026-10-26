@@ -340,6 +340,24 @@ export interface FileManagerLocaleText
     /** The path bar's name for screen readers. */
     path: string;
     folderMenu: string;
+    /**
+     * Going to a path typed: the button in the path bar on touch screens, the path field's name for
+     * screen readers, and Ctrl+L's row in the keyboard shortcuts window.
+     */
+    editPath: string;
+    /** The path field's placeholder, while nothing is typed in it. */
+    pathPlaceholder: string;
+    /** A typed path starts with "/" and a name that is no section's label. */
+    pathNoSection: (name: string) => string;
+    /** The folder searched, `folder`, has nothing called `name`. */
+    pathNotFound: (name: string, folder: string) => string;
+    /** A name before the end of a typed path is a file, which has nothing inside it. */
+    pathNotFolder: (name: string) => string;
+    /**
+     * A folder on the way couldn't be listed. `reason` is the adapter's message, isolated, or
+     * undefined when it gave none.
+     */
+    pathListFailed: (folder: string, reason: string | undefined) => string;
 
     // Sidebar
     /** Shown at the top of the sidebar when `FileManager` has no `title`. */
