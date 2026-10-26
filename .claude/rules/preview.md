@@ -33,7 +33,7 @@ There's no editor in the component, by choice: editing needs a way to save throu
 
 ## The adapter's `content`
 
-`content(entry, { signal, purpose })` resolves with a `FileContent`: `{ url }` or `{ blob }`. The preview asks with `purpose: "preview"`, only for files it shows something of, so describing a zip downloads nothing, and the signal aborts as the preview steps on or closes. Downloading a single file asks with `purpose: "download"` (see `download.md`). The list's and the grid's thumbnails come from the adapter's separate `thumbnail`, never from `content` (see `thumbnails.md`).
+`content(entry, { signal, purpose })` resolves with a `FileContent`: `{ url }` or `{ blob }`. The preview asks with `purpose: "preview"`, only for files it shows something of, so describing a zip downloads nothing, and the signal aborts as the preview steps on or closes. Downloading a single file asks with `purpose: "download"` (see `download.md`), and copying one into a folder another adapter serves with `purpose: "copy"` (see "Between adapters" in `transfers.md`). The list's and the grid's thumbnails come from the adapter's separate `thumbnail`, never from `content` (see `thumbnails.md`).
 
 - A URL is used as it is, as the `src` of an `<img>`, `<video>`, `<audio>` or `<iframe>`, so it streams and caches as any URL does. Text and fonts are fetched from it, which needs CORS on another origin, and for text only as much as is shown is read before the download is cancelled.
 - A blob is shown through an object URL, read in part for text, or handed to `FontFace` as bytes. The URL is revoked, and the font taken off the page, once the file is more than a step away from the one shown, or the preview has gone.

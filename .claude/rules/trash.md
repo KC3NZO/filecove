@@ -84,6 +84,6 @@ The demo actions: Delete moves to the trash where there's one ("Move to trash"),
 
 Not gaps:
 
-- Each entry goes to its own adapter's trash. Moving it to the trash of another adapter, or a trash an app keeps with another, would be copying between adapters, which nothing does yet (see `transfers.md`), and a backend's trash holds its own, as Drive's, Dropbox's and OneDrive's do, and each disk's on a desktop. An app wanting one trash over several backends serves them through one adapter.
+- Each entry goes to its own adapter's trash, and a drop of another adapter's entries on a trash is refused (`offerTrash`), though entries are copied and moved between adapters elsewhere (see "Between adapters" in `transfers.md`): a backend's trash holds its own, as Drive's, Dropbox's and OneDrive's do, and each disk's on a desktop, and what's in it is only restored where it came from. An app wanting one trash over several backends serves them through one adapter.
 - Entries leave the trash by being restored or deleted for good, not moved, copied or dragged elsewhere, as a trashed entry's id may only mean something to `restore` and `delete`, as in Drive and Dropbox; restoring and then moving does it. Entries inside a trashed folder aren't restored by themselves, as on the desktops.
 - Emptying the trash and deleting for good aren't undone (see `undo.md`).
