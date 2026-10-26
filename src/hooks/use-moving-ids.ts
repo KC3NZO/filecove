@@ -6,7 +6,7 @@ import { movingThrough } from "../utils/transfer";
 
 import type { Section } from "../types";
 
-/** Ids of the entries being moved that a section could be showing: those its adapter serves. */
+/** Ids of the entries held that a section could be showing, those its adapter serves, with what holds each. */
 export const useMovingIds = (section: Section) => {
     const moving = useContext(MovingContext);
     const data = useContext(DataContext);

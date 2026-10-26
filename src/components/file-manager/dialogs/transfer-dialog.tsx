@@ -29,7 +29,14 @@ import { groupedEntries } from "../../../utils/groups";
 import { isHidden } from "../../../utils/hidden";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { folderLeft, folderOf } from "../../../utils/navigation";
-import { folderMoving, folderWritable, lockedFolder, replaceable } from "../../../utils/permissions";
+import {
+    folderWritable,
+    heldBy,
+    heldText,
+    lockedFolder,
+    pickerHeldText,
+    replaceable,
+} from "../../../utils/permissions";
 import { nameOrder } from "../../../utils/sort";
 import { entryClashes, mergedFolders } from "../../../utils/transfer";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
@@ -50,6 +57,7 @@ import type {
     FileEntry,
     FileManagerLocation,
     FolderRef,
+    MovingKind,
     OpenMenu,
     Section,
 } from "../../../types";
@@ -117,14 +125,14 @@ interface PickerItem {
     /** The section the row opens, on the list of sections. */
     section?: Section;
     /**
-     * One of the entries being copied or moved, or a folder a move under way is moving, which
-     * can't be opened.
+     * One of the entries being copied or moved, or a folder a move under way is moving, or the
+     * trash's work holds, which can't be opened.
      */
     disabled?: boolean;
     /** A folder nothing can be put in, shown with a lock, which can be gone through but not chosen. */
     locked?: boolean;
-    /** A folder a move under way is moving, which says so. */
-    moving?: boolean;
+    /** What holds a folder, a move under way or the trash's work, which it says. */
+    moving?: MovingKind;
 }
 
 const NO_MENU: OpenMenu = () => false;
@@ -299,9 +307,9 @@ const TransferDialog = ({
     // All of the folder has come, not just some of its pages, so its names can be checked for clashes.
     const listed = !!state?.entries && !state.partial;
     const failed = state?.status === "error";
-    // Read as the folder's listing comes, which may bring its own permissions. A folder being moved
-    // says so rather than that it's read-only.
-    const moving = place !== null && folderMoving(target, place.trail, movingIds);
+    // Read as the folder's listing comes, which may bring its own permissions. A folder being moved,
+    // or moved to the trash, says so rather than that it's read-only.
+    const moving = place === null ? undefined : heldBy(target, place.trail, undefined, movingIds);
     const readOnly = place !== null && !folderWritable(store, target, place.trail, movingIds);
 
     // Ids are unique within an adapter, so the same folder is the same id whichever section shows it.
@@ -341,7 +349,7 @@ const TransferDialog = ({
                       name: folder.name,
                       disabled: pickedIds.has(folder.id) || movingIds.has(folder.id),
                       locked: lockedFolder(folder),
-                      moving: movingIds.has(folder.id),
+                      moving: movingIds.get(folder.id),
                   })),
         [choosingSection, destinations, folders, pickedIds, movingIds],
     );
@@ -609,7 +617,11 @@ const TransferDialog = ({
                                     disabled={item.disabled}
                                     tabIndex={item.id === tabStop ? 0 : -1}
                                     aria-description={
-                                        item.moving ? text.entryMoving : item.locked ? text.folderLocked : undefined
+                                        item.moving
+                                            ? heldText(text, item.moving)
+                                            : item.locked
+                                              ? text.folderLocked
+                                              : undefined
                                     }
                                     data-row-id={item.id}
                                     onClick={() => openItem(item)}
@@ -715,7 +727,7 @@ const TransferDialog = ({
                     <DialogActions sx={dialogActionsSx}>
                         {readOnly && (
                             <Typography id={readOnlyId} variant="body2" sx={readOnlySx}>
-                                {moving ? text.pickerMoving : text.pickerReadOnly}
+                                {moving ? pickerHeldText(text, moving) : text.pickerReadOnly}
                             </Typography>
                         )}
                         <Button color="inherit" onClick={onClose}>

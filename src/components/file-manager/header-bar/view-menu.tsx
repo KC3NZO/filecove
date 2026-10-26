@@ -20,7 +20,7 @@ import { insetLabelSx } from "../../../styles/direction";
 import { forcedColors, forcedEdge, menuPaperSx } from "../../../styles/mixins";
 import { isRtl } from "../../../utils/dom";
 import { ZOOM_ARIA_SHORTCUTS, formatShortcut } from "../../../utils/shortcut";
-import { SORT_KEYS, SORT_LABELS, folderSort, withSortKey } from "../../../utils/sort";
+import { LOCATED_SORT_KEYS, SORT_KEYS, SORT_LABELS, folderSort, withSortKey } from "../../../utils/sort";
 import { canZoom, zoomScale } from "../../../utils/zoom";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
@@ -34,7 +34,10 @@ interface ViewMenuProps {
     sort: SortOrder;
     /** Whether a search everywhere's results show, which can be ordered by relevance. */
     resultsShown: boolean;
-    /** Whether the trash's root shows, whose date goes by when its entries were moved there. */
+    /**
+     * Whether the trash's root shows, whose date goes by when its entries were moved there, and
+     * which can be ordered by where they came from.
+     */
     trashShown: boolean;
     showHidden: boolean;
     /** Whether the docked sidebar is hidden. */
@@ -59,7 +62,7 @@ const PROPERTIES_KEYS = ["Alt", "Enter"];
 
 const DIRECTIONS: readonly SortDirection[] = ["asc", "desc"];
 
-const SORT_KEYS_WITH_RELEVANCE: readonly SortKey[] = ["relevance", ...SORT_KEYS];
+const SORT_KEYS_WITH_RELEVANCE: readonly SortKey[] = ["relevance", ...LOCATED_SORT_KEYS];
 
 
 const slotProps: MenuProps["slotProps"] = {
@@ -173,9 +176,10 @@ const ViewMenu = ({
     const dir = useContext(DirectionContext);
     const percent = formatPercent(zoomScale(zoom, view));
     const zoomId = useId();
-    // Folders have no relevance, and are by name instead.
-    const order = resultsShown ? sort : folderSort(sort);
-    const keys = resultsShown ? SORT_KEYS_WITH_RELEVANCE : SORT_KEYS;
+    // Folders have no relevance, nor a location but the trash's root, and are by name instead.
+    const order = resultsShown ? sort : folderSort(sort, trashShown);
+    const folderKeys = trashShown ? LOCATED_SORT_KEYS : SORT_KEYS;
+    const keys = resultsShown ? SORT_KEYS_WITH_RELEVANCE : folderKeys;
     const keyLabels = SORT_LABELS[order.key](text);
 
     return (
@@ -213,7 +217,11 @@ const ViewMenu = ({
                             <Radio size="small" checked={key === order.key} tabIndex={-1} disableRipple sx={controlSx} />
                         </ListItemIcon>
                         <ListItemText>
-                            {trashShown && key === "modified" ? text.sortTrashed : SORT_LABELS[key](text).label}
+                            {trashShown && key === "modified"
+                                ? text.sortTrashed
+                                : trashShown && key === "location"
+                                  ? text.trashLocation
+                                  : SORT_LABELS[key](text).label}
                         </ListItemText>
                     </MenuItem>
                 ))}

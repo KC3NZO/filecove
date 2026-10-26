@@ -28,7 +28,7 @@ import { isHidden } from "../../../utils/hidden";
 import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { belowElement, insideElement, pointerPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
-import { folderMoving } from "../../../utils/permissions";
+import { heldBy } from "../../../utils/permissions";
 import { holdsTerms, searchTerms } from "../../../utils/search";
 import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import { sameIds } from "../../../utils/sets";
@@ -268,9 +268,11 @@ const FolderView = ({
         }
 
         const listed = showHidden ? [...state.entries] : state.entries.filter((entry) => !isHidden(entry));
+        // The trash's root can be ordered by where its entries came from, as its list shows.
+        const locationOf = trashLocation && ((entry: FileEntry) => (entry.trashed ? trashLocation(entry.trashed) : ""));
 
-        return listed.sort(entryComparator(sort, locale));
-    }, [state?.entries, showHidden, sort, locale]);
+        return listed.sort(entryComparator(sort, locale, locationOf));
+    }, [state?.entries, showHidden, sort, locale, trashLocation]);
 
     // A folder search lists only the entries whose names hold every word typed, so everything that
     // goes by what's listed goes by the results. Names are folded once per listing rather than per
@@ -309,11 +311,12 @@ const FolderView = ({
         [trashLocation, adapter, entries],
     );
 
-    // Everything in a folder being moved goes with it, so it's all marked as being moved.
-    const folderMoved = folderMoving(section, trail, movingIds);
+    // Everything in a folder being moved, or moved to the trash or restored, goes with it, so it's
+    // all marked as the folder is.
+    const folderHeld = heldBy(section, trail, undefined, movingIds);
     const movedHere = useMemo(
-        () => (folderMoved ? new Set(state?.entries?.map((entry) => entry.id)) : movingIds),
-        [folderMoved, state?.entries, movingIds],
+        () => (folderHeld ? new Map(state?.entries?.map((entry) => [entry.id, folderHeld] as const)) : movingIds),
+        [folderHeld, state?.entries, movingIds],
     );
 
     // Where each entry is listed, to find entries by id without searching a large folder.

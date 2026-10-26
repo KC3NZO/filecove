@@ -1,6 +1,15 @@
-import type { Clash, EntryClash, FileAdapter, FileEntry, MovingIds, TransferItem } from "../types";
+import type {
+    Clash,
+    EntryClash,
+    FileAdapter,
+    FileEntry,
+    MovingIds,
+    MovingKind,
+    MovingKinds,
+    TransferItem,
+} from "../types";
 
-const NONE: ReadonlySet<string> = new Set();
+const NONE: MovingKinds = new Map();
 
 /**
  * The names of `entries`, or of files and folders being uploaded, that a folder's listing already
@@ -77,24 +86,27 @@ export const isMoving = (item: TransferItem) => item.kind === "move" && item.sta
 
 /**
  * The entries the moves among `items` are moving, by the adapter serving them (`isMoving`), and
- * those `held` otherwise, as entries going to the trash or coming back from it are.
+ * those `held` otherwise, as entries going to the trash or coming back from it are, each with what
+ * holds it.
  */
 export const movingIds = (
     items: readonly TransferItem[],
-    held: readonly { adapter: FileAdapter; entries: readonly FileEntry[] }[] = [],
+    held: readonly { adapter: FileAdapter; entries: readonly FileEntry[]; kind: MovingKind }[] = [],
 ): MovingIds => {
-    const moving = new Map<FileAdapter, Set<string>>();
+    const moving = new Map<FileAdapter, Map<string, MovingKind>>();
 
-    [...items.filter(isMoving), ...held].forEach(({ adapter, entries }) => {
-        const ids = moving.get(adapter) ?? new Set<string>();
+    [...items.filter(isMoving).map((item) => ({ ...item, kind: "move" as const })), ...held].forEach(
+        ({ adapter, entries, kind }) => {
+            const ids = moving.get(adapter) ?? new Map<string, MovingKind>();
 
-        entries.forEach((entry) => ids.add(entry.id));
-        moving.set(adapter, ids);
-    });
+            entries.forEach((entry) => ids.set(entry.id, kind));
+            moving.set(adapter, ids);
+        },
+    );
 
     return moving;
 };
 
-/** The ids of the entries being moved through `adapter`. */
+/** The ids of the entries held through `adapter`, each with what holds it. */
 export const movingThrough = (moving: MovingIds, adapter: FileAdapter | undefined) =>
     (adapter && moving.get(adapter)) || NONE;

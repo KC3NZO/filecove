@@ -4,8 +4,12 @@ import type { FileEntry, FileManagerLocaleText, Locale, SortDirection, SortKey, 
 
 type Comparator = (a: FileEntry, b: FileEntry) => number;
 
-/** The keys an entry is compared by; "relevance" ranks search results and compares no entries. */
-type FieldKey = Exclude<SortKey, "relevance">;
+/**
+ * The keys an entry is compared by its own fields; "relevance" ranks search results and compares no
+ * entries, and "location" compares where they are, which only a search's results and the trash's
+ * root show.
+ */
+type FieldKey = Exclude<SortKey, "relevance" | "location">;
 
 interface SortKeyLabels {
     /** The list column's label, which the view menu uses too. */
@@ -18,6 +22,9 @@ interface SortKeyLabels {
 /** In the order the list view's columns show them. */
 export const SORT_KEYS: readonly SortKey[] = ["name", "size", "type", "modified"];
 
+/** So too, where the list shows a Location column: a search's results and the trash's root. */
+export const LOCATED_SORT_KEYS: readonly SortKey[] = ["name", "location", "size", "type", "modified"];
+
 // The direction each key starts in when picked. Sizes and dates start largest and newest first, as
 // in most file managers.
 const INITIAL_DIRECTIONS: Record<SortKey, SortDirection> = {
@@ -26,6 +33,7 @@ const INITIAL_DIRECTIONS: Record<SortKey, SortDirection> = {
     type: "asc",
     modified: "desc",
     relevance: "desc",
+    location: "asc",
 };
 
 /** How the list's column and the view menu name each key, and each of its directions. */
@@ -36,18 +44,23 @@ export const SORT_LABELS: Record<SortKey, (text: FileManagerLocaleText) => SortK
     modified: (text) => ({ label: text.sortModified, asc: text.sortOldestFirst, desc: text.sortNewestFirst }),
     // Has one direction, best first, which the menu doesn't offer to change.
     relevance: (text) => ({ label: text.sortRelevance, asc: text.sortRelevance, desc: text.sortRelevance }),
+    location: (text) => ({ label: text.searchLocation, asc: text.sortAToZ, desc: text.sortZToA }),
 };
 
 /** An order of the keys entries are compared by. */
-type FolderOrder = SortOrder & { key: FieldKey };
+type FolderOrder = SortOrder & { key: Exclude<SortKey, "relevance"> };
 
 export const DEFAULT_SORT: FolderOrder = { key: "name", direction: "asc" };
 
 /** What the file manager starts with: relevance for a search's results, and name A to Z in folders. */
 export const RELEVANCE_SORT: SortOrder = { key: "relevance", direction: "desc" };
 
-/** The order folders go by: relevance means nothing in a folder, which is by name, A to Z. */
-export const folderSort = (sort: SortOrder): FolderOrder => (isFolderOrder(sort) ? sort : DEFAULT_SORT);
+/**
+ * The order folders go by: relevance means nothing in a folder, nor does location but in a folder
+ * that shows where its entries are from (`located`), the trash's root, so they're by name, A to Z.
+ */
+export const folderSort = (sort: SortOrder, located = false): FolderOrder =>
+    isFolderOrder(sort) && (located || sort.key !== "location") ? sort : DEFAULT_SORT;
 
 const isFolderOrder = (sort: SortOrder): sort is FolderOrder => sort.key !== "relevance";
 
@@ -69,11 +82,20 @@ const comparators = (locale: Locale): Record<FieldKey, Comparator> => ({
 /**
  * Folders first in either direction, then by the key in natural order, so "file2" sorts before
  * "file10". Ties fall back to the name A to Z, so entries of one size or type stay easy to scan.
+ * Entries are ordered by location only where `locationOf` says where each is, as their Location
+ * column does, and by name otherwise.
  */
-export const entryComparator = (sort: SortOrder, locale: Locale): Comparator => {
-    const { key, direction } = folderSort(sort);
+export const entryComparator = (
+    sort: SortOrder,
+    locale: Locale,
+    locationOf?: (entry: FileEntry) => string,
+): Comparator => {
+    const { key, direction } = folderSort(sort, !!locationOf);
     const compareBy = comparators(locale);
-    const compare = compareBy[key];
+    const compare: Comparator =
+        key === "location"
+            ? (a, b) => locale.compareNames(locationOf?.(a) ?? "", locationOf?.(b) ?? "")
+            : compareBy[key];
     const sign = direction === "asc" ? 1 : -1;
 
     return (a: FileEntry, b: FileEntry) => {

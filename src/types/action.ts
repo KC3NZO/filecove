@@ -49,11 +49,12 @@ export interface ActionContext {
     readOnly: boolean;
     /**
      * Whether a move the file manager has under way, or waiting its turn, is moving `entries`, or
-     * `folder` with everything in it, so their ids may soon name nothing. They show faded until it
-     * ends, and renaming, copying, cutting, moving and deleting them are missing meanwhile, as are
-     * dragging them and pasting them when they were cut or copied before; opening, previewing,
-     * downloading and the properties stay. An action of the app's own working on them, such as
-     * "Compress…", can hide with `visible: (context) => !context.moving`.
+     * `folder` with everything in it, or they're being moved to the trash or restored from it, so
+     * their ids may soon name nothing. They show faded until it ends, and renaming, copying,
+     * cutting, moving and deleting them are missing meanwhile, as are dragging them and pasting them
+     * when they were cut or copied before; opening, previewing, downloading and the properties stay.
+     * An action of the app's own working on them, such as "Compress…", can hide with
+     * `visible: (context) => !context.moving`.
      */
     moving: boolean;
     /** Lists `folder` again, or with `byFolder` each of the entries' folders, e.g. after the action changed them. */
@@ -185,7 +186,9 @@ export interface ActionContext {
      * Puts `entries`, in the trash's root (`Section.trash`), back in the folders they were moved to
      * the trash from, asking first about names those folders have now, as a paste does. Missing
      * unless every one of `entries` is right in the trash's root and says where it came from
-     * (`FileEntry.trashed`), and when the adapter has no `restore`.
+     * (`FileEntry.trashed`), when the adapter has no `restore`, and when a folder they go back to,
+     * as a section shows it, can't take them: its permissions refuse writing, or a move under way is
+     * moving it, or the trash's work holding it.
      */
     restore?: () => void;
     /**

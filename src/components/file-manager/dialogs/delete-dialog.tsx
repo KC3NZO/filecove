@@ -9,6 +9,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { DirectionContext } from "../../../contexts/direction-context";
+import { MovingContext } from "../../../contexts/moving-context";
 import { useData } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
 import { listingOf } from "../../../store/folder-store";
@@ -17,6 +18,7 @@ import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { groupedEntries } from "../../../utils/groups";
 import { folderOf } from "../../../utils/navigation";
+import { movingThrough } from "../../../utils/transfer";
 
 import type { EntryGroup, FileAdapter } from "../../../types";
 
@@ -80,6 +82,7 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
     const { text } = useLocale();
     const dir = useContext(DirectionContext);
     const { store } = useData();
+    const moving = useContext(MovingContext);
     // Emptying the trash deletes what it lists as the user confirms.
     const [groups, setGroups] = useState(asked);
     const entries = groupedEntries(groups);
@@ -132,11 +135,13 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
     };
 
     // The trash's listing as it is now, so nothing moved there since the dialog opened is left, and
-    // nothing restored meanwhile is deleted.
+    // nothing restored meanwhile is deleted, nor what's being restored as the user confirms, which
+    // stays in the trash should the restore fail.
     const listTrash = async (signal: AbortSignal) => {
         const [trash] = asked;
         const listed = await listingOf(store, trash.section.id, trash.adapter, trash.section.rootId, true, signal);
-        const now = [{ ...trash, entries: listed }];
+        const held = movingThrough(moving, trash.adapter);
+        const now = [{ ...trash, entries: listed.filter((entry) => !held.has(entry.id)) }];
 
         if (!signal.aborted) {
             setGroups(now);

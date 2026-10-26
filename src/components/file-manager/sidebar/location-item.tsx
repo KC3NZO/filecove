@@ -39,7 +39,7 @@ import { isRtl } from "../../../utils/dom";
 import { isMenuKey } from "../../../utils/keyboard";
 import { belowElement, pointerPosition, pressPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
-import { drawnState, entriesMoving, folderMoving, lockedFolder } from "../../../utils/permissions";
+import { drawnState, heldBy, heldText, lockedFolder } from "../../../utils/permissions";
 import { selectModifiers } from "../../../utils/selection";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
@@ -133,7 +133,7 @@ interface TreeItemProps {
     open: boolean;
     /** Cut to the clipboard, and not pasted yet. */
     cut?: boolean;
-    /** Being moved by a move under way, itself or with a folder it's in. */
+    /** Being moved by a move under way, or held by the trash's work, itself or with a folder it's in. */
     moving?: boolean;
     /** Can be dragged, taking its folder along. */
     draggable?: boolean;
@@ -548,7 +548,7 @@ const FolderItem = memo(
         const drag = useContext(DragContext);
         const { text } = useLocale();
         const locked = lockedFolder(entry);
-        const moving = entriesMoving(section, parentTrail, [entry], movingIds);
+        const moving = heldBy(section, parentTrail, entry, movingIds);
 
         // A drag moves or copies, so it needs an adapter that does one or the other.
         const adapter = section.adapter ?? data?.adapter;
@@ -636,7 +636,7 @@ const FolderItem = memo(
                 selected={selected}
                 open={key === openKey}
                 cut={cutIds.has(entry.id)}
-                moving={moving}
+                moving={!!moving}
                 draggable={draggable}
                 dragged={draggedIds.has(entry.id)}
                 dropTarget={drop.dropKey !== null}
@@ -675,8 +675,9 @@ const SectionItem = memo(
         const drag = useContext(DragContext);
         const movingIds = useMovingIds(section);
         const { text } = useLocale();
-        // A section is rooted in a folder of its adapter's, which a move may be moving.
-        const moving = folderMoving(section, ROOT_TRAIL, movingIds);
+        // A section is rooted in a folder of its adapter's, which a move may be moving, or the
+        // trash's work holding.
+        const moving = heldBy(section, ROOT_TRAIL, undefined, movingIds);
 
         // Dropped onto, the entries go into the root. Its row isn't an entry, so it's never dragged.
         const drop = useDropTarget({
@@ -709,8 +710,8 @@ const SectionItem = memo(
                 variant="section"
                 row={row}
                 icon={<IconSlot icon={section.icon ?? "folder"} />}
-                description={moving ? text.entryMoving : undefined}
-                moving={moving}
+                description={moving ? heldText(text, moving) : undefined}
+                moving={!!moving}
                 selected={selection ? selection.ids.has(key) : key === openKey}
                 open={key === openKey}
                 dropTarget={drop.dropKey !== null}

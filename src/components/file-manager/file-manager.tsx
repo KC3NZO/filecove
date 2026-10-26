@@ -44,7 +44,7 @@ import {
 } from "../../styles/layout";
 import { withSx } from "../../styles/sx";
 import { toolbarGroups, visibleActionGroups } from "../../utils/action-groups";
-import { isolate, joinIsolated } from "../../utils/bidi";
+import { isolate } from "../../utils/bidi";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { canDownload, downloadedEntries } from "../../utils/download";
 import {
@@ -59,8 +59,16 @@ import {
 import { groupedEntries, requestGroups, selectionRequest } from "../../utils/groups";
 import { isHidden } from "../../utils/hidden";
 import { countLimit, delayLimit } from "../../utils/limits";
-import { folderLeft, folderOf, outsideDeleted, renameInPlace, samePlace } from "../../utils/navigation";
-import { allows, entriesAllow, entriesMoving, folderMoving, folderWritable, replaceable } from "../../utils/permissions";
+import { folderLeft, folderOf, outsideDeleted, placeName, renameInPlace, samePlace } from "../../utils/navigation";
+import {
+    allows,
+    entriesAllow,
+    entriesMoving,
+    folderMoving,
+    folderPermits,
+    folderWritable,
+    replaceable,
+} from "../../utils/permissions";
 import { clampWidth } from "../../utils/resize";
 import { importsFrom } from "../../utils/sections";
 import { sameSearch } from "../../utils/search";
@@ -86,6 +94,7 @@ import {
     canUndoWith,
     changedFolders,
     heldHistory,
+    joinActions,
     latestSteps,
     madePairs,
     otherWay,
@@ -593,6 +602,8 @@ interface UndoRun {
  */
 interface TrashWork {
     adapter: FileAdapter;
+    /** Whether the entries are going to the trash or coming back from it, which their mark says. */
+    kind: "trash" | "restore";
     /** The folders it changes: where the entries are, the trash, and where they go back to. */
     folderIds: string[];
     entries: FileEntry[];
@@ -605,8 +616,11 @@ interface UndoNotice extends Notice {
      * notice shows while it is, or while it's under way.
      */
     offer?: { direction: UndoDirection; stepId: number; retry?: boolean };
-    /** The folder entries just restored went back to, with them, which its Show opens, them selected. */
-    show?: UndoGroup;
+    /**
+     * The folders entries just restored went back to that aren't open, with them, which its Show
+     * opens, them selected, offering a list of them when there are several.
+     */
+    show?: UndoGroup[];
 }
 
 /**
@@ -633,7 +647,7 @@ interface UndoTools {
     ) => void;
     trashRootIds: (adapter: FileAdapter) => string[];
     startTrashWork: (work: TrashWork[]) => { signal: AbortSignal; end: () => void };
-    revealRestored: (groups: UndoGroup[]) => UndoGroup | undefined;
+    revealRestored: (groups: UndoGroup[]) => UndoGroup[] | undefined;
     askDelete: (request: DeleteRequest) => void;
     relist: (adapter: FileAdapter, folderIds: string[]) => void;
     startTransfer: (
@@ -1272,7 +1286,7 @@ const FileManager = ({
     // A change made through the file manager goes on the undo list, and leaves nothing undone to
     // redo, as in any editor. The notice says what it did, with Undo, and Show for entries restored.
     const recordChange = useCallback(
-        (change: UndoChange, served: FileAdapter, action: UndoAction, message: string, show?: UndoGroup) => {
+        (change: UndoChange, served: FileAdapter, action: UndoAction, message: string, show?: UndoGroup[]) => {
             const step: UndoStep = { id: (stepCount.current += 1), change, adapter: served, action };
 
             historyEpoch.current += 1;
@@ -1302,11 +1316,38 @@ const FileManager = ({
         return true;
     }, []);
 
+    // What an undo or redo did, as a step on the other list that goes back the other way. What's
+    // left of one that failed partway, done at last, joins the step holding what it did then, while
+    // that's still the latest there (`joins`), so the two are one change again.
+    const putDone = useCallback(
+        (run: UndoRun, back: UndoDirection, action: UndoAction) => {
+            const top = historyNow.current[back].at(-1);
+            const joined = top && run.step.joins === top.id ? joinActions(top.action, action) : null;
+            const step: UndoStep = {
+                id: (stepCount.current += 1),
+                change: run.step.change,
+                adapter: joined && top ? top.adapter : run.step.adapter,
+                action: joined ?? action,
+            };
+
+            changeHistory((before) => ({
+                ...before,
+                [back]: latestSteps(
+                    [...(joined ? before[back].slice(0, -1) : before[back]), step],
+                    undoLimitNow.current,
+                ),
+            }));
+
+            return step;
+        },
+        [changeHistory],
+    );
+
     // An undo or redo done: what undoes or redoes it in turn goes on the other list, and the notice
     // says what it did, with that one's button, unless an undo ends after another change was made
     // meanwhile, which left nothing to redo.
     const endRun = useCallback(
-        (run: UndoRun, done: { action: UndoAction; message: string; show?: UndoGroup }) => {
+        (run: UndoRun, done: { action: UndoAction; message: string; show?: UndoGroup[] }) => {
             if (!leaveRun(run)) {
                 return;
             }
@@ -1319,17 +1360,11 @@ const FileManager = ({
                 return;
             }
 
-            const step: UndoStep = {
-                id: (stepCount.current += 1),
-                change: run.step.change,
-                adapter: run.step.adapter,
-                action: done.action,
-            };
+            const step = putDone(run, back, done.action);
 
-            pushStep(back, step);
             showNotice({ message: done.message, offer: { direction: back, stepId: step.id }, show: done.show });
         },
-        [leaveRun, pushStep, showNotice],
+        [leaveRun, putDone, showNotice],
     );
 
     // A step put back on its list, to try again, as long as no change was made meanwhile, which it
@@ -1367,6 +1402,51 @@ const FileManager = ({
             });
         },
         [leaveRun, putBack, showNotice, announce, localeValue],
+    );
+
+    // An undo or redo of a move to the trash or a restore that failed partway, through several
+    // folders or adapters: what it did goes on the other list, as a run done does, or ends the
+    // history when it can't be undone in turn, and what's left (`rest`, through `restAdapter` first)
+    // is put back to try again, as long as no change was made meanwhile, joining what it did once
+    // it's done. The notice says it failed, and why, with Try again.
+    const failRunPartway = useCallback(
+        (run: UndoRun, done: UndoAction | null, rest: UndoAction, restAdapter: FileAdapter, detail?: string) => {
+            if (!leaveRun(run)) {
+                return;
+            }
+
+            const back = otherWay(run.direction);
+            const current = historyEpoch.current === run.epoch;
+            let joins: number | undefined;
+
+            if (!done) {
+                endHistory();
+            } else if (back === "undo" || current) {
+                joins = putDone(run, back, done).id;
+            }
+
+            const { text } = localeValue;
+            const message = (run.direction === "undo" ? text.undoFailed : text.redoFailed)(run.step.change);
+            const left: UndoStep = {
+                id: (stepCount.current += 1),
+                change: run.step.change,
+                adapter: restAdapter,
+                action: rest,
+                joins,
+            };
+
+            if (current) {
+                pushStep(run.direction, left);
+            }
+
+            announce(detail ? `${message}: ${detail}` : message);
+            showNotice({
+                message,
+                detail,
+                offer: current ? { direction: run.direction, stepId: left.id, retry: true } : undefined,
+            });
+        },
+        [leaveRun, endHistory, putDone, pushStep, showNotice, announce, localeValue],
     );
 
     // An undo or redo the user called off, as the dialog confirming a copy's copies closed, is put back.
@@ -1865,16 +1945,8 @@ const FileManager = ({
 
             for (let by = sign; historyPlaces[historyIndex + by]; by += sign) {
                 const { sectionId, trail } = historyPlaces[historyIndex + by];
-                const section = sectionsById.get(sectionId);
-                const names = trail.map((folder) => folder.name);
 
-                stops.push({
-                    by,
-                    label: names.at(-1) ?? section?.label ?? "",
-                    location:
-                        names.length > 0 ? joinIsolated([section?.label ?? "", ...names.slice(0, -1)], " / ") : "",
-                    icon: names.length > 0 ? "folder" : (section?.icon ?? "folder"),
-                });
+                stops.push({ by, ...placeName(sectionsById.get(sectionId), trail) });
             }
 
             return stops;
@@ -3655,28 +3727,27 @@ const FileManager = ({
     );
 
     // Entries just restored, by the user or an undo or redo, are selected and scrolled to where the
-    // folder they went back to is open, in whichever section shows it. Otherwise the first folder,
-    // with what it now holds, is what the notice's Show opens. Without what they now are, there's
-    // nothing to select, and Show only opens the folder.
+    // folder they went back to is open, in whichever section shows it. The other folders, with what
+    // each now holds, are what the notice's Show opens, or lists to choose from when there are
+    // several. Without what they now are, there's nothing to select, and Show only opens a folder.
     const revealRestored = useCallback(
         (groups: UndoGroup[]) => {
-            const open = groups.find((group) =>
-                sectionsOf(group.adapter).some(
-                    (shown) => folderKey(shown.id, folderOf(group.section, group.trail).id) === openKey,
-                ),
-            );
+            const open = openKey
+                ? groups.find((group) =>
+                      sectionsOf(group.adapter).some(
+                          (shown) => folderKey(shown.id, folderOf(group.section, group.trail).id) === openKey,
+                      ),
+                  )
+                : undefined;
+            const [first, ...rest] = open?.entries ?? [];
 
-            if (!open || !openKey) {
-                return groups[0];
-            }
-
-            const [first, ...rest] = open.entries;
-
-            if (first) {
+            if (openKey && first) {
                 setReveal({ key: openKey, id: first.id, with: rest.map((entry) => entry.id) });
             }
 
-            return undefined;
+            const others = groups.filter((group) => group !== open);
+
+            return others.length > 0 ? others : undefined;
         },
         [sectionsOf, openKey],
     );
@@ -3776,6 +3847,7 @@ const FileManager = ({
 
                 return {
                     adapter: served,
+                    kind: "trash",
                     folderIds: [
                         ...own.map((group) => folderOf(group.section, group.trail).id),
                         ...trashRootIds(served),
@@ -3829,28 +3901,36 @@ const FileManager = ({
             const went = done.flatMap(({ group }) => group.entries);
             const message = went.length > 0 ? text.trashDone(went.length, isolate(went[0].name)) : null;
 
+            const restores = done.flatMap(({ group, made }): UndoRestore[] =>
+                group.adapter.restore && made && madePairs(group.entries, made, "keepBoth")
+                    ? [{ adapter: group.adapter, entries: made, to: { section: group.section, trail: group.trail } }]
+                    : [],
+            );
+            const undoable = restores.length === done.length;
+
             if (message) {
                 announce(message);
             }
 
+            // Nothing older can be undone past one that failed, as part of it may have gone, but
+            // the folders that went before it can still be restored.
             if (failed) {
                 const failure = text.trashFailed(failed.group.entries.length, isolate(failed.group.entries[0].name));
                 const detail = errorDetail(failed.error);
 
                 endHistory();
+
+                if (message && undoable) {
+                    recordChange("trash", done[0].group.adapter, { kind: "restore", restores }, message);
+                }
+
                 announce(detail ? `${failure}: ${detail}` : failure);
                 showNotice({ message: failure, detail });
 
                 return;
             }
 
-            const restores = done.flatMap(({ group, made }): UndoRestore[] =>
-                group.adapter.restore && made && madePairs(group.entries, made, "keepBoth")
-                    ? [{ adapter: group.adapter, entries: made, to: { section: group.section, trail: group.trail } }]
-                    : [],
-            );
-
-            if (message && restores.length === done.length) {
+            if (message && undoable) {
                 recordChange("trash", done[0].group.adapter, { kind: "restore", restores }, message);
             } else {
                 endHistory();
@@ -3874,7 +3954,12 @@ const FileManager = ({
             const { adapter: served, entries, origins } = request;
             const folderIds = entries.flatMap((entry) => entry.trashed?.trail.at(-1)?.id ?? []);
             const alongIds = entries.flatMap((entry) => entry.trashed?.trail.map((step) => step.id) ?? []);
-            const work: TrashWork = { adapter: served, folderIds: [...trashRootIds(served), ...folderIds], entries };
+            const work: TrashWork = {
+                adapter: served,
+                kind: "restore",
+                folderIds: [...trashRootIds(served), ...folderIds],
+                entries,
+            };
             const { signal, end } = startTrashWork([work]);
             let made: FileEntry[] | undefined;
             let failure: { error: unknown } | null = null;
@@ -4327,18 +4412,39 @@ const FileManager = ({
                         }
 
                         // A folder's at a time, each gone from it once it's in the trash, held meanwhile.
+                        // One failing after others went leaves those done, and what's left to try again.
                         const restores: UndoRestore[] = [];
+                        let partway: { index: number; error: unknown } | null = null;
                         const { end } = tools().startTrashWork(
-                            groups.map((group) => ({ adapter: group.adapter, folderIds: [], entries: group.entries })),
+                            groups.map(
+                                (group): TrashWork => ({
+                                    adapter: group.adapter,
+                                    kind: "trash",
+                                    folderIds: [],
+                                    entries: group.entries,
+                                }),
+                            ),
                         );
 
                         try {
-                            for (const group of groups) {
+                            for (const [index, group] of groups.entries()) {
                                 if (!group.adapter.trash) {
                                     throw new UndoRefused();
                                 }
 
-                                const made = trashMade(await group.adapter.trash(group.entries, { signal }));
+                                let made: FileEntry[] | undefined;
+
+                                try {
+                                    made = trashMade(await group.adapter.trash(group.entries, { signal }));
+                                } catch (error) {
+                                    if (index === 0 || signal.aborted) {
+                                        throw error;
+                                    }
+
+                                    partway = { index, error };
+
+                                    break;
+                                }
 
                                 tools().applyTrashed(group.adapter, group);
 
@@ -4352,6 +4458,24 @@ const FileManager = ({
                             }
                         } finally {
                             end();
+                        }
+
+                        if (partway) {
+                            const went = groups.slice(0, partway.index);
+
+                            // The adapter may have done some of the one that failed all the same.
+                            run.folders.forEach((each) => tools().relist(each.adapter, each.folderIds));
+                            failRunPartway(
+                                run,
+                                restores.length === went.length && went.every((group) => !!group.adapter.restore)
+                                    ? { kind: "restore", restores }
+                                    : null,
+                                { kind: "trash", groups: action.groups.slice(partway.index) },
+                                action.groups[partway.index].adapter,
+                                errorDetail(partway.error),
+                            );
+
+                            return;
                         }
 
                         const { text } = tools();
@@ -4430,22 +4554,44 @@ const FileManager = ({
 
                         // An adapter's at a time, all at once, held meanwhile. Each is moved to the
                         // trash again a folder's at a time, from the one it went back to, which they
-                        // came in the order they were given.
+                        // came in the order they were given. One failing after others went leaves
+                        // those done, and what's left to try again.
                         const shown: UndoGroup[] = [];
                         let undoable = true;
+                        let partway: { index: number; error: unknown } | null = null;
                         const { end } = tools().startTrashWork(
-                            parts.map((part) => ({ adapter: part.adapter, folderIds: [], entries: part.given })),
+                            parts.map(
+                                (part): TrashWork => ({
+                                    adapter: part.adapter,
+                                    kind: "restore",
+                                    folderIds: [],
+                                    entries: part.given,
+                                }),
+                            ),
                         );
 
                         try {
-                            for (const part of parts) {
+                            for (const [index, part] of parts.entries()) {
                                 if (!part.adapter.restore) {
                                     throw new UndoRefused();
                                 }
 
-                                const made = trashMade(
-                                    await part.adapter.restore(part.given, { signal, conflict: "keepBoth" }),
-                                );
+                                let made: FileEntry[] | undefined;
+
+                                try {
+                                    made = trashMade(
+                                        await part.adapter.restore(part.given, { signal, conflict: "keepBoth" }),
+                                    );
+                                } catch (error) {
+                                    if (index === 0 || signal.aborted) {
+                                        throw error;
+                                    }
+
+                                    partway = { index, error };
+
+                                    break;
+                                }
+
                                 const pairs = madePairs(part.given, made, "keepBoth");
                                 const alongIds = part.restores.flatMap(({ to }) => [
                                     to.section.rootId,
@@ -4466,6 +4612,23 @@ const FileManager = ({
                             }
                         } finally {
                             end();
+                        }
+
+                        if (partway) {
+                            const left = new Set(parts.slice(partway.index).map((part) => part.adapter));
+                            const rest = action.restores.filter((restore) => left.has(restore.adapter));
+
+                            tools().revealRestored(shown);
+                            run.folders.forEach((each) => tools().relist(each.adapter, each.folderIds));
+                            failRunPartway(
+                                run,
+                                undoable ? { kind: "trash", groups: shown } : null,
+                                { kind: "restore", restores: rest },
+                                parts[partway.index].adapter,
+                                errorDetail(partway.error),
+                            );
+
+                            return;
                         }
 
                         const given = parts.flatMap((part) => part.given);
@@ -4504,7 +4667,7 @@ const FileManager = ({
                 failRun(run, errorDetail(error), true);
             }
         },
-        [store, announce, endRun, failRun, leaveRun, endHistory, showNotice],
+        [store, announce, endRun, failRun, failRunPartway, leaveRun, endHistory, showNotice],
     );
 
     // Undoes, or redoes, the latest change of `direction`'s list, taking it off, one at a time.
@@ -4607,6 +4770,21 @@ const FileManager = ({
                 !entriesBusy &&
                 entries.length > 0 &&
                 entries.every((entry) => allows(what, entry.permissions));
+            // Where each of them goes back to, as a section's folder, when one shows it. They're only
+            // restored into folders the backend lets change and no move under way is moving, or the
+            // trash's work holding, whichever section shows them, as a restore is the trash's, not
+            // the section's.
+            const origins = trashRoot
+                ? entries.map((entry) =>
+                      entry.trashed ? trashOrigin(sectionsById.values(), adapter, folderAdapter, entry.trashed) : null,
+                  )
+                : [];
+            const restorable = origins.every(
+                (origin) =>
+                    !origin ||
+                    (folderPermits(store, origin.section, origin.trail) &&
+                        !folderMoving(origin.section, origin.trail, busy)),
+            );
 
             // Pastes into the folder at `pasteTrail`, when what was cut or copied can go there.
             // Entries from several folders aren't in `trail`'s, so nothing goes in there for them.
@@ -4752,18 +4930,11 @@ const FileManager = ({
                         ? () => void trashEntries(groups.map((group) => ({ ...group, adapter: servedBy(group) })))
                         : undefined,
                 restore:
-                    folderAdapter.restore && trashPermits("move") && entries.every((entry) => !!entry.trashed)
-                        ? () =>
-                              askRestore({
-                                  section: menuSection,
-                                  adapter: folderAdapter,
-                                  entries,
-                                  origins: entries.map((entry) =>
-                                      entry.trashed
-                                          ? trashOrigin(sectionsById.values(), adapter, folderAdapter, entry.trashed)
-                                          : null,
-                                  ),
-                              })
+                    folderAdapter.restore &&
+                    trashPermits("move") &&
+                    entries.every((entry) => !!entry.trashed) &&
+                    restorable
+                        ? () => askRestore({ section: menuSection, adapter: folderAdapter, entries, origins })
                         : undefined,
                 emptyTrash:
                     inTrashRoot(menuSection, trail) &&
@@ -4817,10 +4988,7 @@ const FileManager = ({
 
             // An entry in the trash's root opens the folder it was moved there from, when a section
             // shows it, as GNOME's trash offers.
-            const origin =
-                trashRoot && entries.length === 1 && only.trashed
-                    ? trashOrigin(sectionsById.values(), adapter, folderAdapter, only.trashed)
-                    : null;
+            const origin = entries.length === 1 ? origins[0] : null;
 
             if (origin) {
                 context.openOrigin = () => goTo({ sectionId: origin.section.id, trail: origin.trail });
@@ -4930,6 +5098,14 @@ const FileManager = ({
               ? localeValue.text.undo
               : localeValue.text.redo);
     const noticeShow = shownNotice?.show && localeValue.text.showRestored;
+    // Several folders to show are listed by name, with where each is.
+    const noticePlaces = useMemo(
+        () =>
+            shownNotice?.show && shownNotice.show.length > 1
+                ? shownNotice.show.map((group) => placeName(sectionsById.get(group.section.id), group.trail))
+                : undefined,
+        [shownNotice?.show, sectionsById],
+    );
 
     const handleNoticeAction = useCallback(() => {
         if (notice?.offer) {
@@ -4937,34 +5113,39 @@ const FileManager = ({
         }
     }, [notice, runUndo]);
 
-    // The notice's Show: opens the folder entries were restored to, with them selected, ending a
-    // search, and takes the focus into it, as "Open item location" does.
-    const handleNoticeShow = useCallback(() => {
-        const shown = notice?.show && sectionsById.get(notice.show.section.id);
+    // The notice's Show: opens a folder entries were restored to, the one chosen from its list when
+    // there are several, with them selected, ending a search, and takes the focus into it, as "Open
+    // item location" does.
+    const handleNoticeShow = useCallback(
+        (index: number) => {
+            const group = notice?.show?.[index];
+            const shown = group && sectionsById.get(group.section.id);
 
-        if (!notice?.show || !shown) {
-            return;
-        }
+            if (!group || !shown) {
+                return;
+            }
 
-        const { trail, entries } = notice.show;
-        const location = { sectionId: shown.id, trail };
-        const [first, ...rest] = entries;
+            const { trail, entries } = group;
+            const location = { sectionId: shown.id, trail };
+            const [first, ...rest] = entries;
 
-        if (first) {
-            setReveal({
-                key: folderKey(shown.id, folderOf(shown, trail).id),
-                id: first.id,
-                with: rest.map((entry) => entry.id),
-            });
-        }
+            if (first) {
+                setReveal({
+                    key: folderKey(shown.id, folderOf(shown, trail).id),
+                    id: first.id,
+                    with: rest.map((entry) => entry.id),
+                });
+            }
 
-        stopSearching();
-        setFocusContent(true);
+            stopSearching();
+            setFocusContent(true);
 
-        if (!samePlace(location, place)) {
-            goTo(location);
-        }
-    }, [notice, sectionsById, place, stopSearching, goTo]);
+            if (!samePlace(location, place)) {
+                goTo(location);
+            }
+        },
+        [notice, sectionsById, place, stopSearching, goTo],
+    );
 
     const focusFromNotice = useCallback(() => setFocusContent(true), []);
 
@@ -5149,9 +5330,13 @@ const FileManager = ({
             }
 
             const listed = store.get(folderKey(atSection.id, folderOf(atSection, at.trail).id))?.entries;
+            // The trash's root may be ordered by where its entries came from.
+            const locationOf = inTrashRoot(atSection, at.trail)
+                ? (entry: FileEntry) => (entry.trashed ? locateIn(atSection, entry.trashed) : "")
+                : undefined;
             const listing = listed
                 ?.filter((entry) => showHidden || !isHidden(entry))
-                .sort(entryComparator(sort, localeValue));
+                .sort(entryComparator(sort, localeValue, locationOf));
 
             return contextFor({
                 target: entries.length > 0 ? "selection" : "folder",
@@ -5161,7 +5346,7 @@ const FileManager = ({
                 listing,
             });
         },
-        [place, sectionsById, store, showHidden, sort, localeValue, contextFor],
+        [place, sectionsById, store, showHidden, sort, localeValue, locateIn, contextFor],
     );
 
     // The API stays the same object while the file manager is mounted, so a consumer can keep it;
@@ -5464,7 +5649,7 @@ const FileManager = ({
                                                                     trail={place.trail}
                                                                     view={view}
                                                                     zoom={zoom[view]}
-                                                                    sort={folderSort(sort)}
+                                                                    sort={folderSort(sort, !!trashOpen)}
                                                                     showHidden={showHidden}
                                                                     query={searchScope === "folder" ? query : ""}
                                                                     hasActions={hasActions}
@@ -5501,6 +5686,7 @@ const FileManager = ({
                                                             notice={shownNotice}
                                                             actionLabel={noticeAction}
                                                             showLabel={noticeShow}
+                                                            showPlaces={noticePlaces}
                                                             onShow={handleNoticeShow}
                                                             raised={selecting && !showsResults}
                                                             onAction={handleNoticeAction}

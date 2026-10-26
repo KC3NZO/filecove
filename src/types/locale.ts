@@ -453,6 +453,10 @@ export interface FileManagerLocaleText
     pickerReadOnly: string;
     /** Beside the picker's disabled "Copy here" or "Move here", in a folder a move under way is moving. */
     pickerMoving: string;
+    /** As `pickerMoving`, in a folder being moved to the trash. */
+    pickerTrashing: string;
+    /** As `pickerMoving`, in a folder of the trash being restored. */
+    pickerRestoring: string;
     /**
      * Read to screen readers after the name of a folder nothing can be put in, which shows a lock
      * (`EntryPermissions.write` false), in the list, the grid, the sidebar tree and the picker.
@@ -464,6 +468,10 @@ export interface FileManagerLocaleText
      * tree and the picker. It's read in place of `folderLocked`.
      */
     entryMoving: string;
+    /** As `entryMoving`, for an entry being moved to the trash, itself or with a folder it's in. */
+    entryTrashing: string;
+    /** As `entryMoving`, for an entry of the trash being restored, itself or with a folder it's in. */
+    entryRestoring: string;
     /** The title of a paste asking about names the folder already has. */
     copyTitle: (count: number, name: string) => string;
     moveTitle: (count: number, name: string) => string;

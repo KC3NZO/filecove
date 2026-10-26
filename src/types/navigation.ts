@@ -25,13 +25,20 @@ export interface FileManagerLocation {
  */
 export type LocationChangeReason = "navigate" | "back" | "forward" | "replace";
 
-/** Internal: a place on the header's back or forward list: how many steps `by` from the current one (negative back), and how it reads. */
-export interface HistoryStop {
-    by: number;
+/** Internal: a folder of a section as a menu lists it, by its name, with where it is under it. */
+export interface PlaceName {
     /** The folder's name, or its section's label at the root. */
     label: string;
     /** The section and the folders above it, to tell folders of one name apart; empty at the root. */
     location: string;
     /** The section's icon at the root, else a folder's. */
     icon: IconSource;
+}
+
+/**
+ * Internal: a place on the header's back or forward list: how many steps `by` from the current one
+ * (negative back), and how it reads.
+ */
+export interface HistoryStop extends PlaceName {
+    by: number;
 }

@@ -34,7 +34,7 @@ import { listIconSize } from "../../../utils/zoom";
 import Icon from "../../icons/icon";
 import ItemIcon from "./item-icon";
 
-import type { EntryOrigin, FileEntry, FileViewProps, SortKey, SortOrder } from "../../../types";
+import type { EntryOrigin, FileEntry, FileViewProps, MovingKind, SortKey, SortOrder } from "../../../types";
 
 interface ColumnHeaderProps {
     sortKey: SortKey;
@@ -65,8 +65,11 @@ interface FileRowProps
     focused: boolean;
     selected: boolean;
     cut: boolean;
-    /** Being moved by a move under way, itself or with a folder it's in. */
-    moving: boolean;
+    /**
+     * What holds it, a move under way or the trash's work, itself or with a folder it's in; missing
+     * while nothing does.
+     */
+    moving: MovingKind | undefined;
     /** Whether the entry was just uploaded, and is highlighted for a moment. */
     arrived: boolean;
     dragged: boolean;
@@ -321,7 +324,7 @@ const FileRow = memo(
                 data-striped={index % 2 === 0}
                 data-selected={selected}
                 data-cut={cut}
-                data-moving={moving}
+                data-moving={!!moving}
                 data-arrived={arrived}
                 data-dragged={dragged}
                 data-drop-target={dropTarget}
@@ -429,7 +432,14 @@ const FileList = ({
         <Box sx={listSx} style={{ "--icon-size": `${iconSize}rem` } as CSSProperties} data-located={!!origins}>
             <Box sx={headerRowSx} role="group" aria-label={text.sortBy}>
                 <ColumnHeader sortKey="name" sort={sort} sx={nameHeaderSx} onSortChange={onSortChange} />
-                {origins && <Box>{trash ? text.trashLocation : text.searchLocation}</Box>}
+                {origins && (
+                    <ColumnHeader
+                        sortKey="location"
+                        sort={sort}
+                        label={trash ? text.trashLocation : undefined}
+                        onSortChange={onSortChange}
+                    />
+                )}
                 <ColumnHeader sortKey="size" sort={sort} onSortChange={onSortChange} />
                 <ColumnHeader sortKey="type" sort={sort} sx={typeCellSx} onSortChange={onSortChange} />
                 <ColumnHeader
@@ -464,7 +474,7 @@ const FileList = ({
                             focused={entry.id === focusId}
                             selected={selectedIds.has(entry.id)}
                             cut={cutIds.has(entry.id)}
-                            moving={movingIds.has(entry.id)}
+                            moving={movingIds.get(entry.id)}
                             arrived={!!arrivedIds?.has(entry.id)}
                             adapter={adapter}
                             draggable={draggable}

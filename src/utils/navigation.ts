@@ -1,4 +1,6 @@
-import type { FileEntry, FileManagerLocation, FolderRef, Section } from "../types";
+import { joinIsolated } from "./bidi";
+
+import type { FileEntry, FileManagerLocation, FolderRef, PlaceName, Section } from "../types";
 
 /** The folder a place points at: the end of its trail, or the section root. */
 export const folderOf = (section: Section, trail: FolderRef[]): FolderRef =>
@@ -54,4 +56,18 @@ export const outsideDeleted = (place: FileManagerLocation, ids: ReadonlySet<stri
     const index = place.trail.findIndex((folder) => ids.has(folder.id));
 
     return index < 0 ? place : { ...place, trail: place.trail.slice(0, index) };
+};
+
+/**
+ * How a menu names the folder at `trail` of `section`: by its name, or the section's label at the
+ * root, with the section and the folders above it under it, to tell folders of one name apart.
+ */
+export const placeName = (section: Section | undefined, trail: FolderRef[]): PlaceName => {
+    const names = trail.map((folder) => folder.name);
+
+    return {
+        label: names.at(-1) ?? section?.label ?? "",
+        location: names.length > 0 ? joinIsolated([section?.label ?? "", ...names.slice(0, -1)], " / ") : "",
+        icon: names.length > 0 ? "folder" : (section?.icon ?? "folder"),
+    };
 };

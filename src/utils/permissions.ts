@@ -3,7 +3,15 @@ import { folderOf } from "./navigation";
 import { sectionLocked } from "./sections";
 
 import type { FolderStore } from "../store/folder-store";
-import type { EntryPermissions, FileEntry, FileManagerLocaleText, FolderRef, Section } from "../types";
+import type {
+    EntryPermissions,
+    FileEntry,
+    FileManagerLocaleText,
+    FolderRef,
+    MovingKind,
+    MovingKinds,
+    Section,
+} from "../types";
 
 /** Whether every one of the permissions given allows `what`; each allows what it doesn't set to false. */
 export const allows = (what: keyof EntryPermissions, ...permissions: (EntryPermissions | undefined)[]) =>
@@ -26,37 +34,67 @@ export const replaceable = (store: FolderStore, section: Section, entry: FileEnt
     );
 
 /**
- * Whether the folder at `trail`, or one it's in up to its section's root, is among `moving`, the
- * ids a move under way through the section's adapter is moving (`movingThrough`), so it's being
- * moved too.
+ * What holds `entry`, in the folder at `trail`, or with no entry the folder itself: among `moving`,
+ * the ids held through the section's adapter (`movingThrough`), the entry, or else the nearest
+ * folder it's in, up to its section's root, since everything in a folder goes with it.
  */
-export const folderMoving = (section: Section, trail: FolderRef[], moving: ReadonlySet<string>) =>
-    moving.size > 0 && [section.rootId, ...trail.map((step) => step.id)].some((id) => moving.has(id));
+export const heldBy = (
+    section: Section,
+    trail: FolderRef[],
+    entry: FileEntry | undefined,
+    moving: MovingKinds,
+): MovingKind | undefined => {
+    if (moving.size === 0) {
+        return undefined;
+    }
+
+    const ids = [section.rootId, ...trail.map((step) => step.id), ...(entry ? [entry.id] : [])];
+
+    return ids.reduceRight<MovingKind | undefined>((found, id) => found ?? moving.get(id), undefined);
+};
+
+/**
+ * Whether the folder at `trail`, or one it's in up to its section's root, is among `moving`, the
+ * ids a move under way, or the trash's work, through the section's adapter holds (`movingThrough`),
+ * so it's being moved too.
+ */
+export const folderMoving = (section: Section, trail: FolderRef[], moving: MovingKinds) =>
+    heldBy(section, trail, undefined, moving) !== undefined;
 
 /** Whether any of `entries`, in the folder at `trail`, is being moved, itself or with a folder it's in. */
 export const entriesMoving = (
     section: Section,
     trail: FolderRef[],
     entries: readonly FileEntry[],
-    moving: ReadonlySet<string>,
+    moving: MovingKinds,
 ) => folderMoving(section, trail, moving) || entries.some((entry) => moving.has(entry.id));
 
 /**
  * Whether what's in the folder at `trail` can change: its section isn't `readOnly` or the trash
  * (`sectionLocked`), it isn't being moved (`folderMoving`, by the ids in `moving`), and neither its
- * own listing's permissions nor its entry's, in the listing of the folder above, refuse writing. A
- * folder neither is cached for counts as writable, as the adapter has the final say anyway.
+ * own listing's permissions nor its entry's, in the listing of the folder above, refuse writing
+ * (`folderPermits`). A folder neither is cached for counts as writable, as the adapter has the final
+ * say anyway.
  */
 export const folderWritable = (
     store: FolderStore,
     section: Section,
     trail: FolderRef[],
-    moving: ReadonlySet<string>,
+    moving: MovingKinds,
 ) => {
     if (sectionLocked(section) || folderMoving(section, trail, moving)) {
         return false;
     }
 
+    return folderPermits(store, section, trail);
+};
+
+/**
+ * Whether the backend lets what's in the folder at `trail` change, whatever the section says:
+ * neither its own listing's permissions nor its entry's, in the listing of the folder above,
+ * refuse writing. A folder neither is cached for counts as writable.
+ */
+export const folderPermits = (store: FolderStore, section: Section, trail: FolderRef[]) => {
     const folder = folderOf(section, trail);
     const own = store.get(folderKey(section.id, folder.id))?.permissions;
     // A section's root is in none of the section's listings.
@@ -76,14 +114,23 @@ export const entriesAllow = (
     trail: FolderRef[],
     entries: readonly FileEntry[],
     what: "rename" | "move" | "delete",
-    moving: ReadonlySet<string>,
+    moving: MovingKinds,
 ) =>
     folderWritable(store, section, trail, moving) &&
     entries.every((entry) => !moving.has(entry.id) && allows(what, entry.permissions));
 
+/** What screen readers hear after the name of an entry held, for what holds it. */
+export const heldText = (text: FileManagerLocaleText, kind: MovingKind) =>
+    kind === "trash" ? text.entryTrashing : kind === "restore" ? text.entryRestoring : text.entryMoving;
+
+/** Beside the picker's disabled "Copy here" or "Move here", in a folder held, for what holds it. */
+export const pickerHeldText = (text: FileManagerLocaleText, kind: MovingKind) =>
+    kind === "trash" ? text.pickerTrashing : kind === "restore" ? text.pickerRestoring : text.pickerMoving;
+
 /**
  * What screen readers hear after an entry's name for what only its look shows: that it's being
- * moved, which counts for more while it lasts, or that it's a folder that shows a lock.
+ * moved, moved to the trash or restored, which counts for more while it lasts, or that it's a
+ * folder that shows a lock.
  */
-export const drawnState = (text: FileManagerLocaleText, entry: FileEntry, moving: boolean) =>
-    moving ? text.entryMoving : lockedFolder(entry) ? text.folderLocked : undefined;
+export const drawnState = (text: FileManagerLocaleText, entry: FileEntry, moving: MovingKind | undefined) =>
+    moving ? heldText(text, moving) : lockedFolder(entry) ? text.folderLocked : undefined;

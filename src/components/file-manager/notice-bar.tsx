@@ -1,16 +1,26 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { FocusEvent, KeyboardEvent } from "react";
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { FocusEvent, KeyboardEvent, MouseEvent } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Grow from "@mui/material/Grow";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import ListItemText from "@mui/material/ListItemText";
+import Menu from "@mui/material/Menu";
+import type { MenuProps } from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 import SnackbarContent from "@mui/material/SnackbarContent";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { DirectionContext } from "../../contexts/direction-context";
 import { useLocale } from "../../hooks/use-locale";
-import { forcedColors, forcedEdge } from "../../styles/mixins";
+import { forcedColors, forcedEdge, menuPaperSx } from "../../styles/mixins";
+import { isRtl } from "../../utils/dom";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import Icon from "../icons/icon";
+import IconSlot from "../icons/icon-slot";
+
+import type { PlaceName } from "../../types";
 
 /** What the notice under the content says. */
 export interface Notice {
@@ -29,7 +39,10 @@ interface NoticeBarProps {
     onAction: () => void;
     /** The label of a button before that one, showing where a change put something (Show), when it has one. */
     showLabel?: string;
-    onShow: () => void;
+    /** The folders it shows, when there are several, which it lists to choose from. */
+    showPlaces?: PlaceName[];
+    /** Shows the folder at `index` of `showPlaces`, or the one there is. */
+    onShow: (index: number) => void;
     onClose: () => void;
     /** Whether it sits above the touch selection bar, which has the panel's bottom. */
     raised: boolean;
@@ -81,27 +94,51 @@ const detailSx: SxProps<Theme> = {
     opacity: 0.8,
 };
 
+// Long names are cut short rather than widening the list.
+const placeSx: SxProps<Theme> = { maxWidth: "min(24rem, 90vw)" };
+
+const placeTextSx: SxProps<Theme> = { minWidth: 0 };
+
+// Above the notice, which sits at the bottom of the content, hanging from Show's end edge.
+const ORIGINS: Record<"ltr" | "rtl", Pick<MenuProps, "anchorOrigin" | "transformOrigin">> = {
+    ltr: {
+        anchorOrigin: { vertical: "top", horizontal: "right" },
+        transformOrigin: { vertical: "bottom", horizontal: "right" },
+    },
+    rtl: {
+        anchorOrigin: { vertical: "top", horizontal: "left" },
+        transformOrigin: { vertical: "bottom", horizontal: "left" },
+    },
+};
+
 /**
  * A notice over the bottom of the content, as a snackbar is: what a change did, with Undo, and Show
- * for what a restore put back, or why an undo did nothing. It goes after `SHOW_FOR`, which waits
- * while the pointer is over it or the focus in it, or with its ✕ or Escape. Screen readers hear its
- * message from the file manager's live region, so it isn't one itself.
+ * for what a restore put back, listing the folders it went back to when there are several, or why
+ * an undo did nothing. It goes after `SHOW_FOR`, which waits while the pointer is over it, the focus
+ * in it or its list open, or with its ✕ or Escape. Screen readers hear its message from the file
+ * manager's live region, so it isn't one itself.
  */
 const NoticeBar = ({
     notice,
     actionLabel,
     onAction,
     showLabel,
+    showPlaces,
     onShow,
     onClose,
     raised,
     onFocusLost,
 }: NoticeBarProps) => {
     const { text } = useLocale();
+    const dir = useContext(DirectionContext);
     // A notice going keeps saying what it said while it shrinks away.
     const [shown, setShown] = useState(notice);
     const [hovered, setHovered] = useState(false);
     const [focused, setFocused] = useState(false);
+    // Show's list of folders, from the button it hangs from, kept while it fades out, and gone as
+    // another notice comes.
+    const [list, setList] = useState<{ from: HTMLElement; open: boolean } | null>(null);
+    const listOpen = !!list?.open && !!notice && !!showPlaces;
     const rootRef = useRef<HTMLDivElement>(null);
     const closeRef = useRef<HTMLButtonElement>(null);
     // Whether the focus was in it, which React isn't told is lost when the button that had it goes.
@@ -114,9 +151,10 @@ const NoticeBar = ({
 
     if (notice && notice !== shown) {
         setShown(notice);
+        setList(null);
     }
 
-    const held = hovered || focused;
+    const held = hovered || focused || !!list;
 
     useEffect(() => {
         if (!notice || held) {
@@ -138,7 +176,8 @@ const NoticeBar = ({
         if (!notice) {
             focusInside.current = false;
             latest.current.onFocusLost();
-        } else if (!rootRef.current?.contains(document.activeElement)) {
+        } else if (!list && !rootRef.current?.contains(document.activeElement)) {
+            // The list portals out of it, so the focus in it, or there as it fades out, isn't inside.
             closeRef.current?.focus();
         }
     });
@@ -160,6 +199,23 @@ const NoticeBar = ({
         setShown(null);
         setHovered(false);
         setFocused(false);
+    };
+
+    // With one folder, Show opens it; with several, it lists them.
+    const handleShow = (event: MouseEvent<HTMLElement>) => {
+        if (showPlaces) {
+            setList({ from: event.currentTarget, open: true });
+        } else {
+            onShow(0);
+        }
+    };
+
+    const closeList = () => setList((prev) => prev && { ...prev, open: false });
+
+    // The list closes as the folder picked opens, which takes the focus.
+    const showPlace = (index: number) => {
+        closeList();
+        onShow(index);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -190,7 +246,13 @@ const NoticeBar = ({
                     action={
                         <>
                             {showLabel && (
-                                <Button color="inherit" size="small" onClick={onShow}>
+                                <Button
+                                    color="inherit"
+                                    size="small"
+                                    aria-haspopup={showPlaces ? "menu" : undefined}
+                                    aria-expanded={showPlaces ? listOpen : undefined}
+                                    onClick={handleShow}
+                                >
                                     {showLabel}
                                 </Button>
                             )}
@@ -217,6 +279,39 @@ const NoticeBar = ({
                     onKeyDown={handleKeyDown}
                 />
             </Grow>
+            {showPlaces && list && (
+                <Menu
+                    dir={dir}
+                    open={listOpen}
+                    anchorEl={list.from}
+                    {...ORIGINS[isRtl(list.from) ? "rtl" : "ltr"]}
+                    slotProps={{
+                        paper: { sx: menuPaperSx },
+                        list: { dense: true, "aria-label": showLabel },
+                        transition: { onExited: () => setList(null) },
+                    }}
+                    onClose={closeList}
+                >
+                    {showPlaces.map(({ label, location, icon }, index) => (
+                        <MenuItem
+                            key={index}
+                            sx={placeSx}
+                            divider={index < showPlaces.length - 1}
+                            onClick={() => showPlace(index)}
+                        >
+                            <ListItemIcon>
+                                <IconSlot icon={icon} />
+                            </ListItemIcon>
+                            <ListItemText
+                                sx={placeTextSx}
+                                primary={<bdi>{label}</bdi>}
+                                secondary={location ? <bdi>{location}</bdi> : undefined}
+                                slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
+                            />
+                        </MenuItem>
+                    ))}
+                </Menu>
+            )}
         </Box>
     );
 };

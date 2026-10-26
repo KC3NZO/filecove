@@ -27,7 +27,7 @@ import { gridSize } from "../../../utils/zoom";
 import Icon from "../../icons/icon";
 import ItemIcon from "./item-icon";
 
-import type { EntryOrigin, FileEntry, FileViewProps } from "../../../types";
+import type { EntryOrigin, FileEntry, FileViewProps, MovingKind } from "../../../types";
 
 interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "onSelect" | "onOpen" | "onMenu"> {
     entry: FileEntry;
@@ -47,8 +47,11 @@ interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "o
     focused: boolean;
     selected: boolean;
     cut: boolean;
-    /** Being moved by a move under way, itself or with a folder it's in. */
-    moving: boolean;
+    /**
+     * What holds it, a move under way or the trash's work, itself or with a folder it's in; missing
+     * while nothing does.
+     */
+    moving: MovingKind | undefined;
     /** Whether the entry was just uploaded, and is highlighted for a moment. */
     arrived: boolean;
     dragged: boolean;
@@ -198,7 +201,7 @@ const FileTile = memo(
                 data-no-marquee
                 data-selected={selected}
                 data-cut={cut}
-                data-moving={moving}
+                data-moving={!!moving}
                 data-arrived={arrived}
                 data-dragged={dragged}
                 data-drop-target={dropTarget}
@@ -287,7 +290,7 @@ const FileGrid = ({
                             focused={entry.id === focusId}
                             selected={selectedIds.has(entry.id)}
                             cut={cutIds.has(entry.id)}
-                            moving={movingIds.has(entry.id)}
+                            moving={movingIds.get(entry.id)}
                             arrived={!!arrivedIds?.has(entry.id)}
                             adapter={adapter}
                             draggable={draggable}

@@ -42,7 +42,16 @@ export interface TransferItem {
 }
 
 /**
- * Ids of the entries the moves in the transfer queue are moving, waiting or under way, by the
- * adapter serving them, so every view marks them and nothing else is done to them meanwhile.
+ * What holds an entry: a move in the transfer queue, waiting or under way, or a move to the trash
+ * or a restore from it, while the adapter works.
  */
-export type MovingIds = ReadonlyMap<FileAdapter, ReadonlySet<string>>;
+export type MovingKind = "move" | "trash" | "restore";
+
+/** Ids of the entries held through one adapter, each with what holds it. */
+export type MovingKinds = ReadonlyMap<string, MovingKind>;
+
+/**
+ * Ids of the entries held, by moves in the transfer queue or by the trash's work, by the adapter
+ * serving them, so every view marks them and nothing else is done to them meanwhile.
+ */
+export type MovingIds = ReadonlyMap<FileAdapter, MovingKinds>;

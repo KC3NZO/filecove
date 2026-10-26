@@ -22,6 +22,18 @@ export const NO_HISTORY: UndoHistory = { undo: [], redo: [] };
 /** The other list of the history: what undoing a step leaves to redo, and the other way round. */
 export const otherWay = (direction: UndoDirection): UndoDirection => (direction === "undo" ? "redo" : "undo");
 
+/**
+ * Two actions of a kind carried out in parts as one, `first`'s parts first, as what's left of an
+ * undo or redo that failed partway joins what it did then; null for any but a move to the trash's
+ * or a restore's.
+ */
+export const joinActions = (first: UndoAction, then: UndoAction): UndoAction | null =>
+    first.kind === "trash" && then.kind === "trash"
+        ? { kind: "trash", groups: [...first.groups, ...then.groups] }
+        : first.kind === "restore" && then.kind === "restore"
+          ? { kind: "restore", restores: [...first.restores, ...then.restores] }
+          : null;
+
 /** The latest `limit` steps of a list, `Infinity` keeping them all. */
 export const latestSteps = (steps: UndoStep[], limit: number) =>
     steps.length <= limit ? steps : limit <= 0 ? [] : steps.slice(steps.length - limit);

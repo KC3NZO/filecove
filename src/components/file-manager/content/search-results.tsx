@@ -29,7 +29,7 @@ import { isHidden } from "../../../utils/hidden";
 import { isMenuKey, isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
 import { belowElement, pressPosition } from "../../../utils/menu-position";
 import { folderOf } from "../../../utils/navigation";
-import { entriesMoving } from "../../../utils/permissions";
+import { heldBy } from "../../../utils/permissions";
 import { EMPTY_SELECTION, NO_MODIFIERS, marqueeSelection, selectModifiers } from "../../../utils/selection";
 import { pressesKey } from "../../../utils/shortcut";
 import { relevanceOf, resultKey, searchTerms } from "../../../utils/search";
@@ -237,7 +237,11 @@ const SearchResults = ({
                 .map(({ hit }) => hit);
         }
 
-        const compare = entryComparator(sort, locale);
+        // Ordered by location, as the column shows it, with the section first even inside its tab.
+        const places = new Map(
+            listed.map((hit) => [hit.entry, [hit.section.label, ...hit.trail.map(({ name }) => name)].join(" / ")]),
+        );
+        const compare = entryComparator(sort, locale, (entry) => places.get(entry) ?? "");
 
         return listed.sort((a, b) => compare(a.entry, b.entry));
     }, [shownTargets, searches, showHidden, sort, query, locale]);
@@ -273,15 +277,16 @@ const SearchResults = ({
     );
     const cutKeys = useMemo(() => marked(cut), [marked, cut]);
     const draggedKeys = useMemo(() => marked(drag?.dragged), [marked, drag?.dragged]);
-    // Results being moved, themselves or with a folder they're in.
+    // Results being moved, or moved to the trash, themselves or with a folder they're in, with what
+    // holds each.
     const movingKeys = useMemo(
         () =>
-            new Set(
-                hits
-                    .filter((hit) =>
-                        entriesMoving(hit.section, hit.trail, [hit.entry], movingThrough(moving, hit.adapter)),
-                    )
-                    .map((hit) => hit.key),
+            new Map(
+                hits.flatMap((hit) => {
+                    const kind = heldBy(hit.section, hit.trail, hit.entry, movingThrough(moving, hit.adapter));
+
+                    return kind ? [[hit.key, kind] as const] : [];
+                }),
             ),
         [hits, moving],
     );

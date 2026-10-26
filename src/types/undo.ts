@@ -86,6 +86,12 @@ export interface UndoStep {
     adapter: FileAdapter;
     /** What undoing it does, on the undo list, or redoing it, on the redo list. */
     action: UndoAction;
+    /**
+     * For what's left of an undo or redo of a move to the trash or a restore that failed partway,
+     * put back to try again: the id of the step on the other list holding what it did then, which
+     * what this one does joins once it's done, so the two are one change again.
+     */
+    joins?: number;
 }
 
 /** Folders of one adapter, which an undo or redo changes, and show the progress bar while it runs. */

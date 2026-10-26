@@ -1,6 +1,7 @@
 import type { FileAdapter, FileEntry } from "./adapter";
 import type { MenuPosition } from "./menu";
 import type { SelectModifiers } from "./selection";
+import type { MovingKinds } from "./transfer";
 
 export type ViewMode = "list" | "grid";
 
@@ -32,9 +33,11 @@ export type TextDirection = "ltr" | "rtl";
 /**
  * What an order goes by. "relevance" ranks a search everywhere's results by how well their names
  * answer what's typed, best first (its direction is ignored); anywhere else it stands for name,
- * A to Z.
+ * A to Z. "location" orders a search everywhere's results by where they are, and the trash's root
+ * by where its entries were moved there from, as their Location column shows; anywhere else it
+ * stands for name, A to Z, too.
  */
-export type SortKey = "name" | "size" | "type" | "modified" | "relevance";
+export type SortKey = "name" | "size" | "type" | "modified" | "relevance" | "location";
 
 export type SortDirection = "asc" | "desc";
 
@@ -143,10 +146,10 @@ export interface FileViewProps {
     /** Entries cut to the clipboard, shown faded until they're pasted. */
     cutIds: ReadonlySet<string>;
     /**
-     * Entries a move under way is moving, themselves or with a folder they're in, shown faded until
-     * it ends.
+     * Entries a move under way is moving, or the trash's work holds, themselves or with a folder
+     * they're in, each with what holds it, shown faded until it ends.
      */
-    movingIds: ReadonlySet<string>;
+    movingIds: MovingKinds;
     /** Entries just uploaded, highlighted for a moment; none among a search's results. */
     arrivedIds?: ReadonlySet<string>;
     /** The folder's adapter, which may give its files thumbnails. */
