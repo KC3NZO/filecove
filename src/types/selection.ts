@@ -45,6 +45,8 @@ export interface TreeSelection extends EntrySelection {
     parentTrail: FolderRef[];
     /** `folderKey` of the open folder when the selection was made; opening another folder drops it. */
     openKey: string | null;
+    /** Made in the touch selection mode, which lasts while the selection does. */
+    selecting?: boolean;
 }
 
 /** A sidebar folder row, as something to select. */

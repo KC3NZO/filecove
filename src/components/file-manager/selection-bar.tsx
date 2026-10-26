@@ -3,9 +3,9 @@ import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { useLocale } from "../../../hooks/use-locale";
-import TooltipIconButton from "../../buttons/tooltip-icon-button";
-import Icon from "../../icons/icon";
+import { useLocale } from "../../hooks/use-locale";
+import TooltipIconButton from "../buttons/tooltip-icon-button";
+import Icon from "../icons/icon";
 
 interface SelectionBarProps {
     /** How many entries are selected. */

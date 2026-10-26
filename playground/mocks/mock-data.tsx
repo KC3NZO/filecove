@@ -309,6 +309,15 @@ export const createDemoActions = (notify: (message: string) => void): ActionGrou
                 onSelect: (context) => context.openOrigin?.(),
             },
             {
+                // Only from a long-press on a folder in the sidebar tree, for its selection mode.
+                id: "select",
+                label: "Select",
+                icon: "selectMode",
+                target: "selection",
+                visible: (context) => !!context.select,
+                onSelect: (context) => context.select?.(),
+            },
+            {
                 id: "preview",
                 label: "Preview",
                 icon: "preview",

@@ -148,6 +148,7 @@ const flatten = (
                 label: entry.name,
                 section,
                 entry,
+                parentKey: folderKey(section.id, folderId),
                 parentTrail: trail,
                 trail: folderTrail,
                 siblings: folders,

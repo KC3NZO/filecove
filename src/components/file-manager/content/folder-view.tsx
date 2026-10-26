@@ -36,9 +36,9 @@ import { pressesKey } from "../../../utils/shortcut";
 import { entryComparator } from "../../../utils/sort";
 import { canCarry } from "../../../utils/transfer";
 import Icon from "../../icons/icon";
+import SelectionBar from "../selection-bar";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
-import SelectionBar from "./selection-bar";
 
 import type {
     Arrival,

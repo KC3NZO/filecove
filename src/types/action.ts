@@ -82,6 +82,14 @@ export interface ActionContext {
      */
     openOrigin?: () => void;
     /**
+     * Starts the sidebar tree's touch selection mode with `entries` selected, for a "Select" action:
+     * in it, every tap on a folder selects or deselects it, and a bar at the sidebar's bottom counts
+     * them and opens their menu. Missing unless the menu was opened by a long-press (touch or pen)
+     * on a folder in the tree, where a tap opens the folder; the content has a Select button of its
+     * own, and a mouse or keyboard selects there with Ctrl, Shift and Space.
+     */
+    select?: () => void;
+    /**
      * Shows the files among `entries` in the file manager's preview, one at a time. A single file
      * steps through the files of the folder it's listed in, in the content's order; several, from
      * one folder or many (`byFolder`), through themselves. Missing when `entries` holds no files,

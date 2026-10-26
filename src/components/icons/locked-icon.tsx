@@ -18,7 +18,7 @@ const wrapperSx: SxProps<Theme> = {
 };
 
 // A lock on a disc at the icon's bottom end corner, as GNOME Files marks what can't be written,
-// sized with the icon. It gives way to the check badge of the content's touch selection mode, which
+// sized with the icon. It gives way to the check badge of touch selection mode (`CheckBadge`), which
 // takes the same corner. Screen readers hear it from the item's own description.
 const emblemSx: SxProps<Theme> = {
     position: "absolute",

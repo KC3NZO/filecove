@@ -38,10 +38,10 @@ import {
 import { isRtl } from "../../../utils/dom";
 import { isMenuKey } from "../../../utils/keyboard";
 import { belowElement, pointerPosition, pressPosition } from "../../../utils/menu-position";
-import { folderOf } from "../../../utils/navigation";
 import { drawnState, heldBy, heldText, lockedFolder } from "../../../utils/permissions";
 import { selectModifiers } from "../../../utils/selection";
 import { canCarry } from "../../../utils/transfer";
+import CheckBadge from "../../icons/check-badge";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import IconSlot from "../../icons/icon-slot";
@@ -75,6 +75,8 @@ interface TreeProps {
     openKey: string | null;
     /** The tree's selection; null while the open folder alone counts as selected. */
     selection: TreeSelection | null;
+    /** Starts the touch selection mode with the folder selected, from the menu a long-press opened. */
+    onStartSelecting: (target: TreeTarget) => void;
     onToggle: (key: string) => void;
     /** Expands the folder or section with that `folderKey`, without collapsing it if it's expanded. */
     onExpand: (key: string) => void;
@@ -280,6 +282,13 @@ const folderToggleSx: SxProps<Theme> = {
     width: CHEVRON,
     height: CHEVRON,
     "& > svg": { fontSize: "1rem", transition: "rotate 150ms" },
+};
+
+// Holds a folder's icon and the check badge the touch selection mode puts at its corner.
+const folderIconSx: SxProps<Theme> = {
+    position: "relative",
+    display: "inline-flex",
+    flexShrink: 0,
 };
 
 // Along the folders below an expanded row, placed by the tree like a row, behind the rows.
@@ -533,6 +542,7 @@ const FolderItem = memo(
         row,
         openKey,
         selection,
+        onStartSelecting,
         onToggle,
         onExpand,
         onNavigate,
@@ -541,7 +551,8 @@ const FolderItem = memo(
         onShortcut,
         onPasteFiles,
     }: FolderItemProps) => {
-        const { id: key, section, entry, parentTrail, trail, siblings, siblingKeys, expandable, expanded } = row;
+        const { id: key, section, entry, parentKey, parentTrail, trail, siblings, siblingKeys, expandable, expanded } =
+            row;
         const cutIds = useCutIds(section);
         const movingIds = useMovingIds(section);
         const draggedIds = useDraggedIds(section);
@@ -557,21 +568,20 @@ const FolderItem = memo(
         const draggable = !!adapter && canCarry(adapter);
 
         const selected = selection ? selection.ids.has(key) : key === openKey;
+        const selecting = selection?.selecting === true;
 
-        const target: TreeTarget = {
-            key,
-            parentKey: folderKey(section.id, folderOf(section, parentTrail).id),
-            parentTrail,
-            order: siblingKeys,
-        };
+        const target: TreeTarget = { key, parentKey, parentTrail, order: siblingKeys };
 
         const open = () => onNavigate({ sectionId: section.id, trail });
 
-        // Ctrl and Shift select without opening anything; a plain click opens the folder.
+        // Ctrl and Shift select without opening anything; a plain click opens the folder. In the
+        // touch selection mode every tap toggles it.
         const handleSelect = (event: MouseEvent) => {
             const modifiers = selectModifiers(event);
 
-            if (modifiers.toggle || modifiers.range) {
+            if (selecting) {
+                onSelectFolder(target, { toggle: true, range: modifiers.range });
+            } else if (modifiers.toggle || modifiers.range) {
                 onSelectFolder(target, modifiers);
             } else {
                 open();
@@ -600,8 +610,15 @@ const FolderItem = memo(
             return actedOn();
         };
 
-        const handleMenu = (position: MenuPosition) =>
-            onOpenMenu(position, { target: "selection", section, trail: parentTrail, entries: takeSelection() });
+        // From a long-press, the menu offers to start the selection mode (`ActionContext.select`).
+        const handleMenu = (position: MenuPosition, pressed = false) =>
+            onOpenMenu(position, {
+                target: "selection",
+                section,
+                trail: parentTrail,
+                entries: takeSelection(),
+                select: pressed ? () => onStartSelecting(target) : undefined,
+            });
 
         // An action for entries runs on the folder, and one for a folder runs in it, so Ctrl+V
         // pastes into it and F5 lists it again.
@@ -617,12 +634,42 @@ const FolderItem = memo(
             drag?.start(event, pick);
         };
 
-        // The tree has no selection mode, so on touch a long-press opens the folder's menu once the
-        // finger lifts, as a right-click would, and the finger moving on drags it, as a mouse does.
+        // On touch, a long-press opens the folder's menu once the finger lifts, as a right-click
+        // would, where the app's "Select" can start the selection mode, and the finger moving on
+        // drags it, as a mouse does.
+        // In the selection mode it adds the folder to the selection instead, keeping it there if it
+        // is, so the finger moving on drags the whole selection, as in the content; a folder under
+        // another parent starts a new one.
         const longPress = useLongPress({
             itemAt: () => key,
-            onLongPress: (_, press) =>
-                drag?.touch(press, draggable ? pick : null, () => handleMenu(pressPosition(press))),
+            onLongPress: (_, press) => {
+                if (!selecting) {
+                    drag?.touch(press, draggable ? pick : null, () => handleMenu(pressPosition(press), true));
+
+                    return;
+                }
+
+                const joined = selection?.parentKey === parentKey ? selection.ids : null;
+
+                if (!selected) {
+                    onSelectFolder(target, { toggle: true, range: false });
+                }
+
+                if (draggable) {
+                    const carried = joined
+                        ? siblings.filter((sibling) => {
+                              const siblingKey = folderKey(section.id, sibling.id);
+
+                              return siblingKey === key || joined.has(siblingKey);
+                          })
+                        : [entry];
+
+                    drag?.touch(press, () => ({
+                        parts: [{ section, trail: parentTrail, entries: carried }],
+                        grabbed: entry,
+                    }));
+                }
+            },
         });
 
         return (
@@ -630,9 +677,12 @@ const FolderItem = memo(
                 variant="folder"
                 row={row}
                 icon={
-                    <LockedIcon locked={locked}>
-                        <FolderTypeIcon folderName={entry.name} size="1.125rem" />
-                    </LockedIcon>
+                    <Box component="span" sx={folderIconSx}>
+                        <LockedIcon locked={locked}>
+                            <FolderTypeIcon folderName={entry.name} size="1.125rem" />
+                        </LockedIcon>
+                        <CheckBadge />
+                    </Box>
                 }
                 description={drawnState(text, entry, moving)}
                 selected={selected}

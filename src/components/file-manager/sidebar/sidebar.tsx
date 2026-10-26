@@ -25,15 +25,18 @@ import {
 import { focusOutline, forcedColors, forcedPressed } from "../../../styles/mixins";
 import { focusLost, isRtl, scrollParent } from "../../../utils/dom";
 import { focusTreeItem, isTypingKey, matchName } from "../../../utils/keyboard";
+import { belowElement } from "../../../utils/menu-position";
 import { clampWidth } from "../../../utils/resize";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 import ResizeEdge from "../resize-edge";
+import SelectionBar from "../selection-bar";
 import TreeRowItem, { GuideLine } from "./location-item";
 import MainMenu from "./main-menu";
 
 import type {
     FileManagerLocation,
+    FolderRow,
     MainMenuGroup,
     OpenMenu,
     PasteFiles,
@@ -96,6 +99,8 @@ interface SidebarProps {
     /** Expands a collapsed folder or section that a drag rests on. */
     onExpand: (key: string) => void;
     onNavigate: (place: FileManagerLocation) => void;
+    /** Whether the consumer has any actions, without which the selection bar has no menu. */
+    hasActions: boolean;
     onOpenMenu: OpenMenu;
     onShortcut: RunShortcut;
     onPasteFiles: PasteFiles;
@@ -282,6 +287,7 @@ const Sidebar = ({
     onRevealed,
     onExpand,
     onNavigate,
+    hasActions,
     onOpenMenu,
     onShortcut,
     onPasteFiles,
@@ -292,7 +298,8 @@ const Sidebar = ({
     onShowShortcuts,
 }: SidebarProps) => {
     // The sidebar's own selection; the content's lives in its folder view, and neither sees the other.
-    const { selection, select, selectSection, reset } = useTreeSelection(openKey);
+    const { selection, selecting, select, startSelecting, selectKeys, selectSection, reset } =
+        useTreeSelection(openKey);
     const typeAhead = useTypeAhead();
     const drag = useContext(DragContext);
     const { text, sameLetters } = useLocale();
@@ -336,6 +343,24 @@ const Sidebar = ({
             treeRef.current?.focus();
         }
     }, [open]);
+
+    // The selection mode ends as the sidebar is put away: the overlay closing, by its backdrop,
+    // Escape or anything else, and the docked sidebar being hidden. The overlay closing as it docks
+    // leaves it, as the sidebar stays in view; it's docked by then, no longer `absolute`.
+    const wasShown = useRef({ open, hidden });
+
+    useEffect(() => {
+        const before = wasShown.current;
+        const sidebar = sidebarRef.current;
+
+        wasShown.current = { open, hidden };
+
+        const closed = before.open && !open && !!sidebar && getComputedStyle(sidebar).position === "absolute";
+
+        if (closed || (!before.hidden && hidden)) {
+            reset();
+        }
+    }, [open, hidden, reset]);
 
     useEffect(() => {
         if (focusRequest === null) {
@@ -446,6 +471,7 @@ const Sidebar = ({
     // Escape in the main menu, which portals out of the sidebar but still bubbles here through
     // React's tree, only closes the menu.
     // Escape that calls off a drag of the edge is the edge's.
+    // Escape leaves the touch selection mode first, as in the content, and then closes the overlay.
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         if (
             event.key === "Escape" &&
@@ -453,7 +479,12 @@ const Sidebar = ({
             event.target instanceof Node &&
             event.currentTarget.contains(event.target)
         ) {
-            onClose();
+            if (selecting) {
+                event.preventDefault();
+                reset();
+            } else {
+                onClose();
+            }
         }
     };
 
@@ -566,12 +597,34 @@ const Sidebar = ({
         setGrabbedKey(item?.dataset.treeKey ?? null);
     };
 
+    // In the touch selection mode, the folders the selection is among, as the first row shown
+    // among them has them. While their parent is collapsed none are, so none count, as in the
+    // content selected entries a search leaves out don't, and they come back as it's expanded.
+    const among = selecting
+        ? rows.find((row): row is FolderRow => row.kind === "folder" && row.parentKey === selection?.parentKey)
+        : undefined;
+    const selectedFolders = among
+        ? among.siblings.filter((_, index) => selection?.ids.has(among.siblingKeys[index]))
+        : [];
+
+    const handleSelectionMenu = (button: HTMLElement) => {
+        if (among) {
+            onOpenMenu(belowElement(button), {
+                target: "selection",
+                section: among.section,
+                trail: among.parentTrail,
+                entries: selectedFolders,
+            });
+        }
+    };
+
     const renderItem = (row: TreeItemRow | StatusRow) => (
         <TreeRowItem
             key={row.id}
             row={row}
             openKey={openKey}
             selection={selection}
+            onStartSelecting={startSelecting}
             onToggle={onToggle}
             onExpand={onExpand}
             onNavigate={handleNavigate}
@@ -625,6 +678,8 @@ const Sidebar = ({
                     role="tree"
                     aria-label={tree ? tree.label : text.sections}
                     aria-multiselectable
+                    // Shows the check badges on the folders' icons.
+                    data-selecting={selecting}
                     // With no section, there's nothing in it to tab to.
                     tabIndex={focusInside || !rows.some(isItem) ? -1 : 0}
                     sx={treeSx}
@@ -689,6 +744,17 @@ const Sidebar = ({
                         })}
                 </Box>
             </Box>
+            {selecting && (
+                <SelectionBar
+                    count={selectedFolders.length}
+                    total={among?.siblings.length ?? 0}
+                    hasActions={hasActions}
+                    onClose={reset}
+                    onSelectAll={() => selectKeys(among?.siblingKeys ?? [])}
+                    onSelectNone={() => selectKeys([])}
+                    onMenu={handleSelectionMenu}
+                />
+            )}
             {/* Only there, by CSS, while the sidebar docks and isn't peeking over the content. */}
             <ResizeEdge
                 target={sidebarRef}

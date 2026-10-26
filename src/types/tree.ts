@@ -43,6 +43,8 @@ export interface SectionRow extends ExpandableRow {
 export interface FolderRow extends ExpandableRow {
     kind: "folder";
     entry: FileEntry;
+    /** `folderKey` of the folder the row is in. */
+    parentKey: string;
     /** Trail to the folder the row is in. */
     parentTrail: FolderRef[];
     /** Trail to the row's own folder. */

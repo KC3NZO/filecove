@@ -5171,6 +5171,9 @@ const FileManager = ({
                 context.openOrigin = () => goTo({ sectionId: origin.section.id, trail: origin.trail });
             }
 
+            // Only the tree's menu from a long-press hands this over (see `MenuRequest.select`).
+            context.select = request.select;
+
             // Opened as double-clicking it does: a folder here, and a file as the consumer says, or
             // in the preview when they decline it. Without `onOpenFile`, opening a file is only
             // previewing it, which `preview` already offers.
@@ -5708,6 +5711,7 @@ const FileManager = ({
                                             onRevealed={clearTreeReveal}
                                             onExpand={expand}
                                             onNavigate={navigateFromSidebar}
+                                            hasActions={hasActions}
                                             onOpenMenu={openMenu}
                                             onShortcut={runShortcut}
                                             onPasteFiles={pasteFiles}

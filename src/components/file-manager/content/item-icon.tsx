@@ -5,8 +5,8 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useThumbnail } from "../../../hooks/use-thumbnail";
 import { lockedFolder } from "../../../utils/permissions";
+import CheckBadge from "../../icons/check-badge";
 import { FileTypeIcon, FolderTypeIcon } from "../../icons/file-icon";
-import Icon from "../../icons/icon";
 import LockedIcon from "../../icons/locked-icon";
 
 import type { FileAdapter, FileEntry, ViewMode } from "../../../types";
@@ -42,28 +42,6 @@ const thumbnailSx: SxProps<Theme> = {
     },
 };
 
-// Only shown in touch selection mode, set as `data-selecting` on the folder view: an empty ring,
-// filled with a check once the entry's row or tile is `data-selected`.
-const badgeSx: SxProps<Theme> = {
-    display: "none",
-    position: "absolute",
-    insetInlineEnd: -2,
-    bottom: -2,
-    width: "max(0.875rem, 36%)",
-    aspectRatio: "1",
-    alignItems: "center",
-    justifyContent: "center",
-    border: 2,
-    borderColor: "text.secondary",
-    borderRadius: "50%",
-    bgcolor: "background.paper",
-    color: "primary.contrastText",
-    "& > svg": { width: "80%", height: "80%", visibility: "hidden" },
-    '[data-selecting="true"] &': { display: "flex" },
-    '[data-selected="true"] &': { borderColor: "primary.main", bgcolor: "primary.main" },
-    '[data-selected="true"] & > svg': { visibility: "visible" },
-};
-
 /**
  * An entry's type icon, or its file's thumbnail once one has loaded, with the check badge of touch
  * selection, and a lock on a folder nothing can be put in.
@@ -92,9 +70,7 @@ const ItemIcon = ({ entry, size, adapter, view }: ItemIconProps) => {
     return (
         <Box sx={wrapperSx}>
             {icon}
-            <Box sx={badgeSx} aria-hidden>
-                <Icon name="check" />
-            </Box>
+            <CheckBadge />
         </Box>
     );
 };

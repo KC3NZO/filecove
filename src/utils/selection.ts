@@ -82,7 +82,8 @@ export const marqueeSelection = (
 /**
  * The sidebar tree's selection after clicking a folder row. `prev` only counts while the folder
  * it was made in is still open; without it, the open folder is what Ctrl and Shift build from.
- * Selected folders stay siblings, so a click under another parent starts a new selection.
+ * Selected folders stay siblings, so a click under another parent starts a new selection. The
+ * touch selection mode carries on through it.
  */
 export const nextTreeSelection = (
     prev: TreeSelection | null,
@@ -104,5 +105,6 @@ export const nextTreeSelection = (
         parentKey: target.parentKey,
         parentTrail: target.parentTrail,
         openKey,
+        selecting: live?.selecting,
     };
 };

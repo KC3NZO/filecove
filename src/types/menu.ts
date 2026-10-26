@@ -47,6 +47,11 @@ export interface MenuRequest {
     listing?: FileEntry[];
     /** The entries are results of a search everywhere, whose folder isn't the open one. */
     inResults?: boolean;
+    /**
+     * Starts the sidebar tree's touch selection mode with the entries selected, for a menu a
+     * long-press on a tree folder opened (`ActionContext.select`).
+     */
+    select?: () => void;
 }
 
 /** Opens the context menu. Returns false when no action applies, so the browser's own menu can show instead. */
