@@ -19,9 +19,11 @@ import ToolbarActions from "../buttons/toolbar-actions";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon, FolderTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
+import PropertyEditor from "./property-editor";
 
 import type { PropertiesCache } from "../../store/properties-cache";
 import type {
+    EditableField,
     EntryTotals,
     FileEntry,
     Locale,
@@ -49,6 +51,8 @@ interface PropertiesPanelProps {
 
 interface RowProps {
     label: string;
+    /** The label's id, for a field edited in the row. */
+    labelId?: string;
     children: ReactNode;
 }
 
@@ -66,6 +70,10 @@ interface SpinnerProps {
 interface FieldValueProps {
     field: PropertyField;
     onCopy: (field: PropertyField & { type: "text" }) => void;
+    /** Opens the field for editing; missing when it can't be edited. */
+    onEdit?: () => void;
+    /** Takes the focus as its Edit button mounts, given back to it as its editing closes. */
+    editRef?: (button: HTMLButtonElement | null) => void;
 }
 
 interface ContentsProps {
@@ -82,10 +90,19 @@ interface ContentsProps {
     onRetry: () => void;
 }
 
-/** Something copied, for the panel's own live region; `id` counts, so copying twice is heard twice. */
-interface Copied {
+/**
+ * Something said from the panel's own live region, a value copied or a field saved; `id` counts,
+ * so the same thing twice is heard twice.
+ */
+interface Said {
     message: string;
     id: number;
+}
+
+/** The field being edited, of the entry with that id. */
+interface Editing {
+    entryId: string;
+    fieldId: string;
 }
 
 // The sides of the square the panel asks the adapter's thumbnail for, in rem, smallest first: the
@@ -100,8 +117,8 @@ const INLINE_ACTIONS = 2;
 
 const NO_ACTIONS: readonly ToolbarGroup[] = [];
 
-/** How long the message that something was copied stays for screen readers, in ms. */
-const COPIED_FOR = 5000;
+/** How long a message from the panel's live region stays for screen readers, in ms. */
+const SAID_FOR = 5000;
 
 const messageOf = (error: unknown) => (error instanceof Error && error.message ? error.message : undefined);
 
@@ -233,6 +250,10 @@ const tagsSx: SxProps<Theme> = {
     gap: 0.5,
 };
 
+const notSetSx: SxProps<Theme> = {
+    color: "text.secondary",
+};
+
 const stateSx: SxProps<Theme> = {
     display: "flex",
     alignItems: "center",
@@ -245,9 +266,9 @@ const stateSx: SxProps<Theme> = {
     fontSize: "0.875rem",
 };
 
-const Row = ({ label, children }: RowProps) => (
+const Row = ({ label, labelId, children }: RowProps) => (
     <Box sx={rowSx}>
-        <dt>{label}</dt>
+        <dt id={labelId}>{label}</dt>
         <dd>{children}</dd>
     </Box>
 );
@@ -286,7 +307,7 @@ const typeWithMime = ({ text, describeType }: Locale, entry: FileEntry) =>
         : describeType(entry);
 
 /** A value of the backend's own, written out in the locale. */
-const FieldValue = ({ field, onCopy }: FieldValueProps) => {
+const FieldText = ({ field, onCopy }: FieldValueProps) => {
     const { text, formatCount, formatSize, formatDate } = useLocale();
 
     switch (field.type) {
@@ -328,6 +349,35 @@ const FieldValue = ({ field, onCopy }: FieldValueProps) => {
     }
 };
 
+/** Whether a field can be changed in the properties, by its type and the backend's say. */
+const isEditable = (field: PropertyField): field is EditableField =>
+    (field.type === "text" || field.type === "tags") && !!field.editable;
+
+/** A value of the backend's own, written out in the locale, with its Edit button when it can be changed. */
+const FieldValue = ({ field, onCopy, onEdit, editRef }: FieldValueProps) => {
+    const { text } = useLocale();
+    const empty = field.type === "text" || field.type === "tags" ? field.value.length === 0 : false;
+
+    if (!onEdit) {
+        return <FieldText field={field} onCopy={onCopy} />;
+    }
+
+    return (
+        <>
+            {empty ? (
+                <Box component="span" sx={notSetSx}>
+                    {text.propertiesNotSet}
+                </Box>
+            ) : (
+                <FieldText field={field} onCopy={onCopy} />
+            )}
+            <TooltipIconButton ref={editRef} label={text.propertiesEdit(field.label)} size="small" onClick={onEdit}>
+                <Icon name="edit" fontSize="small" />
+            </TooltipIconButton>
+        </>
+    );
+};
+
 /**
  * What's in folders, counted all the way down, or several entries with what's in their folders, the
  * selected files added in and the selected folders among the folders, counting up while it's
@@ -363,8 +413,9 @@ const Contents = ({ totals, files, folders, bytes, counted, fallback, onRetry }:
  * An entry's properties, or several entries' together: its picture and name, what the listing
  * says of it (type, size or contents, location, dates, dimensions, length), and what its adapter
  * adds, the fuller entry and properties of the backend's own (`properties`), and what's in folders
- * (`measure`), with the host's actions for it in the header. It knows nothing of where it's shown,
- * so it can sit beside any view of files, and has its own live region, saying what was copied.
+ * (`measure`), with the host's actions for it in the header. The backend's fields it marks editable
+ * are changed in place and saved (`updateProperties`). It knows nothing of where it's shown, so it
+ * can sit beside any view of files, and has its own live region, saying what was copied or saved.
  */
 const PropertiesPanel = ({
     items,
@@ -384,7 +435,13 @@ const PropertiesPanel = ({
     const bodyRef = useRef<HTMLDivElement>(null);
     const [pictureSize, setPictureSize] = useState(PICTURE_SIZES[0]);
     const titleId = useId();
-    const [copied, setCopied] = useState<Copied | null>(null);
+    const fieldId = useId();
+    const [said, setSaid] = useState<Said | null>(null);
+    const [editing, setEditing] = useState<Editing | null>(null);
+    // The field whose Edit button takes the focus back as its editing closes, while nothing else
+    // has taken it meanwhile.
+    const returnFocus = useRef<string | null>(null);
+    const mounted = useRef(false);
 
     useEffect(() => {
         if (takeFocus) {
@@ -415,24 +472,77 @@ const PropertiesPanel = ({
     }, []);
 
     useEffect(() => {
-        if (!copied) {
+        mounted.current = true;
+
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!said) {
             return;
         }
 
-        const timer = window.setTimeout(() => setCopied(null), COPIED_FOR);
+        const timer = window.setTimeout(() => setSaid(null), SAID_FOR);
 
         return () => window.clearTimeout(timer);
-    }, [copied]);
+    }, [said]);
+
+    const say = (message: string) => setSaid((prev) => ({ message, id: (prev?.id ?? 0) + 1 }));
 
     const copy = (field: PropertyField & { type: "text" }) => {
         navigator.clipboard.writeText(field.value).then(
-            () => setCopied((prev) => ({ message: text.propertiesCopied(field.label), id: (prev?.id ?? 0) + 1 })),
+            () => say(text.propertiesCopied(field.label)),
             () => undefined,
         );
     };
 
     const [only] = items;
     const single = items.length === 1 ? only : undefined;
+
+    // Editing ends as the panel shows something else; an edit being saved, or that failed, is the
+    // cache's, and shows again as the panel comes back to it.
+    if (editing && editing.entryId !== single?.entry.id) {
+        setEditing(null);
+    }
+
+    const canEdit = !!single && !!single.adapter.updateProperties && !single.readOnly;
+
+    const saveField = (field: EditableField, value: string | readonly string[]) => {
+        if (!single) {
+            return;
+        }
+
+        returnFocus.current = field.id;
+        setEditing(null);
+        cache.saveProperty(single.entry, single.adapter, field.id, value, single.onUpdated).then((saved) => {
+            if (saved && mounted.current) {
+                say(text.propertiesSaved(field.label));
+            }
+        });
+    };
+
+    const cancelEdit = (field: EditableField) => {
+        returnFocus.current = field.id;
+        setEditing(null);
+
+        if (single) {
+            cache.dropSave(single.entry, single.adapter, field.id);
+        }
+    };
+
+    // The Edit button takes the focus back as the field's editing closes, unless the focus went
+    // elsewhere first, as it does when leaving the field saved it.
+    const editRefFor = (id: string) => (button: HTMLButtonElement | null) => {
+        if (button && returnFocus.current === id) {
+            returnFocus.current = null;
+
+            if (!document.activeElement || document.activeElement === document.body) {
+                button.focus();
+            }
+        }
+    };
     // What `properties` handed over, or while a changed entry is asked about again, what it handed
     // over before.
     const handed =
@@ -602,7 +712,7 @@ const PropertiesPanel = ({
             );
         } else if (handed) {
             backendGroups = handed.groups?.map(
-                (group) =>
+                (group, groupIndex) =>
                     group.fields.length > 0 && (
                         <Box key={group.id} sx={groupSx}>
                             {group.title && (
@@ -611,11 +721,40 @@ const PropertiesPanel = ({
                                 </Typography>
                             )}
                             <Box component="dl" sx={fieldsSx}>
-                                {group.fields.map((field) => (
-                                    <Row key={field.id} label={field.label}>
-                                        <FieldValue field={field} onCopy={copy} />
-                                    </Row>
-                                ))}
+                                {group.fields.map((field, index) => {
+                                    const editable = single && canEdit && isEditable(field) ? field : undefined;
+                                    const save = single && editable && cache.save(single.entry, single.adapter, field.id);
+                                    const opened = editing?.fieldId === field.id;
+                                    // Ids the consumer gives may hold spaces, which an id can't.
+                                    const labelId = editable && `${fieldId}-${groupIndex}-${index}`;
+
+                                    return (
+                                        <Row key={field.id} label={field.label} labelId={labelId}>
+                                            {single && editable && labelId && (save || opened) ? (
+                                                <PropertyEditor
+                                                    key={single.entry.id}
+                                                    field={editable}
+                                                    save={save}
+                                                    labelId={labelId}
+                                                    takeFocus={opened}
+                                                    onSave={(value) => saveField(editable, value)}
+                                                    onCancel={() => cancelEdit(editable)}
+                                                />
+                                            ) : (
+                                                <FieldValue
+                                                    field={field}
+                                                    onCopy={copy}
+                                                    onEdit={
+                                                        single && editable
+                                                            ? () => setEditing({ entryId: single.entry.id, fieldId: field.id })
+                                                            : undefined
+                                                    }
+                                                    editRef={editable && editRefFor(field.id)}
+                                                />
+                                            )}
+                                        </Row>
+                                    );
+                                })}
                             </Box>
                         </Box>
                     ),
@@ -674,7 +813,7 @@ const PropertiesPanel = ({
                 {body}
             </Box>
             <Box role="status" sx={visuallyHiddenSx}>
-                {copied && <span key={copied.id}>{copied.message}</span>}
+                {said && <span key={said.id}>{said.message}</span>}
             </Box>
         </Box>
     );

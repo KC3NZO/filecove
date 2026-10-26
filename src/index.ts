@@ -46,6 +46,7 @@ export type {
     PropertyField,
     PropertyGroup,
     PropertyValue,
+    PropertyValues,
     RefreshOptions,
     RestoreOptions,
     SearchMatch,

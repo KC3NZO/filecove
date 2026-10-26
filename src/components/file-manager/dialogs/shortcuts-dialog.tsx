@@ -33,6 +33,8 @@ interface ShortcutsDialogProps {
     canPreview: boolean;
     /** Whether any section takes uploads, without which nothing pasted is uploaded. */
     canUpload: boolean;
+    /** Whether any section's adapter has `updateProperties`, without which no property is edited. */
+    canEditProperties: boolean;
     /** Whether anything the file manager does can be undone, without which there's no Undo and Redo. */
     canUndo: boolean;
     onClose: () => void;
@@ -73,6 +75,7 @@ interface SectionOptions {
     choosesSections: boolean;
     canPreview: boolean;
     canUpload: boolean;
+    canEditProperties: boolean;
     canUndo: boolean;
 }
 
@@ -87,6 +90,7 @@ const ownSections = ({
     choosesSections,
     canPreview,
     canUpload,
+    canEditProperties,
     canUndo,
 }: SectionOptions) => {
     // Back and forward, and expanding and collapsing, swap right to left, as the arrows on the
@@ -108,6 +112,10 @@ const ownSections = ({
                 { label: text.shortcutToggleHidden, combos: [["Ctrl", "H"]] },
                 { label: text.shortcutToggleProperties, combos: [["Alt", "Enter"]] },
                 { label: text.shortcutResizePanes, combos: [[start], [end]], yields: false },
+                // In a field, where the consumer's shortcuts don't run.
+                ...(canEditProperties
+                    ? [{ label: text.shortcutSaveProperty, combos: [["Enter"], ["Ctrl", "Enter"]], yields: false as const }]
+                    : []),
                 // In the content only, so the browser's own zoom still works elsewhere.
                 { label: text.zoomIn, combos: [["Ctrl", "+"]] },
                 { label: text.zoomOut, combos: [["Ctrl", "-"]] },
@@ -350,6 +358,7 @@ const ShortcutsDialog = ({
     choosesSections,
     canPreview,
     canUpload,
+    canEditProperties,
     canUndo,
     onClose,
     onClosed,
@@ -361,7 +370,16 @@ const ShortcutsDialog = ({
     const rtl = dir === "rtl";
 
     const sections = useMemo(() => {
-        const own = ownSections({ text, rtl, canSearchEverywhere, choosesSections, canPreview, canUpload, canUndo });
+        const own = ownSections({
+            text,
+            rtl,
+            canSearchEverywhere,
+            choosesSections,
+            canPreview,
+            canUpload,
+            canEditProperties,
+            canUndo,
+        });
         // Only the content's and the tree's shortcuts, and the main menu's, come before keys of the
         // file manager's own; the preview's and the panel's work there alone.
         const theirs = consumerRows([actions, previewActions, propertiesActions], mainMenu);
@@ -390,6 +408,7 @@ const ShortcutsDialog = ({
         choosesSections,
         canPreview,
         canUpload,
+        canEditProperties,
         canUndo,
         actions,
         previewActions,

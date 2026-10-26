@@ -399,6 +399,15 @@ export type PropertyValue =
           value: string;
           /** Gives it a button that copies it, e.g. for a checksum or an address. */
           copyable?: boolean;
+          /**
+           * Lets the user change it in the properties, saved through `updateProperties`, e.g. a
+           * picture's alt text or caption. Its `id` is then unique among the entry's groups.
+           */
+          editable?: boolean;
+          /** Edited over several lines, e.g. a caption or a description. */
+          multiline?: boolean;
+          /** How many characters it takes at most, while it's edited. */
+          maxLength?: number;
       }
     | { type: "number"; value: number }
     | { type: "size"; value: number }
@@ -410,7 +419,15 @@ export type PropertyValue =
           /** Where it goes, opened in a new tab. */
           href: string;
       }
-    | { type: "tags"; value: readonly string[] };
+    | {
+          type: "tags";
+          value: readonly string[];
+          /**
+           * Lets the user add and remove tags in the properties, saved through `updateProperties`.
+           * Its `id` is then unique among the entry's groups.
+           */
+          editable?: boolean;
+      };
 
 /** A property of the backend's own, such as an owner, permissions or a checksum, with its label. */
 export type PropertyField = PropertyValue & {
@@ -438,6 +455,12 @@ export interface EntryProperties {
     /** The backend's own properties, shown after the file manager's. */
     groups?: PropertyGroup[];
 }
+
+/**
+ * New values of an entry's editable properties, by their fields' ids: text for a text field, trimmed,
+ * and for tags, the tags, trimmed, each once, none empty.
+ */
+export type PropertyValues = Record<string, string | readonly string[]>;
 
 /** Everything in some folders, counted all the way down (`measure`). */
 export interface EntryTotals {
@@ -628,6 +651,16 @@ export interface FileAdapter {
      * its message in their place.
      */
     properties?(entry: FileEntry, options: PropertiesOptions): Promise<EntryProperties>;
+    /**
+     * Saves what the user changed of an entry's properties, the fields `properties` marked
+     * `editable`, by their ids, one field at a time from the properties panel. Resolve with the
+     * entry's properties as they now are, to show what the backend made of them, or with nothing,
+     * and the values given show as they were saved. Reject with an `Error` to show its message
+     * under the field, which stays as the user left it, to try again. Fields are only edited where
+     * the entry's folder can change, so not in a `readOnly` section or the trash; leave `editable`
+     * out of what the backend won't let the user change. Without it, nothing is editable.
+     */
+    updateProperties?(entry: FileEntry, values: PropertyValues, options: OperationOptions): Promise<EntryProperties | void>;
     /**
      * Counts everything in folders, all the way down, for the properties panel: how many files and
      * folders, and the files' sizes added up, together for all of them. The folders may be in

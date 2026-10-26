@@ -20,6 +20,7 @@ import { groupByFolder, selectionRequest } from "../../utils/groups";
 import { joinIsolated } from "../../utils/bidi";
 import { folderOf } from "../../utils/navigation";
 import { clampWidth } from "../../utils/resize";
+import { sectionLocked } from "../../utils/sections";
 import { typesInField } from "../../utils/shortcut";
 import { inTrashRoot } from "../../utils/trash";
 import PropertiesPanel from "../properties/properties-panel";
@@ -29,6 +30,7 @@ import type { PropertiesCache } from "../../store/properties-cache";
 import type {
     ActionContext,
     ActionGroup,
+    FileAdapter,
     FileEntry,
     FolderRef,
     MenuRequest,
@@ -67,6 +69,8 @@ interface PropertiesPaneProps {
     contextFor: (request: MenuRequest) => ActionContext;
     /** Where an entry in `trash`'s root was moved there from, written out. */
     locateTrashed: (trash: Section, info: TrashInfo) => string;
+    /** Lists folders again, in every section the adapter serves, once an entry's properties are saved. */
+    relist: (adapter: FileAdapter, folderIds: string[]) => void;
     /** The panel's close button. */
     onClose: () => void;
     /** Escape in the panel. */
@@ -190,6 +194,7 @@ const PropertiesPane = ({
     actions,
     contextFor,
     locateTrashed,
+    relist,
     onClose,
     onEscape,
     onFocusOut,
@@ -255,11 +260,17 @@ const PropertiesPane = ({
             store.get(folderKey(section.id, folderOf(section, trail).id))?.entries?.find((entry) => entry.id === id);
 
         // Rename, "Open item location" and "Open original location", as the context menu offers
-        // them for the one entry.
+        // them for the one entry, and whether its fields can be edited: not where its folder can't
+        // change, nor while a move is moving it.
         const actionsFor = (request: MenuRequest) => {
             const context = contextFor(request);
 
-            return { rename: context.rename, openLocation: context.openLocation, openOrigin: context.openOrigin };
+            return {
+                rename: context.rename,
+                openLocation: context.openLocation,
+                openOrigin: context.openOrigin,
+                readOnly: context.readOnly || context.moving,
+            };
         };
         // An entry right in a trash's root is shown where it was moved there from.
         const trashedOf = (section: Section, trail: FolderRef[], entry: FileEntry) =>
@@ -307,6 +318,11 @@ const PropertiesPane = ({
                     childCount: own?.status === "ready" && !own.partial ? own.entries?.length : undefined,
                     rename: actions?.rename,
                     openOrigin: actions?.openOrigin,
+                    // A section's root is the consumer's, and changes as its section allows.
+                    readOnly: actions?.readOnly ?? sectionLocked(section),
+                    // What lists it, as a saved property may change what's listed of it.
+                    onUpdated:
+                        trail.length > 0 ? () => relist(served, [folderOf(section, parentTrail).id]) : undefined,
                 },
             ];
         }
@@ -324,18 +340,22 @@ const PropertiesPane = ({
                       })
                     : undefined;
 
+            const served = section.adapter ?? adapter;
+
             return {
                 entry: now,
-                adapter: section.adapter ?? adapter,
+                adapter: served,
                 location: locationOf(section, trail),
                 trashed: trashedOf(section, trail, now),
                 rename: actions?.rename,
                 openLocation: actions?.openLocation,
                 openOrigin: actions?.openOrigin,
+                readOnly: actions?.readOnly,
+                onUpdated: () => relist(served, [folderOf(section, trail).id]),
             };
         });
         // `listings` stands for the listings read through the store.
-    }, [visible, subject, store, adapter, contextFor, locateTrashed, listings]);
+    }, [visible, subject, store, adapter, contextFor, locateTrashed, relist, listings]);
 
     // The app's actions in the header, for what the panel shows: its entries, by folder when they're
     // in several, as the context menu's are, or else the folder it shows.

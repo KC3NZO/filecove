@@ -1579,6 +1579,12 @@ const FileManager = ({
         [sections, adapter],
     );
 
+    // Whether a property can be edited anywhere, for the keyboard shortcuts window.
+    const canEditProperties = useMemo(
+        () => sections.some((group) => group.sections.some((shown) => !!(shown.adapter ?? adapter).updateProperties)),
+        [sections, adapter],
+    );
+
     // Sections a search everywhere leaves out, kept while the file manager is mounted, so a section
     // added later is searched. Ids of sections gone, or that can't be searched, don't count, and
     // leaving out every section left counts as leaving out none.
@@ -5918,6 +5924,7 @@ const FileManager = ({
                                                     actions={propertiesActions}
                                                     contextFor={contextFor}
                                                     locateTrashed={locateIn}
+                                                    relist={relist}
                                                     onClose={closeProperties}
                                                     onEscape={handlePropertiesEscape}
                                                     onFocusOut={handlePropertiesFocusOut}
@@ -6012,6 +6019,7 @@ const FileManager = ({
                                         choosesSections={searchTargets.length > 1}
                                         canPreview={canPreview}
                                         canUpload={canUpload}
+                                        canEditProperties={canEditProperties}
                                         canUndo={canUndo}
                                         onClose={closeShortcuts}
                                         onClosed={handleShortcutsClosed}

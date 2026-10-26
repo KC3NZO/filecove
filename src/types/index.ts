@@ -22,6 +22,7 @@ export type {
     PropertyField,
     PropertyGroup,
     PropertyValue,
+    PropertyValues,
     RestoreOptions,
     SearchMatch,
     SearchOptions,
@@ -61,7 +62,15 @@ export type {
 export type { FileManagerLocation, HistoryStop, LocationChangeReason, PlaceName } from "./navigation";
 export type { PreviewContent, PreviewKind, PreviewPlan, TextExcerpt } from "./preview";
 export type { FilePreviewer, PreviewerProps, PreviewerReads } from "./previewer";
-export type { CountTarget, PropertiesItem, PropertiesSubject, Requested, SubjectEntry } from "./properties";
+export type {
+    CountTarget,
+    EditableField,
+    PropertiesItem,
+    PropertiesSubject,
+    PropertySave,
+    Requested,
+    SubjectEntry,
+} from "./properties";
 export type { FileManagerSearch, SearchHit, SearchScope, SearchTarget, SectionSearch } from "./search";
 export type { FolderRef, Section, SectionFolder, SectionGroup, SectionImports } from "./section";
 export type {

@@ -1,6 +1,6 @@
 // Internal to the package, not exported from the package entry.
 
-import type { FileAdapter, FileEntry } from "./adapter";
+import type { FileAdapter, FileEntry, PropertyField } from "./adapter";
 import type { FolderRef, Section } from "./section";
 
 /**
@@ -29,7 +29,22 @@ export interface PropertiesItem {
     openLocation?: () => void;
     /** Opens the folder it was moved to a trash from, for an entry in a trash; missing otherwise. */
     openOrigin?: () => void;
+    /**
+     * Whether its fields can't be edited here, though the adapter marks them editable: the folder
+     * it's in can't change, as in a read-only section or a trash, or a move under way is moving it.
+     */
+    readOnly?: boolean;
+    /** Told once its properties are saved, so what lists it can be listed again. */
+    onUpdated?: () => void;
 }
+
+/** A field of the backend's own the user can change in the properties: text, or a list of tags. */
+export type EditableField = Extract<PropertyField, { type: "text" | "tags" }>;
+
+/** A field's edit being saved, or that failed, with the value given, kept until it's saved or dropped. */
+export type PropertySave =
+    | { status: "saving"; value: string | readonly string[] }
+    | { status: "error"; value: string | readonly string[]; error: unknown };
 
 /**
  * What was asked of the adapter for the properties: on its way, with what's come so far when it

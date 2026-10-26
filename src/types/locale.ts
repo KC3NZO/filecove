@@ -225,6 +225,22 @@ export interface PropertiesLocaleText {
     propertiesCopy: (label: string) => string;
     /** Read once a value is copied; `label` is the property's. */
     propertiesCopied: (label: string) => string;
+    /** The button that edits a property the backend lets the user change; `label` is the property's. */
+    propertiesEdit: (label: string) => string;
+    /** In place of an editable property's value while it has none. */
+    propertiesNotSet: string;
+    /** The button saving an edited property. */
+    propertiesSave: string;
+    /** The button leaving an edited property as it was. */
+    propertiesCancel: string;
+    /** Read once an edited property is saved; `label` is the property's. */
+    propertiesSaved: (label: string) => string;
+    /** Why an edited property couldn't be saved, when the adapter didn't say; `label` is the property's. */
+    propertiesSaveFailed: (label: string) => string;
+    /** Names the field adding a tag to an editable list of tags. */
+    propertiesAddTag: string;
+    /** Names a tag in an editable list of tags, which removes it; `tag` is isolated. */
+    propertiesRemoveTag: (tag: string) => string;
 }
 
 /**
@@ -705,6 +721,8 @@ export interface FileManagerLocaleText
     shortcutToggleProperties: string;
     /** The arrow keys on the edge of the docked sidebar or properties, which resize them. */
     shortcutResizePanes: string;
+    /** Enter, or Ctrl+Enter over several lines, saving a property being edited in the properties. */
+    shortcutSaveProperty: string;
     /** F6, between the sidebar tree, the content and the docked properties. */
     shortcutSwitchPane: string;
     shortcutExpand: string;

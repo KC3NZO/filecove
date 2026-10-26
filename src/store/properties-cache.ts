@@ -1,4 +1,13 @@
-import type { CountTarget, EntryProperties, EntryTotals, FileAdapter, FileEntry, Requested } from "../types";
+import type {
+    CountTarget,
+    EntryProperties,
+    EntryTotals,
+    FileAdapter,
+    FileEntry,
+    PropertyField,
+    PropertySave,
+    Requested,
+} from "../types";
 
 /**
  * How long something stays shown before the adapter is asked about it, in ms, so moving through a
@@ -58,6 +67,27 @@ const sameTargets = (a: readonly CountTarget[], b: readonly CountTarget[]) =>
 
 const sameFolders = (a: Count, b: Count) => a.showHidden === b.showHidden && sameTargets(a.targets, b.targets);
 
+/** A field's edit, kept by the entry's id and the field's, so it outlives the entry being listed anew. */
+const saveKey = (entry: FileEntry, fieldId: string) => JSON.stringify([entry.id, fieldId]);
+
+/** A field with the value saved, when the value is of its type. */
+const withSaved = (field: PropertyField, value: string | readonly string[]): PropertyField => {
+    if (field.type === "text" && typeof value === "string") {
+        return { ...field, value };
+    }
+
+    return field.type === "tags" && typeof value !== "string" ? { ...field, value } : field;
+};
+
+/** The properties with a field's value as it was saved, for an adapter resolving with nothing. */
+const withValue = (properties: EntryProperties, fieldId: string, value: string | readonly string[]) => ({
+    ...properties,
+    groups: properties.groups?.map((group) => ({
+        ...group,
+        fields: group.fields.map((field) => (field.id === fieldId ? withSaved(field, value) : field)),
+    })),
+});
+
 /**
  * What adapters handed over for the properties panel: an entry's properties (`properties`), kept by
  * the entry object, which a listing keeps for as long as the entry is as it was, and what's in
@@ -72,6 +102,9 @@ export const createPropertiesCache = () => {
     // The latest properties that came for each entry, by adapter and id, to stand in while an entry
     // listed anew as it changed is asked about again.
     const latest = new WeakMap<FileAdapter, Map<string, EntryProperties>>();
+    // Edits being saved, or that failed, by adapter, then entry and field, so they outlive the panel
+    // moving on to something else, and show again as it comes back.
+    const saves = new WeakMap<FileAdapter, Map<string, PropertySave>>();
     // Asked for longest ago first.
     let counts: Count[] = [];
     const listeners = new Set<() => void>();
@@ -278,7 +311,8 @@ export const createPropertiesCache = () => {
                             (error: unknown): Requested<EntryProperties> => ({ status: "error", error }),
                         )
                         .then((state) => {
-                            if (signal.aborted) {
+                            // An edit saved meanwhile has set them, as they are after it.
+                            if (signal.aborted || details.has(entry)) {
                                 return;
                             }
 
@@ -308,6 +342,92 @@ export const createPropertiesCache = () => {
             details.delete(entry);
             latest.get(adapter)?.delete(entry.id);
             notify();
+        },
+
+        /** A field's edit being saved, or that failed, or undefined when there's none. */
+        save(entry: FileEntry, adapter: FileAdapter, fieldId: string): PropertySave | undefined {
+            return saves.get(adapter)?.get(saveKey(entry, fieldId));
+        },
+
+        /**
+         * Saves a field's new value through the adapter's `updateProperties`, kept meanwhile and,
+         * should it fail, until it's saved or dropped, wherever the panel has gone. What the adapter
+         * resolves with shows as the entry's properties, or else what was shown with the value saved.
+         * Resolves with whether it was saved.
+         */
+        saveProperty(
+            entry: FileEntry,
+            adapter: FileAdapter,
+            fieldId: string,
+            value: string | readonly string[],
+            onSaved?: () => void,
+        ): Promise<boolean> {
+            let kept = saves.get(adapter);
+
+            if (!kept) {
+                kept = new Map();
+                saves.set(adapter, kept);
+            }
+
+            const held = kept;
+            const key = saveKey(entry, fieldId);
+            const save: PropertySave = { status: "saving", value };
+
+            held.set(key, save);
+            notify();
+
+            // Wrapped so an adapter that throws synchronously still fails the save. Nothing calls it
+            // off once it's sent, as the change may have been made by then.
+            return Promise.resolve()
+                .then(() => {
+                    if (!adapter.updateProperties) {
+                        throw new Error("The adapter has no `updateProperties`.");
+                    }
+
+                    return adapter.updateProperties(entry, { [fieldId]: value }, { signal: new AbortController().signal });
+                })
+                .then(
+                    (saved) => {
+                        if (held.get(key) !== save) {
+                            return false;
+                        }
+
+                        const before = details.get(entry);
+                        const shown = before?.status === "ready" ? before.value : standInOf(entry, adapter);
+                        const now = saved ?? (shown ? withValue(shown, fieldId, value) : undefined);
+
+                        held.delete(key);
+
+                        if (now) {
+                            details.set(entry, { status: "ready", value: now });
+                            keepLatest(entry, adapter, now);
+                        }
+
+                        notify();
+                        onSaved?.();
+
+                        return true;
+                    },
+                    (error: unknown) => {
+                        if (held.get(key) === save) {
+                            held.set(key, { status: "error", value, error });
+                            notify();
+                        }
+
+                        return false;
+                    },
+                );
+        },
+
+        /** Forgets a field's edit that failed, as the user leaves the field as it was. */
+        dropSave(entry: FileEntry, adapter: FileAdapter, fieldId: string) {
+            const kept = saves.get(adapter);
+            const key = saveKey(entry, fieldId);
+
+            if (kept?.get(key)?.status === "error") {
+                kept.delete(key);
+                notify();
+            }
         },
 
         /**

@@ -13,6 +13,7 @@ import type {
     ListResult,
     MediaInfo,
     PropertyGroup,
+    PropertyValues,
     SearchMatch,
     SearchResult,
     TransferOptions,
@@ -42,6 +43,8 @@ export interface MockNode {
      * `permissions`, and the adapter refuses changing them anyway, as a backend would.
      */
     readOnly?: boolean;
+    /** Properties the user saved, by their fields' ids, kept with the node as it's moved or copied. */
+    properties?: PropertyValues;
 }
 
 interface MockAdapterOptions {
@@ -194,6 +197,15 @@ const unreadableIn = (node: MockNode): MockNode | undefined =>
 const hashOf = (text: string) => [...text].reduce((hash, char) => (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0, 7);
 
 const extensionOf = (name: string) => name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+
+const PICTURE_EXTENSIONS = ["avif", "bmp", "gif", "heic", "jpg", "jpeg", "png", "psd", "svg", "tif", "tiff", "webp"];
+
+/** Whether a node is a picture, by its type or its name, uploaded or not, which has alt text and a caption. */
+const isPicture = (node: MockNode) =>
+    !node.children && ((node.mimeType ?? "").startsWith("image/") || PICTURE_EXTENSIONS.includes(extensionOf(node.name)));
+
+/** A saved text property, or none yet. */
+const savedText = (value: string | readonly string[] | undefined) => (typeof value === "string" ? value : "");
 
 const IMAGE_SIZES: [width: number, height: number][] = [
     [1920, 1080],
@@ -464,6 +476,9 @@ export const createMockAdapter = (
             }
         }
     };
+
+    /** Whether an entry is in the trash, where nothing changes but restoring and deleting. */
+    const inTrash = (path: string) => !!trash && path.startsWith(`${trash}/`);
 
     /** A folder to change what's in it: refused when it can't be changed. */
     const writableAt = (path: string) => {
@@ -793,9 +808,10 @@ export const createMockAdapter = (
 
         // An entry's properties as a backend keeps them: when it was made, and what a picture, a
         // video or a piece of audio is like, which listings leave out, made up from its name, with
-        // its owner, its permissions, its path, a checksum for a file, a link to share it and some
-        // tags. What can't be read fails, as `restricted` and `contract.pdf` do. A folder may come
-        // with only its id, as a section's root does.
+        // its owner, its permissions, its path, a checksum for a file, a link to share it, a
+        // picture's alt text and caption, and some tags, the last three editable unless it's
+        // read-only or in the trash, as saved. What can't be read fails, as `restricted` and
+        // `contract.pdf` do. A folder may come with only its id, as a section's root does.
         properties: (entry, { signal }) =>
             respond<EntryProperties>(signal, () => {
                 const node = entry.kind === "folder" ? folderAt(entry.id) : locate(entry).node;
@@ -805,7 +821,12 @@ export const createMockAdapter = (
                     ? new Date(new Date(node.modified).getTime() - ((hash % 120) + 1) * 86_400_000)
                     : undefined;
                 const code = (hash % 46_656).toString(36).padStart(3, "0");
-                const tags = TAGS.filter((_, index) => (hash >>> (index * 3)) % 4 === 0).slice(0, 3);
+                const saved = node.properties ?? {};
+                const editable = !node.readOnly && !locked(entry.id) && !inTrash(entry.id);
+                const tags =
+                    saved.tags && typeof saved.tags !== "string"
+                        ? saved.tags
+                        : TAGS.filter((_, index) => (hash >>> (index * 3)) % 4 === 0).slice(0, 3);
                 const groups: PropertyGroup[] = [
                     {
                         id: "access",
@@ -858,11 +879,60 @@ export const createMockAdapter = (
                     ],
                 });
 
-                if (tags.length > 0) {
-                    groups.push({ id: "labels", fields: [{ id: "tags", label: "Tags", type: "tags", value: tags }] });
+                if (isPicture(node)) {
+                    groups.push({
+                        id: "description",
+                        title: "Description",
+                        fields: [
+                            {
+                                id: "alt",
+                                label: "Alt text",
+                                type: "text",
+                                value: savedText(saved.alt),
+                                editable,
+                                maxLength: 250,
+                            },
+                            {
+                                id: "caption",
+                                label: "Caption",
+                                type: "text",
+                                value: savedText(saved.caption),
+                                editable,
+                                multiline: true,
+                            },
+                        ],
+                    });
+                }
+
+                if (tags.length > 0 || editable) {
+                    groups.push({
+                        id: "labels",
+                        fields: [{ id: "tags", label: "Tags", type: "tags", value: tags, editable }],
+                    });
                 }
 
                 return { entry: { ...entry, createdAt: made, media: mediaOf(node) }, groups };
+            }),
+
+        // Saves what the user changed of an entry's properties with the node, refusing what's
+        // read-only or in the trash, and any value with "fail" in it, to show a save failing. It
+        // resolves with nothing, so the values show as they were given.
+        updateProperties: (entry, values, { signal }) =>
+            respond(signal, () => {
+                const node = entry.kind === "folder" ? folderAt(entry.id) : locate(entry).node;
+                const refused = Object.values(values)
+                    .flat()
+                    .find((value) => /fail/i.test(value));
+
+                if (node.readOnly || locked(entry.id) || inTrash(entry.id)) {
+                    throw new Error(`This ${entry.kind} is read-only.`);
+                }
+
+                if (refused !== undefined) {
+                    throw new Error(`The server refused “${refused}”.`);
+                }
+
+                node.properties = { ...node.properties, ...values };
             }),
 
         // Counts what's in folders by walking the tree, `COUNT_STEP` entries a step, reporting the
