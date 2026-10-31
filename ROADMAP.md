@@ -1,25 +1,37 @@
 # Roadmap
 
-What's left in the features already built, what packaging needs before a release, and the features still to build. Items marked **new** came from a source audit on 2026-10-23 and aren't in the rules' "Not yet" lists. Tick an item off once it's done, and add new ones here, so this list stays the one place to look.
+What's left in the two components, `FileManager` and `MediaManager`, what they share, and what packaging needs before a release. Each component has its gaps (in what's built) and its features (still to build), each split into **necessary**, needed before a first release, and **optional**, worth doing when an app asks or there's time. What's done stays below each, ticked, so it's clear what was decided. Items marked **new** came from a source audit on 2026-10-23. Tick an item off once it's done, and add new ones here, so this list stays the one place to look.
 
 ## Order
 
-1. ~~Re-list a folder in the background when it opens, showing the cached listing meanwhile, with a prop to turn it off (A, "Folder data and cache").~~ Done 2026-10-23.
-2. ~~Tooltips on icon-only buttons, selection that shows in Windows High Contrast mode, and screen-reader announcements when operations finish (A, "Interface polish" and "Operations").~~ Done 2026-10-23.
-3. ~~Properties, then folder upload (C).~~ Folder upload and properties done 2026-10-24.
-4. The media manager (C.4). Its look and feel, browsing and choosing, are in (2026-10-27), reworked to the contract settled on paper (2026-10-31: the consumer's fields, properties and previewers); holding Choose back, uploading and processing come next.
-5. Packaging, in one pass before a release (B), as the last step.
+1. ~~Re-listing folders in the background, tooltips, high contrast and announcements, properties, folder upload.~~ Done 2026-10-23 to 2026-10-24.
+2. The media manager's necessary gaps and features, in the order listed below: the contract's open points first (`fields` on the section, `value` / `onChange`), then holding Choose back, the errors no field claims, virtualizing the grid, uploading and processing.
+3. Packaging, in one pass before a release, as the last step.
 
-## A. Gaps in features already built
+Everything optional waits until then, unless an app needs it.
 
-### Folder data and cache
-- [x] **new:** Once a folder is listed, opening it again shows the saved copy and never asks the adapter again. Changes made elsewhere (another user, another tab) only show after a refresh. There's no re-check when a folder opens, no expiry, and no adapter `watch`. *Done 2026-10-23: a folder opened again (content, tree, picker) is listed again in the background, `relistAfter` (default 0, `Infinity` for never) sets how old a listing may be first, and unchanged entries keep their objects. An adapter `watch` stays under "Optional ideas".*
+---
+
+## File manager
+
+### Gaps
+
+#### Necessary
+None left. The file manager's own gaps are closed; what's still open for it is shared with the media manager (see "Shared") or optional.
+
+#### Optional
+- [ ] A menu tall enough to scroll puts its scrollbar padding on the wrong side, right to left.
+
+#### Done
+
+**Folder data and cache**
+- [x] **new:** Once a folder is listed, opening it again shows the saved copy and never asks the adapter again. Changes made elsewhere (another user, another tab) only show after a refresh. There's no re-check when a folder opens, no expiry, and no adapter `watch`. *Done 2026-10-23: a folder opened again (content, tree, picker) is listed again in the background, `relistAfter` (default 0, `Infinity` for never) sets how old a listing may be first, and unchanged entries keep their objects. An adapter `watch` stays under the optional features.*
 - [x] **new:** Saved listings are never dropped while the component is open. Thumbnails stop at 1,000; folder listings have no limit. *Done 2026-10-23: listings nothing shows are dropped beyond 20,000 entries, longest unseen first, never one with a kept listing below it.*
 - [x] **new:** With an empty `sections` (say, while the app is still loading them) the content area is blank, with no message. *Done 2026-10-23: "No sections to show", folder-only buttons disabled, and the first section to come starts expanded.*
 - [x] A section rooted further below a changed folder only updates if that folder happens to be loaded (known limit). *Done 2026-10-23: after a folder is deleted, moved or renamed, a section that doesn't list it lists what it shows again at once, and every listing of the adapter's sections is checked again as it opens.*
 - [x] **new:** A folder that a paste or move with Replace put another in the place of kept its old listing, so an expanded tree row showed the old contents. *Done 2026-10-23: replaced folders go through `dropFolders`.*
 
-### Operations (create, rename, copy, move, delete, paste)
+**Operations (create, rename, copy, move, delete, paste)**
 - [x] A non-modal panel for long copies and moves. *Done 2026-10-25: the picker, pastes and drops hand the copy or move to a transfer queue once its names are settled and close, three running at once; one taking over 500 ms shows in a panel above the download panel, with its bytes when the adapter reports them (`TransferOptions.onProgress`), and cancelling; one that's done leaves it, announced; one that fails stays with the adapter's error and Try again, which checks the destination's names again for what its folder still lists. A cut leaves the clipboard as its paste starts, and a paste no longer waits for the one before (see `transfers.md`).*
 - [x] **new:** A failed copy or move can't say which of its entries went through, since it's one adapter call; Try again goes by the source's listing. *Done 2026-10-26: `TransferOptions.onEntryDone(entry, made?)`, optional to call, reports each entry as it goes; a transfer that then fails or is cancelled keeps what went (`TransferItem.went`), its row says "2 of 5 items copied" and names what's left, Try again goes for the rest, the moves among what went leave the source, and what went goes in the undo history as a change of its own, "Copied 2 of 5 items to “Photos”" with Undo, after the history ends (see `transfers.md` and "Failing partway" in `undo.md`).*
 - [x] **new (minor):** Entries being moved aren't marked while the move runs, and can be acted on meanwhile. *Done 2026-10-25: entries a move is moving, waiting or under way, and everything in a folder being moved, fade with a busy pointer wherever they're listed (the list, the grid, search results, the tree, a section rooted in one) and read "Being moved", until it ends. Meanwhile they aren't renamed, moved, cut, copied, deleted, dragged or pasted from the clipboard, nothing goes into a folder being moved (the picker disables them, "This folder is being moved"), a failed transfer isn't tried again while its entries or destination are, and `ActionContext.moving` lets an app's own actions hide; opening, previewing, downloading and the properties stay (see "While a move runs" in `transfers.md`).*
@@ -33,14 +45,13 @@ What's left in the features already built, what packaging needs before a release
 - [x] **new (minor):** Uploaded files' and folders' names aren't put through `checkName` before they're queued, so one the backend refuses only fails in the panel. *Done 2026-10-25: the upload check leaves out the files and folders given whose names `checkName` refuses, saying why (`uploadNamesRefused`), and the queue checks what's inside uploaded folders before each folder is made or file sent, failing a refused name with the adapter's message, without the call, listed under the folder's row (see `uploads.md`).*
 - [x] Copied entries inside a folder that was then renamed keep their old ids, so pasting them fails with the adapter's error. *Done 2026-10-24: the clipboard follows a folder above its entries renamed to a new id, finding the folders below it and the entries again by name, and after a change names can't be trusted for (a folder they may be below moved, deleted, or renamed outside their trail, a section rooted below another's changed folder included), lists their folder again and keeps those still there by id, with nothing pasted meanwhile (see "Cut, copy and paste" in `file-manager.md`).*
 
-### Drag and drop
+**Drag and drop**
 - [x] The path bar as a drop target. *Done 2026-10-24: each segment takes entries and files from outside into its folder, by the paste rules, and a drag resting on one opens its folder.*
 - [x] Opening a folder in the content by holding a drag over it. *Done 2026-10-24: in the list, the grid and a search everywhere's results, after 700 ms, but for a folder being dragged, and the drag goes on there. A drag whose source row went with the view still ends.*
 - [x] Opening the collapsed sidebar during a drag. *Done 2026-10-24: resting a drag of entries or files on "Show sidebar" opens the overlay, or shows the hidden docked sidebar over the content, until the drag ends, leaving the hidden setting as it was.*
 - [x] Touch dragging. *Done 2026-10-24: a long-press then moving on drags, in the content, the tree and the results, through the same drop targets and holds as a mouse, with the image by the finger and scrolling near edges. It moves, or copies where only that can be done or with Ctrl or Option held on a keyboard. Lifting after a long-press on a tree row or a result opens its menu, on iOS too.*
 
-### Uploads
-- [x] Uploading folders (planned, C.2). *Done 2026-10-24: dropped, pasted or picked (`ActionContext.uploadFolder`) folders are uploaded with everything in them, through the adapter's `createFolder` and `upload`, one row each in the panel, and a folder whose name is taken is merged into the one there, kept both under a free name, or skipped.*
+**Uploads**
 - [x] **new:** A folder's row in the upload panel doesn't list its files, nor which of them failed and why beyond the first error. *Done 2026-10-24: a chevron on the row unfolds what failed, each by its path with the adapter's error, the first 100 listed and the rest counted.*
 - [x] **new (minor):** Cancelling while a folder of an upload is being made can leave it made without the queue knowing, and Retry then fails, as its name is taken. *Done 2026-10-24: a folder tried before is looked for first and taken as made, and a file tried before in a folder the upload made replaces its own earlier try.*
 - [x] Pasting files from the system clipboard. *Done 2026-10-23: Ctrl+V, ⌘V or Shift+Insert in the content or on a tree row uploads them there, unless the file manager's own cut or copied entries can be pasted there, which come first. The menu's Paste can't (reading the clipboard from a click needs permission), and what a browser hands over from the desktop differs by browser and system.*
@@ -48,7 +59,7 @@ What's left in the features already built, what packaging needs before a release
 - [x] Showing which files just arrived: "Show in folder" on a finished upload in the panel, and a brief highlight in the open folder, never a change to the selection. *Done 2026-10-24: what an upload put in a folder is highlighted for a moment in any view showing that folder, and "Show in folder" on a finished row opens the folder and scrolls to it, with the Tab stop but not the focus. The adapter's `upload` may resolve with the file's entry, to find a file kept under another name.*
 - [x] **new:** The file picker has no `accept` setting, so an app can't limit file types. *Done 2026-10-24: `Section.acceptUploads` takes a string in `accept`'s syntax, offered by the picker, checked for picked, dropped and pasted files, which the upload check leaves out saying which types the section takes, and refused while dragging when the files' types surely don't match. Folders have no rule of their own, by choice (see `uploads.md`).*
 
-### Preview
+**Preview**
 - [x] The app's own actions in the preview's header. *Done 2026-10-24: `previewActions`, as an `ActionContext` for the file shown with `closePreview`, as buttons (four with icons) and a "More actions" menu, all in the menu on a narrow screen, their shortcuts working in the preview; Rename, Delete and Move open over the preview, which follows what they did, and what they announce is said from inside it.*
 - [x] Sliding animation when stepping with the buttons or keys. *Done 2026-10-24: the file slides in from its side as a swipe's does, and Home and End go to the first and last file.*
 - [x] Swiping on past the edge of a zoomed image. *Done 2026-10-24: the finger pans the image to its edge, and the swipe takes the rest of the way.*
@@ -60,23 +71,23 @@ What's left in the features already built, what packaging needs before a release
 - [x] **new:** The text preview stops at 256 kB, reads only UTF-8, and PDFs show nothing on a browser without a PDF viewer. *Done 2026-10-24: Show more reads as much again each time; UTF-16 with its byte order mark and Windows-1252 are decoded; a browser without a viewer gets "Open in a new tab".*
 - [x] **new:** A file renamed, deleted or moved while it's previewed, or replaced under the same id, kept showing as it was. *Done 2026-10-24: the preview follows its folder's listing and the file manager's changes, showing the next file in the place of one that went, and closing with none left; contents are kept by id, size and date.*
 
-### Properties
+**Properties**
 - [x] Editing fields (an adapter `updateProperties`, for the media manager's alt text and caption; fields already carry an `id` for it), designed with the media manager's contract. *Done 2026-10-26: text and tags fields marked `editable` (text with `multiline` and `maxLength`) are changed in place in the panel for one entry, through the adapter's optional `updateProperties(entry, values, options)`, which may resolve with the properties as they now are; saved by Save, Enter or the focus leaving, a failure shown under the field with what was typed kept, saves kept in the properties cache so they finish and their failures come back as the panel moves on and returns. Not in a read-only folder or section, the trash, or while a move holds the entry. The generic contract makes the media manager's alt text and caption plain text fields (see "Editing fields" in `properties.md`).*
 - [x] The app's own actions in the panel's header, designed together with the preview's. *Done 2026-10-24: `propertiesActions`, for its entries or the folder it shows, through the same `ToolbarActions` as the preview's, two as buttons, their shortcuts working in the panel.*
 - [x] Resizing the docked panel. *Done 2026-10-25: by dragging its edge (mouse, pen or touch), Left, Right, Home and End on it as a focusable `separator`, and a double click back to the default, from 240px to 480px, the content keeping room for the list's size and date columns beside it; `propertiesWidth` / `defaultPropertiesWidth` / `onPropertiesWidthChange` control it, told once per drag. The picture asks for a larger thumbnail as the panel widens, a step at a time.*
 - [x] A picture larger than the grid's thumbnail in the properties panel. *Done 2026-10-25: it fills the panel's width, asked of the adapter at 17rem in the grid's view, with the grid's smaller thumbnail standing in, at the same size, while it loads.*
 
-### Thumbnails
+**Thumbnails**
 - [x] A thumbnail in the preview while the file loads. (The sidebar tree and the Move/Copy picker show only folders, so they have no thumbnails to show.) *Done 2026-10-24: the grid's thumbnail stands where the file will be, under the spinner, sized as the image will be when the listing says; it's a video's poster, and the picture of a file with no preview, such as a TIFF.*
 
-### Search
+**Search**
 - [x] Acting on a selection that spans several folders. *Done 2026-10-25: a search's selection is acted on whole, by folder, of one section or several: copying, moving, cutting, copying to the clipboard, dragging, deleting, downloading, previewing and the properties, each folder's adapter asked for its entries. `ActionContext.byFolder` gives the app each section, folder and entries, and only actions marked `acrossFolders` are offered for such a selection. Entries already in the destination stay there on a move, and names shared among them are asked about as clashes, their copies or moves running one after another so each settles against the last (see "Acting on several folders" in `file-manager.md`).*
 - [x] Acting on a selection that spans sections. *Done 2026-10-25: results of several sections are grouped by adapter and folder, an entry two sections sharing an adapter both find acted on once; deleting, downloading, previewing and the properties go through each one's own adapter, and copying and moving through their one adapter when they share it, and across into another's since 2026-10-26 (see "Copying between different adapters" above).*
 - [x] Downloading and previewing a selection from several folders. *Done 2026-10-25: the adapter's optional `downloadAcross(groups, options)` hands entries of several folders over as one file, or without it each folder downloads as its own, and the preview steps through files of several folders and adapters, each following its own folder's listing.*
 - [x] Locations in the grid view. *Done 2026-10-25: a result's tile shows its location under the name in an outlined pill with a folder icon, two lines of text kept as tall as the name's so the tiles are still all one height.*
 - [x] Ordering results by relevance. *Done 2026-10-25: a `relevance` sort key, the default, ranks a search everywhere's results by the adapter's optional `SearchMatch.score` or else by how their names answer what's typed; folders go by name as before.*
 
-### Trash
+**Trash**
 - [x] **new:** A restored entry isn't shown: nothing selects or scrolls to it, and there's no "Open original location" for an entry in the trash. *Done 2026-10-26: what a restore puts back is selected and scrolled to, all of it together, where its folder is open; otherwise the notice has Show beside Undo, opening the first folder it went back to with it selected. `ActionContext.openOrigin()` opens the folder a trashed entry came from, from the menu, the preview's header and the properties (see "Restoring" in `trash.md`).*
 - [x] **new:** The properties of an entry in the trash show where it is, the trash, rather than where it came from. *Done 2026-10-26: "Original location" in place of the location, "Trashed" with when, and "Open original location" under the name (`PropertiesItem.trashed`, `openOrigin`).*
 - [x] **new (minor):** Entries being moved to the trash or restored aren't held meanwhile, as a move's are, since it's quick; acting on them meanwhile is left to the adapter. *Done 2026-10-26: they go into `moving` beside the moves' entries, by the user or an undo or redo, so they're marked and refused as a move's are until the adapter answers. They read "Being moved", the moves' wording, which got wording of its own the same day, below.*
@@ -88,80 +99,127 @@ What's left in the features already built, what packaging needs before a release
 - [x] **new:** Restore was offered into folders whose permissions refuse writing, or that a move or the trash's work holds. *Done 2026-10-26: it's missing then, by the backend's permissions (`folderPermits`) whichever section shows the folder.*
 - [x] **new:** The trash couldn't be ordered by its Original location column, nor a search's results by their Location, as GNOME's and Windows' trashes are. *Done 2026-10-26: the `sort` key "location", from the column's header and the view menu where the column shows; name A to Z in any other folder.*
 
-### Selection
+**Selection**
 - [x] The sidebar tree has no touch selection mode. *Done 2026-10-26: a long-press on a tree folder still opens its menu, which offers `ActionContext.select()` for the app's "Select" (the playground's), starting the mode with the folder, or the tree's selection it's in. In it every tap toggles a folder (under another parent starting anew), a long-press adds it so the finger moving on drags the selection, the folders' icons show check badges, and the content's selection bar sits at the sidebar's bottom (✕, the count, Select all or none of the folders beside them, ⋮ for their menu). Opening a folder, Escape, or the sidebar being closed or hidden ends it.*
 
-### Keyboard
+**Keyboard**
 - [x] Two layout cases miss: a non-Latin layout on a non-US keyboard, and Option+letter on a non-QWERTY Mac. Fixing them needs `getLayoutMap()`, which only Chromium has. *Done 2026-10-26: the Latin letter printed on each key is learned from the layout map where there is one (Chromium) and, in every browser, from keys typed in the page with no modifier but Shift, and a press that types no Latin letter falls back to it before the US place. A non-Latin layout on a non-US keyboard still gets the US place until its Latin layout has been used in the page, since no browser can read what's printed on the keys (see "Keyboard layouts" in `keyboard.md`).*
 
-### Virtualization limits
+**Virtualization limits**
 - [x] The browser's find in page and a screen reader's browse mode only see the rows on screen. *Done 2026-10-26 for find in page: the content, the search results, the tree and the picker keep every row's name in a find layer, `hidden="until-found"` (Baseline 2025), which the browser's find looks in; coming to one scrolls the view to its row, gives it the Tab stop and tints it for a moment, as the browser's own highlight is in the layer, and rows draw their names from CSS so each is found once, in order (see "Find in page" in `virtualization.md`). Browse mode is left out by choice, as the user agreed: the web can't give screen readers items as they're reached, and every entry in the page slows them on a large folder; focus mode reads every entry with its place among all of them.*
 - [x] Browsers cap an element's height, so a folder of a few hundred thousand entries gets cut off. *Done 2026-10-26: a list taller than 6 million px is laid out that tall and scrolled through proportionally, its rows moved by a drift, in steps of 1 million px through their `top` and the rest through the list's `translate`, in the content, the tree and the picker, with scrolling to an item, the zoom's anchor and the marquee going by it; the playground's `?huge` has a folder of 200,000 files (see "Lists too tall for the browser" in `virtualization.md`).*
 
-### Right to left limits
-- [ ] A menu tall enough to scroll puts its scrollbar padding on the wrong side.
-- [ ] `:dir()` needs recent browsers.
-- [ ] A page that sets `direction: rtl` in CSS without the `dir` attribute doesn't get the mirrored styles.
-
-### Locale
-- [ ] No translations ship with the package.
-- [ ] The playground has no page in another language.
-
-### Interface polish
+**Interface polish**
 - [x] **new:** No tooltips anywhere. Icon-only buttons (back, search, view, menus, zoom) only have screen-reader labels. *Done 2026-10-23: every icon-only button is a `TooltipIconButton` showing its label, but the list rows' ⋮, which is hidden from screen readers.*
 - [x] **new:** Nothing handles Windows High Contrast mode (`forced-colors`). Selection, hover, cut and drop markers are background colours, which that mode removes, so selected files look like all the others. *Done 2026-10-23: selections show in the system's `Highlight`, as do pressed buttons, the open search tab and progress bars, menus and tooltips get an edge, and the cut and drop markers already had outlines. Hover shows nothing for now.*
 - [x] **new:** Back and forward have no history list (GNOME shows one on right-click). *Done 2026-10-25: right-clicking, the menu key or a long-press on either button lists the places it leads to, nearest first, and picking one goes straight there.*
 - [x] **new:** The docked sidebar can't be resized. *Done 2026-10-25: by dragging its edge, the arrow keys, Home and End on it, and a double click back to the default, from 200px to 360px, through the same `ResizeEdge` as the properties; `sidebarWidth` / `defaultSidebarWidth` / `onSidebarWidthChange` control it. The content keeps 540px beside both panels, which give way in an order when the root is too narrow for them at their widest, the properties first, then the sidebar, and dragging one never squeezes the other (see "Resizing the docked panels" in `file-manager.md`).*
 
-## B. Packaging (before any release)
-- [ ] `package.json` is private and uses the repo's name. React, MUI and Emotion are dependencies when they should be peer dependencies.
-- [ ] There's no library build, no `.d.ts` files, no `exports` and no `sideEffects`.
-- [ ] **new:** `icon-sets/registry.ts` imports all five icon styles, so every app ships five copies of every icon, whichever style it uses.
-- [ ] The size of `@react-symbols/icons` hasn't been checked.
-- [ ] **new:** There's no `"use client"` directive, which Next.js App Router needs.
-- [ ] The README is still Vite's template, there's no LICENSE or CHANGELOG, `index.html` still has the repo name as its title, and the repo name mentions Pigment.
-- [ ] **new:** The MUI-style ways to customise are missing: stable class names, theme `defaultProps` (`localeText` included, as MUI's own components take it) and `styleOverrides`, and `slots`/`slotProps` (for example to replace the empty state or add header buttons).
-- [x] **new:** Fixed numbers an app can't change: 3 uploads and 3 downloads at once, 6 thumbnails at once, the search delay, and the 20,000 entries of listings kept that nothing shows. *Done 2026-10-25: `limits` (`FileManagerLimits`) sets `uploads`, `downloads`, `transfers`, `thumbnails`, `keptThumbnails`, `keptEntries` and `searchDelay`, each its default when omitted, taking effect at once (see "Limits" in `props.md`).*
+### Features
 
-## C. New features
+#### Necessary
+None left. Picking files is the media manager's job, so the file manager needs nothing more for a first release.
 
-### Planned, in order
-1. [x] Properties, designed together with the media manager's details panel. *Done 2026-10-24: a panel docked beside the content from 1100px wide, over it below, following the selection or showing the open folder, from Alt+Enter, the view menu or `ActionContext.properties()`, with `propertiesOpen` to control it; the adapter adds `properties` (fuller fields and its own) and `measure` (what's in folders), and `FileEntry` takes `createdAt` and `media`. The panel is shared, for the media manager (see `properties.md`).*
-2. [x] Folder upload. *Done 2026-10-24 (see A, "Uploads").*
-3. [ ] A pick mode (filter by type, a Choose button).
-4. [ ] The media manager, after its contract is designed on paper. *Started 2026-10-27: its first design, browsing and choosing, built from the shared parts with nothing of the file manager's: `MediaManager` (public) with `sections` or a single `section`, each a flat library of its root's files, newest first, holding one kind of asset (`MediaSection.kind`): pictures as square tiles, videos as 16:9 ones with their length, audio as rows, documents as pages; a search by name, one or `multiple` selected, the selection spanning libraries (a carousel's pictures and videos), `onChoose(choices)`; redesigned the same day at the user's direction as a picker rather than a file manager: what's selected listed in a column on the end side (docked from 1040px wide, an overlay below), put in order there, each pick with the app's own details for this use of it (the draft `renderChoiceDetails`, its `values` kept with the pick and handed back, no fields or languages of the media manager's), Choose at its foot, `defaultValue` to start from an existing pick, and an asset opened in the library's place (its tile's button, Alt+Enter), with its picture and the shared properties panel embedded. Settled on paper with the user: assets rather than files, flat libraries organised by tags, sections, one kind a library, what crosses kinds belonging to the asset as its parts (the backend's relations, the media manager showing them), processing results the consumer's, and job updates by both polling and push (see `media-manager.md`). The playground's `?media`.*
-    - [x] The contract on paper, and the look and feel reworked to it. *Done 2026-10-31 (branch `better-mediamanger`): backend-neutral (a Laravel backend worked through only as an example), the consumer defining what's shown (the adapter's `properties`, its own groups, the media manager adding no rows of its own), what's filled in for a pick (`fields(asset, section)`, `MediaField` descriptors the media manager draws: text with `lang` and `dir`, number, boolean, select, tags, custom) and how an asset plays (`previewers`, a library's own first, then the component's; no built-in HLS, the thumbnail otherwise); an asset's delivery in `FileEntry.meta`, handed back with the pick (`MediaChoice.asset`); one asset, one pick across libraries sharing an adapter; the draft `mediaSlots` and `renderChoiceDetails` dropped. The same day, at the user's direction, what an asset shows and what a pick asks became the app's definitions, as a data grid's columns (`PropertyDefinition`, shared with the properties panel: types `string`, `number`, `boolean` and `date`, kinds `url`, `size`, `duration` and `datetime`, `options` and `multiple` on any but boolean, `valueGetter`, `valueFormatter`, `render` saving in place, `renderEdit`), read from the plain `values` the adapter's `properties` hands over, a library's `properties` in place of the component's `properties(asset, section)`, the built-in types drawn and edited by one shared input (`PropertyInput`) in the properties' editor and a pick's fields alike; the playground's renditions as jobs with a percent and its poster picker are `render`s. `MediaField` and the earlier custom renderers (`PropertyRenderers`, `type: "custom"`), and the `duration` and `dimensions` property values, dropped.*
-    - [x] The backend's errors for the picks' fields. *Done 2026-10-31: `errors` (`FieldErrors`, public) takes what the app's backend answered as it came, by its own keys, a message or several each, as Laravel's validation errors are; a field's `errorKey({ index, entry })` names its key from the pick's place among those selected, its messages show under it, its control marked as wrong and described by them, and the pick's row in the list says how many of its fields have one (`mediaChoiceProblems`); a field the app draws reads `errors` and `index` from its params itself (`PropertyParams.errors`, `index`, `errorId`, and `error` for `render` too). The playground's Choose saves to a mock backend first (`mocks/mock-save.ts`).*
-    - [ ] Holding Choose back until a pick's `required` fields are filled, a status on its row, prefilling a pick's fields from the asset's properties.
-    - [ ] Errors no field's `errorKey` claims, and those of a pick or the whole selection (`items.0`, `items`), shown at the pick's head or the column's; counting on its row the errors a field the app draws finds itself.
-    - [ ] Acting on an asset's parts (shown as properties the app defines for now, the poster picked in place): the poster in use, uploading into one, linking an asset of another library through the media manager as a picker, "used by" before a delete.
-    - [ ] Uploading into a library, through the shared upload queue and panel.
-    - [ ] Processing: the jobs (`jobs` polling, `watch` pushing) and the job tracker and its panel, surviving a reload.
-    - [ ] The props checklist: the library, the search, the selection (`value` / `onChange`; `defaultValue` done) and the asset open controlled, an `apiRef`, `limits`, `relistAfter`, announcements.
-    - [ ] Virtualizing the grid, which renders every tile for now.
-    - [ ] The preview dialog's own contents (images zoomed, browser video and audio, PDFs, text, fonts) as previewers an app can pass, once they've moved out of `file-manager/`.
-    - [ ] The selected column's extras, if apps need them: a `max`, the app's own check before Choose. (Reordering done 2026-10-27, by dragging, a long press on touch, and the keyboard.)
-    - [ ] Other sort orders, a list view, resizing the docked panels, touch selection.
-5. [ ] List columns from `FileEntry.meta`.
-6. [x] Undo. *Done 2026-10-25: renames, new folders (from the menu or the picker), copies and moves can be undone and redone, 20 steps back (`limits.undoSteps`), with Ctrl+Z and Shift+Ctrl+Z or Ctrl+Y, the main menu's "Undo rename" and "Redo move", `ActionContext.undo`/`redo` and `apiRef.undo()`/`redo()`, and a notice over the content after each change with Undo, which the user chose with the several steps. Each checks a fresh listing first and acts only on what the change left as it left it: a new folder is deleted only while empty, a copy's copies only once the delete dialog confirms, a move goes back through the transfer panel taking back names kept both on the way in. Copies and moves need `copy`/`move` to resolve with a `TransferResult`; a delete, an upload, or a copy or move that replaced something ends the history (see `undo.md`).*
-7. [x] Trash and restoring. *Done 2026-10-25: the adapter's optional `trash` and `restore` (each resolving with a `TrashResult`), `FileEntry.trashed` (`TrashInfo`: the trail it came from and when) and `Section.trash` for the section showing the backend's trash. `ActionContext.trash()` moves entries there at once, as a desktop's Delete key does, and so does dropping them on it; `restore()` puts them back, asking about names their folders have now as a paste does; `delete()` deletes them for good there, and `emptyTrash()` and the trash's own bar empty it, through the delete dialog. Nothing else changes in the trash, it isn't searched everywhere, and its list shows each entry's original location and when it was trashed. A move to the trash is undone by restoring, and a restore by moving to the trash again, both redone, through the undo history and its notice (see `trash.md`).*
-
-### Optional ideas
+#### Optional
+- [ ] A pick mode (filter by type, a Choose button), for an app choosing files rather than media; the media manager covers choosing media.
+- [ ] List columns from `FileEntry.meta`.
+- [ ] Choosing and resizing list columns.
 - [ ] **new:** An app's own actions in the undo history, such as "Compress…": an `ActionContext` member to add a step, or to end the history, since for now they do neither.
 - [ ] Live updates: an adapter `watch`, or re-checking the open folder when the page is shown again (re-checking a folder as it opens is done, `relistAfter`).
-- [x] Zoom levels for the list and the grid (Ctrl+plus and Ctrl+minus, as in GNOME), which also give pictures larger thumbnails. *Done 2026-10-25: each view zooms by its own steps (the list four sizes, the grid five), its icons, thumbnails, rows or columns growing and the text staying, with Ctrl+plus, Ctrl+minus, Ctrl+0, Ctrl+wheel and a touchpad pinch in the content only, so the browser's page zoom works everywhere else, and from the view menu; `zoom` / `defaultZoom` / `onZoomChange` control it. The entry at the top stays there as the lines change size, larger thumbnails are asked for as a view zooms in, and the level is announced.*
+- [ ] Progress and errors for the app's own long actions (compress, extract) through a job panel, which could grow from the transfer queue and panel (and be shared with the media manager's processing).
 - [ ] Zooming the content with a pinch on a touch screen, which zooms the page for now, since the content takes the touch to scroll.
-- [ ] Choosing and resizing list columns.
-- [ ] Progress and errors for the app's own long actions (compress, extract) through the planned job panel, which could grow from the transfer queue and panel.
 - [ ] "New file" with the name dialog.
 - [ ] Renaming several files at once.
-- [x] Going to a location by typing a path. *Done 2026-10-26: Ctrl+L or ⌘L, a click on the path bar's empty space, its edit button on touch screens or `apiRef.editPath()` swap the path bar for a path field with the open folder's path selected, as the path bar writes it ("/Website/src/components", led by the section's label); Enter goes to where the path leads, Escape or ✕ closes it, and what can't be found is said under the field. A path starting with "/" begins with a section's label, any other in the open folder, where ".." goes up; a name is found by looking for it in its folder's listing, so ids are never parsed and no adapter member is needed, and the last name may be a file, which is selected in its folder. `apiRef.goToPath(path)` does the same from outside (see "Going to a path" in `file-manager.md`).*
 - [ ] **new:** Completing a path as it's typed: a list of the folders matching what's typed, and Tab or a pick to complete it, as GNOME Files' location bar does.
 - [ ] **new (minor):** A "/" typed in the content starting the path field, as GNOME Files does; it's type-ahead for now.
 - [ ] **new (minor):** An optional adapter `resolve(path)` answering a whole path in one call, for a backend where listing every folder on the way costs; for now each folder on the way is listed (the cached listing first), however deep.
 - [ ] "Folders first" as a setting.
 - [ ] Invert selection.
 
-## Left out by choice
+#### Done
+- [x] Properties, designed together with the media manager's details panel. *Done 2026-10-24: a panel docked beside the content from 1100px wide, over it below, following the selection or showing the open folder, from Alt+Enter, the view menu or `ActionContext.properties()`, with `propertiesOpen` to control it; the adapter adds `properties` (fuller fields and its own) and `measure` (what's in folders), and `FileEntry` takes `createdAt` and `media`. The panel is shared, for the media manager (see `properties.md`).*
+- [x] Folder upload. *Done 2026-10-24: dropped, pasted or picked (`ActionContext.uploadFolder`) folders are uploaded with everything in them, through the adapter's `createFolder` and `upload`, one row each in the panel, and a folder whose name is taken is merged into the one there, kept both under a free name, or skipped.*
+- [x] Undo. *Done 2026-10-25: renames, new folders (from the menu or the picker), copies and moves can be undone and redone, 20 steps back (`limits.undoSteps`), with Ctrl+Z and Shift+Ctrl+Z or Ctrl+Y, the main menu's "Undo rename" and "Redo move", `ActionContext.undo`/`redo` and `apiRef.undo()`/`redo()`, and a notice over the content after each change with Undo, which the user chose with the several steps. Each checks a fresh listing first and acts only on what the change left as it left it: a new folder is deleted only while empty, a copy's copies only once the delete dialog confirms, a move goes back through the transfer panel taking back names kept both on the way in. Copies and moves need `copy`/`move` to resolve with a `TransferResult`; a delete, an upload, or a copy or move that replaced something ends the history (see `undo.md`).*
+- [x] Trash and restoring. *Done 2026-10-25: the adapter's optional `trash` and `restore` (each resolving with a `TrashResult`), `FileEntry.trashed` (`TrashInfo`: the trail it came from and when) and `Section.trash` for the section showing the backend's trash. `ActionContext.trash()` moves entries there at once, as a desktop's Delete key does, and so does dropping them on it; `restore()` puts them back, asking about names their folders have now as a paste does; `delete()` deletes them for good there, and `emptyTrash()` and the trash's own bar empty it, through the delete dialog. Nothing else changes in the trash, it isn't searched everywhere, and its list shows each entry's original location and when it was trashed. A move to the trash is undone by restoring, and a restore by moving to the trash again, both redone, through the undo history and its notice (see `trash.md`).*
+- [x] Zoom levels for the list and the grid (Ctrl+plus and Ctrl+minus, as in GNOME), which also give pictures larger thumbnails. *Done 2026-10-25: each view zooms by its own steps (the list four sizes, the grid five), its icons, thumbnails, rows or columns growing and the text staying, with Ctrl+plus, Ctrl+minus, Ctrl+0, Ctrl+wheel and a touchpad pinch in the content only, so the browser's page zoom works everywhere else, and from the view menu; `zoom` / `defaultZoom` / `onZoomChange` control it. The entry at the top stays there as the lines change size, larger thumbnails are asked for as a view zooms in, and the level is announced.*
+- [x] Going to a location by typing a path. *Done 2026-10-26: Ctrl+L or ⌘L, a click on the path bar's empty space, its edit button on touch screens or `apiRef.editPath()` swap the path bar for a path field with the open folder's path selected, as the path bar writes it ("/Website/src/components", led by the section's label); Enter goes to where the path leads, Escape or ✕ closes it, and what can't be found is said under the field. A path starting with "/" begins with a section's label, any other in the open folder, where ".." goes up; a name is found by looking for it in its folder's listing, so ids are never parsed and no adapter member is needed, and the last name may be a file, which is selected in its folder. `apiRef.goToPath(path)` does the same from outside (see "Going to a path" in `file-manager.md`).*
 
-Not gaps: tests, moving entries to another adapter's trash (each backend's trash holds its own, and one trash over several backends is one adapter's), moving or dragging entries out of the trash but by restoring them (see "By choice" in `trash.md`), undoing a delete (it's for good; what should come back goes to the trash) or an upload, a built-in editor, previewers for other kinds built into the package (an app plugs them in through `previewers`), saving an image turned in the preview, keyboard drag and drop, renaming in place, modal dialogs for background work, resuming an upload after a reload (the browser no longer has the files, and resuming partway is the backend's upload protocol), upload types per folder (a section rooted there, or the adapter's `upload`, covers it), tabs in the properties panel for activity, versions and sharing (backend features the component can't supply; an app adds its own through `propertiesActions`), a screen reader's browse mode reading the rows not rendered (the web has no way to give screen readers items as they're reached, and every entry in the page would slow them; see "By choice" in `virtualization.md`), and `onClipboardChange` until a consumer needs it (see "Internal by choice" in `props.md`).
+### Left out by choice
+Tests, moving entries to another adapter's trash (each backend's trash holds its own, and one trash over several backends is one adapter's), moving or dragging entries out of the trash but by restoring them (see "By choice" in `trash.md`), undoing a delete (it's for good; what should come back goes to the trash) or an upload, a built-in editor, previewers for other kinds built into the package (an app plugs them in through `previewers`), saving an image turned in the preview, keyboard drag and drop, renaming in place, modal dialogs for background work, resuming an upload after a reload (the browser no longer has the files, and resuming partway is the backend's upload protocol), upload types per folder (a section rooted there, or the adapter's `upload`, covers it), tabs in the properties panel for activity, versions and sharing (backend features the component can't supply; an app adds its own through `propertiesActions`), a screen reader's browse mode reading the rows not rendered (the web has no way to give screen readers items as they're reached, and every entry in the page would slow them; see "By choice" in `virtualization.md`), and `onClipboardChange` until a consumer needs it (see "Internal by choice" in `props.md`).
+
+---
+
+## Media manager
+
+### Gaps
+
+#### Necessary
+- [ ] **The contract's open points**, settled in talk on 2026-10-31 but not built:
+  - `fields` on `MediaSection`, beside its `properties`, with the component's `fields(asset, section)` kept as the fallback, as `properties` has it (the user's idea, agreed).
+  - A controlled selection, `value` / `onChange` called on every change, the pick's fields included (`defaultValue` done). Proposed with it: picking turned on by any of `value`, `defaultValue`, `onChange` or `onChoose`, and the Choose button, a double click or Enter finishing, only with `onChoose`, as MUI X's pickers have `onChange` and `onAccept`. Not yet agreed.
+- [ ] **Holding Choose back** until a pick's `required` fields are filled, saying so on its row.
+- [ ] **Errors no field claims**: those no `errorKey` names, and a pick's or the whole selection's own (`items.0`, `items`), shown at the pick's head or the column's.
+- [ ] **Virtualizing the grid**, which renders every tile for now, so a library of thousands is slow (the file manager's lines, see `virtualization.md`).
+- [ ] **The rest of the props checklist** (`props.md`): the open library, the search and the asset open controlled, an `apiRef` (focus, refresh, open a library, open an asset, select, choose), `limits`, `relistAfter`, and announcements, such as the number of matches.
+
+#### Optional
+- [ ] Counting on a pick's row the errors a field the app draws finds itself, with no `errorKey`.
+- [ ] Prefilling a pick's fields from the asset's own properties.
+- [ ] The selected column's extras, if apps need them: a `max`, the app's own check disabling Choose with its message, resizing it.
+- [ ] Resizing the docked libraries (`ResizeEdge`, once shared out of `file-manager/`).
+- [ ] Touch: a long-press, and the check on every tile while selecting several.
+- [ ] Other sort orders than newest first, and a list view.
+- [ ] Folders a library lists, left out for now.
+
+#### Done
+- [x] Reordering the selected column. *Done 2026-10-27: by dragging, a long press on touch, and the keyboard (Space to pick one up, the arrows to move it), each step announced.*
+- [x] The backend's errors for the picks' fields. *Done 2026-10-31: `errors` (`FieldErrors`, public) takes what the app's backend answered as it came, by its own keys, a message or several each, as Laravel's validation errors are; a field's `errorKey({ index, entry })` names its key from the pick's place among those selected, its messages show under it, its control marked as wrong and described by them, and the pick's row in the list says how many of its fields have one (`mediaChoiceProblems`); a field the app draws reads `errors` and `index` from its params itself (`PropertyParams.errors`, `index`, `errorId`, and `error` for `render` too). The playground's Choose saves to a mock backend first (`mocks/mock-save.ts`).*
+
+### Features
+
+#### Necessary
+- [ ] **Uploading** into a library, by a button, a drop and a paste, through the shared upload queue and panel, by the library's `acceptUploads`, files showing in the grid as they come and while they're processed.
+- [ ] **Processing**: the jobs (`jobs` polling, `watch` pushing) and the job tracker and its panel, shaped like the upload queue, surviving a reload.
+
+#### Optional
+- [ ] Acting on an asset's parts, shown as properties the app defines for now (the poster picked in place): uploading into one (a custom poster, a subtitle file), linking an asset of another library through the media manager as a picker, "used by" before an asset others link to is deleted.
+- [ ] The preview dialog's own contents (images zoomed, browser video and audio, PDFs, text, fonts) as previewers an app can pass, once they've moved out of `file-manager/`; the app's previewers and the thumbnail for now.
+- [ ] A mixed view, everything of every kind at once, if an app ever asks for one.
+
+#### Done
+- [x] The first design. *Done 2026-10-27: browsing and choosing, built from the shared parts with nothing of the file manager's: `MediaManager` (public) with `sections` or a single `section`, each a flat library of its root's files, newest first, holding one kind of asset (`MediaSection.kind`): pictures as square tiles, videos as 16:9 ones with their length, audio as rows, documents as pages; a search by name, one or `multiple` selected, the selection spanning libraries (a carousel's pictures and videos), `onChoose(choices)`; redesigned the same day at the user's direction as a picker rather than a file manager: what's selected listed in a column on the end side (docked from 1040px wide, an overlay below), put in order there, each pick with the app's own details for this use of it, Choose at its foot, `defaultValue` to start from an existing pick, and an asset opened in the library's place (its tile's button, Alt+Enter), with its picture and the shared properties panel embedded. Settled on paper with the user: assets rather than files, flat libraries organised by tags, sections, one kind a library, what crosses kinds belonging to the asset as its parts, processing results the consumer's, and job updates by both polling and push (see `media-manager.md`). The playground's `?media`.*
+- [x] The contract on paper, and the look and feel reworked to it. *Done 2026-10-31 (branch `better-mediamanger`): backend-neutral (a Laravel backend worked through only as an example), the consumer defining what's shown, what's filled in for a pick and how an asset plays (`previewers`, a library's own first, then the component's; no built-in HLS, the thumbnail otherwise); an asset's delivery in `FileEntry.meta`, handed back with the pick (`MediaChoice.asset`); one asset, one pick across libraries sharing an adapter; the draft `mediaSlots` and `renderChoiceDetails` dropped. What an asset shows and what a pick asks are the app's definitions, as a data grid's columns (`PropertyDefinition`, shared with the properties panel: types `string`, `number`, `boolean` and `date`, kinds `url`, `size`, `duration` and `datetime`, `options` and `multiple` on any but boolean, `valueGetter`, `valueFormatter`, `render` saving in place, `renderEdit`), read from the plain `values` the adapter's `properties` hands over, a library's `properties` in place of the component's `properties(asset, section)`, the built-in types drawn and edited by one shared input (`PropertyInput`) in the properties' editor and a pick's fields alike. `MediaField`, the earlier custom renderers (`PropertyRenderers`, `type: "custom"`), and the `duration` and `dimensions` property values, dropped.*
+
+### Left out by choice
+A built-in player or HLS (the app's `previewers`), fields, languages or localized values of the media manager's own (a pick's fields are entirely the app's), properties a backend describes at runtime (each library defines what it shows in code), folders inside a library (organising is by tags and the search), and a mixed library of several kinds (one kind a library, the app passing the libraries of the kinds it takes).
+
+---
+
+## Shared
+
+### Gaps
+
+#### Necessary
+None.
+
+#### Optional
+- [ ] Right to left: `:dir()` needs recent browsers.
+- [ ] Right to left: a page that sets `direction: rtl` in CSS without the `dir` attribute doesn't get the mirrored styles (only `dir` is asked of the consumer, by design).
+- [ ] No translations ship with the package (`enUS` only); apps pass their own `localeText`.
+- [ ] The playground has no page with a whole other language's text (`?locale=` changes only the formats).
+
+### Packaging (before any release)
+
+#### Necessary
+- [ ] `package.json` is private and uses the repo's name. React, MUI and Emotion are dependencies when they should be peer dependencies.
+- [ ] There's no library build, no `.d.ts` files, no `exports` and no `sideEffects`.
+- [ ] **new:** `icon-sets/registry.ts` imports all five icon styles, so every app ships five copies of every icon, whichever style it uses.
+- [ ] The size of `@react-symbols/icons` hasn't been checked.
+- [ ] **new:** There's no `"use client"` directive, which Next.js App Router needs.
+- [ ] The README is still Vite's template, there's no LICENSE or CHANGELOG, `index.html` still has the repo name as its title, and the repo name mentions Pigment.
+
+#### Optional
+- [ ] **new:** The MUI-style ways to customise: stable class names, theme `defaultProps` (`localeText` included, as MUI's own components take it) and `styleOverrides`, and `slots`/`slotProps` (for example to replace the empty state or add header buttons).
+
+#### Done
+- [x] **new:** Fixed numbers an app can't change: 3 uploads and 3 downloads at once, 6 thumbnails at once, the search delay, and the 20,000 entries of listings kept that nothing shows. *Done 2026-10-25: `limits` (`FileManagerLimits`) sets `uploads`, `downloads`, `transfers`, `thumbnails`, `keptThumbnails`, `keptEntries` and `searchDelay`, each its default when omitted, taking effect at once (see "Limits" in `props.md`).*
