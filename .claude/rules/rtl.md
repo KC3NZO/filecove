@@ -53,7 +53,7 @@ A MUI component's physical style is overridden where we use it, by resetting the
 - A small `Chip`'s delete icon is spaced with a `margin-left` and a `margin-right`, which the properties' tags being edited reset for logical ones (`chipSx` in `property-editor.tsx`).
 - `SnackbarContent` spaces its action with a `margin-left`, a negative `margin-right` and a `padding-left`, which the notice over the content resets for `margin-inline-start: auto`, `margin-inline-end` and `padding-inline-start` (`contentSx` in `notice-bar.tsx`).
 
-To use a MUI component not used yet, read its source in `node_modules/@mui/material` for `left`, `right`, `margin-left`, `padding-left`, `text-align`, `translateX`, `transform-origin` and `useRtl`, and override what shows with a prop or content we use. A prop we don't use (`startIcon`, `edge`, `inset` dividers, a `Button`'s start or end `loadingPosition`) needs nothing until it is.
+To use a MUI component not used yet, read its source in `node_modules/@mui/material` for `left`, `right`, `margin-left`, `padding-left`, `text-align`, `translateX`, `transform-origin` and `useRtl`, and override what shows with a prop or content we use. A prop we don't use (`edge`, `inset` dividers, a `Button`'s start or end `loadingPosition`) needs nothing until it is. A `Button`'s `startIcon` is spaced with a `margin-right` and pulled to its edge with a `margin-left`, so a button with one spreads `startIconSx` (`styles/direction.ts`) into its `sx`, as the media manager's Upload and its asset view's Select do.
 
 ## What mirrors
 
