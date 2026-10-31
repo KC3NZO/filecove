@@ -1,4 +1,4 @@
-import type { FileEntry } from "./adapter";
+import type { AssetState, FileAdapter, FileEntry } from "./adapter";
 import type { FilePreviewer } from "./previewer";
 import type { PropertyDefinitionGroup } from "./property-definition";
 import type { Section } from "./section";
@@ -45,6 +45,39 @@ export interface MediaSection
     uploadFields?: PropertyDefinitionGroup[] | ((files: readonly File[]) => PropertyDefinitionGroup[]);
     /** What the upload fields hold as they're shown, by their `field` keys: the backend's defaults. */
     uploadDefaults?: Readonly<Record<string, unknown>>;
+    /**
+     * Whether an asset of this library may be chosen, by the app's own rules, such as a stock photo
+     * whose licence has run out: `true`, or `false`, or why not, in the app's language, which its
+     * tile shows in place of its size. One that can't is still shown and opened, but isn't
+     * selected, and one selected already, as given with `defaultValue`, holds Choose back until
+     * it's taken out. An asset being processed (`FileEntry.processing`) can't be chosen either,
+     * whatever this says. The app's backend still has the last word when it saves the picks.
+     */
+    selectable?(entry: FileEntry): boolean | string;
+}
+
+/** Assets being processed, followed through the adapter serving them (internal). */
+export interface FollowedAssets {
+    adapter: FileAdapter;
+    entries: readonly FileEntry[];
+}
+
+/** How assets being processed stand, as their backends last said, by adapter and id (internal). */
+export type AssetStates = ReadonlyMap<FileAdapter, ReadonlyMap<string, AssetState>>;
+
+/**
+ * Why an asset can't be chosen now (internal): its backend's work on it under way or failed
+ * (`FileEntry.processing`), or its library refusing it (`MediaSection.selectable`), as its tile, its
+ * row among those selected and its view show it, in one line, with a bar while it's processed.
+ */
+export interface AssetHold {
+    status: "processing" | "failed" | "refused";
+    /** How far along the processing is, from 0 to 1, when the backend says. */
+    progress?: number;
+    /** The line shown: what it's doing and how far along, that it failed, or why it's refused. */
+    text: string;
+    /** Why it failed, as the backend said, for its description. */
+    detail?: string;
 }
 
 /** Libraries shown together in the list of libraries, under an optional heading. */

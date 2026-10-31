@@ -20,13 +20,19 @@ import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
 import { savePicks } from "./mocks/mock-save";
 import { browse, locale, multiple, single } from "./options";
 
-import type { FieldErrors, MediaChoice, MediaSectionGroup, PropertyErrorKeyParams } from "../src";
+import type { FieldErrors, FileEntry, MediaChoice, MediaSectionGroup, PropertyErrorKeyParams } from "../src";
 
 // The media manager's page (`?media`), full-viewport with a footer saying what was last chosen, as
 // an editor inserting it would, each pick with what the playground's fields hold for it. Choose
 // saves the picks to the playground's backend first, which may answer with errors, as Laravel's
 // validation does, handed back to the media manager as they came; the list's own (`media`), which
 // is about no pick, the footer shows, as an app would beside it.
+
+/**
+ * Whether a stock photo may be used, as the app's own rule: not one whose licence has run out, those
+ * numbered 06, 12 and 18, which its backend refuses as well when the picks are saved.
+ */
+const stockSelectable = (entry: FileEntry) => !/-(?:06|12|18)\./.test(entry.name) || "Licence expired";
 
 /**
  * The playground's libraries, on two backends: this site's, a root a kind, whose videos are
@@ -90,6 +96,7 @@ const libraries: MediaSectionGroup[] = [
                 rootId: "/",
                 adapter: stockMediaAdapter,
                 readOnly: true,
+                selectable: stockSelectable,
             },
             // A library whose root refuses to be listed, to see the error.
             { id: "archive", label: "Old archive", kind: "image", icon: "drive", rootId: "/old/archive" },

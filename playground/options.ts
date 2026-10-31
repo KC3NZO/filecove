@@ -97,3 +97,9 @@ export const multiple = params.has("multiple");
 
 /** `?media&browse`: no `onChoose`, so the media manager is a library to look through, without Choose. */
 export const browse = params.has("browse");
+
+/**
+ * `?media&push`: the media backend pushes how its assets' processing stands (`watchProcessing`, a
+ * timer standing in for a socket) rather than being polled for it (`processing`).
+ */
+export const push = params.has("push");

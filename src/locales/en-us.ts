@@ -558,4 +558,11 @@ export const enUS: LocaleText = {
     mediaUploadFiles: "Files to upload",
     mediaUploading: "Uploading",
     mediaUploadingFile: (name) => `Uploading “${name}”`,
+    mediaProcessing: "Processing",
+    mediaProcessingFailed: "Processing failed",
+    mediaUnavailable: "Can't be chosen",
+    mediaChoicesProcessing: (count) =>
+        count === 1 ? "Waiting for 1 to finish processing" : `Waiting for ${count} to finish processing`,
+    mediaChoicesUnavailable: (count) =>
+        count === 1 ? "Take out the 1 that can't be chosen" : `Take out the ${count} that can't be chosen`,
 };

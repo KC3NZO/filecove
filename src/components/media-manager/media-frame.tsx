@@ -6,6 +6,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useAssetStates } from "../../hooks/use-asset-states";
 import { useData, useFolder } from "../../hooks/use-folder";
 import { useLocale } from "../../hooks/use-locale";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
@@ -16,7 +17,7 @@ import { focusLost } from "../../utils/dom";
 import { NO_ERRORS, choiceMessages, countFieldErrors } from "../../utils/field-errors";
 import { carriesFiles, filesIn, mayAccept, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
-import { asksAnything, checkMediaUpload, uploadFieldsFor } from "../../utils/media";
+import { asksAnything, checkMediaUpload, holdOf, uploadFieldsFor, withState } from "../../utils/media";
 import { allows } from "../../utils/permissions";
 import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
@@ -34,6 +35,7 @@ import MediaUpload from "./media-upload";
 
 import type { PropertiesCache } from "../../store/properties-cache";
 import type {
+    AssetHold,
     DroppedFiles,
     EntrySelection,
     FileAdapter,
@@ -41,6 +43,7 @@ import type {
     FilePreviewer,
     FileUploadItem,
     FieldErrors,
+    FollowedAssets,
     MediaChoice,
     MediaSection,
     MediaSectionGroup,
@@ -119,6 +122,7 @@ const NO_PREVIEWERS: readonly FilePreviewer[] = [];
 const NO_ARRIVALS: readonly Arrival[] = [];
 const NO_UPLOADS: readonly FileUploadItem[] = [];
 const NO_LIBRARIES: ReadonlyMap<number, string> = new Map();
+const NO_HOLDS: ReadonlyMap<string, AssetHold> = new Map();
 
 /** How long a file just uploaded is waited for in its library's listing, in ms. */
 const ARRIVAL_WAIT = 10_000;
@@ -291,7 +295,7 @@ const MediaFrame = ({
     choiceErrorKey,
     propertiesCache,
 }: MediaFrameProps) => {
-    const { text, foldLetters, compareNames } = useLocale();
+    const { text, foldLetters, compareNames, formatPercent } = useLocale();
     const sections = useMemo(() => groups.flatMap((group) => group.sections), [groups]);
     const sectionsById = useMemo(() => new Map(sections.map((item) => [item.id, item])), [sections]);
     const [openId, setOpenId] = useState<string>();
@@ -398,23 +402,13 @@ const MediaFrame = ({
 
     // The library's assets, as its adapter lists them under its root: they're all of its kind, so
     // nothing is sorted into kinds here.
-    const library = useMemo(
+    const listed = useMemo(
         () =>
             (state?.entries ?? NO_ENTRIES)
                 .filter((entry) => entry.kind === "file" && !isHidden(entry))
                 .sort(byDate(compareNames)),
         [state?.entries, compareNames],
     );
-
-    const terms = useMemo(() => searchTerms(query, foldLetters), [query, foldLetters]);
-
-    const shownEntries = useMemo(
-        () =>
-            terms.length === 0 ? library : library.filter((entry) => holdsTerms(foldLetters(entry.name), terms)),
-        [library, terms, foldLetters],
-    );
-
-    const order = useMemo(() => shownEntries.map(({ id }) => id), [shownEntries]);
 
     const sectionId = section?.id;
 
@@ -435,6 +429,91 @@ const MediaFrame = ({
         [sections, adapterOf, store],
     );
 
+    // An asset done with being processed: every library on its adapter is listed again, as what it
+    // has may have changed with it.
+    const relistAll = useCallback(
+        (served: FileAdapter) =>
+            relist(
+                served,
+                sections.filter((item) => adapterOf(item) === served).map(({ rootId }) => rootId),
+            ),
+        [relist, sections, adapterOf],
+    );
+
+    // Assets their listing says are being processed, in the library shown and among the picks, each
+    // through its adapter, followed until they're done; a pick of the library shown as it's listed.
+    const processed = useMemo<FollowedAssets[]>(() => {
+        const byAdapter = new Map<FileAdapter, Map<string, FileEntry>>();
+        const listedIds = new Set(listed.map(({ id }) => id));
+        const add = (served: FileAdapter, entry: FileEntry) => {
+            if (entry.processing?.status === "processing") {
+                byAdapter.set(served, (byAdapter.get(served) ?? new Map()).set(entry.id, entry));
+            }
+        };
+
+        listed.forEach((entry) => add(sectionAdapter, entry));
+        picks.items.forEach(({ sectionId: pickedIn, asset }) => {
+            const from = sectionsById.get(pickedIn);
+            const served = from && adapterOf(from);
+
+            if (served && !(served === sectionAdapter && listedIds.has(asset.id))) {
+                add(served, asset);
+            }
+        });
+
+        return [...byAdapter].map(([served, entries]) => ({ adapter: served, entries: [...entries.values()] }));
+    }, [listed, picks.items, sectionsById, adapterOf, sectionAdapter]);
+
+    const { states: assetStates, forget: forgetStates } = useAssetStates(processed, relistAll);
+
+    // The library's assets with what their backend has said since of their processing.
+    const library = useMemo(() => {
+        const own = assetStates.get(sectionAdapter);
+
+        return own ? listed.map((entry) => withState(entry, own.get(entry.id))) : listed;
+    }, [listed, assetStates, sectionAdapter]);
+
+    // Once the listing has caught up, what was said of its assets' processing is forgotten, so one
+    // processed again later is followed afresh.
+    useEffect(() => {
+        if (state?.status === "ready") {
+            forgetStates(
+                sectionAdapter,
+                listed.filter((entry) => !entry.processing).map(({ id }) => id),
+            );
+        }
+    }, [state?.status, listed, sectionAdapter, forgetStates]);
+
+    const terms = useMemo(() => searchTerms(query, foldLetters), [query, foldLetters]);
+
+    const shownEntries = useMemo(
+        () =>
+            terms.length === 0 ? library : library.filter((entry) => holdsTerms(foldLetters(entry.name), terms)),
+        [library, terms, foldLetters],
+    );
+
+    const order = useMemo(() => shownEntries.map(({ id }) => id), [shownEntries]);
+
+    // Why assets shown can't be chosen now, by their ids: being processed, failed, or refused by
+    // their library. They're shown and opened, but not selected.
+    const holds = useMemo(() => {
+        if (!section) {
+            return NO_HOLDS;
+        }
+
+        const held = new Map<string, AssetHold>();
+
+        shownEntries.forEach((entry) => {
+            const hold = holdOf(entry, section, { text, formatPercent });
+
+            if (hold) {
+                held.set(entry.id, hold);
+            }
+        });
+
+        return held.size > 0 ? held : NO_HOLDS;
+    }, [shownEntries, section, text, formatPercent]);
+
     const uploads = useUploadQueue(relist, text.keptBothName);
 
     // Whether the open library takes files: its adapter has `upload`, it isn't `readOnly` nor
@@ -451,7 +530,7 @@ const MediaFrame = ({
     // once that's listed, as it's listed now, and gone when it isn't any more; picked in another,
     // as the open library lists it when it does, through the same adapter, or else as it was picked.
     const choices = useMemo<MediaChoice[]>(() => {
-        const listed = state?.status === "ready" ? new Map(library.map((entry) => [entry.id, entry])) : undefined;
+        const listedById = state?.status === "ready" ? new Map(library.map((entry) => [entry.id, entry])) : undefined;
 
         return picks.items.flatMap(({ sectionId: pickedIn, asset, values }) => {
             const from = sectionsById.get(pickedIn);
@@ -460,12 +539,16 @@ const MediaFrame = ({
                 return [];
             }
 
-            const listedNow = listed && adapterOf(from) === sectionAdapter ? listed.get(asset.id) : undefined;
-            const now = listed && pickedIn === sectionId ? listedNow : (listedNow ?? asset);
+            const served = adapterOf(from);
+            const listedNow = listedById && served === sectionAdapter ? listedById.get(asset.id) : undefined;
+            const now =
+                listedById && pickedIn === sectionId
+                    ? listedNow
+                    : (listedNow ?? withState(asset, assetStates.get(served)?.get(asset.id)));
 
             return now ? [{ asset: now, section: from, values }] : [];
         });
-    }, [picks.items, sectionsById, state?.status, library, sectionId, adapterOf, sectionAdapter]);
+    }, [picks.items, sectionsById, state?.status, library, sectionId, adapterOf, sectionAdapter, assetStates]);
 
     // Until the app has been handed any, as with errors for the picks it gave as `defaultValue`, the
     // order of the picks as the errors came.
@@ -504,6 +587,37 @@ const MediaFrame = ({
         () => new Set(choices.filter(inOpen).map(({ asset }) => asset.id)),
         [choices, inOpen],
     );
+
+    // Why picks can't be chosen now, by their keys, which holds Choose back until they can, or are
+    // taken out: still being processed, failed, or refused by their library.
+    const choiceHolds = useMemo(() => {
+        const held = new Map<string, AssetHold>();
+
+        choices.forEach((choice) => {
+            const hold = holdOf(choice.asset, choice.section, { text, formatPercent });
+
+            if (hold) {
+                held.set(choiceKey(choice), hold);
+            }
+        });
+
+        return held.size > 0 ? held : NO_HOLDS;
+    }, [choices, text, formatPercent]);
+
+    const holdOfChoice = useCallback((choice: MediaChoice) => choiceHolds.get(choiceKey(choice)), [choiceHolds]);
+
+    // What holds Choose back, said beside it: those to take out first, else those still processed.
+    const chooseHeld = useMemo(() => {
+        if (choiceHolds.size === 0) {
+            return undefined;
+        }
+
+        const held = [...choiceHolds.values()];
+        const waiting = held.filter(({ status }) => status === "processing").length;
+        const refused = held.length - waiting;
+
+        return refused > 0 ? text.mediaChoicesUnavailable(refused) : text.mediaChoicesProcessing(waiting);
+    }, [choiceHolds, text]);
 
     // Whether a pick kept is of the same asset as a choice.
     const samePick = useCallback(
@@ -545,6 +659,14 @@ const MediaFrame = ({
         [sectionId, choices, inOpen, multiple, shownEntries, selectedIds],
     );
 
+    // The open library's share as `ids` would make it, without those it adds that can't be chosen
+    // now, as a Shift-click's range or Select all may hold.
+    const selectable = useCallback(
+        (ids: ReadonlySet<string>) =>
+            holds.size === 0 ? ids : new Set([...ids].filter((id) => selectedIds.has(id) || !holds.has(id))),
+        [holds, selectedIds],
+    );
+
     // Several at once, a click adds or takes away the asset, as a media picker does, and Shift adds
     // those from the last one clicked; what's selected in other libraries stays. One at a time, it
     // selects the asset alone, in place of what was selected in any library.
@@ -552,7 +674,8 @@ const MediaFrame = ({
         (index: number, keys: { toggle: boolean; range: boolean }) => {
             const id = order[index];
 
-            if (id === undefined) {
+            // One that can't be chosen now isn't selected; one selected already can be taken out.
+            if (id === undefined || (holds.has(id) && !selectedIds.has(id))) {
                 return;
             }
 
@@ -564,14 +687,14 @@ const MediaFrame = ({
                 ? nextSelection(base, id, { toggle: true, range: keys.range }, order)
                 : nextSelection(base, id, NO_MODIFIERS, order);
 
-            setPicks(picksWith(next.ids, next.anchor));
+            setPicks(picksWith(selectable(next.ids), next.anchor));
         },
-        [order, selectedIds, picks.anchor, sectionId, multiple, picksWith],
+        [order, holds, selectedIds, picks.anchor, sectionId, multiple, picksWith, selectable],
     );
 
     const selectAll = useCallback(() => {
-        setPicks(picksWith(new Set([...selectedIds, ...order]), order[0] ?? null));
-    }, [picksWith, selectedIds, order]);
+        setPicks(picksWith(selectable(new Set([...selectedIds, ...order])), order[0] ?? null));
+    }, [picksWith, selectable, selectedIds, order]);
 
     const clearSelection = useCallback(() => setPicks(NO_PICKS), []);
 
@@ -620,13 +743,13 @@ const MediaFrame = ({
 
         if (selectedIds.has(viewed.entry.id)) {
             removeChoice(choice);
-        } else {
+        } else if (!holdOf(viewed.entry, section, { text, formatPercent })) {
             setPicks((previous) => ({
                 items: multiple ? [...previous.items, pickOf(choice)] : [pickOf(choice)],
                 anchor: { sectionId: section.id, id: viewed.entry.id },
             }));
         }
-    }, [viewed, section, selectedIds, removeChoice, multiple]);
+    }, [viewed, section, selectedIds, removeChoice, multiple, text, formatPercent]);
 
     const openAsset = useCallback(
         (index: number) => {
@@ -683,15 +806,26 @@ const MediaFrame = ({
                 return;
             }
 
+            // One that can't be chosen now opens instead, to see how it stands.
+            if (holds.has(entry.id)) {
+                openAsset(index);
+
+                return;
+            }
+
             const chosen = choices.find((choice) => inOpen(choice) && choice.asset.id === entry.id) ?? {
                 asset: entry,
                 section,
                 values: NO_VALUES,
             };
+            const handed = multiple ? [...choices.filter((choice) => choice !== chosen), chosen] : [chosen];
 
-            handOver(multiple ? [...choices.filter((choice) => choice !== chosen), chosen] : [chosen]);
+            // The others selected hold it back as they hold Choose.
+            if (!handed.some((choice) => choiceHolds.has(choiceKey(choice)))) {
+                handOver(handed);
+            }
         },
-        [shownEntries, onChoose, handOver, multiple, choices, inOpen, section, openAsset],
+        [shownEntries, onChoose, handOver, multiple, choices, inOpen, section, openAsset, holds, choiceHolds],
     );
 
     const closeLibraries = useCallback(() => {
@@ -849,21 +983,27 @@ const MediaFrame = ({
 
     // Once the open library lists what arrived, its tile takes the place of the upload's, and while
     // the app takes a choice, it's selected, as a media picker does: added to what's selected, or
-    // one at a time, the last to arrive in place of it.
+    // one at a time, the last to arrive in place of it. One still being processed is selected too,
+    // holding Choose back until it's done, as it was uploaded to be chosen; one whose processing
+    // failed, or its library refuses, isn't.
     useEffect(() => {
         if (!section || state?.status !== "ready") {
             return;
         }
 
-        const listed = new Map(library.map((entry) => [entry.id, entry]));
-        const here = arrivals.filter((waiting) => waiting.sectionId === section.id && listed.has(waiting.entryId));
+        const listedById = new Map(library.map((entry) => [entry.id, entry]));
+        const here = arrivals.filter(
+            (waiting) => waiting.sectionId === section.id && listedById.has(waiting.entryId),
+        );
 
         if (here.length === 0) {
             return;
         }
 
         const keys = new Set(here.map((waiting) => waiting.key));
-        const assets = here.flatMap((waiting) => listed.get(waiting.entryId) ?? []);
+        const assets = here
+            .flatMap((waiting) => listedById.get(waiting.entryId) ?? [])
+            .filter((asset) => asset.processing?.status !== "failed" && (section.selectable?.(asset) ?? true) === true);
         const last = assets[assets.length - 1];
 
         setArrivals((previous) => previous.filter((waiting) => !keys.has(waiting.key)));
@@ -987,6 +1127,12 @@ const MediaFrame = ({
         [viewedEntry, section, properties],
     );
 
+    // Why the asset shown can't be chosen now, which its view shows, with Select held.
+    const viewedHold = useMemo(
+        () => (viewedEntry && section ? holdOf(viewedEntry, section, { text, formatPercent }) : undefined),
+        [viewedEntry, section, text, formatPercent],
+    );
+
     const errorMessage =
         state?.status === "error" && state.error instanceof Error && state.error.message
             ? isolate(state.error.message)
@@ -1070,6 +1216,7 @@ const MediaFrame = ({
                                 adapter={sectionAdapter}
                                 label={section.label}
                                 selectedIds={selectedIds}
+                                holds={holds}
                                 multiple={multiple}
                                 status={state?.status ?? "loading"}
                                 hasMedia={library.length > 0}
@@ -1095,6 +1242,7 @@ const MediaFrame = ({
                             adapter={sectionAdapter}
                             choosing={choosing}
                             selected={selectedIds.has(viewed.entry.id)}
+                            hold={viewedHold}
                             previewers={sectionPreviewers}
                             definitions={viewedDefinitions}
                             propertiesCache={propertiesCache}
@@ -1142,11 +1290,12 @@ const MediaFrame = ({
                 {onChoose && (
                     <ChooseBar
                         count={choices.length}
+                        held={chooseHeld}
                         chosenOpen={chosenOverlay}
                         showOpener={!chosenEmpty}
                         openerRef={openerRef}
                         onOpenChosen={() => setChosenOverlay(true)}
-                        onChoose={() => handOver(choices)}
+                        onChoose={() => !chooseHeld && handOver(choices)}
                     />
                 )}
             </Box>
@@ -1171,10 +1320,12 @@ const MediaFrame = ({
                             multiple={multiple}
                             renderDetails={renderDetails}
                             problemsOf={problemsOf}
+                            holdOf={holdOfChoice}
+                            held={chooseHeld}
                             onRemove={removeChoice}
                             onMove={moveChoice}
                             onClear={clearSelection}
-                            onChoose={() => handOver(choices)}
+                            onChoose={() => !chooseHeld && handOver(choices)}
                             onShowInLibrary={showInLibrary}
                             onClose={closeChosen}
                         />

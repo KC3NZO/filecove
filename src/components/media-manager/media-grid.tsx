@@ -18,7 +18,7 @@ import MediaRow from "./media-row";
 import MediaTile from "./media-tile";
 import UploadTile from "./upload-tile";
 
-import type { FileAdapter, FileEntry, FileUploadItem, MediaKind } from "../../types";
+import type { AssetHold, FileAdapter, FileEntry, FileUploadItem, MediaKind } from "../../types";
 
 interface MediaGridProps {
     /** The library's assets the search leaves, in the order shown. */
@@ -31,6 +31,8 @@ interface MediaGridProps {
     /** The library's name, which the grid is named by for screen readers. */
     label: string;
     selectedIds: ReadonlySet<string>;
+    /** Why assets can't be chosen now, by their ids, which their tiles show. */
+    holds: ReadonlyMap<string, AssetHold>;
     multiple: boolean;
     status: "loading" | "ready" | "error";
     /** Whether the library has assets at all, whatever the search leaves. */
@@ -135,6 +137,7 @@ const MediaGrid = ({
     adapter,
     label,
     selectedIds,
+    holds,
     multiple,
     status,
     hasMedia,
@@ -294,6 +297,7 @@ const MediaGrid = ({
                             adapter={adapter}
                             index={index}
                             selected={selectedIds.has(entry.id)}
+                            hold={holds.get(entry.id)}
                             focused={index === tabStop}
                             onPress={handlePress}
                             onActivate={onActivate}
@@ -309,6 +313,7 @@ const MediaGrid = ({
                             adapter={adapter}
                             index={index}
                             selected={selectedIds.has(entry.id)}
+                            hold={holds.get(entry.id)}
                             focused={index === tabStop}
                             onPress={handlePress}
                             onActivate={onActivate}

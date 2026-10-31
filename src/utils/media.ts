@@ -1,10 +1,14 @@
+import { joinIsolated } from "./bidi";
 import { acceptsFile, uploadPatterns } from "./files";
 
 import type {
+    AssetHold,
+    AssetState,
     DroppedFiles,
     FileAdapter,
     FileEntry,
     IconName,
+    Locale,
     MediaKind,
     MediaSection,
     MediaUploadCheck,
@@ -70,3 +74,53 @@ export const uploadStandIn = (files: readonly File[]): FileEntry => ({
     size: files.reduce((total, file) => total + file.size, 0),
     mimeType: files[0]?.type || undefined,
 });
+
+/**
+ * An asset as the backend's latest word on its processing has it, where its listing said it was
+ * being processed: with how it stands now, or once it's done, as the backend handed it over, or
+ * else as listed without it. What's listed without it is usable, whatever was said before.
+ */
+export const withState = (entry: FileEntry, state: AssetState | undefined): FileEntry => {
+    if (!entry.processing || !state) {
+        return entry;
+    }
+
+    if (state.status === "ready") {
+        return state.entry ?? { ...entry, processing: undefined };
+    }
+
+    return { ...entry, processing: state };
+};
+
+/**
+ * Why an asset can't be chosen now, in one line, or nothing when it can: its backend's work on it,
+ * with what it's doing and how far along, or failed; or its library refusing it, with why.
+ */
+export const holdOf = (
+    entry: FileEntry,
+    section: MediaSection,
+    { text, formatPercent }: Pick<Locale, "text" | "formatPercent">,
+): AssetHold | undefined => {
+    const { processing } = entry;
+
+    if (processing?.status === "processing") {
+        const step = processing.label || text.mediaProcessing;
+        const { progress } = processing;
+
+        return {
+            status: "processing",
+            progress,
+            text: progress === undefined ? step : joinIsolated([step, formatPercent(progress)]),
+        };
+    }
+
+    if (processing?.status === "failed") {
+        return { status: "failed", text: text.mediaProcessingFailed, detail: processing.message || undefined };
+    }
+
+    const allowed = section.selectable?.(entry) ?? true;
+
+    return allowed === true
+        ? undefined
+        : { status: "refused", text: typeof allowed === "string" && allowed ? allowed : text.mediaUnavailable };
+};

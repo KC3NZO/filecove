@@ -913,6 +913,19 @@ export interface MediaManagerLocaleText
     mediaUploading: string;
     /** One of them, its tile's progress bar's name; `name` comes isolated. */
     mediaUploadingFile: (name: string) => string;
+    /**
+     * An asset its backend is still processing, on its tile, where the backend says nothing of what
+     * it's doing; its `label` stands in its place, and a percent follows either after " · ".
+     */
+    mediaProcessing: string;
+    /** An asset whose processing failed, on its tile; the backend's message is its description. */
+    mediaProcessingFailed: string;
+    /** An asset its library won't have chosen, on its tile, where the library gives no reason. */
+    mediaUnavailable: string;
+    /** Beside Choose while selected assets are still being processed, holding it back. */
+    mediaChoicesProcessing: (count: number) => string;
+    /** Beside Choose while selected assets can't be chosen at all, which have to be taken out. */
+    mediaChoicesUnavailable: (count: number) => string;
 }
 
 /** Every text of both components, as `enUS` holds them and `Locale` hands them on (internal). */

@@ -28,7 +28,9 @@ interface Slot {
     controller: AbortController | null;
 }
 
-const versionOf = (entry: FileEntry) => `${entry.size ?? ""}:${entry.modifiedAt?.getTime() ?? ""}`;
+// An asset's processing ending may give it a picture, as a video's poster frames are made then.
+const versionOf = (entry: FileEntry) =>
+    `${entry.size ?? ""}:${entry.modifiedAt?.getTime() ?? ""}:${entry.processing?.status ?? ""}`;
 
 /**
  * Loads a picture before it's shown, so a URL or blob the browser can't draw leaves the icon in

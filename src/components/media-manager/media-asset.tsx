@@ -26,9 +26,11 @@ import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 import PropertiesPanel from "../properties/properties-panel";
+import { HoldBar } from "./asset-hold";
 
 import type { PropertiesCache } from "../../store/properties-cache";
 import type {
+    AssetHold,
     FileAdapter,
     FileEntry,
     FilePreviewer,
@@ -45,6 +47,8 @@ interface MediaAssetProps {
     /** Whether something can be chosen, which shows the Select toggle. */
     choosing: boolean;
     selected: boolean;
+    /** Why it can't be chosen now, shown under the header, with Select held unless it's selected. */
+    hold: AssetHold | undefined;
     /** What shows assets of its library: the library's own previewers, then the media manager's. */
     previewers: readonly FilePreviewer[];
     /** What it shows: the library's own definitions, or the media manager's; the adapter's groups without. */
@@ -91,6 +95,27 @@ const titleSx: SxProps<Theme> = {
     px: 0.5,
     fontSize: "0.9375rem",
     fontWeight: 700,
+};
+
+// Under the header, across the view: what its backend is doing and how far along, or why it failed
+// or is refused, with a bar along its foot while it's processed.
+const noticeSx: SxProps<Theme> = {
+    position: "relative",
+    flexShrink: 0,
+    px: 2,
+    py: 1,
+    borderBottom: 1,
+    borderColor: "divider",
+};
+
+const noticeTextSx: SxProps<Theme> = {
+    fontSize: "0.8125rem",
+    '&[data-status="failed"]': { color: "error.main" },
+};
+
+const noticeDetailSx: SxProps<Theme> = {
+    color: "text.secondary",
+    fontSize: "0.8125rem",
 };
 
 const selectSx: SxProps<Theme> = {
@@ -370,6 +395,7 @@ const MediaAsset = ({
     adapter,
     choosing,
     selected,
+    hold,
     previewers,
     definitions,
     onBack,
@@ -381,6 +407,7 @@ const MediaAsset = ({
 }: MediaAssetProps) => {
     const { text } = useLocale();
     const nameId = useId();
+    const holdId = useId();
     const rootRef = useRef<HTMLElement>(null);
     const opened = useRef(false);
 
@@ -441,6 +468,8 @@ const MediaAsset = ({
                         color={selected ? "primary" : "inherit"}
                         disableElevation
                         aria-pressed={selected}
+                        disabled={!!hold && !selected}
+                        aria-describedby={hold ? holdId : undefined}
                         startIcon={selected ? <Icon name="check" fontSize="small" /> : undefined}
                         sx={selectSx}
                         onClick={onToggleSelected}
@@ -449,6 +478,19 @@ const MediaAsset = ({
                     </Button>
                 )}
             </Box>
+            {hold && (
+                <Box id={holdId} sx={noticeSx}>
+                    <Typography data-status={hold.status} sx={noticeTextSx}>
+                        <bdi>{hold.text}</bdi>
+                    </Typography>
+                    {hold.detail && (
+                        <Typography sx={noticeDetailSx}>
+                            <bdi>{hold.detail}</bdi>
+                        </Typography>
+                    )}
+                    <HoldBar hold={hold} place="view" />
+                </Box>
+            )}
             <Box sx={bodySx}>
                 <Stage key={entry.id} entry={entry} section={section} adapter={adapter} previewers={previewers} />
                 <Box sx={detailsSx}>

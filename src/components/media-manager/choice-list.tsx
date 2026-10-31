@@ -14,8 +14,9 @@ import { KIND_ICONS } from "../../utils/media";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
+import { HoldLine } from "./asset-hold";
 
-import type { FileAdapter, MediaChoice } from "../../types";
+import type { AssetHold, FileAdapter, MediaChoice } from "../../types";
 
 interface ChoiceListProps {
     /** What's selected, in every library, in the order it's handed over in. */
@@ -32,6 +33,8 @@ interface ChoiceListProps {
     onOpenDetails: (choice: MediaChoice) => void;
     /** How much of a pick the app's `errors` have to fix: its fields with one, and its own as one more. */
     problemsOf: ((choice: MediaChoice) => number) | undefined;
+    /** Why a pick can't be chosen now, which holds Choose back. */
+    holdOf: (choice: MediaChoice) => AssetHold | undefined;
 }
 
 interface ChoiceRowProps {
@@ -50,6 +53,8 @@ interface ChoiceRowProps {
     hasDetails: boolean;
     /** How many of its fields have an error, shown in place of its library. */
     problems: number;
+    /** Why it can't be chosen now, shown in place of its library, before what there is to fix. */
+    hold: AssetHold | undefined;
     describedBy: string;
     onKeyDown: (event: KeyboardEvent<HTMLElement>, index: number) => void;
     onFocus: (index: number) => void;
@@ -212,6 +217,7 @@ const ChoiceRow = ({
     shift,
     hasDetails,
     problems,
+    hold,
     describedBy,
     onKeyDown,
     onFocus,
@@ -221,6 +227,7 @@ const ChoiceRow = ({
 }: ChoiceRowProps) => {
     const { text, formatNumber } = useLocale();
     const problemsId = useId();
+    const holdId = useId();
     const { asset, section } = choice;
     const thumbnail = useThumbnail(asset, section.adapter ?? adapter, "list", CHOICE_THUMBNAIL);
     const name = isolate(asset.name);
@@ -240,7 +247,9 @@ const ChoiceRow = ({
                 data-key={choiceKey(choice)}
                 data-lifted={lifted}
                 aria-label={text.mediaChoiceItem(name, formatNumber(index + 1), formatNumber(count))}
-                aria-describedby={problems > 0 ? `${problemsId} ${describedBy}` : describedBy}
+                aria-describedby={
+                    hold ? `${holdId} ${describedBy}` : problems > 0 ? `${problemsId} ${describedBy}` : describedBy
+                }
                 sx={handleSx}
                 onKeyDown={(event) => onKeyDown(event, index)}
                 onFocus={() => onFocus(index)}
@@ -261,7 +270,9 @@ const ChoiceRow = ({
                     <Typography variant="body2" noWrap sx={nameSx}>
                         {asset.name}
                     </Typography>
-                    {problems > 0 ? (
+                    {hold ? (
+                        <HoldLine hold={hold} id={holdId} />
+                    ) : problems > 0 ? (
                         <Typography id={problemsId} variant="caption" noWrap sx={problemsSx}>
                             {text.mediaChoiceProblems(problems)}
                         </Typography>
@@ -313,6 +324,7 @@ const ChoiceList = ({
     onMove,
     onOpenDetails,
     problemsOf,
+    holdOf,
 }: ChoiceListProps) => {
     const { text, formatNumber } = useLocale();
     const hintId = useId();
@@ -738,6 +750,7 @@ const ChoiceList = ({
                         shift={shiftOf(index)}
                         hasDetails={hasDetails}
                         problems={problemsOf?.(choice) ?? 0}
+                        hold={holdOf(choice)}
                         describedBy={describedBy}
                         onKeyDown={handleKeyDown}
                         onFocus={handleFocus}

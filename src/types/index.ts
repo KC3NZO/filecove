@@ -1,6 +1,9 @@
 export type { ActionContext, ActionGroup, ActionTarget, ContextFolder, FileAction } from "./action";
 export type { FileManagerApi, RefreshOptions } from "./api";
 export type {
+    AssetProcessing,
+    AssetReady,
+    AssetState,
     ConflictPolicy,
     ContentOptions,
     DownloadContent,
@@ -51,7 +54,15 @@ export type {
 } from "./locale";
 export type { FileManagerLimits } from "./limits";
 export type { MainMenuGroup, MainMenuItem } from "./main-menu";
-export type { MediaChoice, MediaKind, MediaSection, MediaSectionGroup } from "./media";
+export type {
+    AssetHold,
+    AssetStates,
+    FollowedAssets,
+    MediaChoice,
+    MediaKind,
+    MediaSection,
+    MediaSectionGroup,
+} from "./media";
 export type {
     EntryGroup,
     MenuPosition,

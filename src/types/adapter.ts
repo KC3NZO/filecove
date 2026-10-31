@@ -56,9 +56,50 @@ export interface FileEntry {
      * offered to restore. Leave it out everywhere else, what's inside a trashed folder included.
      */
     trashed?: TrashInfo;
+    /**
+     * Files: the backend's work on it, while it isn't usable yet, or failed so it never became so,
+     * such as a video still being transcoded after its upload. The media manager shows it on the
+     * asset's tile and won't have it chosen, and follows it through `processing` or
+     * `watchProcessing` until it's usable. Leave it out once it's usable, which it may be while work
+     * still runs on it, such as a video made again in another quality; the file manager ignores it.
+     */
+    processing?: AssetProcessing;
     /** Anything else the adapter wants to carry for custom actions; the file manager ignores it. */
     meta?: Record<string, unknown>;
 }
+
+/**
+ * The backend's work on an asset that isn't usable yet (`FileEntry.processing`): under way, or
+ * failed. What the work is, its jobs and its parts, is the backend's own; this is only how the asset
+ * as a whole stands, for its tile: one line and a bar.
+ */
+export interface AssetProcessing {
+    status: "processing" | "failed";
+    /**
+     * How far along it is as a whole, from 0 to 1, as the backend weighs its jobs, which the media
+     * manager never adds up itself. Leave it out when the backend can't tell, and the bar just moves.
+     */
+    progress?: number;
+    /**
+     * What it's doing, shown in place of "Processing", in the app's language: "Making renditions",
+     * "Converting audio tracks". Keep it short: it's one line on a tile.
+     */
+    label?: string;
+    /** Why it failed, in the app's language, for its tile's description and the asset's view. */
+    message?: string;
+}
+
+/**
+ * An asset done with: usable now, with its entry as it is now when the backend hands it over (a new
+ * thumbnail, its length, its delivery in `meta`), or else listed again.
+ */
+export interface AssetReady {
+    status: "ready";
+    entry?: FileEntry;
+}
+
+/** How an asset being processed stands now, as `processing` and `watchProcessing` say it. */
+export type AssetState = AssetProcessing | AssetReady;
 
 /** Where an entry in the trash was moved there from, and when (`FileEntry.trashed`). */
 export interface TrashInfo {
@@ -691,4 +732,22 @@ export interface FileAdapter {
      * totals, e.g. when there are too many to count.
      */
     measure?(folders: FileEntry[], options: MeasureOptions): Promise<EntryTotals>;
+    /**
+     * Says how assets being processed stand now (`FileEntry.processing`), by their ids, polled by
+     * the media manager for those it shows or has selected, every 2 s and less often while nothing
+     * changes, up to every 10 s, paused while the page is hidden. Ids left out are taken as
+     * unchanged. One done resolves as `{ status: "ready" }`, with its entry as it now is when the
+     * backend has it at hand, else its library is listed again. It's only asked of the assets
+     * whose listing said they're processing; one that failed isn't followed. Not used when there's
+     * `watchProcessing`. Without either, an asset shows as its listing says until it's listed again.
+     */
+    processing?(entries: FileEntry[], options: OperationOptions): Promise<Record<string, AssetState>>;
+    /**
+     * Follows assets being processed as the backend pushes how they stand, through the app's own
+     * WebSocket or server-sent events, which the adapter opens: call `onChange` with an asset's id
+     * and its state each time it changes, as `processing` resolves them. Return the function that
+     * stops following them, called when the assets followed change, as one is done or comes into
+     * view, and as the media manager unmounts. Used in place of `processing`.
+     */
+    watchProcessing?(entries: FileEntry[], onChange: (id: string, state: AssetState) => void): () => void;
 }

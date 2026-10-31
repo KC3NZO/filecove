@@ -1,7 +1,15 @@
+import { push } from "../options";
 import { createMockAdapter, file, folder } from "./mock-adapter";
 import { shrink, thumbnailSource } from "./mock-content";
 
-import type { EntryProperties, FileAdapter, FileEntry, PropertyValues } from "../../src";
+import type {
+    AssetProcessing,
+    AssetState,
+    EntryProperties,
+    FileAdapter,
+    FileEntry,
+    PropertyValues,
+} from "../../src";
 import type { MockNode } from "./mock-adapter";
 
 // The media manager's libraries for the dev host (`?media`): one root a kind, as a site's media
@@ -273,6 +281,86 @@ const renditionJobs = (entry: FileEntry): RenditionJob[] => {
     );
 };
 
+// How long a picture uploaded here takes to be made smaller or turned into another format, and a
+// file named "broken" to be found broken, in ms.
+const PICTURE_WORK = 4_000;
+const CHECK_WORK = 5_000;
+
+/**
+ * What this backend is still doing to an asset, as a whole, for its tile, while it isn't usable
+ * yet: a video's renditions, how far along all of them are and the one being made; a picture
+ * uploaded here made smaller or turned into another format, with no percent, as that's one quick
+ * request; a file uploaded with "broken" in its name failing once it's checked. Nothing once it's
+ * done, or for what was never processed. A video whose rendition failed with the others done is
+ * usable, as the rest play.
+ */
+const processingOf = (entry: FileEntry): AssetProcessing | undefined => {
+    const upload = uploads.get(entry.id);
+    const since = upload ? Date.now() - upload.at : Infinity;
+
+    if (upload && /broken/i.test(entry.name)) {
+        return since < CHECK_WORK
+            ? { status: "processing", label: "Checking the file" }
+            : { status: "failed", message: "The file couldn't be decoded, so nothing could be made of it." };
+    }
+
+    if (isVideo(entry)) {
+        const jobs = renditionJobs(entry);
+
+        if (!jobs.some(({ status }) => status === "queued" || status === "processing")) {
+            return undefined;
+        }
+
+        const under = jobs.find(({ status }) => status === "processing");
+        const done = jobs.reduce(
+            (sum, job) => sum + (job.status === "processing" ? (job.progress ?? 0) : job.status === "queued" ? 0 : 1),
+            0,
+        );
+
+        return {
+            status: "processing",
+            progress: done / jobs.length,
+            label: under ? `Making the ${under.name} rendition` : "Waiting for the transcoder",
+        };
+    }
+
+    if (upload && isImage(entry) && since < PICTURE_WORK) {
+        const { format, optimize, responsive } = upload.values;
+
+        if (typeof format === "string" && format && entry.mimeType !== `image/${format}`) {
+            return { status: "processing", label: `Converting to ${format.toUpperCase()}` };
+        }
+
+        if (responsive) {
+            return { status: "processing", label: "Making responsive sizes" };
+        }
+
+        if (optimize) {
+            return { status: "processing", label: "Optimizing" };
+        }
+    }
+
+    return undefined;
+};
+
+/** An asset as this backend lists it: what it's like, how it's delivered, and its processing. */
+const listedAs = (entry: FileEntry): FileEntry => ({
+    ...entry,
+    media: mediaOf(entry),
+    meta: metaOf(entry),
+    processing: processingOf(entry),
+});
+
+/** How assets being processed stand now, by id: still under way, failed, or done, as now listed. */
+const statesOf = (entries: readonly FileEntry[]): Record<string, AssetState> =>
+    Object.fromEntries(
+        entries.map((entry): [string, AssetState] => {
+            const now = listedAs(entry);
+
+            return [entry.id, now.processing ?? { status: "ready", entry: now }];
+        }),
+    );
+
 /**
  * Asks this backend how a video's renditions stand, as a renderer of the app's would poll its API
  * (or listen to its socket) to show them live.
@@ -356,19 +444,34 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
     upload: async (file, folderId, options) => {
         const entry = await adapter.upload?.(file, folderId, options);
 
-        if (entry && options.values) {
-            uploads.set(entry.id, { values: options.values, at: Date.now() });
+        if (entry) {
+            uploads.set(entry.id, { values: options.values ?? {}, at: Date.now() });
         }
 
-        return entry;
+        return entry && listedAs(entry);
     },
     list: (folderId, options) =>
         adapter.list(folderId, options).then((result) => ({
             ...result,
-            entries: result.entries.map((entry) =>
-                entry.kind === "file" ? { ...entry, media: mediaOf(entry), meta: metaOf(entry) } : entry,
-            ),
+            entries: result.entries.map((entry) => (entry.kind === "file" ? listedAs(entry) : entry)),
         })),
+    // How its assets' processing stands, asked by the media manager as it polls, or with `?push`,
+    // pushed every second as a socket would, rather than asked.
+    ...(push
+        ? {
+              watchProcessing: (entries: FileEntry[], onChange: (id: string, state: AssetState) => void) => {
+                  const timer = window.setInterval(
+                      () => Object.entries(statesOf(entries)).forEach(([id, state]) => onChange(id, state)),
+                      1_000,
+                  );
+
+                  return () => window.clearInterval(timer);
+              },
+          }
+        : {
+              processing: (entries: FileEntry[], { signal }: { signal: AbortSignal }) =>
+                  wait(150, signal).then(() => statesOf(entries)),
+          }),
     thumbnail: (entry, options) =>
         isVideo(entry)
             ? wait(200 + (hashOf(entry.name) % 400), options.signal)

@@ -18,9 +18,10 @@ import {
 } from "../../styles/mixins";
 import { joinIsolated } from "../../utils/bidi";
 import Icon from "../icons/icon";
+import { HoldBar, HoldLine } from "./asset-hold";
 import OpenButton from "./open-button";
 
-import type { FileAdapter, FileEntry } from "../../types";
+import type { AssetHold, FileAdapter, FileEntry } from "../../types";
 
 interface MediaRowProps {
     entry: FileEntry;
@@ -28,6 +29,11 @@ interface MediaRowProps {
     /** Where the entry is shown, from 0. */
     index: number;
     selected: boolean;
+    /**
+     * Why it can't be chosen now, shown in place of its type and size, with a bar while it's
+     * processed: it isn't selected then, but is opened.
+     */
+    hold: AssetHold | undefined;
     /** Whether the row has the list's Tab stop. */
     focused: boolean;
     onPress: (index: number, event: MouseEvent) => void;
@@ -55,6 +61,7 @@ const rowSx: SxProps<Theme> = (theme) => ({
     '&[aria-selected="true"]': { bgcolor: selectedBackground(theme) },
     '&[aria-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
     "&:focus-visible": focusOutline,
+    '&[aria-disabled="true"]': { cursor: "default" },
     [forcedColors]: { '&[aria-selected="true"]': { bgcolor: "Highlight", color: "HighlightText" } },
 });
 
@@ -72,6 +79,8 @@ const coverSx: SxProps<Theme> = {
     bgcolor: "action.hover",
     color: "text.secondary",
     "& > img": { width: "100%", height: "100%", objectFit: "cover" },
+    // A piece of audio that can't be chosen now is faded, as a file being uploaded is.
+    "[data-held='true'] > & > *": { opacity: 0.55 },
 };
 
 const textSx: SxProps<Theme> = {
@@ -123,7 +132,19 @@ const checkSx: SxProps<Theme> = {
 
 /** One piece of audio of a library: its cover or icon, its name, its type and size, and its length. */
 const MediaRow = memo(
-    ({ entry, adapter, index, selected, focused, onPress, onActivate, onOpen, onFocus, onKeyDown }: MediaRowProps) => {
+    ({
+        entry,
+        adapter,
+        index,
+        selected,
+        hold,
+        focused,
+        onPress,
+        onActivate,
+        onOpen,
+        onFocus,
+        onKeyDown,
+    }: MediaRowProps) => {
         const { describeType, formatDuration, formatSize, text } = useLocale();
         const cover = useThumbnail(entry, adapter, "list", AUDIO_ROW);
         const duration = entry.media?.duration;
@@ -133,8 +154,11 @@ const MediaRow = memo(
             <Box
                 role="option"
                 aria-selected={selected}
+                // One selected before it was held, as an upload still processed is, can be taken out.
+                aria-disabled={hold && !selected ? true : undefined}
                 tabIndex={focused ? 0 : -1}
                 data-index={index}
+                data-held={!!hold}
                 sx={rowSx}
                 onClick={(event) => onPress(index, event)}
                 onDoubleClick={() => onActivate(index)}
@@ -148,9 +172,16 @@ const MediaRow = memo(
                     <Typography variant="body2" noWrap>
                         {entry.name}
                     </Typography>
-                    <Typography variant="caption" noWrap sx={detailSx}>
-                        {joinIsolated(detail)}
-                    </Typography>
+                    {hold ? (
+                        <>
+                            <HoldLine hold={hold} />
+                            <HoldBar hold={hold} place="row" />
+                        </>
+                    ) : (
+                        <Typography variant="caption" noWrap sx={detailSx}>
+                            {joinIsolated(detail)}
+                        </Typography>
+                    )}
                 </Box>
                 {duration !== undefined && (
                     <>

@@ -18,9 +18,10 @@ import {
 } from "../../styles/mixins";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
+import { HoldBar, HoldLine } from "./asset-hold";
 import OpenButton from "./open-button";
 
-import type { FileAdapter, FileEntry } from "../../types";
+import type { AssetHold, FileAdapter, FileEntry } from "../../types";
 
 /** The kinds a library shows as tiles; audio has rows (`MediaRow`). */
 export type TileKind = keyof typeof TILE_LAYOUTS;
@@ -32,6 +33,11 @@ interface MediaTileProps {
     /** Where the entry is shown, from 0. */
     index: number;
     selected: boolean;
+    /**
+     * Why it can't be chosen now, shown in place of its size, with a bar while it's processed: it
+     * isn't selected then, but is opened.
+     */
+    hold: AssetHold | undefined;
     /** Whether the tile has the grid's Tab stop. */
     focused: boolean;
     onPress: (index: number, event: MouseEvent) => void;
@@ -58,6 +64,7 @@ const tileSx: SxProps<Theme> = (theme) => ({
     '&[aria-selected="true"]': { bgcolor: selectedBackground(theme) },
     '&[aria-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
     "&:focus-visible": focusOutline,
+    '&[aria-disabled="true"]': { cursor: "default" },
     [forcedColors]: { '&[aria-selected="true"]': { bgcolor: "Highlight", color: "HighlightText" } },
 });
 
@@ -78,6 +85,8 @@ const frameSx = (ratio: string): SxProps<Theme> => ({
         outlineColor: "primary.main",
         outlineOffset: "-3px",
     },
+    // An asset that can't be chosen now is faded, as a file being uploaded is.
+    "[data-held='true'] > & > img, [data-held='true'] > & > svg": { opacity: 0.55 },
     [forcedColors]: { "[aria-selected='true'] > &": { outlineColor: "HighlightText" } },
 });
 
@@ -177,7 +186,20 @@ const detailSx: SxProps<Theme> = {
  * length over it, and its name, with a picture's or a video's size, or a document's, under it.
  */
 const MediaTile = memo(
-    ({ entry, kind, adapter, index, selected, focused, onPress, onActivate, onOpen, onFocus, onKeyDown }: MediaTileProps) => {
+    ({
+        entry,
+        kind,
+        adapter,
+        index,
+        selected,
+        hold,
+        focused,
+        onPress,
+        onActivate,
+        onOpen,
+        onFocus,
+        onKeyDown,
+    }: MediaTileProps) => {
         const { formatDuration, formatNumber, formatSize, text } = useLocale();
         const thumbnail = useThumbnail(entry, adapter, "grid", TILE_LAYOUTS[kind].thumbnail);
         const duration = kind === "video" ? entry.media?.duration : undefined;
@@ -188,9 +210,12 @@ const MediaTile = memo(
             <Box
                 role="option"
                 aria-selected={selected}
+                // One selected before it was held, as an upload still processed is, can be taken out.
+                aria-disabled={hold && !selected ? true : undefined}
                 tabIndex={focused ? 0 : -1}
                 data-index={index}
                 data-kind={kind}
+                data-held={!!hold}
                 sx={tileSx}
                 onClick={(event) => onPress(index, event)}
                 onDoubleClick={() => onActivate(index)}
@@ -213,12 +238,15 @@ const MediaTile = memo(
                         <Icon name="check" />
                     </Box>
                     <OpenButton name={entry.name} index={index} onOpen={onOpen} sx={openSx} />
+                    {hold && <HoldBar hold={hold} place="frame" />}
                 </Box>
                 <Box sx={textSx}>
                     <Typography variant="body2" noWrap sx={nameSx}>
                         {entry.name}
                     </Typography>
-                    {measured ? (
+                    {hold ? (
+                        <HoldLine hold={hold} />
+                    ) : measured ? (
                         <Typography variant="caption" noWrap sx={detailSx} aria-hidden>
                             <bdi>{`${formatNumber(width)} × ${formatNumber(height)}`}</bdi>
                         </Typography>

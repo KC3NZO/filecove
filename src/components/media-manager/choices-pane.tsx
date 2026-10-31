@@ -16,9 +16,10 @@ import { KIND_ICONS } from "../../utils/media";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
+import { HoldLine } from "./asset-hold";
 import ChoiceList, { choiceKey } from "./choice-list";
 
-import type { FileAdapter, MediaChoice } from "../../types";
+import type { AssetHold, FileAdapter, MediaChoice } from "../../types";
 
 interface ChoicesPaneProps {
     /** What's selected, in every library, in the order it's handed over in. */
@@ -37,6 +38,10 @@ interface ChoicesPaneProps {
     renderDetails: ((choice: MediaChoice, index: number) => ReactNode) | undefined;
     /** How much of a pick the app's `errors` have to fix, for its row; none without them. */
     problemsOf: ((choice: MediaChoice) => number) | undefined;
+    /** Why a pick can't be chosen now, for its row and its details. */
+    holdOf: (choice: MediaChoice) => AssetHold | undefined;
+    /** What holds Choose back, said beside it, while picks can't be chosen; nothing otherwise. */
+    held: string | undefined;
     onRemove: (choice: MediaChoice) => void;
     onMove: (from: number, to: number) => void;
     onClear: () => void;
@@ -50,6 +55,7 @@ interface ChoicesPaneProps {
 interface ChoiceDetailsProps {
     choice: MediaChoice;
     adapter: FileAdapter;
+    hold: AssetHold | undefined;
     children: ReactNode;
     onShowInLibrary: () => void;
 }
@@ -115,13 +121,21 @@ const emptySx: SxProps<Theme> = {
     "& > svg": { fontSize: 40, opacity: 0.6 },
 };
 
+// Choose across the column, with what holds it back above it.
 const footerSx: SxProps<Theme> = {
     display: "flex",
+    flexDirection: "column",
+    gap: 1,
     flexShrink: 0,
     p: 1.5,
     borderTop: 1,
     borderColor: "divider",
-    "& > button": { flex: 1 },
+};
+
+const heldSx: SxProps<Theme> = {
+    color: "text.secondary",
+    fontSize: "0.8125rem",
+    textAlign: "center",
 };
 
 const detailsSx: SxProps<Theme> = {
@@ -185,7 +199,7 @@ const showSx: SxProps<Theme> = {
 };
 
 /** One pick's details: what it is, a way to the asset itself, and the app's own fields for this use of it. */
-const ChoiceDetails = ({ choice, adapter, children, onShowInLibrary }: ChoiceDetailsProps) => {
+const ChoiceDetails = ({ choice, adapter, hold, children, onShowInLibrary }: ChoiceDetailsProps) => {
     const { text } = useLocale();
     const { asset, section } = choice;
     const thumbnail = useThumbnail(asset, section.adapter ?? adapter, "grid", 5.5);
@@ -209,6 +223,7 @@ const ChoiceDetails = ({ choice, adapter, children, onShowInLibrary }: ChoiceDet
                     <Typography variant="caption" sx={librarySx}>
                         {section.label}
                     </Typography>
+                    {hold && <HoldLine hold={hold} />}
                     <Button size="small" sx={showSx} onClick={onShowInLibrary}>
                         {text.mediaShowInLibrary}
                     </Button>
@@ -232,6 +247,8 @@ const ChoicesPane = ({
     multiple,
     renderDetails,
     problemsOf,
+    holdOf,
+    held,
     onRemove,
     onMove,
     onClear,
@@ -241,6 +258,7 @@ const ChoicesPane = ({
 }: ChoicesPaneProps) => {
     const { text, formatNumber } = useLocale();
     const titleId = useId();
+    const heldId = useId();
     const paneRef = useRef<HTMLElement>(null);
     const backRef = useRef<HTMLButtonElement>(null);
     const [detailsKey, setDetailsKey] = useState<string | null>(null);
@@ -321,6 +339,7 @@ const ChoicesPane = ({
                         key={detailsKey}
                         choice={open}
                         adapter={adapter}
+                        hold={holdOf(open)}
                         onShowInLibrary={() => onShowInLibrary(open)}
                     >
                         {renderDetails(open, choices.indexOf(open))}
@@ -351,6 +370,7 @@ const ChoicesPane = ({
                             key={choiceKey(only)}
                             choice={only}
                             adapter={adapter}
+                            hold={holdOf(only)}
                             onShowInLibrary={() => onShowInLibrary(only)}
                         >
                             {renderDetails?.(only, 0)}
@@ -365,6 +385,7 @@ const ChoicesPane = ({
                             onMove={onMove}
                             onOpenDetails={openDetails}
                             problemsOf={problemsOf}
+                            holdOf={holdOf}
                         />
                     ) : (
                         <Box sx={emptySx}>
@@ -375,7 +396,18 @@ const ChoicesPane = ({
                 </>
             )}
             <Box sx={footerSx}>
-                <Button variant="contained" disableElevation disabled={count === 0} onClick={onChoose}>
+                {held && (
+                    <Typography id={heldId} variant="body2" sx={heldSx}>
+                        {held}
+                    </Typography>
+                )}
+                <Button
+                    variant="contained"
+                    disableElevation
+                    disabled={count === 0 || !!held}
+                    aria-describedby={held ? heldId : undefined}
+                    onClick={onChoose}
+                >
                     {text.mediaChoose}
                 </Button>
             </Box>
