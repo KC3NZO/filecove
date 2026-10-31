@@ -5,7 +5,7 @@ What's left in the two components, `FileManager` and `MediaManager`, what they s
 ## Order
 
 1. ~~Re-listing folders in the background, tooltips, high contrast and announcements, properties, folder upload.~~ Done 2026-10-23 to 2026-10-24.
-2. The media manager's necessary gaps and features, in the order listed below: the contract's open points first (`fields` on the section, `value` / `onChange`), then holding Choose back, the errors no field claims, virtualizing the grid, uploading and processing.
+2. The media manager's necessary gaps and features, in the order listed below: the contract's open points first (`fields` on the section, `value` / `onChange`), then holding Choose back, virtualizing the grid, uploading and processing.
 3. Packaging, in one pass before a release, as the last step.
 
 Everything optional waits until then, unless an app needs it.
@@ -158,12 +158,10 @@ Tests, moving entries to another adapter's trash (each backend's trash holds its
   - `fields` on `MediaSection`, beside its `properties`, with the component's `fields(asset, section)` kept as the fallback, as `properties` has it (the user's idea, agreed).
   - A controlled selection, `value` / `onChange` called on every change, the pick's fields included (`defaultValue` done). Proposed with it: picking turned on by any of `value`, `defaultValue`, `onChange` or `onChoose`, and the Choose button, a double click or Enter finishing, only with `onChoose`, as MUI X's pickers have `onChange` and `onAccept`. Not yet agreed.
 - [ ] **Holding Choose back** until a pick's `required` fields are filled, saying so on its row.
-- [ ] **Errors no field claims**: those no `errorKey` names, and a pick's or the whole selection's own (`items.0`, `items`), shown at the pick's head or the column's.
 - [ ] **Virtualizing the grid**, which renders every tile for now, so a library of thousands is slow (the file manager's lines, see `virtualization.md`).
 - [ ] **The rest of the props checklist** (`props.md`): the open library, the search and the asset open controlled, an `apiRef` (focus, refresh, open a library, open an asset, select, choose), `limits`, `relistAfter`, and announcements, such as the number of matches.
 
 #### Optional
-- [ ] Counting on a pick's row the errors a field the app draws finds itself, with no `errorKey`.
 - [ ] Prefilling a pick's fields from the asset's own properties.
 - [ ] The selected column's extras, if apps need them: a `max`, the app's own check disabling Choose with its message, resizing it.
 - [ ] Resizing the docked libraries (`ResizeEdge`, once shared out of `file-manager/`).
@@ -174,6 +172,7 @@ Tests, moving entries to another adapter's trash (each backend's trash holds its
 #### Done
 - [x] Reordering the selected column. *Done 2026-10-27: by dragging, a long press on touch, and the keyboard (Space to pick one up, the arrows to move it), each step announced.*
 - [x] The backend's errors for the picks' fields. *Done 2026-10-31: `errors` (`FieldErrors`, public) takes what the app's backend answered as it came, by its own keys, a message or several each, as Laravel's validation errors are; a field's `errorKey({ index, entry })` names its key from the pick's place among those selected, its messages show under it, its control marked as wrong and described by them, and the pick's row in the list says how many of its fields have one (`mediaChoiceProblems`); a field the app draws reads `errors` and `index` from its params itself (`PropertyParams.errors`, `index`, `errorId`, and `error` for `render` too). The playground's Choose saves to a mock backend first (`mocks/mock-save.ts`).*
+- [x] The backend's errors no field claims, and errors following their pick. *Done 2026-10-31: `choiceErrorKey({ index, entry })` names a pick's own keys (`media.0`, `media.0.id`), shown at the top of its details and counted on its row as one more to fix ("2 to fix"); a field's `errorKey` may name several keys, such as a title a language under tabs, counted once with every language's messages under it, so it's the only way a field is counted, and a field the app draws reads `errors` only to mark finer parts of its own; the keys go by the order the app was handed the picks in at Choose, so a pick moved keeps its errors, one taken out takes them, and one added since has none, with nothing asked of the app. The list's own errors (`media`) are the app's to show, and keys nobody names aren't shown, as the app may pass its whole form's (`selectionErrorKey` declined). The playground's backend answers by `media.N.translations.en.title`, with a video's title as one tabbed field.*
 
 ### Features
 
@@ -191,7 +190,7 @@ Tests, moving entries to another adapter's trash (each backend's trash holds its
 - [x] The contract on paper, and the look and feel reworked to it. *Done 2026-10-31 (branch `better-mediamanger`): backend-neutral (a Laravel backend worked through only as an example), the consumer defining what's shown, what's filled in for a pick and how an asset plays (`previewers`, a library's own first, then the component's; no built-in HLS, the thumbnail otherwise); an asset's delivery in `FileEntry.meta`, handed back with the pick (`MediaChoice.asset`); one asset, one pick across libraries sharing an adapter; the draft `mediaSlots` and `renderChoiceDetails` dropped. What an asset shows and what a pick asks are the app's definitions, as a data grid's columns (`PropertyDefinition`, shared with the properties panel: types `string`, `number`, `boolean` and `date`, kinds `url`, `size`, `duration` and `datetime`, `options` and `multiple` on any but boolean, `valueGetter`, `valueFormatter`, `render` saving in place, `renderEdit`), read from the plain `values` the adapter's `properties` hands over, a library's `properties` in place of the component's `properties(asset, section)`, the built-in types drawn and edited by one shared input (`PropertyInput`) in the properties' editor and a pick's fields alike. `MediaField`, the earlier custom renderers (`PropertyRenderers`, `type: "custom"`), and the `duration` and `dimensions` property values, dropped.*
 
 ### Left out by choice
-A built-in player or HLS (the app's `previewers`), fields, languages or localized values of the media manager's own (a pick's fields are entirely the app's), properties a backend describes at runtime (each library defines what it shows in code), folders inside a library (organising is by tags and the search), and a mixed library of several kinds (one kind a library, the app passing the libraries of the kinds it takes).
+A built-in player or HLS (the app's `previewers`), fields, languages or localized values of the media manager's own (a pick's fields are entirely the app's), properties a backend describes at runtime (each library defines what it shows in code), errors about the whole list or keys nobody names shown by the media manager (the app shows the list's own, and may pass its whole form's errors), folders inside a library (organising is by tags and the search), and a mixed library of several kinds (one kind a library, the app passing the libraries of the kinds it takes).
 
 ---
 
