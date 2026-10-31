@@ -16,6 +16,7 @@ import { useThumbnail } from "../../hooks/use-thumbnail";
 import { createPropertiesCache } from "../../store/properties-cache";
 import { focusOutline, visuallyHiddenSx } from "../../styles/mixins";
 import { isolate, joinIsolated } from "../../utils/bidi";
+import { NO_ERRORS } from "../../utils/field-errors";
 import { formatValue, hasEditor, isEmptyValue, readValue } from "../../utils/property-value";
 import ToolbarActions from "../buttons/toolbar-actions";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
@@ -713,6 +714,7 @@ const PropertiesPanel = ({
                         entry,
                         adapter: single.adapter,
                         labelId,
+                        errors: NO_ERRORS,
                         save: editable ? (next: unknown) => saveValue(key, definition.label, next, false) : undefined,
                         saving,
                     })}

@@ -6,11 +6,12 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
+import { fieldMessages } from "../../utils/field-errors";
 import { formatValue, hasBuiltInEditor, isEmptyValue, readValue } from "../../utils/property-value";
 import PropertyDisplay from "../properties/property-display";
 import PropertyInput from "../properties/property-input";
 
-import type { FileAdapter, FileEntry, PropertyDefinition, PropertyDefinitionGroup } from "../../types";
+import type { FieldErrors, FileAdapter, FileEntry, PropertyDefinition, PropertyDefinitionGroup } from "../../types";
 
 interface ChoiceFieldsProps {
     groups: readonly PropertyDefinitionGroup[];
@@ -19,6 +20,10 @@ interface ChoiceFieldsProps {
     /** The asset picked, and the adapter of its library, for the app's own fields. */
     asset: FileEntry;
     adapter: FileAdapter;
+    /** The media manager's `errors`, as the app passed them, each field finding its own by its `errorKey`. */
+    errors: FieldErrors;
+    /** The pick's place among those selected, which the fields' keys in `errors` are made from. */
+    index: number;
     onChange: (key: string, value: unknown) => void;
 }
 
@@ -30,6 +35,10 @@ interface FieldProps {
     /** The control's id, which its label is for. */
     id: string;
     labelId: string;
+    errors: FieldErrors;
+    index: number;
+    /** The id of its messages, while its `errorKey` finds an error. */
+    errorId: string | undefined;
     onChange: (value: unknown) => void;
 }
 
@@ -38,6 +47,8 @@ interface LabelProps {
     labelId: string;
     /** The control it's for, when it's one of the media manager's. */
     htmlFor?: string;
+    /** Whether its `errorKey` finds an error, which colours it. */
+    error: boolean;
 }
 
 // The groups in a box of their own, so the first of them is its first child, whatever the pick's
@@ -80,8 +91,23 @@ const labelSx: SxProps<Theme> = {
     fontSize: "0.75rem",
 };
 
+const errorLabelSx: SxProps<Theme> = {
+    ...labelSx,
+    color: "error.main",
+};
+
 const requiredSx: SxProps<Theme> = {
     color: "error.main",
+};
+
+// Under the field, as a helper text is, each message on a line of its own.
+const messagesSx: SxProps<Theme> = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 0.25,
+    color: "error.main",
+    fontSize: "0.75rem",
+    overflowWrap: "anywhere",
 };
 
 // The checkbox's own padding lines its box up with the labels above the other fields.
@@ -109,7 +135,7 @@ const keepEnter = (event: KeyboardEvent) => {
     }
 };
 
-const Label = ({ definition, labelId, htmlFor }: LabelProps) => {
+const Label = ({ definition, labelId, htmlFor, error }: LabelProps) => {
     const content = (
         <>
             {definition.label}
@@ -121,12 +147,14 @@ const Label = ({ definition, labelId, htmlFor }: LabelProps) => {
         </>
     );
 
+    const sx = error ? errorLabelSx : labelSx;
+
     return htmlFor ? (
-        <Typography component="label" htmlFor={htmlFor} id={labelId} sx={labelSx}>
+        <Typography component="label" htmlFor={htmlFor} id={labelId} sx={sx}>
             {content}
         </Typography>
     ) : (
-        <Typography id={labelId} sx={labelSx}>
+        <Typography id={labelId} sx={sx}>
             {content}
         </Typography>
     );
@@ -135,19 +163,21 @@ const Label = ({ definition, labelId, htmlFor }: LabelProps) => {
 /**
  * One of the app's fields for a pick, as it's to be filled in: its own editor (`renderEdit`), the
  * built-in one of its type, or its `render` changing it in place through `save`. One that isn't
- * `editable` only shows what it holds, left out while it's empty.
+ * `editable` only shows what it holds, left out while it's empty and has no error. With an error its
+ * `errorKey` finds, its label and control are marked, and its messages, under it, describe it.
  */
-const Field = ({ definition, value, asset, adapter, id, labelId, onChange }: FieldProps) => {
+const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, errorId, onChange }: FieldProps) => {
     const locale = useLocale();
     const formattedValue = formatValue(definition, value, asset, locale);
-    const base = { definition, value, formattedValue, entry: asset, adapter, labelId };
+    const error = errorId !== undefined;
+    const base = { definition, value, formattedValue, entry: asset, adapter, labelId, errors, index, errorId };
 
     if (definition.editable === false) {
         return (
             <>
-                <Label definition={definition} labelId={labelId} />
+                <Label definition={definition} labelId={labelId} error={error} />
                 {definition.render ? (
-                    <Box sx={ownSx}>{definition.render({ ...base, saving: false })}</Box>
+                    <Box sx={ownSx}>{definition.render({ ...base, saving: false, error })}</Box>
                 ) : (
                     <Box sx={valueSx}>
                         <PropertyDisplay definition={definition} value={value} formattedValue={formattedValue} />
@@ -160,14 +190,14 @@ const Field = ({ definition, value, asset, adapter, id, labelId, onChange }: Fie
     if (definition.renderEdit) {
         return (
             <>
-                <Label definition={definition} labelId={labelId} />
+                <Label definition={definition} labelId={labelId} error={error} />
                 <Box sx={ownSx}>
                     {definition.renderEdit({
                         ...base,
                         id,
                         onChange: (next) => onChange(next),
                         disabled: false,
-                        error: false,
+                        error,
                     })}
                 </Box>
             </>
@@ -177,8 +207,22 @@ const Field = ({ definition, value, asset, adapter, id, labelId, onChange }: Fie
     if (definition.type === "boolean") {
         return (
             <Box sx={checkRowSx}>
-                <PropertyInput definition={definition} value={value} onChange={onChange} id={id} labelId={labelId} />
-                <Typography component="label" htmlFor={id} id={labelId} variant="body2">
+                <PropertyInput
+                    definition={definition}
+                    value={value}
+                    onChange={onChange}
+                    id={id}
+                    labelId={labelId}
+                    error={error}
+                    describedBy={errorId}
+                />
+                <Typography
+                    component="label"
+                    htmlFor={id}
+                    id={labelId}
+                    variant="body2"
+                    color={error ? "error" : undefined}
+                >
                     {definition.label}
                 </Typography>
             </Box>
@@ -188,8 +232,16 @@ const Field = ({ definition, value, asset, adapter, id, labelId, onChange }: Fie
     if (hasBuiltInEditor(definition)) {
         return (
             <>
-                <Label definition={definition} labelId={labelId} htmlFor={id} />
-                <PropertyInput definition={definition} value={value} onChange={onChange} id={id} labelId={labelId} />
+                <Label definition={definition} labelId={labelId} htmlFor={id} error={error} />
+                <PropertyInput
+                    definition={definition}
+                    value={value}
+                    onChange={onChange}
+                    id={id}
+                    labelId={labelId}
+                    error={error}
+                    describedBy={errorId}
+                />
             </>
         );
     }
@@ -197,7 +249,7 @@ const Field = ({ definition, value, asset, adapter, id, labelId, onChange }: Fie
     // Its `render` sets the pick's value as it saves, at once.
     return (
         <>
-            <Label definition={definition} labelId={labelId} />
+            <Label definition={definition} labelId={labelId} error={error} />
             {definition.render && (
                 <Box sx={ownSx}>
                     {definition.render({
@@ -208,6 +260,7 @@ const Field = ({ definition, value, asset, adapter, id, labelId, onChange }: Fie
                             return Promise.resolve(true);
                         },
                         saving: false,
+                        error,
                     })}
                 </Box>
             )}
@@ -220,7 +273,7 @@ const Field = ({ definition, value, asset, adapter, id, labelId, onChange }: Fie
  * holds under its key, and each change handed back by that key. The fields and their labels are the
  * app's; the media manager knows nothing of what they mean, nor of the languages they're in.
  */
-const ChoiceFields = ({ groups, values, asset, adapter, onChange }: ChoiceFieldsProps) => {
+const ChoiceFields = ({ groups, values, asset, adapter, errors, index: pickIndex, onChange }: ChoiceFieldsProps) => {
     // Ids made from the indexes, as the app's keys may hold spaces, which an id can't.
     const baseId = useId();
 
@@ -230,7 +283,10 @@ const ChoiceFields = ({ groups, values, asset, adapter, onChange }: ChoiceFields
                 const fields = group.properties.flatMap((definition, index) => {
                     const value = readValue(definition, values, asset);
 
-                    if (definition.editable === false && isEmptyValue(value)) {
+                    const messages = fieldMessages(definition, errors, pickIndex, asset);
+                    const errorId = messages.length > 0 ? `${baseId}-${groupIndex}-${index}-error` : undefined;
+
+                    if (definition.editable === false && isEmptyValue(value) && !errorId) {
                         return [];
                     }
 
@@ -243,8 +299,18 @@ const ChoiceFields = ({ groups, values, asset, adapter, onChange }: ChoiceFields
                                 adapter={adapter}
                                 id={`${baseId}-${groupIndex}-${index}`}
                                 labelId={`${baseId}-${groupIndex}-${index}-label`}
+                                errors={errors}
+                                index={pickIndex}
+                                errorId={errorId}
                                 onChange={(next) => onChange(definition.field, next)}
                             />
+                            {errorId && (
+                                <Box id={errorId} sx={messagesSx}>
+                                    {messages.map((message, place) => (
+                                        <bdi key={place}>{message}</bdi>
+                                    ))}
+                                </Box>
+                            )}
                         </Box>,
                     ];
                 });

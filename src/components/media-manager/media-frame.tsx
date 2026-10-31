@@ -10,6 +10,7 @@ import { useLocale } from "../../hooks/use-locale";
 import { CHOICES_WIDTH, mediaMedium, mediaWide } from "../../styles/media-layout";
 import { isolate } from "../../utils/bidi";
 import { focusLost } from "../../utils/dom";
+import { NO_ERRORS, countFieldErrors } from "../../utils/field-errors";
 import { isHidden } from "../../utils/hidden";
 import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
@@ -28,6 +29,7 @@ import type {
     FileAdapter,
     FileEntry,
     FilePreviewer,
+    FieldErrors,
     MediaChoice,
     MediaSection,
     MediaSectionGroup,
@@ -46,6 +48,8 @@ interface MediaFrameProps {
     previewers: readonly FilePreviewer[] | undefined;
     /** What's selected as it mounts. */
     defaultValue: readonly MediaChoice[] | undefined;
+    /** The app's backend's errors, for the picks' fields, as the app passed them. */
+    errors: FieldErrors;
     propertiesCache: PropertiesCache;
 }
 
@@ -205,6 +209,7 @@ const MediaFrame = ({
     properties,
     previewers = NO_PREVIEWERS,
     defaultValue,
+    errors,
     propertiesCache,
 }: MediaFrameProps) => {
     const { text, foldLetters, compareNames } = useLocale();
@@ -582,20 +587,33 @@ const MediaFrame = ({
 
     const reloadLibrary = useCallback(() => reload(), [reload]);
 
-    // The app's fields for one pick, drawn with what it holds.
+    // The app's fields for one pick, drawn with what it holds, and the errors the app's backend
+    // answered with for them, by its place among those selected.
     const renderDetails = useMemo(
         () =>
             fields &&
-            ((choice: MediaChoice) => (
+            ((choice: MediaChoice, index: number) => (
                 <ChoiceFields
                     groups={fields(choice.asset, choice.section)}
                     values={choice.values}
                     asset={choice.asset}
                     adapter={adapterOf(choice.section)}
+                    errors={errors}
+                    index={index}
                     onChange={(key, value) => setChoiceValue(choice, key, value)}
                 />
             )),
-        [fields, adapterOf, setChoiceValue],
+        [fields, adapterOf, setChoiceValue, errors],
+    );
+
+    // How many of a pick's fields have an error, for its row in the list.
+    const problemsOf = useMemo(
+        () =>
+            fields && errors !== NO_ERRORS
+                ? (choice: MediaChoice, index: number) =>
+                      countFieldErrors(fields(choice.asset, choice.section), errors, index, choice.asset)
+                : undefined,
+        [fields, errors],
     );
 
     // A library's own previewers first, as its backend delivers what it holds, then the media
@@ -723,6 +741,7 @@ const MediaFrame = ({
                             adapter={adapter}
                             multiple={multiple}
                             renderDetails={renderDetails}
+                            problemsOf={problemsOf}
                             onRemove={removeChoice}
                             onMove={moveChoice}
                             onClear={clearSelection}

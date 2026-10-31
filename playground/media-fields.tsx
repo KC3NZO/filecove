@@ -1,13 +1,24 @@
+import { useId } from "react";
+
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
+import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import type { FileEntry, MediaSection, PropertyDefinitionGroup, PropertyRenderParams } from "../src";
+import type {
+    FileEntry,
+    MediaSection,
+    PropertyDefinitionGroup,
+    PropertyErrorKeyParams,
+    PropertyRenderParams,
+} from "../src";
 
 // The playground's own fields for each pick (`fields`), as a site's carousel would have them:
 // everything here is the app's, its languages too, a field per language. Each is a property's
 // definition, as what an asset shows is. The media manager only draws them, keeps what's filled in
-// with the pick, and hands it back with what's chosen.
+// with the pick, and hands it back with what's chosen. Each finds its error in what the playground's
+// backend answers (`mocks/mock-save.ts`) by its `errorKey`, the request's key for it, but the focal
+// point, which reads `errors` itself, as a field the app draws may.
 
 /** The site's languages, which the media manager knows nothing of. */
 export const LANGUAGES = [
@@ -33,27 +44,60 @@ const pointSx: SxProps<Theme> = {
     borderColor: "divider",
     "&[aria-checked='true']": { bgcolor: "primary.main", borderColor: "primary.main" },
     "&.Mui-focusVisible": { outline: 2, outlineColor: "primary.main", outlineOffset: 1 },
+    "[aria-invalid='true'] > &": { borderColor: "error.main" },
 };
+
+const focusErrorSx: SxProps<Theme> = {
+    mt: 0.75,
+    color: "error.main",
+    fontSize: "0.75rem",
+};
+
+/** The request's key for a pick's field, as the playground's backend names it: `items.0.title.en`. */
+const keyOf =
+    (field: string) =>
+    ({ index }: PropertyErrorKeyParams) =>
+        `items.${index}.${field}`;
 
 /**
  * A field of the playground's own, drawn as it likes: where a picture's crop keeps its subject, set
- * through `save`, which in a pick's fields keeps it with the pick at once.
+ * through `save`, which in a pick's fields keeps it with the pick at once. It has no `errorKey`, and
+ * finds its error itself, in the `errors` it's handed, by the pick's `index`.
  */
-const FocalPoint = ({ value, save, labelId }: PropertyRenderParams) => (
-    <Box role="radiogroup" aria-labelledby={labelId} sx={pointsSx}>
-        {POINTS.map((point) => (
-            <ButtonBase
-                key={point}
-                role="radio"
-                aria-checked={(value ?? "center") === point}
-                aria-label={point}
-                disabled={!save}
-                sx={pointSx}
-                onClick={() => save?.(point)}
-            />
-        ))}
-    </Box>
-);
+const FocalPoint = ({ value, save, labelId, errors, index }: PropertyRenderParams) => {
+    const errorId = useId();
+    const found = index === undefined ? undefined : errors[`items.${index}.focus`];
+    const message = typeof found === "string" ? found : found?.[0];
+
+    return (
+        <>
+            <Box
+                role="radiogroup"
+                aria-labelledby={labelId}
+                aria-invalid={message !== undefined}
+                aria-describedby={message === undefined ? undefined : errorId}
+                sx={pointsSx}
+            >
+                {POINTS.map((point) => (
+                    <ButtonBase
+                        key={point}
+                        role="radio"
+                        aria-checked={(value ?? "center") === point}
+                        aria-label={point}
+                        disabled={!save}
+                        sx={pointSx}
+                        onClick={() => save?.(point)}
+                    />
+                ))}
+            </Box>
+            {message !== undefined && (
+                <Typography id={errorId} sx={focusErrorSx}>
+                    {message}
+                </Typography>
+            )}
+        </>
+    );
+};
 
 /** A text field in each of the site's languages, under one heading, keyed `name.code`. */
 const perLanguage = (
@@ -71,6 +115,7 @@ const perLanguage = (
         dir,
         multiline: options.multiline,
         required: options.required === code,
+        errorKey: keyOf(`${id}.${code}`),
     })),
 });
 
@@ -101,19 +146,26 @@ export const pickFields = (_asset: FileEntry, section: MediaSection): PropertyDe
             ];
         case "video":
             return [
-                perLanguage("title", "Title"),
+                perLanguage("title", "Title", { required: "en" }),
                 {
                     id: "playback",
                     title: "Playback",
                     properties: [
                         { field: "autoplay", label: "Play on its own, muted", type: "boolean" },
                         { field: "loop", label: "Loop", type: "boolean" },
-                        { field: "start", label: "Start at (seconds)", type: "number", min: 0 },
+                        {
+                            field: "start",
+                            label: "Start at (seconds)",
+                            type: "number",
+                            min: 0,
+                            errorKey: keyOf("start"),
+                        },
                         {
                             field: "showOn",
                             label: "Show on",
                             type: "string",
                             multiple: true,
+                            errorKey: keyOf("showOn"),
                             options: [
                                 { value: "desktop", label: "Desktop" },
                                 { value: "tablet", label: "Tablet" },

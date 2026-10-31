@@ -74,9 +74,11 @@ export type {
 export type { PreviewContent, PreviewKind, PreviewPlan, TextExcerpt } from "./preview";
 export type { FilePreviewer, PreviewerProps, PreviewerReads } from "./previewer";
 export type {
+    FieldErrors,
     PropertyDefinition,
     PropertyDefinitionGroup,
     PropertyEditParams,
+    PropertyErrorKeyParams,
     PropertyOption,
     PropertyParams,
     PropertyRenderParams,

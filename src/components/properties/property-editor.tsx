@@ -7,6 +7,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
+import { NO_ERRORS } from "../../utils/field-errors";
 import { formatValue, sameValue } from "../../utils/property-value";
 import PropertyInput from "./property-input";
 
@@ -173,6 +174,7 @@ const PropertyEditor = ({
         entry,
         adapter,
         labelId,
+        errors: NO_ERRORS,
         id: inputId,
         onChange: (next) => setDraft(() => next),
         disabled: saving,

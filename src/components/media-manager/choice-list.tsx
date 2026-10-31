@@ -30,6 +30,8 @@ interface ChoiceListProps {
     /** Moves the one at `from` to `to`, the others making room. */
     onMove: (from: number, to: number) => void;
     onOpenDetails: (choice: MediaChoice) => void;
+    /** How many of a pick's fields the app's `errors` have one for; none without them. */
+    problemsOf: ((choice: MediaChoice, index: number) => number) | undefined;
 }
 
 interface ChoiceRowProps {
@@ -46,6 +48,8 @@ interface ChoiceRowProps {
     /** How far it's moved up or down while one is dragged, in px: the one dragged, or one making room. */
     shift: number;
     hasDetails: boolean;
+    /** How many of its fields have an error, shown in place of its library. */
+    problems: number;
     describedBy: string;
     onKeyDown: (event: KeyboardEvent<HTMLElement>, index: number) => void;
     onFocus: (index: number) => void;
@@ -179,6 +183,11 @@ const librarySx: SxProps<Theme> = {
     fontSize: "0.75rem",
 };
 
+const problemsSx: SxProps<Theme> = {
+    ...librarySx,
+    color: "error.main",
+};
+
 // Out of the Tab order: Enter opens the details, Delete takes one out.
 const buttonSx: SxProps<Theme> = {
     flexShrink: 0,
@@ -202,6 +211,7 @@ const ChoiceRow = ({
     dragged,
     shift,
     hasDetails,
+    problems,
     describedBy,
     onKeyDown,
     onFocus,
@@ -210,6 +220,7 @@ const ChoiceRow = ({
     onRemove,
 }: ChoiceRowProps) => {
     const { text, formatNumber } = useLocale();
+    const problemsId = useId();
     const { asset, section } = choice;
     const thumbnail = useThumbnail(asset, section.adapter ?? adapter, "list", CHOICE_THUMBNAIL);
     const name = isolate(asset.name);
@@ -229,7 +240,7 @@ const ChoiceRow = ({
                 data-key={choiceKey(choice)}
                 data-lifted={lifted}
                 aria-label={text.mediaChoiceItem(name, formatNumber(index + 1), formatNumber(count))}
-                aria-describedby={describedBy}
+                aria-describedby={problems > 0 ? `${problemsId} ${describedBy}` : describedBy}
                 sx={handleSx}
                 onKeyDown={(event) => onKeyDown(event, index)}
                 onFocus={() => onFocus(index)}
@@ -250,9 +261,15 @@ const ChoiceRow = ({
                     <Typography variant="body2" noWrap sx={nameSx}>
                         {asset.name}
                     </Typography>
-                    <Typography variant="caption" noWrap sx={librarySx}>
-                        {section.label}
-                    </Typography>
+                    {problems > 0 ? (
+                        <Typography id={problemsId} variant="caption" noWrap sx={problemsSx}>
+                            {text.mediaChoiceProblems(problems)}
+                        </Typography>
+                    ) : (
+                        <Typography variant="caption" noWrap sx={librarySx}>
+                            {section.label}
+                        </Typography>
+                    )}
                 </Box>
             </Box>
             {hasDetails && (
@@ -295,6 +312,7 @@ const ChoiceList = ({
     onRemove,
     onMove,
     onOpenDetails,
+    problemsOf,
 }: ChoiceListProps) => {
     const { text, formatNumber } = useLocale();
     const hintId = useId();
@@ -719,6 +737,7 @@ const ChoiceList = ({
                         dragged={drag?.key === keys[index]}
                         shift={shiftOf(index)}
                         hasDetails={hasDetails}
+                        problems={problemsOf?.(choice, index) ?? 0}
                         describedBy={describedBy}
                         onKeyDown={handleKeyDown}
                         onFocus={handleFocus}

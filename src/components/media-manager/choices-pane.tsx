@@ -30,8 +30,13 @@ interface ChoicesPaneProps {
      * straight away with its details, as there's nothing to order.
      */
     multiple: boolean;
-    /** The app's fields for one pick, for this use of it, drawn with what they hold; none without them. */
-    renderDetails: ((choice: MediaChoice) => ReactNode) | undefined;
+    /**
+     * The app's fields for one pick, at its place among those selected, for this use of it, drawn
+     * with what they hold; none without them.
+     */
+    renderDetails: ((choice: MediaChoice, index: number) => ReactNode) | undefined;
+    /** How many of a pick's fields the app's `errors` have one for, for its row; none without them. */
+    problemsOf: ((choice: MediaChoice, index: number) => number) | undefined;
     onRemove: (choice: MediaChoice) => void;
     onMove: (from: number, to: number) => void;
     onClear: () => void;
@@ -226,6 +231,7 @@ const ChoicesPane = ({
     adapter,
     multiple,
     renderDetails,
+    problemsOf,
     onRemove,
     onMove,
     onClear,
@@ -317,7 +323,7 @@ const ChoicesPane = ({
                         adapter={adapter}
                         onShowInLibrary={() => onShowInLibrary(open)}
                     >
-                        {renderDetails(open)}
+                        {renderDetails(open, choices.indexOf(open))}
                     </ChoiceDetails>
                 </>
             ) : (
@@ -347,7 +353,7 @@ const ChoicesPane = ({
                             adapter={adapter}
                             onShowInLibrary={() => onShowInLibrary(only)}
                         >
-                            {renderDetails?.(only)}
+                            {renderDetails?.(only, 0)}
                         </ChoiceDetails>
                     ) : count > 0 ? (
                         <ChoiceList
@@ -358,6 +364,7 @@ const ChoicesPane = ({
                             onRemove={onRemove}
                             onMove={onMove}
                             onOpenDetails={openDetails}
+                            problemsOf={problemsOf}
                         />
                     ) : (
                         <Box sx={emptySx}>

@@ -541,6 +541,7 @@ export const enUS: LocaleText = {
     mediaChoiceDropped: (name, position, count) => `${name} put down at ${position} of ${count}.`,
     mediaChoiceCancelled: (name, position, count) => `Move cancelled. ${name} is back at ${position} of ${count}.`,
     mediaChoiceDetails: (name) => `Details for ${name}`,
+    mediaChoiceProblems: (count) => (count === 1 ? "1 field to fix" : `${count} fields to fix`),
     mediaChoicesBack: "Back to selected",
     mediaShowInLibrary: "Show in library",
     mediaClearSelection: "Clear selection",

@@ -28,8 +28,10 @@ interface PropertyInputProps {
     labelId: string;
     /** While it's saved: shown, but not changed. */
     disabled?: boolean;
-    /** Its save failed. */
+    /** Its save failed, or it has an error the host shows. */
     error?: boolean;
+    /** The element saying what's wrong with it, while there's something. */
+    describedBy?: string;
     /** Given what an editor needs to save a list with something typed but not added yet. */
     handle?: Ref<PropertyInputHandle>;
 }
@@ -82,7 +84,16 @@ const unique = (values: readonly unknown[]) => [...new Set(values)];
 const isNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
 /** Text, on one line or several, or a URL. */
-const TextInput = ({ definition, value, onChange, id, labelId, disabled, error }: InputProps<Typed<"string">>) => {
+const TextInput = ({
+    definition,
+    value,
+    onChange,
+    id,
+    labelId,
+    disabled,
+    error,
+    describedBy,
+}: InputProps<Typed<"string">>) => {
     const url = definition.kind === "url";
     const multiline = !!definition.multiline && !url;
 
@@ -101,6 +112,7 @@ const TextInput = ({ definition, value, onChange, id, labelId, disabled, error }
             slotProps={{
                 htmlInput: {
                     "aria-labelledby": labelId,
+                    "aria-describedby": describedBy,
                     "aria-required": definition.required || undefined,
                     maxLength: definition.maxLength,
                     lang: definition.lang,
@@ -115,7 +127,16 @@ const TextInput = ({ definition, value, onChange, id, labelId, disabled, error }
 };
 
 /** A number, typed as text meanwhile, so "1." on its way to "1.5" isn't cut short. */
-const NumberInput = ({ definition, value, onChange, id, labelId, disabled, error }: InputProps<Typed<"number">>) => {
+const NumberInput = ({
+    definition,
+    value,
+    onChange,
+    id,
+    labelId,
+    disabled,
+    error,
+    describedBy,
+}: InputProps<Typed<"number">>) => {
     const given = isNumber(value) ? value : undefined;
     const [draft, setDraft] = useState(given === undefined ? "" : String(given));
     const [seen, setSeen] = useState(given);
@@ -139,6 +160,7 @@ const NumberInput = ({ definition, value, onChange, id, labelId, disabled, error
             slotProps={{
                 htmlInput: {
                     "aria-labelledby": labelId,
+                    "aria-describedby": describedBy,
                     "aria-required": definition.required || undefined,
                     min: definition.min,
                     max: definition.max,
@@ -163,7 +185,16 @@ const NumberInput = ({ definition, value, onChange, id, labelId, disabled, error
 };
 
 /** A day, or with the "datetime" kind a day and a time, in the browser's own picker. */
-const DateInput = ({ definition, value, onChange, id, labelId, disabled, error }: InputProps<Typed<"date">>) => {
+const DateInput = ({
+    definition,
+    value,
+    onChange,
+    id,
+    labelId,
+    disabled,
+    error,
+    describedBy,
+}: InputProps<Typed<"date">>) => {
     const time = definition.kind === "datetime";
 
     return (
@@ -176,6 +207,7 @@ const DateInput = ({ definition, value, onChange, id, labelId, disabled, error }
             slotProps={{
                 htmlInput: {
                     "aria-labelledby": labelId,
+                    "aria-describedby": describedBy,
                     "aria-required": definition.required || undefined,
                     readOnly: disabled,
                 },
@@ -185,13 +217,15 @@ const DateInput = ({ definition, value, onChange, id, labelId, disabled, error }
     );
 };
 
-const BooleanInput = ({ value, onChange, id, labelId, disabled }: InputProps) => (
+const BooleanInput = ({ value, onChange, id, labelId, disabled, error, describedBy }: InputProps) => (
     <Checkbox
         id={id}
         size="small"
         checked={value === true}
         disabled={disabled}
-        slotProps={{ input: { "aria-labelledby": labelId } }}
+        slotProps={{
+            input: { "aria-labelledby": labelId, "aria-describedby": describedBy, "aria-invalid": error || undefined },
+        }}
         sx={checkboxSx}
         onChange={(event) => onChange(event.target.checked)}
     />
@@ -201,7 +235,17 @@ const BooleanInput = ({ value, onChange, id, labelId, disabled }: InputProps) =>
  * One value chosen from the options, in the browser's own select, its first choice leaving it
  * empty. Options go by their place, as their values may not be text.
  */
-const SelectInput = ({ definition, options, value, onChange, id, labelId, disabled, error }: OptionsProps) => {
+const SelectInput = ({
+    definition,
+    options,
+    value,
+    onChange,
+    id,
+    labelId,
+    disabled,
+    error,
+    describedBy,
+}: OptionsProps) => {
     const { text } = useLocale();
     const index = options.findIndex((option) => Object.is(option.value, value));
 
@@ -216,7 +260,11 @@ const SelectInput = ({ definition, options, value, onChange, id, labelId, disabl
             error={error}
             slotProps={{
                 select: { native: true },
-                htmlInput: { "aria-labelledby": labelId, "aria-required": definition.required || undefined },
+                htmlInput: {
+                    "aria-labelledby": labelId,
+                    "aria-describedby": describedBy,
+                    "aria-required": definition.required || undefined,
+                },
             }}
             sx={selectSx}
             onChange={(event) =>
@@ -237,7 +285,17 @@ const SelectInput = ({ definition, options, value, onChange, id, labelId, disabl
  * Values chosen from the options: those chosen as chips, each removing itself, over a select adding
  * one of the rest.
  */
-const ChoicesInput = ({ definition, options, value, onChange, id, labelId, disabled, error }: OptionsProps) => {
+const ChoicesInput = ({
+    definition,
+    options,
+    value,
+    onChange,
+    id,
+    labelId,
+    disabled,
+    error,
+    describedBy,
+}: OptionsProps) => {
     const { text } = useLocale();
     const chosen = Array.isArray(value) ? (value as unknown[]) : [];
     const left = options.flatMap((option, place) =>
@@ -279,7 +337,11 @@ const ChoicesInput = ({ definition, options, value, onChange, id, labelId, disab
                     error={error}
                     slotProps={{
                         select: { native: true },
-                        htmlInput: { "aria-labelledby": labelId, "aria-required": definition.required || undefined },
+                        htmlInput: {
+                    "aria-labelledby": labelId,
+                    "aria-describedby": describedBy,
+                    "aria-required": definition.required || undefined,
+                },
                     }}
                     sx={selectSx}
                     onChange={(event) => {
@@ -307,7 +369,7 @@ const ChoicesInput = ({ definition, options, value, onChange, id, labelId, disab
  * Enter, a comma between texts, or the focus leaving; Backspace with nothing typed removes the
  * last. A date is added as it's picked.
  */
-const ListInput = ({ definition, value, onChange, id, labelId, disabled, error, handle }: InputProps) => {
+const ListInput = ({ definition, value, onChange, id, labelId, disabled, error, describedBy, handle }: InputProps) => {
     const locale = useLocale();
     const { text } = locale;
     const [typed, setTyped] = useState("");
@@ -403,7 +465,7 @@ const ListInput = ({ definition, value, onChange, id, labelId, disabled, error, 
                 slotProps={{
                     htmlInput: {
                         "aria-label": prompt,
-                        "aria-describedby": labelId,
+                        "aria-describedby": describedBy ? `${labelId} ${describedBy}` : labelId,
                         "aria-required": definition.required || undefined,
                         readOnly: disabled,
                         dir: "auto",

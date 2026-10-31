@@ -15,9 +15,11 @@ import { createPropertiesCache } from "../../store/properties-cache";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { MEDIA_CONTAINER } from "../../styles/media-layout";
 import { withSx } from "../../styles/sx";
+import { NO_ERRORS } from "../../utils/field-errors";
 import MediaFrame from "./media-frame";
 
 import type {
+    FieldErrors,
     FileAdapter,
     FileEntry,
     FilePreviewer,
@@ -78,6 +80,17 @@ interface BaseProps<V> extends RootAttributes {
      * carousel being edited, in its order. Each is matched to its library by `section.id`.
      */
     defaultValue?: readonly MediaChoice<V>[];
+    /**
+     * What the app's backend answered when the picks were saved, as it came, by its own keys, a
+     * message or several each, as Laravel's validation errors are: `{ "items.0.title.en": ["The
+     * title field is required."] }`. Each of the app's fields finds its own: by its `errorKey`,
+     * made from the pick's place among those selected (``({ index }) => `items.${index}.loop` ``),
+     * shown under it, with the pick's row in the selected column saying how many of its fields
+     * have one; or, drawn by the app's `render` or `renderEdit`, from the `errors` and `index` they
+     * are handed. The keys are the backend's, so they go by the order the picks were saved in:
+     * clear them, or map them again, when the picks are put in another order.
+     */
+    errors?: FieldErrors;
     /**
      * The component's own text, for another language or other wording. Keys left out stay in
      * English, as `enUS` has them. Functions written inline are new each render and make every
@@ -153,6 +166,7 @@ const MediaManager = <V,>({
     properties,
     previewers,
     defaultValue,
+    errors = NO_ERRORS,
     localeText,
     locale,
     ref,
@@ -193,6 +207,7 @@ const MediaManager = <V,>({
                             properties={properties}
                             previewers={previewers}
                             defaultValue={defaultValue as readonly MediaChoice[] | undefined}
+                            errors={errors}
                             propertiesCache={propertiesCache}
                         />
                     </Box>

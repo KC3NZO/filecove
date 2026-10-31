@@ -5,6 +5,22 @@ import type { FileAdapter, FileEntry } from "./adapter";
 /** What a property's value is: text, a number, yes or no, or a date. */
 export type PropertyType = "string" | "number" | "boolean" | "date";
 
+/**
+ * What a backend answered a form with, by its own keys: a message, or several, for each, as
+ * Laravel's validation errors are (`{ "items.0.title.en": ["The title field is required."] }`).
+ * The media manager takes them as they came (`errors`), and each of the app's fields finds its own
+ * by its `errorKey` or, drawn by the app, reads them itself.
+ */
+export type FieldErrors = Readonly<Record<string, string | readonly string[]>>;
+
+/** What a pick's field's `errorKey` is handed: which pick it's a field of. */
+export interface PropertyErrorKeyParams {
+    /** The pick's place among those selected, from 0, as they're handed over. */
+    index: number;
+    /** The asset picked. */
+    entry: FileEntry;
+}
+
 /** A choice of a property chosen from a list, with its label in the app's language. */
 export interface PropertyOption<T> {
     value: T;
@@ -33,6 +49,14 @@ interface PropertyBase<V> {
     editable?: boolean;
     /** Marked as to be filled in. */
     required?: boolean;
+    /**
+     * Where its error is in the media manager's `errors`, for a pick's field: the backend's key for
+     * it, made from the pick's place, ``({ index }) => `items.${index}.loop` ``. Its messages then
+     * show under it, its control is marked as wrong, and the pick's row counts it. A field the app
+     * draws itself may instead read `errors` with `index` from its params. Not used in the
+     * properties, whose saves show their own failures.
+     */
+    errorKey?(params: PropertyErrorKeyParams): string;
     /** Gives it a button copying its text (`formattedValue`), e.g. for an address or a checksum. */
     copyable?: boolean;
     /**
@@ -149,6 +173,19 @@ export interface PropertyParams<V = unknown> {
     adapter: FileAdapter;
     /** The id of its label, for a control of the app's to be named by (`aria-labelledby`). */
     labelId: string;
+    /**
+     * In a pick's fields, the media manager's `errors`, as the app passed them, for a field the app
+     * draws to find its own in, by its key with `index`: ``errors[`items.${index}.focus`]``.
+     * Empty in the properties.
+     */
+    errors: FieldErrors;
+    /** In a pick's fields, the pick's place among those selected, from 0; undefined in the properties. */
+    index?: number;
+    /**
+     * The id of the messages shown under it while its `errorKey` finds an error, for its control's
+     * `aria-describedby`; undefined while there's none.
+     */
+    errorId?: string;
 }
 
 export interface PropertyRenderParams<V = unknown> extends PropertyParams<V> {
@@ -161,6 +198,8 @@ export interface PropertyRenderParams<V = unknown> extends PropertyParams<V> {
     save?(value: V): Promise<boolean>;
     /** Whether a save of it is under way. */
     saving: boolean;
+    /** In a pick's fields, whether its `errorKey` finds an error, which the control shows as wrong. */
+    error?: boolean;
 }
 
 export interface PropertyEditParams<V = unknown> extends PropertyParams<V> {
@@ -173,6 +212,9 @@ export interface PropertyEditParams<V = unknown> extends PropertyParams<V> {
     onChange(value: V | undefined): void;
     /** While it's saved, when it can't be changed. */
     disabled: boolean;
-    /** Its save failed, which the control shows as an error. */
+    /**
+     * Its save failed, in the properties, or its `errorKey` finds an error, in a pick's fields,
+     * which the control shows as wrong.
+     */
     error: boolean;
 }

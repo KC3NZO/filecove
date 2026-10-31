@@ -9,12 +9,15 @@ import { pickFields } from "./media-fields";
 import { audioPreviewer, hlsPreviewer } from "./media-previewers";
 import { assetProperties, videoProperties } from "./media-properties";
 import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
+import { savePicks } from "./mocks/mock-save";
 import { browse, locale, multiple, single } from "./options";
 
-import type { MediaChoice, MediaSectionGroup } from "../src";
+import type { FieldErrors, MediaChoice, MediaSectionGroup } from "../src";
 
 // The media manager's page (`?media`), full-viewport with a footer saying what was last chosen, as
-// an editor inserting it would, each pick with what the playground's fields hold for it.
+// an editor inserting it would, each pick with what the playground's fields hold for it. Choose
+// saves the picks to the playground's backend first, which may answer with errors, as Laravel's
+// validation does, handed back to the media manager as they came.
 
 /**
  * The playground's libraries, on two backends: this site's, a root a kind, whose videos are
@@ -92,7 +95,18 @@ const describeOne = ({ asset, section, values }: MediaChoice) => {
     return `${section.id}:${asset.id}${filled.length > 0 ? ` (${filled.join(", ")})` : ""}`;
 };
 
-const describe = (chosen: MediaChoice[] | null) => {
+/** Where saving the picks is at. */
+type Saving = { status: "idle" } | { status: "saving" } | { status: "refused"; count: number };
+
+const describe = (chosen: MediaChoice[] | null, saving: Saving) => {
+    if (saving.status === "saving") {
+        return "Saving…";
+    }
+
+    if (saving.status === "refused") {
+        return `The backend refused it: ${saving.count === 1 ? "1 error" : `${saving.count} errors`} to fix`;
+    }
+
     if (!chosen) {
         return browse ? "Browsing, nothing to choose" : "Nothing chosen yet";
     }
@@ -102,7 +116,24 @@ const describe = (chosen: MediaChoice[] | null) => {
 
 const MediaApp = () => {
     const [chosen, setChosen] = useState<MediaChoice[] | null>(null);
-    const choose = useCallback((choices: MediaChoice[]) => setChosen(choices), []);
+    const [errors, setErrors] = useState<FieldErrors>();
+    const [saving, setSaving] = useState<Saving>({ status: "idle" });
+
+    // Saved first, as an app would save a product's carousel: what the backend refuses goes back to
+    // the media manager, and what it takes is chosen.
+    const choose = useCallback((choices: MediaChoice[]) => {
+        setSaving({ status: "saving" });
+        void savePicks(choices).then((answered) => {
+            setErrors(answered ?? undefined);
+
+            if (answered) {
+                setSaving({ status: "refused", count: Object.keys(answered).length });
+            } else {
+                setSaving({ status: "idle" });
+                setChosen(choices);
+            }
+        });
+    }, []);
     const shared = {
         adapter: siteMediaAdapter,
         multiple,
@@ -111,6 +142,7 @@ const MediaApp = () => {
         fields: pickFields,
         properties: assetProperties,
         previewers,
+        errors,
     };
 
     return (
@@ -122,7 +154,7 @@ const MediaApp = () => {
             )}
             <Box component="footer" sx={footerSx}>
                 <Typography variant="body2" noWrap>
-                    {describe(chosen)}
+                    {describe(chosen, saving)}
                 </Typography>
             </Box>
         </Box>

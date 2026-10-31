@@ -865,6 +865,11 @@ export interface MediaManagerLocaleText
     mediaChoiceCancelled: (name: string, position: string, count: string) => string;
     /** The button opening the app's details for one pick, for this use of it; `name` comes isolated. */
     mediaChoiceDetails: (name: string) => string;
+    /**
+     * In place of a pick's library under its name in the selected column, while the app's `errors`
+     * have some for its fields, found by their `errorKey`: how many of its fields have one.
+     */
+    mediaChoiceProblems: (count: number) => string;
     /** Goes back from one pick's details to the list of what's selected. */
     mediaChoicesBack: string;
     /** In one pick's details, opens the asset itself in the library. */
