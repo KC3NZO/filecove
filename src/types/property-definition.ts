@@ -7,15 +7,21 @@ export type PropertyType = "string" | "number" | "boolean" | "date";
 
 /**
  * What a backend answered a form with, by its own keys: a message, or several, for each, as
- * Laravel's validation errors are (`{ "items.0.title.en": ["The title field is required."] }`).
- * The media manager takes them as they came (`errors`), and each of the app's fields finds its own
- * by its `errorKey` or, drawn by the app, reads them itself.
+ * Laravel's validation errors are (`{ "media.0.translations.en.title": ["The title field is
+ * required."] }`). The media manager takes them as they came (`errors`), each of the app's fields
+ * finding its own by its `errorKey`, and each pick its own by `choiceErrorKey`.
  */
 export type FieldErrors = Readonly<Record<string, string | readonly string[]>>;
 
-/** What a pick's field's `errorKey` is handed: which pick it's a field of. */
+/**
+ * What a pick's field's `errorKey`, and the media manager's `choiceErrorKey`, are handed: which
+ * pick it's about.
+ */
 export interface PropertyErrorKeyParams {
-    /** The pick's place among those selected, from 0, as they're handed over. */
+    /**
+     * The pick's place in the order the app was handed the picks in, from 0, which the backend's
+     * keys go by: as it was at Choose, however it's been moved since.
+     */
     index: number;
     /** The asset picked. */
     entry: FileEntry;
@@ -50,13 +56,17 @@ interface PropertyBase<V> {
     /** Marked as to be filled in. */
     required?: boolean;
     /**
-     * Where its error is in the media manager's `errors`, for a pick's field: the backend's key for
-     * it, made from the pick's place, ``({ index }) => `items.${index}.loop` ``. Its messages then
-     * show under it, its control is marked as wrong, and the pick's row counts it. A field the app
-     * draws itself may instead read `errors` with `index` from its params. Not used in the
-     * properties, whose saves show their own failures.
+     * Where its errors are in the media manager's `errors`, for a pick's field: the backend's key
+     * for it, made from the pick's place, ``({ index }) => `media.${index}.loop` ``, or its keys,
+     * for a field holding several, such as a title in each language under tabs
+     * (``({ index }) => ["en", "ar"].map((code) => `media.${index}.translations.${code}.title`)``).
+     * Its messages then show under it, its control is marked as wrong, and the pick's row counts it,
+     * once however many of its keys have one. It's the only way a field is counted: one the app
+     * draws reads `errors` with `index` from its params only to mark finer parts of its own, such as
+     * the tab of a language with an error. Not used in the properties, whose saves show their own
+     * failures.
      */
-    errorKey?(params: PropertyErrorKeyParams): string;
+    errorKey?(params: PropertyErrorKeyParams): string | readonly string[];
     /** Gives it a button copying its text (`formattedValue`), e.g. for an address or a checksum. */
     copyable?: boolean;
     /**
@@ -175,11 +185,17 @@ export interface PropertyParams<V = unknown> {
     labelId: string;
     /**
      * In a pick's fields, the media manager's `errors`, as the app passed them, for a field the app
-     * draws to find its own in, by its key with `index`: ``errors[`items.${index}.focus`]``.
-     * Empty in the properties.
+     * draws to mark finer parts of its own by, with `index`:
+     * ``errors[`media.${index}.translations.ar.title`]`` for its Arabic tab. Its messages are shown
+     * under it by its `errorKey`. Empty in the properties, and for a pick added since the app was
+     * handed the picks, which the backend never saw.
      */
     errors: FieldErrors;
-    /** In a pick's fields, the pick's place among those selected, from 0; undefined in the properties. */
+    /**
+     * In a pick's fields, the pick's place in the order the app was handed the picks in, from 0,
+     * which the backend's keys go by (see `PropertyErrorKeyParams.index`); undefined in the
+     * properties.
+     */
     index?: number;
     /**
      * The id of the messages shown under it while its `errorKey` finds an error, for its control's

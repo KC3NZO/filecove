@@ -31,12 +31,12 @@ interface ChoicesPaneProps {
      */
     multiple: boolean;
     /**
-     * The app's fields for one pick, at its place among those selected, for this use of it, drawn
-     * with what they hold; none without them.
+     * One pick's own errors and the app's fields for it, for this use of it, drawn with what they
+     * hold, by its place among those selected now; none without either.
      */
     renderDetails: ((choice: MediaChoice, index: number) => ReactNode) | undefined;
-    /** How many of a pick's fields the app's `errors` have one for, for its row; none without them. */
-    problemsOf: ((choice: MediaChoice, index: number) => number) | undefined;
+    /** How much of a pick the app's `errors` have to fix, for its row; none without them. */
+    problemsOf: ((choice: MediaChoice) => number) | undefined;
     onRemove: (choice: MediaChoice) => void;
     onMove: (from: number, to: number) => void;
     onClear: () => void;

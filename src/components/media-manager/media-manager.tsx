@@ -28,6 +28,7 @@ import type {
     MediaSection,
     MediaSectionGroup,
     PropertyDefinitionGroup,
+    PropertyErrorKeyParams,
 } from "../../types";
 
 // The root element's own attributes, which go on it as they do on a MUI component's root.
@@ -82,15 +83,25 @@ interface BaseProps<V> extends RootAttributes {
     defaultValue?: readonly MediaChoice<V>[];
     /**
      * What the app's backend answered when the picks were saved, as it came, by its own keys, a
-     * message or several each, as Laravel's validation errors are: `{ "items.0.title.en": ["The
-     * title field is required."] }`. Each of the app's fields finds its own: by its `errorKey`,
-     * made from the pick's place among those selected (``({ index }) => `items.${index}.loop` ``),
-     * shown under it, with the pick's row in the selected column saying how many of its fields
-     * have one; or, drawn by the app's `render` or `renderEdit`, from the `errors` and `index` they
-     * are handed. The keys are the backend's, so they go by the order the picks were saved in:
-     * clear them, or map them again, when the picks are put in another order.
+     * message or several each, as Laravel's validation errors are:
+     * `{ "media.0.translations.en.title": ["The title field is required."] }`. Pass it all: only
+     * the keys the app names are read, and the rest, the form's other fields' and the list's own
+     * (`media`), are left for the app to show. Each of the app's fields finds its own by its
+     * `errorKey`, made from the pick's place (``({ index }) => `media.${index}.loop` ``), shown
+     * under it, and each pick its own by `choiceErrorKey`, with the pick's row in the selected
+     * column saying how many there are to fix. The keys go by the order the app was handed the
+     * picks in, at Choose (or, before any, the order as the errors came), so each pick keeps its own
+     * as it's moved; one taken out takes them with it, and one added since has none. Pass the same
+     * object for as long as they're the same.
      */
     errors?: FieldErrors;
+    /**
+     * Where a pick's own errors are in `errors`, about it as a whole rather than one of its fields,
+     * such as "This video is still processing.": the backend's key for it, or its keys, made from
+     * its place, ``({ index }) => [`media.${index}`, `media.${index}.id`]``. Its messages show at
+     * the top of its details, above its fields, and its row counts them as one more to fix.
+     */
+    choiceErrorKey?: (params: PropertyErrorKeyParams) => string | readonly string[];
     /**
      * The component's own text, for another language or other wording. Keys left out stay in
      * English, as `enUS` has them. Functions written inline are new each render and make every
@@ -167,6 +178,7 @@ const MediaManager = <V,>({
     previewers,
     defaultValue,
     errors = NO_ERRORS,
+    choiceErrorKey,
     localeText,
     locale,
     ref,
@@ -208,6 +220,7 @@ const MediaManager = <V,>({
                             previewers={previewers}
                             defaultValue={defaultValue as readonly MediaChoice[] | undefined}
                             errors={errors}
+                            choiceErrorKey={choiceErrorKey}
                             propertiesCache={propertiesCache}
                         />
                     </Box>

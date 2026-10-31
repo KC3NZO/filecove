@@ -30,8 +30,8 @@ interface ChoiceListProps {
     /** Moves the one at `from` to `to`, the others making room. */
     onMove: (from: number, to: number) => void;
     onOpenDetails: (choice: MediaChoice) => void;
-    /** How many of a pick's fields the app's `errors` have one for; none without them. */
-    problemsOf: ((choice: MediaChoice, index: number) => number) | undefined;
+    /** How much of a pick the app's `errors` have to fix: its fields with one, and its own as one more. */
+    problemsOf: ((choice: MediaChoice) => number) | undefined;
 }
 
 interface ChoiceRowProps {
@@ -737,7 +737,7 @@ const ChoiceList = ({
                         dragged={drag?.key === keys[index]}
                         shift={shiftOf(index)}
                         hasDetails={hasDetails}
-                        problems={problemsOf?.(choice, index) ?? 0}
+                        problems={problemsOf?.(choice) ?? 0}
                         describedBy={describedBy}
                         onKeyDown={handleKeyDown}
                         onFocus={handleFocus}

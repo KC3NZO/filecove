@@ -12,12 +12,13 @@ import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
 import { savePicks } from "./mocks/mock-save";
 import { browse, locale, multiple, single } from "./options";
 
-import type { FieldErrors, MediaChoice, MediaSectionGroup } from "../src";
+import type { FieldErrors, MediaChoice, MediaSectionGroup, PropertyErrorKeyParams } from "../src";
 
 // The media manager's page (`?media`), full-viewport with a footer saying what was last chosen, as
 // an editor inserting it would, each pick with what the playground's fields hold for it. Choose
 // saves the picks to the playground's backend first, which may answer with errors, as Laravel's
-// validation does, handed back to the media manager as they came.
+// validation does, handed back to the media manager as they came; the list's own (`media`), which
+// is about no pick, the footer shows, as an app would beside it.
 
 /**
  * The playground's libraries, on two backends: this site's, a root a kind, whose videos are
@@ -86,6 +87,9 @@ const footerSx: SxProps<Theme> = {
     color: "text.secondary",
 };
 
+/** Where a pick's own errors are, as the playground's backend names them: `media.0`, `media.0.id`. */
+const choiceErrorKey = ({ index }: PropertyErrorKeyParams) => [`media.${index}`, `media.${index}.id`];
+
 /** A pick as an app would store it: its library's id with the asset's, and what's filled in. */
 const describeOne = ({ asset, section, values }: MediaChoice) => {
     const filled = Object.entries(values)
@@ -95,8 +99,18 @@ const describeOne = ({ asset, section, values }: MediaChoice) => {
     return `${section.id}:${asset.id}${filled.length > 0 ? ` (${filled.join(", ")})` : ""}`;
 };
 
-/** Where saving the picks is at. */
-type Saving = { status: "idle" } | { status: "saving" } | { status: "refused"; count: number };
+/**
+ * Where saving the picks is at: refused, with how many errors came, and the list's own message, when
+ * it has one, which is the app's to show.
+ */
+type Saving = { status: "idle" } | { status: "saving" } | { status: "refused"; count: number; list?: string };
+
+/** The first message under a key of what the backend answered. */
+const firstMessage = (errors: FieldErrors, key: string) => {
+    const found = errors[key];
+
+    return typeof found === "string" ? found : found?.[0];
+};
 
 const describe = (chosen: MediaChoice[] | null, saving: Saving) => {
     if (saving.status === "saving") {
@@ -104,7 +118,9 @@ const describe = (chosen: MediaChoice[] | null, saving: Saving) => {
     }
 
     if (saving.status === "refused") {
-        return `The backend refused it: ${saving.count === 1 ? "1 error" : `${saving.count} errors`} to fix`;
+        const count = `${saving.count === 1 ? "1 error" : `${saving.count} errors`} to fix`;
+
+        return `The backend refused it: ${saving.list ? `${saving.list} (${count})` : count}`;
     }
 
     if (!chosen) {
@@ -127,7 +143,11 @@ const MediaApp = () => {
             setErrors(answered ?? undefined);
 
             if (answered) {
-                setSaving({ status: "refused", count: Object.keys(answered).length });
+                setSaving({
+                    status: "refused",
+                    count: Object.keys(answered).length,
+                    list: firstMessage(answered, "media"),
+                });
             } else {
                 setSaving({ status: "idle" });
                 setChosen(choices);
@@ -143,6 +163,7 @@ const MediaApp = () => {
         properties: assetProperties,
         previewers,
         errors,
+        choiceErrorKey,
     };
 
     return (

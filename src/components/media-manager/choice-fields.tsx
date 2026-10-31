@@ -22,8 +22,13 @@ interface ChoiceFieldsProps {
     adapter: FileAdapter;
     /** The media manager's `errors`, as the app passed them, each field finding its own by its `errorKey`. */
     errors: FieldErrors;
-    /** The pick's place among those selected, which the fields' keys in `errors` are made from. */
+    /**
+     * The pick's place in the order the app was handed the picks in, which the fields' keys in
+     * `errors` are made from.
+     */
     index: number;
+    /** The pick's own messages, about it as a whole, which `choiceErrorKey` finds, shown above its fields. */
+    messages: readonly string[];
     onChange: (key: string, value: unknown) => void;
 }
 
@@ -50,6 +55,20 @@ interface LabelProps {
     /** Whether its `errorKey` finds an error, which colours it. */
     error: boolean;
 }
+
+// The pick's own errors, above its fields, each message on a line of its own, marked by a rule at
+// their start side, which forced colors keep.
+const ownMessagesSx: SxProps<Theme> = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 0.5,
+    mb: 2,
+    paddingInlineStart: 1.25,
+    borderInlineStart: "3px solid",
+    color: "error.main",
+    fontSize: "0.8125rem",
+    overflowWrap: "anywhere",
+};
 
 // The groups in a box of their own, so the first of them is its first child, whatever the pick's
 // details put above it.
@@ -270,70 +289,89 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
 
 /**
  * The app's fields for one pick, by groups, each drawn as its definition says, with what the pick
- * holds under its key, and each change handed back by that key. The fields and their labels are the
- * app's; the media manager knows nothing of what they mean, nor of the languages they're in.
+ * holds under its key, and each change handed back by that key, under the pick's own errors. The
+ * fields and their labels are the app's; the media manager knows nothing of what they mean, nor of
+ * the languages they're in.
  */
-const ChoiceFields = ({ groups, values, asset, adapter, errors, index: pickIndex, onChange }: ChoiceFieldsProps) => {
+const ChoiceFields = ({
+    groups,
+    values,
+    asset,
+    adapter,
+    errors,
+    index: pickIndex,
+    messages: ownMessages,
+    onChange,
+}: ChoiceFieldsProps) => {
     // Ids made from the indexes, as the app's keys may hold spaces, which an id can't.
     const baseId = useId();
 
     return (
-        <Box sx={groupsSx} onKeyDown={keepEnter}>
-            {groups.map((group, groupIndex) => {
-                const fields = group.properties.flatMap((definition, index) => {
-                    const value = readValue(definition, values, asset);
+        <>
+            {ownMessages.length > 0 && (
+                <Box sx={ownMessagesSx}>
+                    {ownMessages.map((message, place) => (
+                        <bdi key={place}>{message}</bdi>
+                    ))}
+                </Box>
+            )}
+            <Box sx={groupsSx} onKeyDown={keepEnter}>
+                {groups.map((group, groupIndex) => {
+                    const fields = group.properties.flatMap((definition, index) => {
+                        const value = readValue(definition, values, asset);
 
-                    const messages = fieldMessages(definition, errors, pickIndex, asset);
-                    const errorId = messages.length > 0 ? `${baseId}-${groupIndex}-${index}-error` : undefined;
+                        const messages = fieldMessages(definition, errors, pickIndex, asset);
+                        const errorId = messages.length > 0 ? `${baseId}-${groupIndex}-${index}-error` : undefined;
 
-                    if (definition.editable === false && isEmptyValue(value) && !errorId) {
-                        return [];
-                    }
+                        if (definition.editable === false && isEmptyValue(value) && !errorId) {
+                            return [];
+                        }
 
-                    return [
-                        <Box key={definition.field} sx={fieldSx}>
-                            <Field
-                                definition={definition}
-                                value={value}
-                                asset={asset}
-                                adapter={adapter}
-                                id={`${baseId}-${groupIndex}-${index}`}
-                                labelId={`${baseId}-${groupIndex}-${index}-label`}
-                                errors={errors}
-                                index={pickIndex}
-                                errorId={errorId}
-                                onChange={(next) => onChange(definition.field, next)}
-                            />
-                            {errorId && (
-                                <Box id={errorId} sx={messagesSx}>
-                                    {messages.map((message, place) => (
-                                        <bdi key={place}>{message}</bdi>
-                                    ))}
-                                </Box>
-                            )}
-                        </Box>,
-                    ];
-                });
+                        return [
+                            <Box key={definition.field} sx={fieldSx}>
+                                <Field
+                                    definition={definition}
+                                    value={value}
+                                    asset={asset}
+                                    adapter={adapter}
+                                    id={`${baseId}-${groupIndex}-${index}`}
+                                    labelId={`${baseId}-${groupIndex}-${index}-label`}
+                                    errors={errors}
+                                    index={pickIndex}
+                                    errorId={errorId}
+                                    onChange={(next) => onChange(definition.field, next)}
+                                />
+                                {errorId && (
+                                    <Box id={errorId} sx={messagesSx}>
+                                        {messages.map((message, place) => (
+                                            <bdi key={place}>{message}</bdi>
+                                        ))}
+                                    </Box>
+                                )}
+                            </Box>,
+                        ];
+                    });
 
-                return (
-                    fields.length > 0 && (
-                        <Box
-                            key={group.id}
-                            role="group"
-                            aria-labelledby={group.title ? `${baseId}-${groupIndex}` : undefined}
-                            sx={groupSx}
-                        >
-                            {group.title && (
-                                <Typography id={`${baseId}-${groupIndex}`} component="h3" sx={groupTitleSx}>
-                                    {group.title}
-                                </Typography>
-                            )}
-                            {fields}
-                        </Box>
-                    )
-                );
-            })}
-        </Box>
+                    return (
+                        fields.length > 0 && (
+                            <Box
+                                key={group.id}
+                                role="group"
+                                aria-labelledby={group.title ? `${baseId}-${groupIndex}` : undefined}
+                                sx={groupSx}
+                            >
+                                {group.title && (
+                                    <Typography id={`${baseId}-${groupIndex}`} component="h3" sx={groupTitleSx}>
+                                        {group.title}
+                                    </Typography>
+                                )}
+                                {fields}
+                            </Box>
+                        )
+                    );
+                })}
+            </Box>
+        </>
     );
 };
 

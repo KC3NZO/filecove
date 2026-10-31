@@ -10,12 +10,13 @@ import { useLocale } from "../../hooks/use-locale";
 import { CHOICES_WIDTH, mediaMedium, mediaWide } from "../../styles/media-layout";
 import { isolate } from "../../utils/bidi";
 import { focusLost } from "../../utils/dom";
-import { NO_ERRORS, countFieldErrors } from "../../utils/field-errors";
+import { NO_ERRORS, choiceMessages, countFieldErrors } from "../../utils/field-errors";
 import { isHidden } from "../../utils/hidden";
 import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
 import Icon from "../icons/icon";
 import ChoiceFields from "./choice-fields";
+import { choiceKey } from "./choice-list";
 import ChoicesPane from "./choices-pane";
 import ChooseBar from "./choose-bar";
 import LibraryList from "./library-list";
@@ -34,6 +35,7 @@ import type {
     MediaSection,
     MediaSectionGroup,
     PropertyDefinitionGroup,
+    PropertyErrorKeyParams,
 } from "../../types";
 
 interface MediaFrameProps {
@@ -48,8 +50,10 @@ interface MediaFrameProps {
     previewers: readonly FilePreviewer[] | undefined;
     /** What's selected as it mounts. */
     defaultValue: readonly MediaChoice[] | undefined;
-    /** The app's backend's errors, for the picks' fields, as the app passed them. */
+    /** The app's backend's errors, for the picks and their fields, as the app passed them. */
     errors: FieldErrors;
+    /** Where a pick's own errors are in `errors`, about it as a whole. */
+    choiceErrorKey: ((params: PropertyErrorKeyParams) => string | readonly string[]) | undefined;
     propertiesCache: PropertiesCache;
 }
 
@@ -81,6 +85,7 @@ interface Viewing {
 const NO_ENTRIES: FileEntry[] = [];
 const NO_PICKS: Picks = { items: [], anchor: null };
 const NO_VALUES: Record<string, unknown> = {};
+const NO_GROUPS: PropertyDefinitionGroup[] = [];
 const NO_PREVIEWERS: readonly FilePreviewer[] = [];
 // Stands in for a library while there's none, so the listing's hook has one to not list.
 const NO_SECTION: MediaSection = { id: "", label: "", rootId: "", kind: "image" };
@@ -210,6 +215,7 @@ const MediaFrame = ({
     previewers = NO_PREVIEWERS,
     defaultValue,
     errors,
+    choiceErrorKey,
     propertiesCache,
 }: MediaFrameProps) => {
     const { text, foldLetters, compareNames } = useLocale();
@@ -225,6 +231,9 @@ const MediaFrame = ({
     const [query, setQuery] = useState("");
     const [picks, setPicks] = useState<Picks>(() => picksFrom(defaultValue));
     const [viewing, setViewing] = useState<Viewing | null>(null);
+    // The order the app was last handed the picks in, at Choose, by their keys, which the keys of
+    // the errors its backend answers go by.
+    const [handedOrder, setHandedOrder] = useState<readonly string[] | null>(null);
     const panelRef = useRef<HTMLDivElement>(null);
     // The asset the view went back from, whose tile takes the focus back.
     const backFromRef = useRef<string | null>(null);
@@ -347,6 +356,28 @@ const MediaFrame = ({
             return now ? [{ asset: now, section: from, values }] : [];
         });
     }, [picks.items, sectionsById, state?.status, library, sectionId, adapterOf, sectionAdapter]);
+
+    // Until the app has been handed any, as with errors for the picks it gave as `defaultValue`, the
+    // order of the picks as the errors came.
+    const [errorsCame, setErrorsCame] = useState(() => ({ errors, order: choices.map(choiceKey) }));
+
+    if (errorsCame.errors !== errors) {
+        setErrorsCame({ errors, order: choices.map(choiceKey) });
+    }
+
+    // Each pick's place in the order the errors' keys go by, by its key, so its errors stay with it
+    // as it's moved; one added since has none.
+    const errorsOrder = handedOrder ?? errorsCame.order;
+    const errorPlaces = useMemo(() => new Map(errorsOrder.map((key, place) => [key, place])), [errorsOrder]);
+
+    // Hands the picks to the app, keeping the order they went in.
+    const handOver = useCallback(
+        (handed: MediaChoice[]) => {
+            setHandedOrder(handed.map(choiceKey));
+            onChoose?.(handed);
+        },
+        [onChoose],
+    );
 
     // One at a time with nothing selected, the column has nothing to show, so it's left out.
     const chosenEmpty = !multiple && choices.length === 0;
@@ -548,9 +579,9 @@ const MediaFrame = ({
                 values: NO_VALUES,
             };
 
-            onChoose(multiple ? [...choices.filter((choice) => choice !== chosen), chosen] : [chosen]);
+            handOver(multiple ? [...choices.filter((choice) => choice !== chosen), chosen] : [chosen]);
         },
-        [shownEntries, onChoose, multiple, choices, inOpen, section, openAsset],
+        [shownEntries, onChoose, handOver, multiple, choices, inOpen, section, openAsset],
     );
 
     const closeLibraries = useCallback(() => {
@@ -587,33 +618,52 @@ const MediaFrame = ({
 
     const reloadLibrary = useCallback(() => reload(), [reload]);
 
-    // The app's fields for one pick, drawn with what it holds, and the errors the app's backend
-    // answered with for them, by its place among those selected.
+    // One pick's details: its own errors, then the app's fields for it, drawn with what it holds,
+    // with the errors the app's backend answered, found by its place in the order the app was
+    // handed the picks in. One added since has none, as the backend never saw it, and its place now.
     const renderDetails = useMemo(
         () =>
-            fields &&
-            ((choice: MediaChoice, index: number) => (
-                <ChoiceFields
-                    groups={fields(choice.asset, choice.section)}
-                    values={choice.values}
-                    asset={choice.asset}
-                    adapter={adapterOf(choice.section)}
-                    errors={errors}
-                    index={index}
-                    onChange={(key, value) => setChoiceValue(choice, key, value)}
-                />
-            )),
-        [fields, adapterOf, setChoiceValue, errors],
+            (fields || choiceErrorKey) &&
+            ((choice: MediaChoice, index: number) => {
+                const place = errorPlaces.get(choiceKey(choice));
+                const answered = place === undefined ? NO_ERRORS : errors;
+                const at = place ?? index;
+
+                return (
+                    <ChoiceFields
+                        groups={fields?.(choice.asset, choice.section) ?? NO_GROUPS}
+                        values={choice.values}
+                        asset={choice.asset}
+                        adapter={adapterOf(choice.section)}
+                        errors={answered}
+                        index={at}
+                        messages={choiceMessages(choiceErrorKey, answered, at, choice.asset)}
+                        onChange={(key, value) => setChoiceValue(choice, key, value)}
+                    />
+                );
+            }),
+        [fields, choiceErrorKey, errorPlaces, adapterOf, setChoiceValue, errors],
     );
 
-    // How many of a pick's fields have an error, for its row in the list.
+    // How much of a pick there is to fix, for its row in the list: each of its fields with an
+    // error, and its own errors as one more.
     const problemsOf = useMemo(
         () =>
-            fields && errors !== NO_ERRORS
-                ? (choice: MediaChoice, index: number) =>
-                      countFieldErrors(fields(choice.asset, choice.section), errors, index, choice.asset)
+            (fields || choiceErrorKey) && errors !== NO_ERRORS
+                ? (choice: MediaChoice) => {
+                      const place = errorPlaces.get(choiceKey(choice));
+
+                      if (place === undefined) {
+                          return 0;
+                      }
+
+                      const own = choiceMessages(choiceErrorKey, errors, place, choice.asset).length > 0 ? 1 : 0;
+                      const groups = fields?.(choice.asset, choice.section) ?? NO_GROUPS;
+
+                      return own + countFieldErrors(groups, errors, place, choice.asset);
+                  }
                 : undefined,
-        [fields, errors],
+        [fields, choiceErrorKey, errors, errorPlaces],
     );
 
     // A library's own previewers first, as its backend delivers what it holds, then the media
@@ -717,7 +767,7 @@ const MediaFrame = ({
                         showOpener={!chosenEmpty}
                         openerRef={openerRef}
                         onOpenChosen={() => setChosenOverlay(true)}
-                        onChoose={() => onChoose(choices)}
+                        onChoose={() => handOver(choices)}
                     />
                 )}
             </Box>
@@ -745,7 +795,7 @@ const MediaFrame = ({
                             onRemove={removeChoice}
                             onMove={moveChoice}
                             onClear={clearSelection}
-                            onChoose={() => onChoose(choices)}
+                            onChoose={() => handOver(choices)}
                             onShowInLibrary={showInLibrary}
                             onClose={closeChosen}
                         />

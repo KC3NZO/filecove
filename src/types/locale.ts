@@ -867,7 +867,8 @@ export interface MediaManagerLocaleText
     mediaChoiceDetails: (name: string) => string;
     /**
      * In place of a pick's library under its name in the selected column, while the app's `errors`
-     * have some for its fields, found by their `errorKey`: how many of its fields have one.
+     * have some for it: how much there is to fix, each of its fields with an error (by their
+     * `errorKey`) and its own errors (by `choiceErrorKey`) counting as one.
      */
     mediaChoiceProblems: (count: number) => string;
     /** Goes back from one pick's details to the list of what's selected. */
