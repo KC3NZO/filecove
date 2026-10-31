@@ -205,7 +205,7 @@ const isPicture = (node: MockNode) =>
     !node.children && ((node.mimeType ?? "").startsWith("image/") || PICTURE_EXTENSIONS.includes(extensionOf(node.name)));
 
 /** A saved text property, or none yet. */
-const savedText = (value: string | readonly string[] | undefined) => (typeof value === "string" ? value : "");
+const savedText = (value: unknown) => (typeof value === "string" ? value : "");
 
 const IMAGE_SIZES: [width: number, height: number][] = [
     [1920, 1080],
@@ -823,10 +823,9 @@ export const createMockAdapter = (
                 const code = (hash % 46_656).toString(36).padStart(3, "0");
                 const saved = node.properties ?? {};
                 const editable = !node.readOnly && !locked(entry.id) && !inTrash(entry.id);
-                const tags =
-                    saved.tags && typeof saved.tags !== "string"
-                        ? saved.tags
-                        : TAGS.filter((_, index) => (hash >>> (index * 3)) % 4 === 0).slice(0, 3);
+                const tags = Array.isArray(saved.tags)
+                    ? (saved.tags as string[])
+                    : TAGS.filter((_, index) => (hash >>> (index * 3)) % 4 === 0).slice(0, 3);
                 const groups: PropertyGroup[] = [
                     {
                         id: "access",
@@ -922,7 +921,7 @@ export const createMockAdapter = (
                 const node = entry.kind === "folder" ? folderAt(entry.id) : locate(entry).node;
                 const refused = Object.values(values)
                     .flat()
-                    .find((value) => /fail/i.test(value));
+                    .find((value) => typeof value === "string" && /fail/i.test(value));
 
                 if (node.readOnly || locked(entry.id) || inTrash(entry.id)) {
                     throw new Error(`This ${entry.kind} is read-only.`);

@@ -5,12 +5,12 @@ import { folderKey } from "../store/folder-store";
 
 import type { Section } from "../types";
 
-/** The folder store and the file manager's adapter, from `DataContext`. */
+/** The folder store and the adapter of the file manager or the media manager, from `DataContext`. */
 export const useData = () => {
     const value = useContext(DataContext);
 
     if (!value) {
-        throw new Error("File manager data is only available inside <FileManager>.");
+        throw new Error("File manager data is only available inside <FileManager> or <MediaManager>.");
     }
 
     return value;

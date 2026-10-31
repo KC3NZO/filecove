@@ -43,8 +43,8 @@ export type EditableField = Extract<PropertyField, { type: "text" | "tags" }>;
 
 /** A field's edit being saved, or that failed, with the value given, kept until it's saved or dropped. */
 export type PropertySave =
-    | { status: "saving"; value: string | readonly string[] }
-    | { status: "error"; value: string | readonly string[]; error: unknown };
+    | { status: "saving"; value: unknown }
+    | { status: "error"; value: unknown; error: unknown };
 
 /**
  * What was asked of the adapter for the properties: on its way, with what's come so far when it

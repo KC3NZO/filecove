@@ -85,3 +85,15 @@ export const huge = params.has("huge");
  * server would, to see the file manager with none meanwhile. Not with `?single`, which has its one.
  */
 export const lateSections = params.has("lateSections");
+
+/**
+ * `?media`: the media manager in place of the file manager, choosing from the libraries in
+ * `mocks/mock-media.ts`; with `?single`, from Images alone. What's chosen shows in the footer.
+ */
+export const media = params.has("media");
+
+/** `?media&multiple`: several files can be chosen at once. */
+export const multiple = params.has("multiple");
+
+/** `?media&browse`: no `onChoose`, so the media manager is a library to look through, without Choose. */
+export const browse = params.has("browse");

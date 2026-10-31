@@ -43,12 +43,15 @@ export type {
     DownloadLocaleText,
     FileManagerLocaleText,
     Locale,
+    LocaleText,
+    MediaManagerLocaleText,
     PropertiesLocaleText,
     TransferLocaleText,
     UploadLocaleText,
 } from "./locale";
 export type { FileManagerLimits } from "./limits";
 export type { MainMenuGroup, MainMenuItem } from "./main-menu";
+export type { MediaChoice, MediaKind, MediaSection, MediaSectionGroup } from "./media";
 export type {
     EntryGroup,
     MenuPosition,
@@ -70,6 +73,15 @@ export type {
 } from "./navigation";
 export type { PreviewContent, PreviewKind, PreviewPlan, TextExcerpt } from "./preview";
 export type { FilePreviewer, PreviewerProps, PreviewerReads } from "./previewer";
+export type {
+    PropertyDefinition,
+    PropertyDefinitionGroup,
+    PropertyEditParams,
+    PropertyOption,
+    PropertyParams,
+    PropertyRenderParams,
+    PropertyType,
+} from "./property-definition";
 export type {
     CountTarget,
     EditableField,

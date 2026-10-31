@@ -71,21 +71,29 @@ const sameFolders = (a: Count, b: Count) => a.showHidden === b.showHidden && sam
 const saveKey = (entry: FileEntry, fieldId: string) => JSON.stringify([entry.id, fieldId]);
 
 /** A field with the value saved, when the value is of its type. */
-const withSaved = (field: PropertyField, value: string | readonly string[]): PropertyField => {
-    if (field.type === "text" && typeof value === "string") {
-        return { ...field, value };
+const withSaved = (field: PropertyField, value: unknown): PropertyField => {
+    if (field.type === "text") {
+        return typeof value === "string" ? { ...field, value } : field;
     }
 
-    return field.type === "tags" && typeof value !== "string" ? { ...field, value } : field;
+    if (field.type === "tags") {
+        return Array.isArray(value) ? { ...field, value: value as readonly string[] } : field;
+    }
+
+    return field;
 };
 
-/** The properties with a field's value as it was saved, for an adapter resolving with nothing. */
-const withValue = (properties: EntryProperties, fieldId: string, value: string | readonly string[]) => ({
+/**
+ * The properties with a value as it was saved, for an adapter resolving with nothing: the field of
+ * that id, and the value under that key, which the app's definitions read.
+ */
+const withValue = (properties: EntryProperties, key: string, value: unknown): EntryProperties => ({
     ...properties,
     groups: properties.groups?.map((group) => ({
         ...group,
-        fields: group.fields.map((field) => (field.id === fieldId ? withSaved(field, value) : field)),
+        fields: group.fields.map((field) => (field.id === key ? withSaved(field, value) : field)),
     })),
+    values: { ...properties.values, [key]: value },
 });
 
 /**
@@ -359,7 +367,7 @@ export const createPropertiesCache = () => {
             entry: FileEntry,
             adapter: FileAdapter,
             fieldId: string,
-            value: string | readonly string[],
+            value: unknown,
             onSaved?: () => void,
         ): Promise<boolean> {
             let kept = saves.get(adapter);

@@ -241,6 +241,13 @@ export interface PropertiesLocaleText {
     propertiesAddTag: string;
     /** Names a tag in an editable list of tags, which removes it; `tag` is isolated. */
     propertiesRemoveTag: (tag: string) => string;
+    /** The first choice of a property chosen from a list, which leaves it empty. */
+    propertiesNone: string;
+    /** The first choice of a list chosen from options, which adds the one picked. */
+    propertiesAddOption: string;
+    /** A yes-or-no property, as it's shown. */
+    propertiesYes: string;
+    propertiesNo: string;
 }
 
 /**
@@ -794,12 +801,104 @@ export interface FileManagerLocaleText
 }
 
 /**
- * What `FileManager` hands its parts through `LocaleContext`: its `localeText` over the English
- * defaults, and formats and comparisons in its `locale`.
+ * Every text `MediaManager` shows or reads to screen readers, apart from what the consumer passes
+ * it (section labels): its own, named `media…`, the properties panel's, which it shares with the
+ * file manager, and the few of the file manager's that both show, such as the type labels. `enUS`
+ * holds them along with the file manager's.
+ */
+export interface MediaManagerLocaleText
+    extends
+        PropertiesLocaleText,
+        Pick<
+            FileManagerLocaleText,
+            | "loading"
+            | "tryAgain"
+            | "itemCount"
+            | "typeFolder"
+            | "typeFile"
+            | "typeImage"
+            | "typeVideo"
+            | "typeAudio"
+            | "typeText"
+            | "typeArchive"
+        > {
+    /** The sidebar's list of libraries (sections), for screen readers. */
+    mediaLibraries: string;
+    /** The header's button opening the drawer of libraries, where there's no room to dock them. */
+    mediaChooseLibrary: string;
+    /** Closes the drawer of libraries. */
+    mediaCloseLibraries: string;
+    /** In place of the library while there are no sections to show. */
+    mediaNoLibraries: string;
+    /** The search field's placeholder and its name for screen readers. */
+    mediaSearch: string;
+    mediaClearSearch: string;
+    /** In place of the library while it has nothing of the kinds it shows. */
+    mediaEmpty: string;
+    /** In place of the library while nothing matches the search or the filter. */
+    mediaNoMatches: string;
+    /** In place of the library when it couldn't be listed, when the adapter didn't say why. */
+    mediaLoadFailed: string;
+    /** How many are selected, in every library: the selected column's count, and its button where it doesn't dock. */
+    mediaSelected: (count: number) => string;
+    /** The selected column's title, and its list's name for screen readers. */
+    mediaChosen: string;
+    /** In the selected column while nothing is selected. */
+    mediaNothingChosen: string;
+    /** Closes the selected column where it's over the library. */
+    mediaCloseChosen: string;
+    /** The button taking an asset out of the selected column; `name` comes isolated. */
+    mediaRemoveChoice: (name: string) => string;
+    /**
+     * An asset in the selected column, for screen readers: its name and where it is, `position` of
+     * `count`, both formatted. `name` comes isolated, as it does in the column's texts below.
+     */
+    mediaChoiceItem: (name: string, position: string, count: string) => string;
+    /** How to move one in the selected column, and take it out, from the keyboard, read after its name. */
+    mediaChoicesHint: string;
+    /** Read after `mediaChoicesHint` while the app has fields for each pick (`fields`). */
+    mediaChoicesDetailsHint: string;
+    /** Said as one in the selected column is picked up from the keyboard, moved, put down, or put back. */
+    mediaChoicePickedUp: (name: string, position: string, count: string) => string;
+    mediaChoiceMoved: (name: string, position: string, count: string) => string;
+    mediaChoiceDropped: (name: string, position: string, count: string) => string;
+    mediaChoiceCancelled: (name: string, position: string, count: string) => string;
+    /** The button opening the app's details for one pick, for this use of it; `name` comes isolated. */
+    mediaChoiceDetails: (name: string) => string;
+    /** Goes back from one pick's details to the list of what's selected. */
+    mediaChoicesBack: string;
+    /** In one pick's details, opens the asset itself in the library. */
+    mediaShowInLibrary: string;
+    mediaClearSelection: string;
+    /** The main button, which hands what's selected to the app. */
+    mediaChoose: string;
+    /** A video's or a piece of audio's length, for screen readers; `duration` comes formatted. */
+    mediaDuration: (duration: string) => string;
+    /** A picture's or a video's size on its tile, for screen readers; both come formatted. */
+    mediaDimensions: (width: string, height: string) => string;
+    /** A tile's button, and Alt+Enter, opening the asset in the library's place; `name` comes isolated. */
+    mediaOpenAsset: (name: string) => string;
+    /** The asset view's button going back to the library it's in; `library` is its label. */
+    mediaBackToLibrary: (library: string) => string;
+    /** The asset view's buttons going to the asset before or after it in the library. */
+    mediaPreviousAsset: string;
+    mediaNextAsset: string;
+    /** The asset view's toggle adding the asset to what's selected, or taking it out. */
+    mediaSelectAsset: string;
+    /** In the asset view's place for it, when a previewer failed and didn't say why. */
+    mediaPreviewFailed: string;
+}
+
+/** Every text of both components, as `enUS` holds them and `Locale` hands them on (internal). */
+export type LocaleText = FileManagerLocaleText & MediaManagerLocaleText;
+
+/**
+ * What `FileManager` and `MediaManager` hand their parts through `LocaleContext`: their
+ * `localeText` over the English defaults, and formats and comparisons in their `locale`.
  */
 export interface Locale {
     /** Every key filled in. */
-    text: FileManagerLocaleText;
+    text: LocaleText;
     /** A number in the locale's digits, without grouping, as dimensions and counters show it. */
     formatNumber: (value: number) => string;
     /** A number grouped as the locale groups digits, e.g. "12,345", as a property of the backend's shows it. */
@@ -812,6 +911,10 @@ export interface Locale {
     formatBytes: (bytes: number) => string;
     /** A date and time in full, for the properties: "Oct 24, 2026, 3:12 PM". */
     formatDate: (date: Date) => string;
+    /** A day, without its time: "Oct 24, 2026". */
+    formatDay: (date: Date) => string;
+    /** Values one after another, as the locale lists them: "a, b, c". */
+    formatList: (values: readonly string[]) => string;
     /** A length in seconds as a clock shows it: "4:05", "1:02:03". */
     formatDuration: (seconds: number) => string;
     /** A file's size, or how many entries a folder holds, or a dash when it isn't known. */

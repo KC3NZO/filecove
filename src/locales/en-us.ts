@@ -1,4 +1,4 @@
-import type { FileManagerLocaleText, UndoChange } from "../types";
+import type { LocaleText, UndoChange } from "../types";
 
 // A change undone or redone, as the menu's items name it: "Undo rename".
 const CHANGES: Record<UndoChange, string> = {
@@ -42,10 +42,11 @@ const filesAndFolders = (fileCount: number, folderCount: number) => {
 };
 
 /**
- * The component's own text in US English, which every key left out of `localeText` falls back to.
- * It has every key, so it's the place to start a translation from.
+ * The components' own text in US English, the file manager's and the media manager's, which every
+ * key left out of `localeText` falls back to. It has every key, so it's the place to start a
+ * translation from.
  */
-export const enUS: FileManagerLocaleText = {
+export const enUS: LocaleText = {
     loading: "Loading",
     cancel: "Cancel",
     close: "Close",
@@ -513,4 +514,43 @@ export const enUS: FileManagerLocaleText = {
     propertiesSaveFailed: (label) => `Couldn't save ${label}.`,
     propertiesAddTag: "Add a tag",
     propertiesRemoveTag: (tag) => `Remove “${tag}”`,
+    propertiesNone: "None",
+    propertiesAddOption: "Add…",
+    propertiesYes: "Yes",
+    propertiesNo: "No",
+
+    mediaLibraries: "Libraries",
+    mediaChooseLibrary: "Show libraries",
+    mediaCloseLibraries: "Close",
+    mediaNoLibraries: "No libraries to show",
+    mediaSearch: "Search media",
+    mediaClearSearch: "Clear search",
+    mediaEmpty: "Nothing here yet",
+    mediaNoMatches: "No media matches",
+    mediaLoadFailed: "Couldn't load this library.",
+    mediaSelected: (count) => (count === 1 ? "1 selected" : `${count} selected`),
+    mediaChosen: "Selected",
+    mediaNothingChosen: "Nothing selected yet. What you select shows here.",
+    mediaCloseChosen: "Close",
+    mediaRemoveChoice: (name) => `Remove ${name}`,
+    mediaChoiceItem: (name, position, count) => `${name}, ${position} of ${count}`,
+    mediaChoicesHint: "Press Space to pick it up, the arrow keys to move it, and Space again to put it down. Delete removes it.",
+    mediaChoicesDetailsHint: "Enter opens its details.",
+    mediaChoicePickedUp: (name, position, count) => `Picked up ${name}, at ${position} of ${count}.`,
+    mediaChoiceMoved: (name, position, count) => `${name} moved to ${position} of ${count}.`,
+    mediaChoiceDropped: (name, position, count) => `${name} put down at ${position} of ${count}.`,
+    mediaChoiceCancelled: (name, position, count) => `Move cancelled. ${name} is back at ${position} of ${count}.`,
+    mediaChoiceDetails: (name) => `Details for ${name}`,
+    mediaChoicesBack: "Back to selected",
+    mediaShowInLibrary: "Show in library",
+    mediaClearSelection: "Clear selection",
+    mediaChoose: "Choose",
+    mediaDuration: (duration) => `Length ${duration}`,
+    mediaDimensions: (width, height) => `${width} by ${height} pixels`,
+    mediaOpenAsset: (name) => `Open ${name}`,
+    mediaBackToLibrary: (library) => `Back to ${library}`,
+    mediaPreviousAsset: "Previous",
+    mediaNextAsset: "Next",
+    mediaSelectAsset: "Select",
+    mediaPreviewFailed: "Couldn't show this file.",
 };

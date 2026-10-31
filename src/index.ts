@@ -1,8 +1,10 @@
 export { default as FileManager } from "./components/file-manager/file-manager";
 export { default as IconProvider } from "./components/icons/icon-provider";
+export { default as MediaManager } from "./components/media-manager/media-manager";
 export { enUS } from "./locales/en-us";
 
 export type { FileManagerProps } from "./components/file-manager/file-manager";
+export type { MediaManagerProps } from "./components/media-manager/media-manager";
 export type {
     ActionContext,
     ActionGroup,
@@ -39,13 +41,25 @@ export type {
     MainMenuItem,
     MeasureOptions,
     MediaInfo,
+    MediaChoice,
+    MediaKind,
+    MediaManagerLocaleText,
+    MediaSection,
+    MediaSectionGroup,
     NameCheck,
     OperationOptions,
     PreviewerProps,
     PreviewerReads,
     PropertiesOptions,
+    PropertyDefinition,
+    PropertyDefinitionGroup,
+    PropertyEditParams,
     PropertyField,
     PropertyGroup,
+    PropertyOption,
+    PropertyParams,
+    PropertyRenderParams,
+    PropertyType,
     PropertyValue,
     PropertyValues,
     RefreshOptions,

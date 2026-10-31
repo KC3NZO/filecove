@@ -2,7 +2,7 @@ import { enUS } from "../locales/en-us";
 import { isolate } from "./bidi";
 import { trashedDate } from "./trash";
 
-import type { FileEntry, FileManagerLocaleText, Locale } from "../types";
+import type { FileEntry, FileManagerLocaleText, Locale, LocaleText } from "../types";
 
 // Decimal units, as GNOME Files shows them, above bytes.
 const SIZE_UNITS = ["kilobyte", "megabyte", "gigabyte", "terabyte"];
@@ -21,19 +21,17 @@ const MIME_LABELS: [prefix: string, label: (text: FileManagerLocaleText) => stri
 ];
 
 /**
- * The text and formats for a `FileManager`: `localeText` over the English defaults, with keys
- * given as undefined kept in English, and numbers, sizes, dates and the order of names in
- * `locale`, a BCP 47 tag, or the browser's language when it's undefined. Sizes and their units come
- * from `Intl` too, so they need no text.
+ * The text and formats for a `FileManager` or a `MediaManager`: `localeText` over the English
+ * defaults, with keys given as undefined kept in English, and numbers, sizes, dates and the order
+ * of names in `locale`, a BCP 47 tag, or the browser's language when it's undefined. Sizes and
+ * their units come from `Intl` too, so they need no text.
  */
 export const createLocale = (
-    localeText: Partial<FileManagerLocaleText> | undefined,
+    localeText: Partial<LocaleText> | undefined,
     locale: string | undefined,
 ): Locale => {
     const given = localeText && Object.entries(localeText).filter(([, value]) => value !== undefined);
-    const text: FileManagerLocaleText = given
-        ? { ...enUS, ...(Object.fromEntries(given) as Partial<FileManagerLocaleText>) }
-        : enUS;
+    const text: LocaleText = given ? { ...enUS, ...(Object.fromEntries(given) as Partial<LocaleText>) } : enUS;
 
     const numberFormat = new Intl.NumberFormat(locale, { useGrouping: false });
     const countFormat = new Intl.NumberFormat(locale);
@@ -44,10 +42,12 @@ export const createLocale = (
     );
     const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "short" });
     const fullDateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
+    const dayFormat = new Intl.DateTimeFormat(locale, { dateStyle: "medium" });
     const clockFormat = new Intl.NumberFormat(locale, { minimumIntegerDigits: 2, useGrouping: false });
     const nameCollator = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
     const letterCollator = new Intl.Collator(locale, { sensitivity: "base" });
     const listFormat = new Intl.ListFormat(locale, { type: "conjunction" });
+    const valuesFormat = new Intl.ListFormat(locale, { type: "unit", style: "short" });
 
     const formatSize = (bytes: number) => {
         if (bytes < 1000) {
@@ -126,6 +126,8 @@ export const createLocale = (
         formatSize,
         formatBytes: (bytes) => byteFormat.format(bytes),
         formatDate: (date) => fullDateFormat.format(date),
+        formatDay: (date) => dayFormat.format(date),
+        formatList: (values) => valuesFormat.format(values),
         formatDuration,
         describeSize,
         describeDate: (entry) => (entry.modifiedAt ? dateFormat.format(entry.modifiedAt) : "—"),

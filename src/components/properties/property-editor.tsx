@@ -1,30 +1,32 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, MouseEvent } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
-import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
-import { isolate } from "../../utils/bidi";
+import { formatValue, sameValue } from "../../utils/property-value";
+import PropertyInput from "./property-input";
 
-import type { EditableField, PropertySave } from "../../types";
-
-type FieldValue = EditableField["value"];
+import type { FileAdapter, FileEntry, PropertyDefinition, PropertyEditParams, PropertySave } from "../../types";
+import type { PropertyInputHandle } from "./property-input";
 
 interface PropertyEditorProps {
-    field: EditableField;
+    definition: PropertyDefinition;
+    /** The property's value, which editing starts from unless a save of it failed. */
+    value: unknown;
+    entry: FileEntry;
+    adapter: FileAdapter;
     /** Its edit being saved, or that failed, kept by the cache, whose value it starts from. */
     save?: PropertySave;
-    /** The element naming the field, its row's label. */
+    /** The element naming the property, its row's label. */
     labelId: string;
     /** Takes the focus as it mounts, opened by its Edit button rather than shown again after a failed save. */
     takeFocus: boolean;
-    onSave: (value: FieldValue) => void;
-    /** Leaves the field as it was, also as the value saved is what it was. */
+    onSave: (value: unknown) => void;
+    /** Leaves the property as it was, also as the value saved is what it was. */
     onCancel: () => void;
 }
 
@@ -33,19 +35,6 @@ const editorSx: SxProps<Theme> = {
     flexDirection: "column",
     gap: 1,
     width: "100%",
-};
-
-const tagsSx: SxProps<Theme> = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 0.5,
-    "&:empty": { display: "none" },
-};
-
-// A small chip's delete icon is spaced with a physical `margin-left` and `margin-right`, reset for
-// logical ones (see `rtl.md`).
-const chipSx: SxProps<Theme> = {
-    "& .MuiChip-deleteIcon": { marginLeft: 0, marginRight: 0, marginInlineStart: "-4px", marginInlineEnd: "4px" },
 };
 
 const errorSx: SxProps<Theme> = {
@@ -59,62 +48,88 @@ const buttonsSx: SxProps<Theme> = {
     gap: 1,
 };
 
+// What a press or Enter acts on itself, which Enter doesn't save from.
+const CONTROLS = "button, a, [role='button'], [role='radio'], [role='checkbox'], [role='option']";
+
 const messageOf = (error: unknown) => (error instanceof Error && error.message ? error.message : undefined);
 
-// A press on the editor's buttons and chips leaves the focus in its field, so it isn't taken as the
-// focus leaving, which saves, first; Safari doesn't focus a button pressed.
+// A press on the editor's buttons leaves the focus in its field, so it isn't taken as the focus
+// leaving, which saves, first; Safari doesn't focus a button pressed.
 const keepFocus = (event: MouseEvent) => event.preventDefault();
 
-const sameValue = (a: FieldValue, b: FieldValue) =>
-    typeof a === "string" || typeof b === "string"
-        ? a === b
-        : a.length === b.length && a.every((tag, index) => tag === b[index]);
-
-/** Tags trimmed, each once, none empty, with what's typed after them. */
-const tagsWith = (tags: readonly string[], typed = "") =>
-    [...new Set([...tags, ...typed.split(",")].map((tag) => tag.trim()).filter(Boolean))];
+/** The first part of the editor to take the focus: its field, or else whatever of the app's takes it. */
+const firstControl = (editor: HTMLElement) =>
+    editor.querySelector<HTMLElement>("input:not([type='hidden']), textarea, select") ??
+    editor.querySelector<HTMLElement>("[tabindex]:not([tabindex='-1']), button");
 
 /**
- * A field of the backend's own being changed in the properties: its text, on one line or several,
- * or its tags, removed by their chips and added as they're typed, with Cancel and Save. Enter saves
- * (Ctrl+Enter or ⌘Enter over several lines), Escape cancels, and the focus leaving it saves what
- * changed, as a details panel on the web does. While it's saved it can't be changed, and should
- * that fail, the adapter's message shows under it, with what was typed kept to try again.
+ * A property being changed in the properties: by the app's own editor (`renderEdit`), or the
+ * built-in one of its type (text, a number, a date, a select, chips), with Cancel and Save. Enter
+ * saves (Ctrl+Enter or ⌘Enter over several lines), Escape cancels, and the focus leaving it saves
+ * what changed, as a details panel on the web does. While it's saved it can't be changed, and
+ * should that fail, the adapter's message shows under it, with what was given kept to try again.
  */
-const PropertyEditor = ({ field, save, labelId, takeFocus, onSave, onCancel }: PropertyEditorProps) => {
-    const { text } = useLocale();
-    const [draft, setDraft] = useState<FieldValue>(save?.value ?? field.value);
-    // What's typed for a tag not added yet.
-    const [typed, setTyped] = useState("");
-    const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
-    const multiline = field.type === "text" && !!field.multiline;
+const PropertyEditor = ({
+    definition,
+    value,
+    entry,
+    adapter,
+    save,
+    labelId,
+    takeFocus,
+    onSave,
+    onCancel,
+}: PropertyEditorProps) => {
+    const locale = useLocale();
+    const { text } = locale;
+    const [draft, setDraft] = useState<unknown>(save ? save.value : value);
+    const editorRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<PropertyInputHandle>(null);
+    const inputId = useId();
+    const multiline =
+        definition.type === "string" && !!definition.multiline && !definition.multiple && !definition.options;
     const saving = save?.status === "saving";
     const failure = save?.status === "error" ? save.error : undefined;
 
-    // Only as it mounts, so the focus isn't taken back as the field goes on being shown.
+    // Only as it mounts, so the focus isn't taken back as it goes on being shown.
     const tookFocus = useRef(false);
 
     useEffect(() => {
-        const input = inputRef.current;
+        const control = editorRef.current && firstControl(editorRef.current);
 
-        if (takeFocus && !tookFocus.current && input) {
-            tookFocus.current = true;
-            input.focus();
-            input.setSelectionRange(input.value.length, input.value.length);
+        if (!takeFocus || tookFocus.current || !control) {
+            return;
+        }
+
+        tookFocus.current = true;
+        control.focus();
+
+        // The caret at the end of what's there; a field of a type with no caret, a number or a
+        // date, throws.
+        if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) {
+            try {
+                control.setSelectionRange(control.value.length, control.value.length);
+            } catch {
+                // No caret to place.
+            }
         }
     }, [takeFocus]);
 
-    const value = (): FieldValue => (typeof draft === "string" ? draft.trim() : tagsWith(draft, typed));
+    // The value to save: with anything typed in a list but not added yet, text trimmed.
+    const current = () => {
+        const next = inputRef.current ? inputRef.current.flush() : draft;
+
+        return typeof next === "string" && definition.type === "string" ? next.trim() : next;
+    };
 
     // Saves what changed, or closes when nothing did. The focus leaving it doesn't try again what
     // failed as it was, which only the user's Save does.
     const commit = (leaving: boolean) => {
-        const next = value();
+        const next = current();
 
-        if (sameValue(next, field.value)) {
+        if (sameValue(next, value)) {
             onCancel();
         } else if (!(leaving && failure !== undefined && save && sameValue(next, save.value))) {
-            setTyped("");
             setDraft(next);
             onSave(next);
         }
@@ -132,7 +147,8 @@ const PropertyEditor = ({ field, save, labelId, takeFocus, onSave, onCancel }: P
             event.key === "Enter" &&
             !event.shiftKey &&
             !event.altKey &&
-            (!multiline || event.ctrlKey || event.metaKey)
+            (!multiline || event.ctrlKey || event.metaKey) &&
+            !(event.target instanceof Element && event.target.closest(CONTROLS))
         ) {
             event.preventDefault();
             commit(false);
@@ -150,91 +166,38 @@ const PropertyEditor = ({ field, save, labelId, takeFocus, onSave, onCancel }: P
         commit(true);
     };
 
-    const removeTag = (tag: string) => {
-        if (typeof draft !== "string") {
-            setDraft(draft.filter((each) => each !== tag));
-            inputRef.current?.focus();
-        }
-    };
-
-    // Enter or a comma adds what's typed as a tag; Enter with nothing typed saves.
-    const handleTagKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-        if (typeof draft === "string" || saving) {
-            return;
-        }
-
-        if ((event.key === "Enter" && !event.ctrlKey && !event.metaKey && typed.trim()) || event.key === ",") {
-            event.preventDefault();
-            setDraft(tagsWith(draft, typed));
-            setTyped("");
-        } else if (event.key === "Backspace" && !typed && draft.length > 0) {
-            event.preventDefault();
-            setDraft(draft.slice(0, -1));
-        }
+    const params: PropertyEditParams = {
+        definition,
+        value: draft,
+        formattedValue: formatValue(definition, draft, entry, locale),
+        entry,
+        adapter,
+        labelId,
+        id: inputId,
+        onChange: (next) => setDraft(() => next),
+        disabled: saving,
+        error: failure !== undefined,
     };
 
     return (
-        <Box sx={editorSx} onKeyDown={handleKeyDown} onBlur={handleBlur}>
-            {typeof draft === "string" ? (
-                <TextField
-                    fullWidth
-                    size="small"
-                    multiline={multiline}
-                    minRows={multiline ? 2 : undefined}
-                    maxRows={multiline ? 8 : undefined}
-                    value={draft}
-                    error={failure !== undefined}
-                    inputRef={inputRef}
-                    slotProps={{
-                        htmlInput: {
-                            "aria-labelledby": labelId,
-                            maxLength: field.type === "text" ? field.maxLength : undefined,
-                            readOnly: saving,
-                            dir: "auto",
-                        },
-                    }}
-                    onChange={(event) => setDraft(event.target.value)}
-                />
+        <Box ref={editorRef} sx={editorSx} onKeyDown={handleKeyDown} onBlur={handleBlur}>
+            {definition.renderEdit ? (
+                definition.renderEdit(params)
             ) : (
-                <>
-                    <Box sx={tagsSx}>
-                        {draft.map((tag) => (
-                            <Chip
-                                key={tag}
-                                size="small"
-                                label={<bdi>{tag}</bdi>}
-                                aria-label={text.propertiesRemoveTag(isolate(tag))}
-                                disabled={saving}
-                                sx={chipSx}
-                                onMouseDown={keepFocus}
-                                onClick={() => removeTag(tag)}
-                                onDelete={() => removeTag(tag)}
-                            />
-                        ))}
-                    </Box>
-                    <TextField
-                        fullWidth
-                        size="small"
-                        placeholder={text.propertiesAddTag}
-                        value={typed}
-                        error={failure !== undefined}
-                        inputRef={inputRef}
-                        slotProps={{
-                            htmlInput: {
-                                "aria-label": text.propertiesAddTag,
-                                "aria-describedby": labelId,
-                                readOnly: saving,
-                                dir: "auto",
-                            },
-                        }}
-                        onChange={(event) => setTyped(event.target.value)}
-                        onKeyDown={handleTagKeyDown}
-                    />
-                </>
+                <PropertyInput
+                    definition={definition}
+                    value={draft}
+                    onChange={params.onChange}
+                    id={inputId}
+                    labelId={labelId}
+                    disabled={saving}
+                    error={failure !== undefined}
+                    handle={inputRef}
+                />
             )}
             {failure !== undefined && (
                 <Typography role="alert" sx={errorSx}>
-                    <bdi>{messageOf(failure) ?? text.propertiesSaveFailed(field.label)}</bdi>
+                    <bdi>{messageOf(failure) ?? text.propertiesSaveFailed(definition.label)}</bdi>
                 </Typography>
             )}
             <Box sx={buttonsSx}>

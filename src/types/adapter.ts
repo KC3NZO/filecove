@@ -452,15 +452,23 @@ export interface EntryProperties {
      * as it is.
      */
     entry?: FileEntry;
-    /** The backend's own properties, shown after the file manager's. */
+    /** The backend's own properties, shown after the file manager's, where the app defines none. */
     groups?: PropertyGroup[];
+    /**
+     * The entry's values by their keys, which the app's own definitions of its properties read by
+     * their `field` (`PropertyDefinition`, the media manager's `properties`), as a data grid's
+     * columns read a row: anything the backend keeps, as plain JSON, dates as ISO strings.
+     */
+    values?: Record<string, unknown>;
 }
 
 /**
- * New values of an entry's editable properties, by their fields' ids: text for a text field, trimmed,
- * and for tags, the tags, trimmed, each once, none empty.
+ * New values of an entry's editable properties, by their fields' ids or their definitions' `field`:
+ * text for a text field, trimmed, for tags, the tags, trimmed, each once, none empty, and for a
+ * property the app defines, its value as its type has it (a string, a number, a boolean, a date as an
+ * ISO string, a list of them with `multiple`) or as its own editor or renderer saves it.
  */
-export type PropertyValues = Record<string, string | readonly string[]>;
+export type PropertyValues = Record<string, unknown>;
 
 /** Everything in some folders, counted all the way down (`measure`). */
 export interface EntryTotals {
@@ -644,7 +652,8 @@ export interface FileAdapter {
      * Hands over one entry's properties, for the properties panel, called a moment after the panel
      * comes to show it: the entry with fields its listing leaves out as too costly (`createdAt`,
      * `media`), and properties of the backend's own, such as an owner, permissions, a checksum or a
-     * link to share. A folder shown from its own menu, the open folder or a section's root, may come
+     * link to share, as `groups` it describes, or as `values` the app's own definitions show (the
+     * media manager's `properties`). A folder shown from its own menu, the open folder or a section's root, may come
      * as an entry with only `id`, `name` and `kind`, a root named after its section, as `download`
      * has them. What a listing brings is shown without it, which is all there is without it.
      * Results are kept for as long as the entry is listed as it was. Reject with an `Error` to show
@@ -653,7 +662,8 @@ export interface FileAdapter {
     properties?(entry: FileEntry, options: PropertiesOptions): Promise<EntryProperties>;
     /**
      * Saves what the user changed of an entry's properties, the fields `properties` marked
-     * `editable`, by their ids, one field at a time from the properties panel. Resolve with the
+     * `editable`, by their ids, or the app's own definitions marked so, by their `field`, one at a
+     * time from the properties panel. Resolve with the
      * entry's properties as they now are, to show what the backend made of them, or with nothing,
      * and the values given show as they were saved. Reject with an `Error` to show its message
      * under the field, which stays as the user left it, to try again. Fields are only edited where
