@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { DragEvent } from "react";
 
 import { DragContext } from "../contexts/drag-context";
-import { filesIn } from "../utils/files";
+import { carriesFiles, filesIn } from "../utils/files";
 
 import type { DropKeys, DropTarget } from "../types";
 
@@ -35,12 +35,6 @@ const keysOf = (event: DragEvent): DropKeys => ({
     copy: event.ctrlKey || event.altKey,
     move: event.shiftKey || event.metaKey,
 });
-
-/**
- * Whether files are dragged in from outside, such as from the desktop. Only that there are some can
- * be told before the drop, not what they are.
- */
-export const carriesFiles = (event: DragEvent) => event.dataTransfer.types.includes("Files");
 
 /**
  * Waits for a drag to rest on one target for `HOLD_DELAY`, then calls `onHold` with its key.

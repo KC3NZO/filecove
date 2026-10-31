@@ -6,7 +6,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
-import { fieldMessages } from "../../utils/field-errors";
+import { NO_MESSAGES, fieldMessages } from "../../utils/field-errors";
 import { formatValue, hasBuiltInEditor, isEmptyValue, readValue } from "../../utils/property-value";
 import PropertyDisplay from "../properties/property-display";
 import PropertyInput from "../properties/property-input";
@@ -24,11 +24,13 @@ interface ChoiceFieldsProps {
     errors: FieldErrors;
     /**
      * The pick's place in the order the app was handed the picks in, which the fields' keys in
-     * `errors` are made from.
+     * `errors` are made from; undefined for upload fields, which have no errors.
      */
-    index: number;
+    index: number | undefined;
     /** The pick's own messages, about it as a whole, which `choiceErrorKey` finds, shown above its fields. */
     messages: readonly string[];
+    /** The files about to be uploaded, for upload fields, which `asset` only stands in for. */
+    files?: readonly File[];
     onChange: (key: string, value: unknown) => void;
 }
 
@@ -41,9 +43,10 @@ interface FieldProps {
     id: string;
     labelId: string;
     errors: FieldErrors;
-    index: number;
+    index: number | undefined;
     /** The id of its messages, while its `errorKey` finds an error. */
     errorId: string | undefined;
+    files: readonly File[] | undefined;
     onChange: (value: unknown) => void;
 }
 
@@ -185,11 +188,11 @@ const Label = ({ definition, labelId, htmlFor, error }: LabelProps) => {
  * `editable` only shows what it holds, left out while it's empty and has no error. With an error its
  * `errorKey` finds, its label and control are marked, and its messages, under it, describe it.
  */
-const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, errorId, onChange }: FieldProps) => {
+const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, errorId, files, onChange }: FieldProps) => {
     const locale = useLocale();
     const formattedValue = formatValue(definition, value, asset, locale);
     const error = errorId !== undefined;
-    const base = { definition, value, formattedValue, entry: asset, adapter, labelId, errors, index, errorId };
+    const base = { definition, value, formattedValue, entry: asset, adapter, labelId, errors, index, errorId, files };
 
     if (definition.editable === false) {
         return (
@@ -291,7 +294,8 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
  * The app's fields for one pick, by groups, each drawn as its definition says, with what the pick
  * holds under its key, and each change handed back by that key, under the pick's own errors. The
  * fields and their labels are the app's; the media manager knows nothing of what they mean, nor of
- * the languages they're in.
+ * the languages they're in. A library's upload fields are drawn the same way, with no errors, for
+ * the files about to be uploaded.
  */
 const ChoiceFields = ({
     groups,
@@ -301,6 +305,7 @@ const ChoiceFields = ({
     errors,
     index: pickIndex,
     messages: ownMessages,
+    files,
     onChange,
 }: ChoiceFieldsProps) => {
     // Ids made from the indexes, as the app's keys may hold spaces, which an id can't.
@@ -320,7 +325,8 @@ const ChoiceFields = ({
                     const fields = group.properties.flatMap((definition, index) => {
                         const value = readValue(definition, values, asset);
 
-                        const messages = fieldMessages(definition, errors, pickIndex, asset);
+                        const messages =
+                            pickIndex === undefined ? NO_MESSAGES : fieldMessages(definition, errors, pickIndex, asset);
                         const errorId = messages.length > 0 ? `${baseId}-${groupIndex}-${index}-error` : undefined;
 
                         if (definition.editable === false && isEmptyValue(value) && !errorId) {
@@ -339,6 +345,7 @@ const ChoiceFields = ({
                                     errors={errors}
                                     index={pickIndex}
                                     errorId={errorId}
+                                    files={files}
                                     onChange={(next) => onChange(definition.field, next)}
                                 />
                                 {errorId && (

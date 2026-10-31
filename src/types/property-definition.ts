@@ -177,7 +177,10 @@ export interface PropertyParams<V = unknown> {
     value: V | undefined;
     /** Its text: `valueFormatter`'s, else its kind's, else its type's. What Copy copies. */
     formattedValue: string;
-    /** The entry, or the media manager's asset, it's a property of. */
+    /**
+     * The entry, or the media manager's asset, it's a property of. In upload fields, a stand-in for
+     * the files about to be uploaded (see `files`).
+     */
     entry: FileEntry;
     /** The adapter serving it, for a renderer asking it for more, e.g. through a method of its own. */
     adapter: FileAdapter;
@@ -202,6 +205,12 @@ export interface PropertyParams<V = unknown> {
      * `aria-describedby`; undefined while there's none.
      */
     errorId?: string;
+    /**
+     * In a media manager's upload fields (`MediaSection.uploadFields`), the files about to be
+     * uploaded, which `entry` only stands in for (the first one's name and type, their size
+     * together, and no id), as nothing is uploaded yet; undefined elsewhere.
+     */
+    files?: readonly File[];
 }
 
 export interface PropertyRenderParams<V = unknown> extends PropertyParams<V> {

@@ -15,7 +15,6 @@ import { LocaleContext } from "../../contexts/locale-context";
 import { MovingContext } from "../../contexts/moving-context";
 import { useAnnouncer } from "../../hooks/use-announcer";
 import { useClipboardFollow } from "../../hooks/use-clipboard-follow";
-import { carriesFiles } from "../../hooks/use-drop-target";
 import { useDownloadQueue } from "../../hooks/use-download-queue";
 import { useEntryDrag } from "../../hooks/use-entry-drag";
 import { useLocaleValue } from "../../hooks/use-locale";
@@ -50,6 +49,7 @@ import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { canDownload, downloadedEntries } from "../../utils/download";
 import {
     acceptsFile,
+    carriesFiles,
     filesIn,
     mayAccept,
     pickedFolder,

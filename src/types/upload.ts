@@ -17,6 +17,8 @@ interface UploadBase {
     /** The folder it goes into. */
     folder: FolderRef;
     conflict: ConflictPolicy;
+    /** What the library's upload fields held for it, handed to the adapter's `upload` (`UploadOptions.values`). */
+    values?: Readonly<Record<string, unknown>>;
     status: UploadStatus;
     /** How much has been sent, from 0 to 1, once the adapter has reported any. */
     progress?: number;
@@ -102,4 +104,23 @@ export interface FolderUpload {
     name: string;
     /** The id of a folder of that name already there, to upload into instead, merging the two. */
     mergeInto?: string;
+}
+
+/** A name the backend's own rules refuse (the adapter's `checkName`), with its message. */
+export interface RefusedName {
+    name: string;
+    reason: string;
+}
+
+/**
+ * Files and folders given to a media manager's library to upload, as its check before they're sent
+ * sorted them: those to send, and those left out, by why.
+ */
+export interface MediaUploadCheck {
+    files: File[];
+    /** Files of types the library doesn't take (`acceptUploads`). */
+    refused: File[];
+    /** Folders, which a library, listed flat, doesn't take. */
+    folders: FolderSource[];
+    misnamed: RefusedName[];
 }

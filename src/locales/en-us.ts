@@ -554,4 +554,8 @@ export const enUS: LocaleText = {
     mediaNextAsset: "Next",
     mediaSelectAsset: "Select",
     mediaPreviewFailed: "Couldn't show this file.",
+    mediaDropToUpload: (library) => `Drop files to upload them to “${library}”`,
+    mediaUploadFiles: "Files to upload",
+    mediaUploading: "Uploading",
+    mediaUploadingFile: (name) => `Uploading “${name}”`,
 };

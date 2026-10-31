@@ -9,6 +9,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
 import { useThumbnail } from "../../hooks/use-thumbnail";
+import { startIconSx } from "../../styles/direction";
 import {
     ASSET_DETAILS_WIDTH,
     ASSET_PICTURE,
@@ -95,6 +96,7 @@ const titleSx: SxProps<Theme> = {
 const selectSx: SxProps<Theme> = {
     flexShrink: 0,
     marginInlineStart: 1,
+    ...startIconSx,
     [forcedColors]: { '&[aria-pressed="true"]': forcedPressed },
 };
 

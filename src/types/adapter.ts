@@ -290,6 +290,15 @@ export interface UploadOptions extends OperationOptions {
      * uploading with no figure.
      */
     onProgress: (loaded: number, total: number) => void;
+    /**
+     * What the library's upload fields held as the user sent the file, by their `field` keys, in a
+     * media manager's library with `uploadFields`: the processing asked of the backend for it, such
+     * as `{ hls: false }` for a video not to be streamed, or `{ format: "avif" }`. The media manager
+     * never reads them; the backend decides what they mean. The same object for every file sent
+     * together, and kept for Try again. Undefined from the file manager, and for a library without
+     * upload fields.
+     */
+    values?: Readonly<Record<string, unknown>>;
 }
 
 /** Passed to `content`. */

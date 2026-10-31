@@ -16,12 +16,15 @@ import { KIND_ICONS } from "../../utils/media";
 import Icon from "../icons/icon";
 import MediaRow from "./media-row";
 import MediaTile from "./media-tile";
+import UploadTile from "./upload-tile";
 
-import type { FileAdapter, FileEntry, MediaKind } from "../../types";
+import type { FileAdapter, FileEntry, FileUploadItem, MediaKind } from "../../types";
 
 interface MediaGridProps {
     /** The library's assets the search leaves, in the order shown. */
     entries: readonly FileEntry[];
+    /** Files being uploaded into the library, shown before its assets until they're listed. */
+    uploads: readonly FileUploadItem[];
     /** The library's kind, which shows them as tiles of its shape, or audio as rows. */
     kind: MediaKind;
     adapter: FileAdapter;
@@ -53,12 +56,18 @@ const rootSx: SxProps<Theme> = {
     overflowY: "auto",
 };
 
+// The uploads under way are laid out as the assets are, before them, with no more room between the
+// two than the grid's gap.
 const gridSx: SxProps<Theme> = {
     display: "grid",
     alignContent: "start",
     gap: 0.5,
     p: 1.5,
     outline: "none",
+    '&[data-part="uploads"]': { m: 0, pb: 0, listStyle: "none" },
+    '&[data-after-uploads="true"]': { pt: 0.5 },
+    // Kept while only uploads show, so it keeps its Tab stop, but not shown.
+    "&[hidden]": { display: "none" },
 };
 
 const tilesSx = (min: number): SxProps<Theme> => ({
@@ -121,6 +130,7 @@ const stepOf = (event: KeyboardEvent<HTMLElement>, columns: number) => {
  */
 const MediaGrid = ({
     entries,
+    uploads,
     kind,
     adapter,
     label,
@@ -235,7 +245,7 @@ const MediaGrid = ({
         );
     }
 
-    if (status === "loading" && entries.length === 0) {
+    if (status === "loading" && entries.length === 0 && uploads.length === 0) {
         return (
             <Box sx={rootSx}>
                 <Box sx={stateSx}>
@@ -245,7 +255,7 @@ const MediaGrid = ({
         );
     }
 
-    if (entries.length === 0) {
+    if (entries.length === 0 && uploads.length === 0) {
         return (
             <Box sx={rootSx}>
                 <Box role="status" sx={stateSx}>
@@ -259,12 +269,21 @@ const MediaGrid = ({
     return (
         <Box sx={rootSx}>
             {busy && <LinearProgress sx={barSx} aria-label={text.loading} />}
+            {uploads.length > 0 && (
+                <Box component="ul" aria-label={text.mediaUploading} data-part="uploads" sx={GRID_SX[kind]}>
+                    {uploads.map((item) => (
+                        <UploadTile key={item.id} item={item} kind={kind} />
+                    ))}
+                </Box>
+            )}
             <Box
                 ref={gridRef}
                 role="listbox"
                 aria-label={label}
                 aria-multiselectable={multiple}
                 aria-busy={busy}
+                hidden={entries.length === 0}
+                data-after-uploads={uploads.length > 0}
                 sx={GRID_SX[kind]}
             >
                 {entries.map((entry, index) =>

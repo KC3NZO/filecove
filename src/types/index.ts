@@ -126,6 +126,8 @@ export type {
     FolderSource,
     FolderUpload,
     FolderUploadItem,
+    MediaUploadCheck,
+    RefusedName,
     UploadFailure,
     UploadItem,
     UploadStatus,

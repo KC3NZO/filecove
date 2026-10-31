@@ -163,9 +163,11 @@ const rootSx = {
  * square tiles, videos as wide ones, audio as rows, documents as pages, searched by name, each
  * opened in the library's place, shown by the app's previewers, with the properties its adapter
  * hands over. While the app takes a choice, what's selected is listed in a column beside them, put
- * in order there, each with the app's own fields for this use of it. Built from the parts it shares
- * with `FileManager` (the adapter, the listing store, thumbnails, the properties panel), not from
- * the file manager itself.
+ * in order there, each with the app's own fields for this use of it. Files are uploaded into a
+ * library taking them by its Upload button, a drop or a paste, asked first what its `uploadFields`
+ * ask, and selected as they arrive while the app takes a choice. Built from the parts it shares
+ * with `FileManager` (the adapter, the listing store, thumbnails, the properties panel, the upload
+ * queue and panel), not from the file manager itself.
  */
 const MediaManager = <V,>({
     adapter,

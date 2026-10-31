@@ -21,6 +21,20 @@ export const insetLabelSx = {
     "& .MuiListItemText-inset": { paddingLeft: 0, paddingInlineStart: "36px" },
 } satisfies SxProps<Theme>;
 
+/**
+ * A `Button`'s `startIcon`, spaced from its label with a `margin-right` and pulled to its edge with
+ * a `margin-left` (-4px, -2px when small).
+ */
+export const startIconSx = {
+    "& .MuiButton-startIcon": {
+        marginLeft: 0,
+        marginRight: 0,
+        marginInlineStart: "-4px",
+        marginInlineEnd: "8px",
+    },
+    "&.MuiButton-sizeSmall .MuiButton-startIcon": { marginInlineStart: "-2px" },
+} satisfies SxProps<Theme>;
+
 const mirrored = {
     "&:dir(rtl)": { scale: "-1 1" },
 } satisfies SxProps<Theme>;

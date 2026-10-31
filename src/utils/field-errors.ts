@@ -9,7 +9,7 @@ import type {
 /** No errors: what the properties hand their definitions, and a media manager without `errors`. */
 export const NO_ERRORS: FieldErrors = Object.freeze({});
 
-const NO_MESSAGES: readonly string[] = [];
+export const NO_MESSAGES: readonly string[] = [];
 
 /** Where errors are, as an `errorKey` or `choiceErrorKey` names them: the backend's key, or several. */
 type ErrorKeys = string | readonly string[];

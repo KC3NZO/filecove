@@ -1,6 +1,14 @@
+import type { DragEvent } from "react";
+
 import { sectionLocked } from "./sections";
 
 import type { DroppedFiles, FolderContents, FolderSource, Section } from "../types";
+
+/**
+ * Whether files are dragged in from outside, such as from the desktop. Only that there are some can
+ * be told before the drop, not what they are.
+ */
+export const carriesFiles = (event: DragEvent) => event.dataTransfer.types.includes("Files");
 
 // What a folder dropped or pasted holds, read a batch at a time, as a browser hands over at most
 // 100 entries per call.

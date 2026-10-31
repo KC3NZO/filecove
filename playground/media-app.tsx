@@ -8,6 +8,14 @@ import { MediaManager } from "../src";
 import { pickFields } from "./media-fields";
 import { audioPreviewer, hlsPreviewer } from "./media-previewers";
 import { assetProperties, videoProperties } from "./media-properties";
+import {
+    audioUploadDefaults,
+    audioUploadFields,
+    imageUploadDefaults,
+    imageUploadFields,
+    videoUploadDefaults,
+    videoUploadFields,
+} from "./media-uploads";
 import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
 import { savePicks } from "./mocks/mock-save";
 import { browse, locale, multiple, single } from "./options";
@@ -23,14 +31,24 @@ import type { FieldErrors, MediaChoice, MediaSectionGroup, PropertyErrorKeyParam
 /**
  * The playground's libraries, on two backends: this site's, a root a kind, whose videos are
  * delivered by HLS and so previewed by its own player, and show their renditions, poster and tracks
- * by definitions of their own, and a stock library's, read-only.
+ * by definitions of their own, and a stock library's, read-only. This site's take uploads of their
+ * own kind, asking first what its backend should make of them, but documents, which it takes as
+ * they are.
  */
 const libraries: MediaSectionGroup[] = [
     {
         id: "site",
         title: "This site",
         sections: [
-            { id: "images", label: "Images", kind: "image", rootId: "/images" },
+            {
+                id: "images",
+                label: "Images",
+                kind: "image",
+                rootId: "/images",
+                acceptUploads: "image/*",
+                uploadFields: imageUploadFields,
+                uploadDefaults: imageUploadDefaults,
+            },
             {
                 id: "videos",
                 label: "Videos",
@@ -38,9 +56,26 @@ const libraries: MediaSectionGroup[] = [
                 rootId: "/videos",
                 previewers: [hlsPreviewer],
                 properties: videoProperties,
+                acceptUploads: "video/*",
+                uploadFields: videoUploadFields,
+                uploadDefaults: videoUploadDefaults,
             },
-            { id: "audio", label: "Audio", kind: "audio", rootId: "/audio" },
-            { id: "documents", label: "Documents", kind: "document", rootId: "/documents" },
+            {
+                id: "audio",
+                label: "Audio",
+                kind: "audio",
+                rootId: "/audio",
+                acceptUploads: "audio/*",
+                uploadFields: audioUploadFields,
+                uploadDefaults: audioUploadDefaults,
+            },
+            {
+                id: "documents",
+                label: "Documents",
+                kind: "document",
+                rootId: "/documents",
+                acceptUploads: ".pdf,.doc,.docx,.odt,.xls,.xlsx,.ods,.ppt,.pptx,.odp,.txt,.csv",
+            },
         ],
     },
     {

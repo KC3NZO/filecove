@@ -176,6 +176,12 @@ const mediaOf = (entry: FileEntry): FileEntry["media"] => {
     return undefined;
 };
 
+/** What each file uploaded here was uploaded with, by its id, and when. */
+const uploads = new Map<string, { values: Readonly<Record<string, unknown>>; at: number }>();
+
+/** Whether a video is streamed as HLS: every one but those uploaded without it. */
+const streamed = (entry: FileEntry) => uploads.get(entry.id)?.values.hls !== false;
+
 /**
  * What this backend delivers a video by, which the media manager carries in `meta` without reading
  * it, for the playground's own player and for the app once it's chosen: an HLS manifest, as a
@@ -185,7 +191,9 @@ const mediaOf = (entry: FileEntry): FileEntry["media"] => {
 const metaOf = (entry: FileEntry): FileEntry["meta"] =>
     isVideo(entry)
         ? {
-              hls: `https://cdn.example.com/media${entry.id.replace(/\.\w+$/, "")}/master.m3u8`,
+              ...(streamed(entry)
+                  ? { hls: `https://cdn.example.com/media${entry.id.replace(/\.\w+$/, "")}/master.m3u8` }
+                  : {}),
               poster: frameUrl(frameName(entry, framesOf(entry).current)),
               sample: "https://mdn.github.io/shared-assets/videos/flower.mp4",
           }
@@ -221,23 +229,40 @@ const PROCESSING = "release-teaser.mp4";
 const STARTED = Date.now();
 const SECONDS_EACH = 12;
 
-/** A video's renditions, as this backend's jobs stand right now. */
+// Renditions made one after another, `SECONDS_EACH` each, from `since`.
+const madeSince = (names: string[], since: number): RenditionJob[] => {
+    const elapsed = (Date.now() - since) / 1000;
+
+    return names.map((name, index) => {
+        const progress = (elapsed - index * SECONDS_EACH) / SECONDS_EACH;
+
+        return progress >= 1
+            ? { name, status: "done" }
+            : progress > 0
+              ? { name, status: "processing", progress }
+              : { name, status: "queued" };
+    });
+};
+
+/**
+ * A video's renditions, as this backend's jobs stand right now: one uploaded here made from when it
+ * was, in the qualities it was uploaded with, or none when it isn't streamed.
+ */
 const renditionJobs = (entry: FileEntry): RenditionJob[] => {
     const height = mediaOf(entry)?.height ?? 1080;
     const names = RENDITIONS.filter((each) => Number.parseInt(each) <= height);
+    const upload = uploads.get(entry.id);
+
+    if (upload) {
+        const { qualities } = upload.values;
+
+        return streamed(entry)
+            ? madeSince(Array.isArray(qualities) ? names.filter((name) => qualities.includes(name)) : names, upload.at)
+            : [];
+    }
 
     if (entry.name === PROCESSING) {
-        const elapsed = (Date.now() - STARTED) / 1000;
-
-        return names.map((name, index) => {
-            const progress = (elapsed - index * SECONDS_EACH) / SECONDS_EACH;
-
-            return progress >= 1
-                ? { name, status: "done" }
-                : progress > 0
-                  ? { name, status: "processing", progress }
-                  : { name, status: "queued" };
-        });
+        return madeSince(names, STARTED);
     }
 
     // One video in five has a rendition that failed.
@@ -255,8 +280,17 @@ const renditionJobs = (entry: FileEntry): RenditionJob[] => {
 export const pollRenditions = (entry: FileEntry): Promise<RenditionJob[]> =>
     new Promise((resolve) => window.setTimeout(() => resolve(renditionJobs(entry)), 150));
 
-/** The format a file is in, as this backend names it. */
-const formatOf = (entry: FileEntry) => entry.name.split(".").pop()?.toUpperCase() ?? "";
+/**
+ * The format a file is in, as this backend names it: the one a picture uploaded here was turned
+ * into, or its own.
+ */
+const formatOf = (entry: FileEntry) => {
+    const format = uploads.get(entry.id)?.values.format;
+
+    return typeof format === "string" && format
+        ? format.toUpperCase()
+        : (entry.name.split(".").pop()?.toUpperCase() ?? "");
+};
 
 /** What's saved of an asset's editable properties, by adapter and id, as a backend keeps it. */
 const savedValues = new Map<string, PropertyValues>();
@@ -316,6 +350,18 @@ const propertiesOf = (entry: FileEntry, key: string, stock: boolean): EntryPrope
  */
 const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
     ...adapter,
+    // Keeps what each file was uploaded with, which the media manager's upload fields held, as this
+    // backend acts on it: a video streamed or not, in the qualities chosen, a picture turned into
+    // another format.
+    upload: async (file, folderId, options) => {
+        const entry = await adapter.upload?.(file, folderId, options);
+
+        if (entry && options.values) {
+            uploads.set(entry.id, { values: options.values, at: Date.now() });
+        }
+
+        return entry;
+    },
     list: (folderId, options) =>
         adapter.list(folderId, options).then((result) => ({
             ...result,

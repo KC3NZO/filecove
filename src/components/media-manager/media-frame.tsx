@@ -1,20 +1,27 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ClipboardEvent, DragEvent } from "react";
 
 import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { useFolder } from "../../hooks/use-folder";
+import { useData, useFolder } from "../../hooks/use-folder";
 import { useLocale } from "../../hooks/use-locale";
+import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { CHOICES_WIDTH, mediaMedium, mediaWide } from "../../styles/media-layout";
+import { focusOutline, selectedBackground } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
 import { focusLost } from "../../utils/dom";
 import { NO_ERRORS, choiceMessages, countFieldErrors } from "../../utils/field-errors";
+import { carriesFiles, filesIn, mayAccept, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
+import { asksAnything, checkMediaUpload, uploadFieldsFor } from "../../utils/media";
+import { allows } from "../../utils/permissions";
 import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
 import Icon from "../icons/icon";
+import UploadPanel from "../uploads/upload-panel";
 import ChoiceFields from "./choice-fields";
 import { choiceKey } from "./choice-list";
 import ChoicesPane from "./choices-pane";
@@ -23,17 +30,21 @@ import LibraryList from "./library-list";
 import MediaAsset from "./media-asset";
 import MediaGrid from "./media-grid";
 import MediaHeader from "./media-header";
+import MediaUpload from "./media-upload";
 
 import type { PropertiesCache } from "../../store/properties-cache";
 import type {
+    DroppedFiles,
     EntrySelection,
     FileAdapter,
     FileEntry,
     FilePreviewer,
+    FileUploadItem,
     FieldErrors,
     MediaChoice,
     MediaSection,
     MediaSectionGroup,
+    MediaUploadCheck,
     PropertyDefinitionGroup,
     PropertyErrorKeyParams,
 } from "../../types";
@@ -82,11 +93,35 @@ interface Viewing {
     entry: FileEntry;
 }
 
+/** Files given to a library, as checked before they're sent, and what it asks of them. */
+interface UploadStep {
+    sectionId: string;
+    check: MediaUploadCheck;
+    groups: readonly PropertyDefinitionGroup[];
+}
+
+/**
+ * A file just uploaded into a library, by its entry's id, waiting to be listed there: until it is,
+ * its tile stands in for it, and while the app takes a choice, it's then selected.
+ */
+interface Arrival {
+    key: number;
+    uploadId: number;
+    sectionId: string;
+    entryId: string;
+}
+
 const NO_ENTRIES: FileEntry[] = [];
 const NO_PICKS: Picks = { items: [], anchor: null };
 const NO_VALUES: Record<string, unknown> = {};
 const NO_GROUPS: PropertyDefinitionGroup[] = [];
 const NO_PREVIEWERS: readonly FilePreviewer[] = [];
+const NO_ARRIVALS: readonly Arrival[] = [];
+const NO_UPLOADS: readonly FileUploadItem[] = [];
+const NO_LIBRARIES: ReadonlyMap<number, string> = new Map();
+
+/** How long a file just uploaded is waited for in its library's listing, in ms. */
+const ARRIVAL_WAIT = 10_000;
 // Stands in for a library while there's none, so the listing's hook has one to not list.
 const NO_SECTION: MediaSection = { id: "", label: "", rootId: "", kind: "image" };
 
@@ -144,6 +179,44 @@ const gridSx: SxProps<Theme> = {
     flex: 1,
     minHeight: 0,
     '&[data-covered="true"]': { visibility: "hidden" },
+};
+
+// Over the library while files dragged over it can be dropped there: an outline inside its edge,
+// and what a drop does, in its middle.
+const dropZoneSx: SxProps<Theme> = (theme) => ({
+    position: "absolute",
+    inset: 0,
+    zIndex: 2,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    p: 3,
+    borderRadius: "inherit",
+    bgcolor: selectedBackground(theme),
+    pointerEvents: "none",
+    ...focusOutline,
+});
+
+const dropLabelSx: SxProps<Theme> = {
+    px: 2,
+    py: 1,
+    borderRadius: 2,
+    bgcolor: "background.paper",
+    boxShadow: 2,
+    fontSize: "0.875rem",
+    fontWeight: 600,
+    textAlign: "center",
+};
+
+// Under the library, an inset panel as it is, above the choose bar; where the library has no
+// margin of its own below, as above the choose bar, it takes one above.
+const uploadsSx: SxProps<Theme> = {
+    flexShrink: 0,
+    marginInline: 0.75,
+    mb: 0.75,
+    [mediaMedium]: { '[data-libraries="true"] &': { marginInlineStart: 0 } },
+    '[data-choosing="true"] &': { mt: 0.75 },
+    [mediaWide]: { '[data-choosing="true"] &': { mt: 0 } },
 };
 
 const backdropSx: SxProps<Theme> = {
@@ -237,6 +310,18 @@ const MediaFrame = ({
     const panelRef = useRef<HTMLDivElement>(null);
     // The asset the view went back from, whose tile takes the focus back.
     const backFromRef = useRef<string | null>(null);
+    const { store } = useData();
+
+    // Uploading: the step before files are sent, files dragged over the library, the library each
+    // upload went into, by its id, and what's just arrived, waiting to be listed.
+    const [uploadStep, setUploadStep] = useState<UploadStep | null>(null);
+    const [dropping, setDropping] = useState(false);
+    const [uploadLibraries, setUploadLibraries] = useState(NO_LIBRARIES);
+    const [arrivals, setArrivals] = useState(NO_ARRIVALS);
+    const arrivedRef = useRef(new Set<number>());
+    const arrivalCount = useRef(0);
+    const pickerRef = useRef<HTMLInputElement>(null);
+    const uploadButtonRef = useRef<HTMLButtonElement>(null);
 
     // The selected column: docked where there's room, or an overlay while opened.
     const [chosenOverlay, setChosenOverlay] = useState(false);
@@ -336,6 +421,31 @@ const MediaFrame = ({
     // The same asset is the same wherever it's listed: from the same adapter, with the same id. Ids
     // are only unique within an adapter, so two adapters never share one.
     const adapterOf = useCallback((item: MediaSection) => item.adapter ?? adapter, [adapter]);
+
+    // Uploads run in the background, a few at a time, while the user goes on; the libraries they
+    // end in, every one on the adapter rooted there, are listed again.
+    const relist = useCallback(
+        (served: FileAdapter, folderIds: string[]) => {
+            sections.forEach((item) => {
+                if (adapterOf(item) === served) {
+                    store.relist(item.id, served, folderIds);
+                }
+            });
+        },
+        [sections, adapterOf, store],
+    );
+
+    const uploads = useUploadQueue(relist, text.keptBothName);
+
+    // Whether the open library takes files: its adapter has `upload`, it isn't `readOnly` nor
+    // refusing them (`acceptUploads`), and it could be listed, its listing not saying it can't be
+    // written to.
+    const takesFiles =
+        !!section &&
+        !!sectionAdapter.upload &&
+        takesUploads(section) &&
+        state?.status !== "error" &&
+        allows("write", state?.permissions);
 
     // What's selected, as it is now: in a library that's gone, it goes; picked in the open library,
     // once that's listed, as it's listed now, and gone when it isn't any more; picked in another,
@@ -595,6 +705,7 @@ const MediaFrame = ({
             setOpenId(id);
             setQuery("");
             setViewing(null);
+            setUploadStep(null);
 
             if (librariesOpen) {
                 closeLibraries();
@@ -613,10 +724,205 @@ const MediaFrame = ({
         setOpenId(choice.section.id);
         setQuery("");
         setViewing({ sectionId: choice.section.id, entry: choice.asset });
+        setUploadStep(null);
         setChosenOverlay(false);
     }, []);
 
     const reloadLibrary = useCallback(() => reload(), [reload]);
+
+    // Sends files into a library, each its own upload, kept both with what's there of its name, as a
+    // library is listed flat, with what its upload fields held.
+    const sendUpload = useCallback(
+        (target: MediaSection, files: File[], values: Readonly<Record<string, unknown>> | undefined) => {
+            const into = { id: target.rootId, name: target.label };
+            const ids = uploads.queue.add(adapterOf(target), into, files, "keepBoth", values);
+
+            setUploadLibraries((previous) => new Map([...previous, ...ids.map((id): [number, string] => [id, target.id])]));
+        },
+        [uploads.queue, adapterOf],
+    );
+
+    // What was picked, dropped or pasted into the open library: checked first, and sent at once when
+    // there's nothing to ask or say; otherwise the upload step shows in the library's place.
+    const askUpload = useCallback(
+        (dropped: DroppedFiles) => {
+            if (!section || !takesFiles || dropped.files.length + dropped.folders.length === 0) {
+                return;
+            }
+
+            const check = checkMediaUpload(section, sectionAdapter, dropped);
+            const groups = check.files.length > 0 ? uploadFieldsFor(section, check.files) : NO_GROUPS;
+            const leftOut = check.refused.length + check.folders.length + check.misnamed.length > 0;
+
+            if (!leftOut && !asksAnything(groups)) {
+                sendUpload(section, check.files, section.uploadDefaults);
+
+                return;
+            }
+
+            setViewing(null);
+            setUploadStep({ sectionId: section.id, check, groups });
+        },
+        [section, takesFiles, sectionAdapter, sendUpload],
+    );
+
+    // Leaves the upload step, the focus going to Upload when the step had it.
+    const closeUploadStep = useCallback(() => {
+        const step = panelRef.current?.querySelector("section");
+
+        if (step?.contains(document.activeElement) || focusLost()) {
+            uploadButtonRef.current?.focus();
+        }
+
+        setUploadStep(null);
+    }, []);
+
+    const shownStep = uploadStep && uploadStep.sectionId === sectionId ? uploadStep : null;
+
+    // Files dragged over the library are taken there while it's shown and takes them, of the types
+    // it takes as far as a drag tells; otherwise the frame refuses them.
+    const dropsFiles = takesFiles && !viewed && !shownStep;
+    const patterns = useMemo(() => (section ? uploadPatterns(section) : null), [section]);
+
+    const offerDrop = (event: DragEvent<HTMLElement>) => {
+        if (carriesFiles(event) && dropsFiles && mayAccept(patterns, event.dataTransfer.items)) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+            setDropping(true);
+        }
+    };
+
+    const leaveDrop = (event: DragEvent<HTMLElement>) => {
+        if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))) {
+            setDropping(false);
+        }
+    };
+
+    const takeDrop = (event: DragEvent<HTMLElement>) => {
+        setDropping(false);
+
+        if (carriesFiles(event) && dropsFiles) {
+            event.preventDefault();
+            askUpload(filesIn(event.dataTransfer));
+        }
+    };
+
+    // Files pasted in the library, with the browser's paste key, as the file manager takes them.
+    const pasteFiles = (event: ClipboardEvent<HTMLElement>) => {
+        if (!dropsFiles) {
+            return;
+        }
+
+        const pasted = filesIn(event.clipboardData);
+
+        if (pasted.files.length + pasted.folders.length > 0) {
+            event.preventDefault();
+            askUpload(pasted);
+        }
+    };
+
+    // Each upload done, by its entry's id, waits to be listed in its library.
+    useEffect(() => {
+        uploads.items.forEach((item) => {
+            const { id, status, entryId } = item;
+            const target = uploadLibraries.get(id);
+
+            if (status !== "done" || arrivedRef.current.has(id)) {
+                return;
+            }
+
+            arrivedRef.current.add(id);
+
+            if (target === undefined || entryId === undefined) {
+                return;
+            }
+
+            const key = (arrivalCount.current += 1);
+
+            setArrivals((previous) => [...previous, { key, uploadId: id, sectionId: target, entryId }]);
+            window.setTimeout(
+                () => setArrivals((previous) => previous.filter((waiting) => waiting.key !== key)),
+                ARRIVAL_WAIT,
+            );
+        });
+    }, [uploads.items, uploadLibraries]);
+
+    // Once the open library lists what arrived, its tile takes the place of the upload's, and while
+    // the app takes a choice, it's selected, as a media picker does: added to what's selected, or
+    // one at a time, the last to arrive in place of it.
+    useEffect(() => {
+        if (!section || state?.status !== "ready") {
+            return;
+        }
+
+        const listed = new Map(library.map((entry) => [entry.id, entry]));
+        const here = arrivals.filter((waiting) => waiting.sectionId === section.id && listed.has(waiting.entryId));
+
+        if (here.length === 0) {
+            return;
+        }
+
+        const keys = new Set(here.map((waiting) => waiting.key));
+        const assets = here.flatMap((waiting) => listed.get(waiting.entryId) ?? []);
+        const last = assets[assets.length - 1];
+
+        setArrivals((previous) => previous.filter((waiting) => !keys.has(waiting.key)));
+
+        if (!onChoose || !last) {
+            return;
+        }
+
+        setPicks((previous) => {
+            if (!multiple) {
+                return {
+                    items: [{ sectionId: section.id, asset: last, values: NO_VALUES }],
+                    anchor: { sectionId: section.id, id: last.id },
+                };
+            }
+
+            const added = assets.filter(
+                (asset) => !previous.items.some((item) => samePick(item, { asset, section, values: NO_VALUES })),
+            );
+
+            return added.length === 0
+                ? previous
+                : {
+                      ...previous,
+                      items: [
+                          ...previous.items,
+                          ...added.map((asset) => ({ sectionId: section.id, asset, values: NO_VALUES })),
+                      ],
+                  };
+        });
+    }, [section, state?.status, library, arrivals, onChoose, multiple, samePick]);
+
+    // The open library's uploads, before its assets: those waiting or being sent, and those done
+    // until they're listed.
+    const shownUploads = useMemo(() => {
+        if (sectionId === undefined) {
+            return NO_UPLOADS;
+        }
+
+        const waiting = new Set(arrivals.map((arrival) => arrival.uploadId));
+        const shown = uploads.items.filter(
+            (item): item is FileUploadItem =>
+                item.kind === "file" &&
+                uploadLibraries.get(item.id) === sectionId &&
+                (item.status === "queued" || item.status === "uploading" || waiting.has(item.id)),
+        );
+
+        return shown.length > 0 ? shown : NO_UPLOADS;
+    }, [sectionId, arrivals, uploads.items, uploadLibraries]);
+
+    // Forgets the ended uploads, and the libraries they went into.
+    const clearUploads = useCallback(() => {
+        uploads.queue.clear();
+
+        const kept = new Set(uploads.queue.getItems().map((item) => item.id));
+
+        setUploadLibraries((previous) => new Map([...previous].filter(([id]) => kept.has(id))));
+        arrivedRef.current.forEach((id) => !kept.has(id) && arrivedRef.current.delete(id));
+    }, [uploads.queue]);
 
     // One pick's details: its own errors, then the app's fields for it, drawn with what it holds,
     // with the errors the app's backend answered, found by its place in the order the app was
@@ -687,7 +993,25 @@ const MediaFrame = ({
             : undefined;
 
     return (
-        <Box ref={frameRef} sx={frameSx} data-libraries={several} data-choosing={choosing}>
+        <Box
+            ref={frameRef}
+            sx={frameSx}
+            data-libraries={several}
+            data-choosing={choosing}
+            // Files dropped anywhere the library doesn't take them are refused, or the browser would
+            // open them in place of the page.
+            onDragOver={(event) => {
+                if (carriesFiles(event) && !event.defaultPrevented) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "none";
+                }
+            }}
+            onDrop={(event) => {
+                if (carriesFiles(event) && !event.defaultPrevented) {
+                    event.preventDefault();
+                }
+            }}
+        >
             {several && (
                 <>
                     <Backdrop open={librariesOpen} sx={librariesBackdropSx} onClick={closeLibraries} />
@@ -710,12 +1034,38 @@ const MediaFrame = ({
                     onOpenLibraries={() => setLibrariesOpen(true)}
                     query={query}
                     onQueryChange={setQuery}
+                    onUpload={takesFiles ? () => pickerRef.current?.click() : undefined}
+                    uploadRef={uploadButtonRef}
                 />
-                <Box ref={panelRef} sx={panelSx}>
-                    <Box sx={gridSx} data-covered={!!viewed}>
+                <input
+                    ref={pickerRef}
+                    type="file"
+                    multiple
+                    hidden
+                    tabIndex={-1}
+                    accept={typeof section?.acceptUploads === "string" ? section.acceptUploads : undefined}
+                    onChange={(event) => {
+                        const files = Array.from(event.target.files ?? []);
+
+                        // Emptied, so picking the same files again still changes it.
+                        event.target.value = "";
+                        askUpload({ files, folders: [] });
+                    }}
+                />
+                <Box
+                    ref={panelRef}
+                    sx={panelSx}
+                    onDragEnter={offerDrop}
+                    onDragOver={offerDrop}
+                    onDragLeave={leaveDrop}
+                    onDrop={takeDrop}
+                    onPaste={pasteFiles}
+                >
+                    <Box sx={gridSx} data-covered={!!viewed || !!shownStep}>
                         {section ? (
                             <MediaGrid
                                 entries={shownEntries}
+                                uploads={shownUploads}
                                 kind={section.kind}
                                 adapter={sectionAdapter}
                                 label={section.label}
@@ -759,7 +1109,36 @@ const MediaFrame = ({
                             onUpdated={reloadLibrary}
                         />
                     )}
+                    {shownStep && section && (
+                        <MediaUpload
+                            section={section}
+                            adapter={sectionAdapter}
+                            check={shownStep.check}
+                            groups={shownStep.groups}
+                            onCancel={closeUploadStep}
+                            onUpload={(values) => {
+                                sendUpload(section, shownStep.check.files, values);
+                                closeUploadStep();
+                            }}
+                        />
+                    )}
+                    {dropping && dropsFiles && section && (
+                        <Box sx={dropZoneSx}>
+                            <Typography sx={dropLabelSx}>{text.mediaDropToUpload(isolate(section.label))}</Typography>
+                        </Box>
+                    )}
                 </Box>
+                {uploads.items.length > 0 && (
+                    <Box sx={uploadsSx}>
+                        <UploadPanel
+                            items={uploads.items}
+                            onCancel={uploads.queue.cancel}
+                            onRetry={uploads.queue.retry}
+                            onCancelAll={uploads.queue.cancelAll}
+                            onClear={clearUploads}
+                        />
+                    </Box>
+                )}
                 {onChoose && (
                     <ChooseBar
                         count={choices.length}

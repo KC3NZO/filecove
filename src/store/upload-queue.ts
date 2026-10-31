@@ -289,7 +289,7 @@ export const createUploadQueue = (
 
     // Puts the job's item as it is now in the list.
     const show = (job: Job) => {
-        const { id, adapter, folder, conflict } = job.item;
+        const { id, adapter, folder, conflict, values } = job.item;
         const status = statusOf(job);
         const error = status === "failed" ? job.error : undefined;
 
@@ -306,6 +306,7 @@ export const createUploadQueue = (
                 adapter,
                 folder,
                 conflict,
+                values,
                 status,
                 error,
                 name: job.upload.name,
@@ -328,6 +329,7 @@ export const createUploadQueue = (
                 adapter,
                 folder,
                 conflict,
+                values,
                 status,
                 error,
                 file: step.file,
@@ -561,6 +563,7 @@ export const createUploadQueue = (
                 const sent: FileEntry | void = await adapter.upload(step.file, targetOf(job, step) as string, {
                     signal,
                     conflict,
+                    values: job.item.values,
                     onProgress: (loaded, total) => {
                         if (owns() && total > 0) {
                             step.progress = Math.min(Math.max(loaded / total, 0), 1);
@@ -702,9 +705,16 @@ export const createUploadQueue = (
 
         /**
          * Queues files to be uploaded into `folder` through `adapter`, which takes uploads, and
-         * returns the ids of their uploads, in the order of `files`.
+         * returns the ids of their uploads, in the order of `files`. `values`, what a media
+         * manager's library's upload fields held, goes to the adapter with each of them.
          */
-        add(adapter: FileAdapter, folder: FolderRef, files: File[], conflict: ConflictPolicy) {
+        add(
+            adapter: FileAdapter,
+            folder: FolderRef,
+            files: File[],
+            conflict: ConflictPolicy,
+            values?: Readonly<Record<string, unknown>>,
+        ) {
             if (files.length === 0) {
                 return [];
             }
@@ -715,7 +725,7 @@ export const createUploadQueue = (
 
                 enqueue(
                     { ...blank(), files: [step], ready: [step], size: file.size },
-                    { kind: "file", id, file, adapter, folder, conflict, status: "queued" },
+                    { kind: "file", id, file, adapter, folder, conflict, values, status: "queued" },
                 );
 
                 return id;

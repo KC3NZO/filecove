@@ -809,10 +809,22 @@ export interface FileManagerLocaleText
 export interface MediaManagerLocaleText
     extends
         PropertiesLocaleText,
+        UploadLocaleText,
         Pick<
             FileManagerLocaleText,
             | "loading"
+            | "cancel"
+            | "close"
             | "tryAgain"
+            | "upload"
+            | "uploadTitle"
+            | "uploadFailedTitle"
+            | "uploadFoldersFailedTitle"
+            | "uploadFoldersOnly"
+            | "uploadFoldersLeftOut"
+            | "uploadTypesOnly"
+            | "uploadTypesLeftOut"
+            | "uploadNamesRefused"
             | "itemCount"
             | "typeFolder"
             | "typeFile"
@@ -893,6 +905,14 @@ export interface MediaManagerLocaleText
     mediaSelectAsset: string;
     /** In the asset view's place for it, when a previewer failed and didn't say why. */
     mediaPreviewFailed: string;
+    /** Over the library while files dragged over it can be dropped; `library` is its label. */
+    mediaDropToUpload: (library: string) => string;
+    /** The upload step's list of the files about to be uploaded, for screen readers. */
+    mediaUploadFiles: string;
+    /** The uploads under way shown before the library's assets, for screen readers. */
+    mediaUploading: string;
+    /** One of them, its tile's progress bar's name; `name` comes isolated. */
+    mediaUploadingFile: (name: string) => string;
 }
 
 /** Every text of both components, as `enUS` holds them and `Locale` hands them on (internal). */

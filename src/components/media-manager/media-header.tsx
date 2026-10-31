@@ -1,11 +1,13 @@
 import type { Ref } from "react";
 
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import InputBase from "@mui/material/InputBase";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
+import { startIconSx } from "../../styles/direction";
 import { headerFieldSx, headerInputSx } from "../../styles/header-field";
 import { HEADER_HEIGHT } from "../../styles/layout";
 import { mediaMedium } from "../../styles/media-layout";
@@ -24,6 +26,9 @@ interface MediaHeaderProps {
     onOpenLibraries: () => void;
     query: string;
     onQueryChange: (query: string) => void;
+    /** Picks files to upload into the library; missing while it takes none. */
+    onUpload: (() => void) | undefined;
+    uploadRef: Ref<HTMLButtonElement>;
 }
 
 const headerSx: SxProps<Theme> = {
@@ -61,9 +66,14 @@ const searchSx: SxProps<Theme> = {
     marginInlineStart: "auto",
 };
 
+const uploadSx: SxProps<Theme> = {
+    flexShrink: 0,
+    ...startIconSx,
+};
+
 /**
- * Above the library: the button opening the libraries where they don't dock, its name, and the
- * search.
+ * Above the library: the button opening the libraries where they don't dock, its name, the search,
+ * and Upload, while the library takes files.
  */
 const MediaHeader = ({
     section,
@@ -73,6 +83,8 @@ const MediaHeader = ({
     onOpenLibraries,
     query,
     onQueryChange,
+    onUpload,
+    uploadRef,
 }: MediaHeaderProps) => {
     const { text } = useLocale();
 
@@ -115,6 +127,17 @@ const MediaHeader = ({
                         </TooltipIconButton>
                     )}
                 </Box>
+                {onUpload && (
+                    <Button
+                        ref={uploadRef}
+                        color="inherit"
+                        startIcon={<Icon name="upload" fontSize="small" />}
+                        sx={uploadSx}
+                        onClick={onUpload}
+                    >
+                        {text.upload}
+                    </Button>
+                )}
             </Box>
         </Box>
     );

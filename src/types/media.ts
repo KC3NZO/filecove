@@ -15,7 +15,8 @@ export type MediaKind = "image" | "video" | "audio" | "document";
  * backend's way of delivering what it holds, so how its assets are previewed is its own too
  * (`previewers`). The media manager trusts the listing, and doesn't sort files into kinds itself.
  */
-export interface MediaSection extends Pick<Section, "id" | "label" | "icon" | "rootId" | "adapter" | "readOnly"> {
+export interface MediaSection
+    extends Pick<Section, "id" | "label" | "icon" | "rootId" | "adapter" | "readOnly" | "acceptUploads"> {
     kind: MediaKind;
     /**
      * How this library's assets are shown as one is opened, as its backend delivers them: an HLS
@@ -31,6 +32,19 @@ export interface MediaSection extends Pick<Section, "id" | "label" | "icon" | "r
      * `properties`; without either, the adapter's own groups show.
      */
     properties?: PropertyDefinitionGroup[];
+    /**
+     * What's asked of files uploaded into this library, before they're sent, in groups: the
+     * processing its backend offers, such as whether a video is streamed as HLS, or a picture made
+     * smaller or turned into WebP or AVIF, by the app's own definitions, as a pick's fields are.
+     * What they hold goes to the adapter's `upload` with every file sent together
+     * (`UploadOptions.values`), which decides what they mean. Asked for once a batch, picked,
+     * dropped or pasted, in the library's place, with `uploadDefaults` filled in; a function is
+     * handed the files, to ask only what fits them, such as nothing for pictures already in
+     * WebP. Without any for the files, they're sent at once.
+     */
+    uploadFields?: PropertyDefinitionGroup[] | ((files: readonly File[]) => PropertyDefinitionGroup[]);
+    /** What the upload fields hold as they're shown, by their `field` keys: the backend's defaults. */
+    uploadDefaults?: Readonly<Record<string, unknown>>;
 }
 
 /** Libraries shown together in the list of libraries, under an optional heading. */
