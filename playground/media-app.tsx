@@ -126,9 +126,6 @@ const footerSx: SxProps<Theme> = {
 /** Where a pick's own errors are, as the playground's backend names them: `media.0`, `media.0.id`. */
 const choiceErrorKey = ({ index }: PropertyErrorKeyParams) => [`media.${index}`, `media.${index}.id`];
 
-/** What the keys of a pick's fields start with, as the playground's backend names them: `media.0.`. */
-const choiceErrorPrefix = ({ index }: PropertyErrorKeyParams) => `media.${index}.`;
-
 /** A pick as an app would store it: its library's id with the asset's, and what's filled in. */
 const describeOne = ({ asset, section, values }: MediaChoice) => {
     const filled = Object.entries(values)
@@ -203,7 +200,6 @@ const MediaApp = () => {
         previewers,
         errors,
         choiceErrorKey,
-        choiceErrorPrefix,
     };
 
     return (

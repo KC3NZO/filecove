@@ -95,7 +95,8 @@ const PosterTime = ({ value, entry, adapter, labelId, onChange, disabled }: Prop
                 URL.revokeObjectURL(objectUrl);
             }
         };
-    }, [adapter, entry]);
+        // By its id, as it's a new object each time its backend's work moves on.
+    }, [adapter, entry.id]);
 
     const inUse = typeof entry.meta?.posterAt === "number" ? entry.meta.posterAt : 0;
     const at = Math.min(chosen ?? inUse, length ?? Infinity);

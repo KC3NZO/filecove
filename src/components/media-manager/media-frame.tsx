@@ -14,7 +14,7 @@ import { CHOICES_WIDTH, mediaMedium, mediaWide } from "../../styles/media-layout
 import { focusOutline, selectedBackground } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
 import { focusLost } from "../../utils/dom";
-import { NO_ERRORS, choiceMessages, countErrorsUnder } from "../../utils/field-errors";
+import { NO_ERRORS, choiceMessages, countErrorsAt } from "../../utils/field-errors";
 import { carriesFiles, filesIn, mayAccept, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
 import {
@@ -51,13 +51,12 @@ import type {
     FieldErrors,
     FollowedAssets,
     MediaChoice,
-    MediaForm,
-    MediaPickFormParams,
-    MediaProcessFormParams,
+    MediaPickForm,
+    MediaProcessForm,
     MediaSection,
     MediaSectionGroup,
     MediaUploadCheck,
-    MediaUploadFormParams,
+    MediaUploadForm,
     PropertyDefinitionGroup,
     PropertyErrorKeyParams,
 } from "../../types";
@@ -67,7 +66,7 @@ export interface MediaFrameProps {
     adapter: FileAdapter;
     multiple: boolean;
     onChoose: ((choices: MediaChoice[]) => void) | undefined;
-    pickForm: ((asset: FileEntry, section: MediaSection) => MediaForm<MediaPickFormParams> | null) | undefined;
+    pickForm: ((asset: FileEntry, section: MediaSection) => MediaPickForm | null) | undefined;
     /** What an asset shows as it's opened, where its library has no `properties` of its own. */
     properties: ((asset: FileEntry, section: MediaSection) => PropertyDefinitionGroup[]) | undefined;
     /** The media manager's own previewers, asked after a library's. */
@@ -78,8 +77,6 @@ export interface MediaFrameProps {
     errors: FieldErrors;
     /** Where a pick's own errors are in `errors`, about it as a whole. */
     choiceErrorKey: ((params: PropertyErrorKeyParams) => string | readonly string[]) | undefined;
-    /** What the keys of a pick's fields in `errors` start with, for its row's count. */
-    choiceErrorPrefix: ((params: PropertyErrorKeyParams) => string) | undefined;
     propertiesCache: PropertiesCache;
 }
 
@@ -109,18 +106,22 @@ interface Viewing {
     entry: FileEntry;
 }
 
-/** Files given to a library, as checked before they're sent, and what it asks of them. */
+/**
+ * Files given to a library, as checked before they're sent, and what it asks of them. Its `key` is its
+ * own, so what another batch's form held doesn't carry over to this one.
+ */
 interface UploadStep {
+    key: number;
     sectionId: string;
     check: MediaUploadCheck;
-    form: MediaForm<MediaUploadFormParams> | null;
+    form: MediaUploadForm | null;
 }
 
 /** An asset of a library being asked what's to be made of it, with what can be asked as it opened. */
 interface ProcessStep {
     sectionId: string;
     entry: FileEntry;
-    form: MediaForm<MediaProcessFormParams>;
+    form: MediaProcessForm;
 }
 
 /**
@@ -137,6 +138,10 @@ interface Arrival {
 const NO_ENTRIES: FileEntry[] = [];
 const NO_PICKS: Picks = { items: [], anchor: null };
 const NO_VALUES: Record<string, unknown> = {};
+const NO_ERROR_KEYS: readonly string[] = [];
+// The choices made from a pick's form's defaults, nothing being changed yet, so what's made from them
+// again is too, and they go on following the form.
+const DEFAULTED = new WeakSet<MediaChoice>();
 const NO_PREVIEWERS: readonly FilePreviewer[] = [];
 const NO_ARRIVALS: readonly Arrival[] = [];
 const NO_UPLOADS: readonly FileUploadItem[] = [];
@@ -152,7 +157,11 @@ const NO_SECTION: MediaSection = { id: "", label: "", rootId: "", kind: "image" 
 const byDate = (compareNames: (a: string, b: string) => number) => (a: FileEntry, b: FileEntry) =>
     (b.modifiedAt?.getTime() ?? 0) - (a.modifiedAt?.getTime() ?? 0) || compareNames(a.name, b.name);
 
-const pickOf = ({ asset, section, values }: MediaChoice): Pick => ({ sectionId: section.id, asset, values });
+const pickOf = (choice: MediaChoice): Pick => ({
+    sectionId: choice.section.id,
+    asset: choice.asset,
+    values: DEFAULTED.has(choice) ? NO_VALUES : choice.values,
+});
 
 const picksFrom = (choices: readonly MediaChoice[] | undefined): Picks =>
     choices && choices.length > 0
@@ -312,7 +321,6 @@ const MediaFrame = ({
     defaultValue,
     errors,
     choiceErrorKey,
-    choiceErrorPrefix,
     propertiesCache,
 }: MediaFrameProps) => {
     const { text, foldLetters, compareNames, formatPercent } = useLocale();
@@ -339,6 +347,7 @@ const MediaFrame = ({
     // Uploading: the step before files are sent, files dragged over the library, the library each
     // upload went into, by its id, and what's just arrived, waiting to be listed.
     const [uploadStep, setUploadStep] = useState<UploadStep | null>(null);
+    const uploadStepCount = useRef(0);
     const [dropping, setDropping] = useState(false);
     const [uploadLibraries, setUploadLibraries] = useState(NO_LIBRARIES);
     const [arrivals, setArrivals] = useState(NO_ARRIVALS);
@@ -612,7 +621,19 @@ const MediaFrame = ({
                     ? listedNow
                     : (listedNow ?? withState(asset, assetStates.get(served)?.get(asset.id)));
 
-            return now ? [{ asset: now, section: from, values: values === NO_VALUES ? defaultsOf(now, from) : values }] : [];
+            if (!now) {
+                return [];
+            }
+
+            if (values !== NO_VALUES) {
+                return [{ asset: now, section: from, values }];
+            }
+
+            const defaulted = { asset: now, section: from, values: defaultsOf(now, from) };
+
+            DEFAULTED.add(defaulted);
+
+            return [defaulted];
         });
     }, [picks.items, sectionsById, state?.status, library, sectionId, adapterOf, sectionAdapter, assetStates, defaultsOf]);
 
@@ -629,13 +650,46 @@ const MediaFrame = ({
     const errorsOrder = handedOrder ?? errorsCame.order;
     const errorPlaces = useMemo(() => new Map(errorsOrder.map((key, place) => [key, place])), [errorsOrder]);
 
-    // Hands the picks to the app, keeping the order they went in.
+    // Hands the picks to the app, keeping the order they went in, each with its values to itself, as
+    // what its form's defaults gave may be one object, the form's.
     const handOver = useCallback(
         (handed: MediaChoice[]) => {
             setHandedOrder(handed.map(choiceKey));
-            onChoose?.(handed);
+            onChoose?.(handed.map((choice) => ({ ...choice, values: { ...choice.values } })));
         },
         [onChoose],
+    );
+
+    // What a pick's form is drawn from and its functions read: its errors, found by its place in the
+    // order the app was handed the picks in. One added since has none, as the backend never saw it,
+    // and its place now.
+    const pickState = useCallback(
+        (choice: MediaChoice, index: number, all: readonly MediaChoice[]) => {
+            const place = errorPlaces.get(choiceKey(choice));
+
+            return {
+                asset: choice.asset,
+                section: choice.section,
+                adapter: adapterOf(choice.section),
+                values: choice.values,
+                errors: place === undefined ? NO_ERRORS : errors,
+                index: place ?? index,
+                choices: all,
+            };
+        },
+        [errorPlaces, errors, adapterOf],
+    );
+
+    // Why a pick's form isn't ready, by its `ready`; nothing once it is.
+    const unfilledOf = useCallback(
+        (choice: MediaChoice, index: number, all: readonly MediaChoice[]): AssetHold | undefined => {
+            const answer = pickForm?.(choice.asset, choice.section)?.ready?.(pickState(choice, index, all)) ?? true;
+
+            return answer === true
+                ? undefined
+                : { status: "unfilled", text: typeof answer === "string" && answer ? answer : text.mediaChoiceUnfilled };
+        },
+        [pickForm, pickState, text],
     );
 
     // One at a time with nothing selected, the column has nothing to show, so it's left out.
@@ -655,12 +709,13 @@ const MediaFrame = ({
     );
 
     // Why picks can't be chosen now, by their keys, which holds Choose back until they can, or are
-    // taken out: still being processed, failed, or refused by their library.
+    // taken out: still being processed, failed, refused by their library, or their form not ready.
     const choiceHolds = useMemo(() => {
         const held = new Map<string, AssetHold>();
 
-        choices.forEach((choice) => {
-            const hold = holdOf(choice.asset, choice.section, { text, formatPercent });
+        choices.forEach((choice, index) => {
+            const hold =
+                holdOf(choice.asset, choice.section, { text, formatPercent }) ?? unfilledOf(choice, index, choices);
 
             if (hold) {
                 held.set(choiceKey(choice), hold);
@@ -668,11 +723,12 @@ const MediaFrame = ({
         });
 
         return held.size > 0 ? held : NO_HOLDS;
-    }, [choices, text, formatPercent]);
+    }, [choices, text, formatPercent, unfilledOf]);
 
     const holdOfChoice = useCallback((choice: MediaChoice) => choiceHolds.get(choiceKey(choice)), [choiceHolds]);
 
-    // What holds Choose back, said beside it: those to take out first, else those still processed.
+    // What holds Choose back, said beside it: those to take out first, then those to fill in, by why
+    // when there's one, else those still processed.
     const chooseHeld = useMemo(() => {
         if (choiceHolds.size === 0) {
             return undefined;
@@ -680,9 +736,18 @@ const MediaFrame = ({
 
         const held = [...choiceHolds.values()];
         const waiting = held.filter(({ status }) => status === "processing").length;
-        const refused = held.length - waiting;
+        const unfilled = held.filter(({ status }) => status === "unfilled");
+        const refused = held.length - waiting - unfilled.length;
 
-        return refused > 0 ? text.mediaChoicesUnavailable(refused) : text.mediaChoicesProcessing(waiting);
+        if (refused > 0) {
+            return text.mediaChoicesUnavailable(refused);
+        }
+
+        if (unfilled.length > 0) {
+            return unfilled.length === 1 ? unfilled[0].text : text.mediaChoicesUnfilled(unfilled.length);
+        }
+
+        return text.mediaChoicesProcessing(waiting);
     }, [choiceHolds, text]);
 
     // Whether a pick kept is of the same asset as a choice.
@@ -885,19 +950,37 @@ const MediaFrame = ({
                 return;
             }
 
-            const chosen = choices.find((choice) => inOpen(choice) && choice.asset.id === entry.id) ?? {
-                asset: entry,
-                section,
-                values: defaultsOf(entry, section),
-            };
+            const picked = choices.find((choice) => inOpen(choice) && choice.asset.id === entry.id);
+            const chosen = picked ?? { asset: entry, section, values: defaultsOf(entry, section) };
             const handed = multiple ? [...choices.filter((choice) => choice !== chosen), chosen] : [chosen];
+
+            // Its form asks for more first: it's selected instead, its row saying what.
+            if (!picked && unfilledOf(chosen, handed.length - 1, handed)) {
+                press(index, { toggle: false, range: false });
+
+                return;
+            }
 
             // The others selected hold it back as they hold Choose.
             if (!handed.some((choice) => choiceHolds.has(choiceKey(choice)))) {
                 handOver(handed);
             }
         },
-        [shownEntries, onChoose, handOver, multiple, choices, inOpen, section, openAsset, holds, choiceHolds, defaultsOf],
+        [
+            shownEntries,
+            onChoose,
+            handOver,
+            multiple,
+            choices,
+            inOpen,
+            section,
+            openAsset,
+            holds,
+            choiceHolds,
+            defaultsOf,
+            unfilledOf,
+            press,
+        ],
     );
 
     const closeLibraries = useCallback(() => {
@@ -969,7 +1052,8 @@ const MediaFrame = ({
             }
 
             setViewing(null);
-            setUploadStep({ sectionId: section.id, check, form });
+            uploadStepCount.current += 1;
+            setUploadStep({ key: uploadStepCount.current, sectionId: section.id, check, form });
         },
         [section, takesFiles, sectionAdapter, sendUpload],
     );
@@ -1139,46 +1223,41 @@ const MediaFrame = ({
         arrivedRef.current.forEach((id) => !kept.has(id) && arrivedRef.current.delete(id));
     }, [uploads.queue]);
 
-    // One pick's details: its own errors, then the app's form for it, drawn with what it holds,
-    // with the errors the app's backend answered, found by its place in the order the app was
-    // handed the picks in. One added since has none, as the backend never saw it, and its place now.
+    // One pick's details: its own errors, then the app's form for it, drawn with what it holds, and
+    // what can read and change the others.
     const renderDetails = useMemo(
         () =>
             (pickForm || choiceErrorKey) &&
             ((choice: MediaChoice, index: number) => {
-                const place = errorPlaces.get(choiceKey(choice));
-                const answered = place === undefined ? NO_ERRORS : errors;
-                const at = place ?? index;
+                const state = pickState(choice, index, choices);
                 const form = pickForm?.(choice.asset, choice.section);
 
                 return (
                     <>
-                        <ChoiceMessages messages={choiceMessages(choiceErrorKey, answered, at, choice.asset)} />
+                        <ChoiceMessages
+                            messages={choiceMessages(choiceErrorKey, state.errors, state.index, choice.asset)}
+                        />
                         {form && (
                             <MediaFormBody
                                 form={form}
                                 params={{
-                                    asset: choice.asset,
-                                    section: choice.section,
-                                    adapter: adapterOf(choice.section),
-                                    index: at,
-                                    errors: answered,
-                                    values: choice.values,
+                                    ...state,
                                     setValues: (next) => setChoiceValues(choice, next),
+                                    setChoiceValues,
                                 }}
                             />
                         )}
                     </>
                 );
             }),
-        [pickForm, choiceErrorKey, errorPlaces, adapterOf, setChoiceValues, errors],
+        [pickForm, choiceErrorKey, pickState, choices, setChoiceValues],
     );
 
-    // How much of a pick there is to fix, for its row in the list, whose form isn't open: each key
-    // under its prefix with an error, and its own errors as one more.
+    // How much of a pick there is to fix, for its row in the list, whose form isn't open: each field
+    // its form has now with an error, and its own errors as one more.
     const problemsOf = useMemo(
         () =>
-            (choiceErrorPrefix || choiceErrorKey) && errors !== NO_ERRORS
+            (pickForm || choiceErrorKey) && errors !== NO_ERRORS
                 ? (choice: MediaChoice) => {
                       const place = errorPlaces.get(choiceKey(choice));
 
@@ -1187,17 +1266,15 @@ const MediaFrame = ({
                       }
 
                       const own = choiceMessages(choiceErrorKey, errors, place, choice.asset).length > 0 ? 1 : 0;
-                      const params = { index: place, entry: choice.asset };
+                      const form = pickForm?.(choice.asset, choice.section);
 
                       return (
                           own +
-                          (choiceErrorPrefix
-                              ? countErrorsUnder(errors, choiceErrorPrefix(params), choiceErrorKey?.(params))
-                              : 0)
+                          countErrorsAt(errors, form?.errorKeys?.(pickState(choice, place, choices)) ?? NO_ERROR_KEYS)
                       );
                   }
                 : undefined,
-        [choiceErrorPrefix, choiceErrorKey, errors, errorPlaces],
+        [pickForm, choiceErrorKey, errors, errorPlaces, pickState, choices],
     );
 
     // A library's own previewers first, as its backend delivers what it holds, then the media
@@ -1397,16 +1474,18 @@ const MediaFrame = ({
                     {shownProcess && section && (
                         <MediaProcess
                             key={shownProcess.entry.id}
-                            entry={shownProcess.entry}
+                            entry={viewed?.entry ?? shownProcess.entry}
                             section={section}
                             adapter={sectionAdapter}
-                            form={shownProcess.form}
+                            form={viewedProcess ?? shownProcess.form}
+                            unavailable={!viewedProcess}
                             onCancel={() => setProcessStep(null)}
                             onSent={() => processSent(shownProcess.entry)}
                         />
                     )}
                     {shownStep && section && (
                         <MediaUpload
+                            key={shownStep.key}
                             section={section}
                             adapter={sectionAdapter}
                             check={shownStep.check}

@@ -26,45 +26,108 @@ export interface MediaFormParams<V = Record<string, unknown>> {
     section: MediaSection;
     /** That library's adapter, its own or the media manager's. */
     adapter: FileAdapter;
+    /**
+     * What's wrong with what it holds, by the backend's own keys, a message or several each: a pick's
+     * as the app passed them (`MediaManager`'s `errors`), empty for a pick the backend never saw; an
+     * upload's or a process form's as its refusal said (`MediaFormRefusal`), until it's sent again.
+     * `MediaFields` shows each field's under it, by its `errorKey`.
+     */
+    errors: FieldErrors;
+    /**
+     * The place the keys in `errors` are made from: a pick's in the order the app was handed the
+     * picks in, from 0; always 0 in an upload's or a process form, which are about one thing.
+     */
+    index: number;
 }
 
 /** What a library's upload form is handed (`MediaSection.uploadForm`). */
-export interface MediaUploadFormParams extends MediaFormParams {
+export interface MediaUploadFormParams<V = Record<string, unknown>> extends MediaFormParams<V> {
     /** The files about to be uploaded. */
     files: readonly File[];
+    /** Whether its `validate` is being answered, while nothing in it should change. */
+    sending: boolean;
 }
 
 /** What a library's process form is handed (`MediaSection.processForm`). */
-export interface MediaProcessFormParams extends MediaFormParams {
+export interface MediaProcessFormParams<V = Record<string, unknown>> extends MediaFormParams<V> {
+    /**
+     * The asset as it's listed now, a new object each time its backend's work moves on, so anything
+     * loaded from it goes by `asset.id`.
+     */
     asset: FileEntry;
+    /** Whether it's being sent to the adapter's `process`, while nothing in it should change. */
+    sending: boolean;
 }
 
 /** What a pick's form is handed (`MediaManager`'s `pickForm`). */
 export interface MediaPickFormParams<V = Record<string, unknown>> extends MediaFormParams<V> {
     asset: FileEntry;
-    /**
-     * The pick's place in the order the app was handed the picks in, from 0, which the backend's
-     * keys in `errors` go by.
-     */
-    index: number;
-    /** The media manager's `errors`, as the app passed them; empty for a pick the backend never saw. */
-    errors: FieldErrors;
+    /** Every pick as it stands now, this one too, in the order set, for rules across them. */
+    choices: readonly MediaChoice<V>[];
+    /** Changes what another pick's form holds, as `setValues` does this one's. */
+    setChoiceValues: (choice: MediaChoice<V>, next: SetStateAction<V>) => void;
 }
 
 /**
- * A form of the app's: what it holds as it's shown, and how it's drawn. `MediaFields` draws fields from
- * their definitions, for all of it or a part, and anything else the app likes can go around them or
- * in their place.
+ * What a form's own functions are handed: what it's drawn with, without what changes it, as they only
+ * read it, and are asked of a pick's form while it isn't open too.
  */
-export interface MediaForm<P extends { values: unknown } = MediaFormParams> {
-    /** What it holds as it's shown. */
-    defaults?: Partial<P["values"]>;
+export type MediaFormState<P> = Omit<P, "setValues" | "setChoiceValues">;
+
+// A form's values with members it has to have start out with them, so `values` never promises
+// what isn't there.
+type FormDefaults<V> = {} extends V ? { defaults?: V } : { defaults: V };
+
+/**
+ * A form of the app's: what it holds as it's shown, how it's drawn, and whether it's ready to go.
+ * `MediaFields` draws fields from their definitions, for all of it or a part, and anything else the
+ * app likes can go around them or in their place.
+ */
+export type MediaForm<P extends { values: unknown } = MediaFormParams> = FormDefaults<P["values"]> & {
     /**
      * Draws it, each time what it holds changes, as a component of its own, so it may use hooks. Return
      * the app's own component as an element, `(form) => <VideoFields {...form} />`, defined outside
-     * this function, or it would start over each time.
+     * this function, or it would start over each time, which the console warns of.
      */
     render(params: P): ReactNode;
+    /**
+     * Whether what it holds can go on: `true`, or `false`, or why not, in the app's language. Until
+     * it can, its button (Upload, Process or Choose) is held back, with why beside it, and a pick's row
+     * says so too. Without it, it always can, the backend having the last word.
+     */
+    ready?(params: MediaFormState<P>): boolean | string;
+};
+
+/** A pick's form (`MediaManager`'s `pickForm`). */
+export type MediaPickForm<V = Record<string, unknown>> = MediaForm<MediaPickFormParams<V>> & {
+    /**
+     * The backend's keys for the fields it has now, one entry a field, each a key or the keys of a field
+     * holding several, made from `index` and what it holds, so what's gone from it isn't counted. Its row
+     * in the selected column says how many of them have a message, while the form isn't open.
+     */
+    errorKeys?(params: MediaFormState<MediaPickFormParams<V>>): ReadonlyArray<string | readonly string[]>;
+};
+
+/** A library's upload form (`MediaSection.uploadForm`). */
+export type MediaUploadForm<V = Record<string, unknown>> = MediaForm<MediaUploadFormParams<V>> & {
+    /**
+     * Asks the backend about what it holds as Upload is pressed, since the files go one by one in the
+     * background after that, with the form gone. Rejecting keeps it open, saying why as `process`
+     * does (`MediaFormRefusal`). Aborted when the user leaves meanwhile.
+     */
+    validate?(params: MediaFormState<MediaUploadFormParams<V>>, options: { signal: AbortSignal }): void | Promise<void>;
+};
+
+/** A library's process form (`MediaSection.processForm`). */
+export type MediaProcessForm<V = Record<string, unknown>> = MediaForm<MediaProcessFormParams<V>>;
+
+/**
+ * What the adapter's `process`, or an upload form's `validate`, rejects with: its `message` shows over
+ * the form, and `errors`, the backend's by its own keys, under the fields their `errorKey`s name, as
+ * Laravel's validation answers: `Object.assign(new Error(body.message), { errors: body.errors })`.
+ */
+export interface MediaFormRefusal extends Error {
+    errors?: FieldErrors;
 }
 
 /**
@@ -98,16 +161,19 @@ export interface MediaSection
      * picked, dropped or pasted, in the library's place. What it holds goes to the adapter's `upload`
      * with every file sent together (`UploadOptions.values`), which decides what it means.
      */
-    uploadForm?(files: readonly File[]): MediaForm<MediaUploadFormParams> | null;
+    // `any`, so a form of values of the app's own shape fits, as a library doesn't know their shape.
+    uploadForm?(files: readonly File[]): MediaUploadForm<any> | null;
     /**
      * What can be asked of an asset already uploaded, from its view: anything its backend can make
      * of it or make again, such as a video's HLS, a picture's responsive sizes or a piece of audio's
      * transcript. Handed the asset, it returns the form for it, or `null` when nothing can be done
      * with it now, as for a video already being processed, and nothing is offered. What it holds goes
      * to the adapter's `process`, which decides what it means. Needs the adapter's `process`, and a
-     * library that isn't `readOnly`.
+     * library that isn't `readOnly`. Asked again as the asset changes, so an open form follows it, and
+     * `null` by then holds Process back rather than closing what's being filled in.
      */
-    processForm?(asset: FileEntry): MediaForm<MediaProcessFormParams> | null;
+    // `any`, so a form of values of the app's own shape fits, as a library doesn't know their shape.
+    processForm?(asset: FileEntry): MediaProcessForm<any> | null;
     /**
      * Whether an asset of this library may be chosen, by the app's own rules, such as a stock photo
      * whose licence has run out: `true`, or `false`, or why not, in the app's language, which its
@@ -131,14 +197,15 @@ export type AssetStates = ReadonlyMap<FileAdapter, ReadonlyMap<string, AssetStat
 
 /**
  * Why an asset can't be chosen now (internal): its backend's work on it under way or failed
- * (`FileEntry.processing`), or its library refusing it (`MediaSection.selectable`), as its tile, its
- * row among those selected and its view show it, in one line, with a bar while it's processed.
+ * (`FileEntry.processing`), its library refusing it (`MediaSection.selectable`), or, once it's picked,
+ * its form not ready (`MediaForm.ready`), as its tile, its row among those selected and its view show
+ * it, in one line, with a bar while it's processed.
  */
 export interface AssetHold {
-    status: "processing" | "failed" | "refused";
+    status: "processing" | "failed" | "refused" | "unfilled";
     /** How far along the processing is, from 0 to 1, when the backend says. */
     progress?: number;
-    /** The line shown: what it's doing and how far along, that it failed, or why it's refused. */
+    /** The line shown: what it's doing and how far along, that it failed, or why it's refused or unfilled. */
     text: string;
     /** Why it failed, as the backend said, for its description. */
     detail?: string;
@@ -163,8 +230,8 @@ export interface MediaChoice<V = Record<string, unknown>> {
     section: MediaSection;
     /**
      * What the app's form (`pickForm`) holds for this use of the asset, which the media manager keeps
-     * with the pick and hands back. The form's `defaults` until something is changed, or as given
-     * with `defaultValue`.
+     * with the pick and hands back, a copy of its own at Choose. The form's `defaults` as they are now
+     * until something is changed, or as given with `defaultValue`.
      */
     values: V;
 }

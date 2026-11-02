@@ -25,9 +25,8 @@ import type {
     FileEntry,
     FilePreviewer,
     MediaChoice,
-    MediaForm,
     MediaManagerLocaleText,
-    MediaPickFormParams,
+    MediaPickForm,
     MediaSection,
     MediaSectionGroup,
     PropertyDefinitionGroup,
@@ -61,10 +60,11 @@ interface BaseProps<V> extends RootAttributes {
      * the same library picked from elsewhere may ask for something else. It's drawn in the selected
      * column as a pick's details are opened, with what the media manager keeps with the pick, as it's
      * moved and as other libraries are shown, and hands back with `onChoose` (`values`): its `defaults`
-     * from the moment it's picked. Without it, picks have no details. Keep it outside the component,
-     * or memoized.
+     * from the moment it's picked. Its `ready` holds Choose back, and its `errorKeys` count on the pick's
+     * row what there is to fix. Without it, picks have no details. Keep it outside the component, or
+     * memoized.
      */
-    pickForm?: (asset: FileEntry, section: MediaSection) => MediaForm<MediaPickFormParams<V>> | null;
+    pickForm?: (asset: FileEntry, section: MediaSection) => MediaPickForm<V> | null;
     /**
      * What an asset shows as it's opened, by the asset and its library, for the libraries without
      * `properties` of their own: the app's definitions of the values the adapter's `properties`
@@ -93,7 +93,7 @@ interface BaseProps<V> extends RootAttributes {
      * `errorKey`, made from the pick's place (``({ index }) => `media.${index}.loop` ``), shown
      * under it, a form of the app's reads them itself (`MediaPickFormParams.errors`), and each pick
      * finds its own by `choiceErrorKey`, with the pick's row in the selected column saying how many
-     * there are to fix (`choiceErrorPrefix`). The keys go by the order the app was handed the
+     * there are to fix (`MediaPickForm.errorKeys`). The keys go by the order the app was handed the
      * picks in, at Choose (or, before any, the order as the errors came), so each pick keeps its own
      * as it's moved; one taken out takes them with it, and one added since has none. Pass the same
      * object for as long as they're the same.
@@ -106,14 +106,6 @@ interface BaseProps<V> extends RootAttributes {
      * the top of its details, above its form, and its row counts them as one more to fix.
      */
     choiceErrorKey?: (params: PropertyErrorKeyParams) => string | readonly string[];
-    /**
-     * What the keys of a pick's fields in `errors` start with, made from its place, its separator
-     * included, ``({ index }) => `media.${index}.` ``, so its row in the selected column can count
-     * what there is to fix while its form isn't open: each key with a message, so a title with an error
-     * in two languages counts as two. Those `choiceErrorKey` names count as one more, apart. Without
-     * it, only those count.
-     */
-    choiceErrorPrefix?: (params: PropertyErrorKeyParams) => string;
     /**
      * The component's own text, for another language or other wording. Keys left out stay in
      * English, as `enUS` has them. Functions written inline are new each render and make every
@@ -193,7 +185,6 @@ const MediaManager = <V,>({
     defaultValue,
     errors = NO_ERRORS,
     choiceErrorKey,
-    choiceErrorPrefix,
     localeText,
     locale,
     ref,
@@ -236,7 +227,6 @@ const MediaManager = <V,>({
                             defaultValue={defaultValue as readonly MediaChoice[] | undefined}
                             errors={errors}
                             choiceErrorKey={choiceErrorKey}
-                            choiceErrorPrefix={choiceErrorPrefix}
                             propertiesCache={propertiesCache}
                         />
                     </Box>

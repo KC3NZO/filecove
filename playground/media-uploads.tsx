@@ -1,6 +1,7 @@
 import { MediaFields } from "../src";
+import { checkVideoUpload } from "./mocks/mock-media";
 
-import type { MediaForm, MediaUploadFormParams, PropertyDefinition } from "../src";
+import type { MediaUploadForm, MediaUploadFormParams, PropertyDefinition } from "../src";
 
 // What this site's backend can do with files as they're uploaded, asked of each library's uploads
 // before they're sent (`uploadForm`), as an app offers what its own backend's pipeline does. The
@@ -53,6 +54,7 @@ export const qualitiesWhile = (streaming: boolean): PropertyDefinition => ({
     type: "string",
     multiple: true,
     disabled: !streaming,
+    errorKey: () => "qualities",
     options: QUALITIES.map((quality) => ({ value: quality, label: quality })),
 });
 
@@ -60,21 +62,21 @@ export const qualitiesWhile = (streaming: boolean): PropertyDefinition => ({
  * What a video's form holds once HLS has been ticked or unticked: without it there are no renditions
  * to ask for, so what was asked of them goes, and the usual qualities come back with it.
  */
-export const followingHls = (next: Values): Values => {
+export const followingHls = <V extends Values>(next: V): V => {
     if (next.hls) {
         return next.qualities === undefined ? { ...next, qualities: USUAL_QUALITIES } : next;
     }
 
     const { qualities: _qualities, remake: _remake, ...rest } = next;
 
-    return rest;
+    return rest as V;
 };
 
 /**
  * A picture library's: optimizing, responsive sizes and another format, for raster pictures only,
  * so an SVG is sent at once; and no other format for pictures already in WebP or AVIF.
  */
-export const imageUploadForm = (files: readonly File[]): MediaForm<MediaUploadFormParams> | null => {
+export const imageUploadForm = (files: readonly File[]): MediaUploadForm | null => {
     const raster = files.filter((file) => file.type !== "image/svg+xml");
 
     if (raster.length === 0) {
@@ -96,8 +98,11 @@ export const imageUploadForm = (files: readonly File[]): MediaForm<MediaUploadFo
     };
 };
 
+/** What a video library's form holds, in a shape of the app's own: its `defaults` have to fill in what's always there. */
+type VideoUpload = { hls: boolean; qualities?: string[]; posters: boolean };
+
 /** A video library's fields: streaming as HLS, in the qualities chosen, and poster frames. */
-const VideoUploadFields = (form: MediaUploadFormParams) => (
+const VideoUploadFields = (form: MediaUploadFormParams<VideoUpload>) => (
     <MediaFields
         {...form}
         setValues={(next) => form.setValues(followingHls(next))}
@@ -115,9 +120,15 @@ const VideoUploadFields = (form: MediaUploadFormParams) => (
     />
 );
 
-const videoUpload: MediaForm<MediaUploadFormParams> = {
+/**
+ * Held back while streaming asks for no quality, and what this site's plan allows is asked of its
+ * backend before anything goes.
+ */
+const videoUpload: MediaUploadForm<VideoUpload> = {
     defaults: { hls: true, qualities: USUAL_QUALITIES, posters: true },
     render: (form) => <VideoUploadFields {...form} />,
+    ready: ({ values }) => !values.hls || (values.qualities?.length ?? 0) > 0 || "Choose at least one quality.",
+    validate: ({ values }, { signal }) => checkVideoUpload(values, signal),
 };
 
 export const videoUploadForm = () => videoUpload;
@@ -129,7 +140,7 @@ const audioGroups = [
     },
 ];
 
-const audioUpload: MediaForm<MediaUploadFormParams> = {
+const audioUpload: MediaUploadForm = {
     defaults: { normalize: true },
     render: (form) => <MediaFields {...form} groups={audioGroups} />,
 };

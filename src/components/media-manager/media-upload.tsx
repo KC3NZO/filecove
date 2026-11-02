@@ -1,18 +1,19 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useFormSend } from "../../hooks/use-form-send";
 import { useLocale } from "../../hooks/use-locale";
 import { isolate } from "../../utils/bidi";
 import { uploadPatterns } from "../../utils/files";
 import { FileTypeIcon } from "../icons/file-icon";
-import { MediaFormBody } from "./media-form";
-import MediaStep from "./media-step";
+import { FormFailure, MediaFormBody } from "./media-form";
+import MediaStep, { StepSend } from "./media-step";
 
-import type { FileAdapter, MediaForm, MediaSection, MediaUploadCheck, MediaUploadFormParams } from "../../types";
+import type { FileAdapter, MediaSection, MediaUploadCheck, MediaUploadForm } from "../../types";
 
 interface MediaUploadProps {
     section: MediaSection;
@@ -21,10 +22,10 @@ interface MediaUploadProps {
     /** What was given, as the check before sending sorted it. */
     check: MediaUploadCheck;
     /** What the library asks of these files: its upload form, for them, or nothing. */
-    form: MediaForm<MediaUploadFormParams> | null;
+    form: MediaUploadForm | null;
     onCancel: () => void;
-    /** Sends the files, with what the upload form holds. */
-    onUpload: (values: Readonly<Record<string, unknown>>) => void;
+    /** Sends the files, with what the upload form holds; with no form, nothing. */
+    onUpload: (values: Readonly<Record<string, unknown>> | undefined) => void;
 }
 
 const notesSx: SxProps<Theme> = {
@@ -71,17 +72,36 @@ const fieldsSx: SxProps<Theme> = {
 /**
  * The step before files are uploaded into a library, in its place, as the asset view is: what's
  * about to go, what's left out and why, and the library's upload form for them, with Cancel and
- * Upload; or, with nothing left to send, why, with Close. Shown only when there's something to ask or
- * to say.
+ * Upload, held back while the form isn't ready and while its `validate` is answered, which refusing keeps
+ * this open, saying why; or, with nothing left to send, why, with Close. Shown only when there's
+ * something to ask or to say.
  */
 const MediaUpload = ({ section, adapter, check, form, onCancel, onUpload }: MediaUploadProps) => {
     const { text, describeAccepted, formatSize } = useLocale();
+    const noteId = useId();
     const [values, setValues] = useState<Record<string, unknown>>(() => ({ ...form?.defaults }));
+    const { sending: checking, failure, errors, send, abort } = useFormSend(text.mediaUploadRefused);
     const { files, refused, folders, misnamed } = check;
     const patterns = uploadPatterns(section);
     const types = patterns ? describeAccepted(patterns) : "";
     const library = isolate(section.label);
     const sending = files.length > 0;
+    const params = { files, section, adapter, values, setValues, errors, index: 0, sending: checking };
+    const ready = form?.ready?.(params) ?? true;
+
+    // Leaving while it's being checked stops that, and nothing has gone.
+    const leave = () => {
+        abort();
+        onCancel();
+    };
+
+    const upload = () => {
+        if (form?.validate) {
+            send((signal) => form.validate?.(params, { signal }), () => onUpload(values));
+        } else {
+            onUpload(form ? values : undefined);
+        }
+    };
 
     const title = sending
         ? text.uploadTitle(files.length, isolate(files[0].name), library)
@@ -107,16 +127,22 @@ const MediaUpload = ({ section, adapter, check, form, onCancel, onUpload }: Medi
         <MediaStep
             title={title}
             backLabel={text.mediaBackToLibrary(section.label)}
-            onBack={onCancel}
+            onBack={leave}
+            note={sending && typeof ready === "string" ? ready : undefined}
+            noteId={noteId}
             footer={
                 sending ? (
                     <>
-                        <Button color="inherit" onClick={onCancel}>
+                        <Button color="inherit" onClick={leave}>
                             {text.cancel}
                         </Button>
-                        <Button variant="contained" disableElevation onClick={() => onUpload(values)}>
+                        <StepSend
+                            held={checking || ready !== true}
+                            describedBy={typeof ready === "string" && ready ? noteId : undefined}
+                            onClick={upload}
+                        >
                             {text.upload}
-                        </Button>
+                        </StepSend>
                     </>
                 ) : (
                     <Button variant="contained" disableElevation onClick={onCancel}>
@@ -125,6 +151,7 @@ const MediaUpload = ({ section, adapter, check, form, onCancel, onUpload }: Medi
                 )
             }
         >
+            {failure && <FormFailure message={failure} />}
             {notes.length > 0 && (
                 <Box sx={notesSx}>
                     {notes.map((note) => (
@@ -151,7 +178,7 @@ const MediaUpload = ({ section, adapter, check, form, onCancel, onUpload }: Medi
             )}
             {sending && form && (
                 <Box sx={fieldsSx}>
-                    <MediaFormBody form={form} params={{ files, section, adapter, values, setValues }} />
+                    <MediaFormBody form={form} params={params} />
                 </Box>
             )}
         </MediaStep>

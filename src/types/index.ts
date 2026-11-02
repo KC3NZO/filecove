@@ -61,11 +61,16 @@ export type {
     MediaChoice,
     MediaForm,
     MediaFormParams,
+    MediaFormRefusal,
+    MediaFormState,
     MediaKind,
+    MediaPickForm,
     MediaPickFormParams,
+    MediaProcessForm,
     MediaProcessFormParams,
     MediaSection,
     MediaSectionGroup,
+    MediaUploadForm,
     MediaUploadFormParams,
 } from "./media";
 export type {

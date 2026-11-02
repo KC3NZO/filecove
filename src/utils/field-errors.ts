@@ -62,13 +62,22 @@ export const choiceMessages = (
 };
 
 /**
- * How many of a pick's keys have a message, under the prefix `choiceErrorPrefix` makes from its place,
- * for its row; its own keys, which `choiceErrorKey` names and are counted apart, aside.
+ * How many of a pick's fields have a message, as its form names them now (`MediaPickForm.errorKeys`),
+ * one entry a field, so a title with an error in two languages counts once.
  */
-export const countErrorsUnder = (errors: FieldErrors, prefix: string, own: ErrorKeys | undefined) => {
-    const asides = new Set(typeof own === "string" ? [own] : own);
+export const countErrorsAt = (errors: FieldErrors, fields: readonly ErrorKeys[]) =>
+    fields.filter((keys) => messagesUnder(errors, keys).length > 0).length;
 
-    return Object.keys(errors).filter(
-        (key) => key.startsWith(prefix) && !asides.has(key) && messagesAt(errors, key).length > 0,
-    ).length;
+/**
+ * What a form's refusal says (`MediaFormRefusal`): its message, or `fallback`, which always shows, as
+ * no field may name a key it has, and what's under its fields, by the backend's keys.
+ */
+export const refusalOf = (error: unknown, fallback: string) => {
+    const message = (error instanceof Error && error.message) || fallback;
+    const found = typeof error === "object" && error !== null ? (error as { errors?: unknown }).errors : undefined;
+
+    return {
+        message,
+        errors: typeof found === "object" && found !== null ? (found as FieldErrors) : NO_ERRORS,
+    };
 };

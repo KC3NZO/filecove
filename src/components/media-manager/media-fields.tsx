@@ -1,4 +1,4 @@
-import { useId, useMemo } from "react";
+import { useId, useLayoutEffect, useMemo, useRef } from "react";
 import type { KeyboardEvent } from "react";
 
 import Box from "@mui/material/Box";
@@ -27,10 +27,12 @@ export interface MediaFieldsProps<V = Record<string, unknown>> {
     asset?: FileEntry;
     /** The files about to be uploaded, in an upload form. */
     files?: readonly File[];
-    /** In a pick's form, the media manager's `errors`, each field finding its own by its `errorKey`. */
+    /** The form's `errors`, each field finding its own by its `errorKey`. */
     errors?: FieldErrors;
-    /** In a pick's form, the pick's place, which the fields' keys in `errors` are made from. */
+    /** The place the fields' keys in `errors` are made from. Without it, no field shows its errors. */
     index?: number;
+    /** Whether the form's being sent, while no field can be changed. */
+    sending?: boolean;
 }
 
 const NO_FILES: readonly File[] = [];
@@ -48,6 +50,8 @@ interface FieldProps {
     /** The id of its messages, while its `errorKey` finds an error. */
     errorId: string | undefined;
     files: readonly File[] | undefined;
+    /** Whether the form's being sent, while it can't be changed. */
+    sending: boolean;
     onChange: (value: unknown) => void;
 }
 
@@ -180,20 +184,35 @@ const Label = ({ definition, labelId, htmlFor, error, disabled }: LabelProps) =>
  * One of the app's fields, as it's to be filled in: its own editor (`renderEdit`), the built-in one
  * of its type, or its `render` changing it in place through `save`. One that isn't `editable` only
  * shows what it holds, left out while it's empty and has no error. One `disabled` shows, greyed, and
- * can't be changed. With an error its `errorKey` finds, its label and control are marked, and its
+ * can't be changed, and neither can any while the form's being sent, a text field keeping the focus.
+ * With an error its `errorKey` finds, its label and control are marked, and its
  * messages, under it, describe it.
  */
-const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, errorId, files, onChange }: FieldProps) => {
+const Field = ({
+    definition,
+    value,
+    asset,
+    adapter,
+    id,
+    labelId,
+    errors,
+    index,
+    errorId,
+    files,
+    sending,
+    onChange,
+}: FieldProps) => {
     const locale = useLocale();
     const formattedValue = formatValue(definition, value, asset, locale);
     const error = errorId !== undefined;
-    const disabled = !!definition.disabled;
+    const off = !!definition.disabled;
+    const disabled = off || sending;
     const base = { definition, value, formattedValue, entry: asset, adapter, labelId, errors, index, errorId, files };
 
     if (definition.editable === false) {
         return (
             <>
-                <Label definition={definition} labelId={labelId} error={error} disabled={disabled} />
+                <Label definition={definition} labelId={labelId} error={error} disabled={off} />
                 {definition.render ? (
                     <Box sx={ownSx}>{definition.render({ ...base, saving: false, error })}</Box>
                 ) : (
@@ -208,7 +227,7 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
     if (definition.renderEdit) {
         return (
             <>
-                <Label definition={definition} labelId={labelId} error={error} disabled={disabled} />
+                <Label definition={definition} labelId={labelId} error={error} disabled={off} />
                 <Box sx={ownSx}>
                     {definition.renderEdit({
                         ...base,
@@ -232,7 +251,7 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
                     id={id}
                     labelId={labelId}
                     disabled={disabled}
-                    off={disabled}
+                    off={off}
                     error={error}
                     describedBy={errorId}
                 />
@@ -241,7 +260,7 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
                     htmlFor={id}
                     id={labelId}
                     variant="body2"
-                    color={error ? "error" : disabled ? "text.disabled" : undefined}
+                    color={error ? "error" : off ? "text.disabled" : undefined}
                 >
                     {definition.label}
                 </Typography>
@@ -252,7 +271,7 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
     if (hasBuiltInEditor(definition)) {
         return (
             <>
-                <Label definition={definition} labelId={labelId} htmlFor={id} error={error} disabled={disabled} />
+                <Label definition={definition} labelId={labelId} htmlFor={id} error={error} disabled={off} />
                 <PropertyInput
                     definition={definition}
                     value={value}
@@ -260,7 +279,7 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
                     id={id}
                     labelId={labelId}
                     disabled={disabled}
-                    off={disabled}
+                    off={off}
                     error={error}
                     describedBy={errorId}
                 />
@@ -271,7 +290,7 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
     // Its `render` sets its value as it saves, at once.
     return (
         <>
-            <Label definition={definition} labelId={labelId} error={error} disabled={disabled} />
+            <Label definition={definition} labelId={labelId} error={error} disabled={off} />
             {definition.render && (
                 <Box sx={ownSx}>
                     {definition.render({
@@ -295,7 +314,8 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
 /**
  * Fields from their definitions, by groups, for a form of the app's to draw all or part of itself
  * with: each drawn as its definition says, with what's held under its `field`, and each change handed
- * back with the rest. They're made fresh as the form likes, from what it holds, so a field can
+ * back with the rest, as they are by then, so a field answering late doesn't undo what's changed
+ * meanwhile. They're made fresh as the form likes, from what it holds, so a field can
  * follow another: gone, or `disabled`, as it's unticked. The labels are the app's; the media manager
  * knows nothing of what they mean, nor of the languages they're in. `{...form}` hands it all it needs.
  */
@@ -308,11 +328,18 @@ const MediaFields = <V,>({
     files = NO_FILES,
     errors = NO_ERRORS,
     index: pickIndex,
+    sending = false,
 }: MediaFieldsProps<V>) => {
     // Ids made from the indexes, as the app's keys may hold spaces, which an id can't.
     const baseId = useId();
     const held = values as Readonly<Record<string, unknown>>;
     const entry = useMemo(() => asset ?? uploadStandIn(files), [asset, files]);
+    // What it holds by now, for a field changing later than it was drawn, or two at once.
+    const latestRef = useRef(held);
+
+    useLayoutEffect(() => {
+        latestRef.current = held;
+    });
 
     return (
         <Box sx={groupsSx} onKeyDown={keepEnter}>
@@ -341,7 +368,13 @@ const MediaFields = <V,>({
                                 index={pickIndex}
                                 errorId={errorId}
                                 files={asset ? undefined : files}
-                                onChange={(next) => setValues({ ...held, [definition.field]: next } as V)}
+                                sending={sending}
+                                onChange={(next) => {
+                                    const merged = { ...latestRef.current, [definition.field]: next };
+
+                                    latestRef.current = merged;
+                                    setValues(merged as V);
+                                }}
                             />
                             {errorId && (
                                 <Box id={errorId} sx={messagesSx}>

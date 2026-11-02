@@ -20,10 +20,11 @@ export type FieldErrors = Readonly<Record<string, string | readonly string[]>>;
 export interface PropertyErrorKeyParams {
     /**
      * The pick's place in the order the app was handed the picks in, from 0, which the backend's
-     * keys go by: as it was at Choose, however it's been moved since.
+     * keys go by: as it was at Choose, however it's been moved since. Always 0 in an upload's or a
+     * process form, which are about one thing.
      */
     index: number;
-    /** The asset picked. */
+    /** The asset picked or processed; in an upload form, a stand-in for the files. */
     entry: FileEntry;
 }
 
@@ -191,17 +192,16 @@ export interface PropertyParams<V = unknown> {
     /** The id of its label, for a control of the app's to be named by (`aria-labelledby`). */
     labelId: string;
     /**
-     * In a pick's fields, the media manager's `errors`, as the app passed them, for a field the app
-     * draws to mark finer parts of its own by, with `index`:
-     * ``errors[`media.${index}.translations.ar.title`]`` for its Arabic tab. Its messages are shown
-     * under it by its `errorKey`. Empty in the properties, and for a pick added since the app was
-     * handed the picks, which the backend never saw.
+     * In a form's fields, the form's `errors`, for a field the app draws to mark finer parts of its
+     * own by, with `index`: ``errors[`media.${index}.translations.ar.title`]`` for its Arabic tab. Its
+     * messages are shown under it by its `errorKey`. Empty in the properties, and for a pick added
+     * since the app was handed the picks, which the backend never saw.
      */
     errors: FieldErrors;
     /**
-     * In a pick's fields, the pick's place in the order the app was handed the picks in, from 0,
-     * which the backend's keys go by (see `PropertyErrorKeyParams.index`); undefined in the
-     * properties.
+     * In a form's fields, the place the backend's keys go by (see `PropertyErrorKeyParams.index`): a
+     * pick's in the order the app was handed the picks in, from 0, and 0 in an upload's or a process
+     * form; undefined in the properties.
      */
     index?: number;
     /**

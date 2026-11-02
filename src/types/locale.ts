@@ -930,6 +930,14 @@ export interface MediaManagerLocaleText
     mediaBackToAsset: (name: string) => string;
     /** Over the step's fields when the adapter's `process` failed and didn't say why. */
     mediaProcessFailed: string;
+    /** Beside Process, held back as the library's `processForm` no longer has anything to ask of the asset. */
+    mediaProcessUnavailable: string;
+    /** Over an upload form, its `validate` having refused it without saying why. */
+    mediaUploadRefused: string;
+    /** A pick's row, while its form isn't ready and doesn't say why (`MediaForm.ready`). */
+    mediaChoiceUnfilled: string;
+    /** Beside Choose, held back while picks' forms aren't ready. */
+    mediaChoicesUnfilled: (count: number) => string;
     /** Beside Choose while selected assets are still being processed, holding it back. */
     mediaChoicesProcessing: (count: number) => string;
     /** Beside Choose while selected assets can't be chosen at all, which have to be taken out. */

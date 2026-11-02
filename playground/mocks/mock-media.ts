@@ -614,6 +614,15 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
                     throw new Error("Change something first: HLS, its renditions or the poster.");
                 }
 
+                // A refusal naming a field, as a Laravel validation error does.
+                if (make && Array.isArray(values.qualities) && values.qualities.includes("2160p")) {
+                    if ((entry.media?.height ?? 0) < 2160) {
+                        throw Object.assign(new Error("The given data was invalid."), {
+                            errors: { qualities: [`“${entry.name}” isn't tall enough to make 2160p from.`] },
+                        });
+                    }
+                }
+
                 if (posterAt !== undefined) {
                     const content = await adapter.content?.(entry, { signal, purpose: "preview", onProgress: () => {} });
                     const frame = content && (await takeFrame(content, posterAt, signal));
@@ -714,3 +723,17 @@ export const siteMediaAdapter = withMedia(siteAdapter);
 
 /** A stock library's backend, another one, read-only. */
 export const stockMediaAdapter = withMedia(stockAdapter, true);
+
+/**
+ * What this site's backend says of a video's upload form before anything is sent, as its plan stops
+ * short of the largest quality: a refusal naming the field, as a Laravel validation error does.
+ */
+export const checkVideoUpload = async (values: { qualities?: string[] }, signal: AbortSignal) => {
+    await wait(300, signal);
+
+    if (values.qualities?.includes("2160p")) {
+        throw Object.assign(new Error("The given data was invalid."), {
+            errors: { qualities: ["This site's plan stops at 1080p."] },
+        });
+    }
+};

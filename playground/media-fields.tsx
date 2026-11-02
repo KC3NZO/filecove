@@ -9,8 +9,9 @@ import { MediaFields } from "../src";
 
 import type {
     FileEntry,
-    MediaForm,
+    MediaFormState,
     MediaKind,
+    MediaPickForm,
     MediaPickFormParams,
     MediaSection,
     PropertyDefinition,
@@ -27,7 +28,7 @@ import type {
 // hands it back with what's chosen. Each finds its errors in what the playground's backend answers
 // (`mocks/mock-save.ts`) by its `errorKey`, the request's key for it, or its keys: the video's
 // title names one a language, and reads `errors` itself only to mark the tab of each language with
-// one.
+// one. Each form names those of the fields it has now (`errorKeys`), for its row's count.
 
 /** The site's languages, which the media manager knows nothing of. */
 export const LANGUAGES = [
@@ -198,12 +199,56 @@ const altKeys = LANGUAGES.map(({ code }) => `alt.${code}`);
 const titleGroup = perLanguage("title", "Title");
 const altGroup = perLanguage("alt", "Alt text", { multiline: true, required: "en" });
 
+/** The backend's keys for the fields of these groups that have them, one entry a field. */
+const keysOf = (groups: readonly PropertyDefinitionGroup[], { index, asset }: MediaFormState<MediaPickFormParams>) =>
+    groups.flatMap(({ properties }) =>
+        properties.flatMap((definition) => (definition.errorKey ? [definition.errorKey({ index, entry: asset })] : [])),
+    );
+
+/** A picture's fields as what it holds has them: no alt text while it's decorative, no focal point while it's whole. */
+const pictureGroups = (values: Record<string, unknown>, cover: PropertyDefinition): PropertyDefinitionGroup[] => [
+    titleGroup,
+    ...(values.decorative ? [] : [altGroup]),
+    {
+        id: "layout",
+        title: "Layout",
+        properties: [
+            cover,
+            { field: "decorative", label: "Decorative, no alt text", type: "boolean" },
+            {
+                field: "fit",
+                label: "Fit",
+                type: "string",
+                options: [
+                    { value: "cover", label: "Fill the slide" },
+                    { value: "contain", label: "Show it whole" },
+                ],
+            },
+            {
+                field: "focus",
+                label: "Focal point",
+                disabled: values.fit === "contain",
+                // While it's off there's nothing to fix, so its error isn't shown or counted.
+                errorKey: values.fit === "contain" ? undefined : keyOf("focus"),
+                render: (params) => <FocalPoint {...params} />,
+            },
+        ],
+    },
+];
+
+const coverField: PropertyDefinition = { field: "cover", label: "Cover of the carousel", type: "boolean" };
+
 /**
  * A picture's: its title, its alt text unless it's decorative, which takes what was written, and how
  * it sits in the slide, its focal point off and forgotten while it's shown whole, when nothing's cut.
+ * One pick at most is the cover: it says which is now, and taking it over takes it from that one.
  */
 const PictureFields = (form: MediaPickFormParams) => {
-    const { values, setValues } = form;
+    const { asset, values, setValues, choices, setChoiceValues } = form;
+    const others = choices.filter((choice) => choice.asset.id !== asset.id && choice.values.cover);
+    const cover = others[0]
+        ? { ...coverField, label: `Cover of the carousel, now “${others[0].asset.name}”` }
+        : coverField;
 
     return (
         <MediaFields
@@ -219,35 +264,13 @@ const PictureFields = (form: MediaPickFormParams) => {
                     delete kept.focus;
                 }
 
+                if (kept.cover) {
+                    others.forEach((other) => setChoiceValues(other, ({ cover: _cover, ...rest }) => rest));
+                }
+
                 setValues(kept);
             }}
-            groups={[
-                titleGroup,
-                ...(values.decorative ? [] : [altGroup]),
-                {
-                    id: "layout",
-                    title: "Layout",
-                    properties: [
-                        { field: "decorative", label: "Decorative, no alt text", type: "boolean" },
-                        {
-                            field: "fit",
-                            label: "Fit",
-                            type: "string",
-                            options: [
-                                { value: "cover", label: "Fill the slide" },
-                                { value: "contain", label: "Show it whole" },
-                            ],
-                        },
-                        {
-                            field: "focus",
-                            label: "Focal point",
-                            disabled: values.fit === "contain",
-                            errorKey: keyOf("focus"),
-                            render: (params) => <FocalPoint {...params} />,
-                        },
-                    ],
-                },
-            ]}
+            groups={pictureGroups(values, cover)}
         />
     );
 };
@@ -293,11 +316,24 @@ const documentGroups: PropertyDefinitionGroup[] = [
     { id: "visibility", properties: [{ field: "until", label: "Show until", type: "date" }] },
 ];
 
-const FORMS: Record<MediaKind, MediaForm<MediaPickFormParams>> = {
-    image: { defaults: { fit: "cover" }, render: (form) => <PictureFields {...form} /> },
-    video: { render: (form) => <MediaFields {...form} groups={videoGroups} /> },
+// A picture's alt text and a video's title are left for the backend to refuse (`mocks/mock-save.ts`), to
+// see its errors; a document's link text holds Choose back itself, as a form can.
+const FORMS: Record<MediaKind, MediaPickForm> = {
+    image: {
+        defaults: { fit: "cover" },
+        render: (form) => <PictureFields {...form} />,
+        errorKeys: (form) => keysOf(pictureGroups(form.values, coverField), form),
+    },
+    video: {
+        render: (form) => <MediaFields {...form} groups={videoGroups} />,
+        errorKeys: (form) => keysOf(videoGroups, form),
+    },
     audio: { render: (form) => <MediaFields {...form} groups={audioGroups} /> },
-    document: { defaults: { "link.en": "Read it" }, render: (form) => <MediaFields {...form} groups={documentGroups} /> },
+    document: {
+        defaults: { "link.en": "Read it" },
+        render: (form) => <MediaFields {...form} groups={documentGroups} />,
+        ready: ({ values }) => !!values["link.en"] || "Write the English link text.",
+    },
 };
 
 /** What the carousel asks of each pick, by its kind. */

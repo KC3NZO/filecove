@@ -2,7 +2,7 @@ import { MediaFields } from "../src";
 import { convert, followingHls, hls, qualitiesWhile } from "./media-uploads";
 import { posterTime } from "./poster-time";
 
-import type { FileEntry, MediaForm, MediaProcessFormParams, PropertyDefinition } from "../src";
+import type { FileEntry, MediaProcessForm, MediaProcessFormParams, PropertyDefinition } from "../src";
 
 // What this site's backend can do with assets already uploaded, asked from an asset's view
 // (`processForm`), as an app offers what its own backend's pipeline does. They're requests, so
@@ -28,10 +28,14 @@ const pictureGroups = (asset: FileEntry) => [
  * A picture's: its responsive sizes and optimizing again, and another format, for raster pictures
  * only, so an SVG offers nothing; and no other format for pictures already in WebP or AVIF.
  */
-export const imageProcessForm = (asset: FileEntry): MediaForm<MediaProcessFormParams> | null =>
+export const imageProcessForm = (asset: FileEntry): MediaProcessForm | null =>
     busy(asset) || /\.svg$/i.test(asset.name)
         ? null
-        : { render: (form) => <MediaFields {...form} groups={pictureGroups(asset)} /> };
+        : {
+              render: (form) => <MediaFields {...form} groups={pictureGroups(asset)} />,
+              ready: ({ values }) =>
+                  !!(values.responsive || values.optimize || values.format) || "Tick what to make of it first.",
+          };
 
 /**
  * A video's fields: streaming as HLS, on or off as it stands, its renditions made again while it has
@@ -63,7 +67,7 @@ const VideoProcessFields = (form: MediaProcessFormParams) => {
 };
 
 /** A video's: HLS ticked as it stands, so unticking it is what turns it off, and ticking it what turns it on. */
-export const videoProcessForm = (asset: FileEntry): MediaForm<MediaProcessFormParams> | null =>
+export const videoProcessForm = (asset: FileEntry): MediaProcessForm | null =>
     busy(asset)
         ? null
         : {
@@ -121,7 +125,10 @@ const AudioProcessFields = (form: MediaProcessFormParams) => {
     );
 };
 
-const audioProcess: MediaForm<MediaProcessFormParams> = { render: (form) => <AudioProcessFields {...form} /> };
+const audioProcess: MediaProcessForm = {
+    render: (form) => <AudioProcessFields {...form} />,
+    ready: ({ values }) => !!(values.transcribe || values.normalize) || "Tick what to make of it first.",
+};
 
 /** A piece of audio's: a transcript and its loudness. */
 export const audioProcessForm = (asset: FileEntry) => (busy(asset) ? null : audioProcess);
