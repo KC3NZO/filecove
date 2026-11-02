@@ -8,7 +8,7 @@ export type PropertyType = "string" | "number" | "boolean" | "date";
 /**
  * What a backend answered a form with, by its own keys: a message, or several, for each, as
  * Laravel's validation errors are (`{ "media.0.translations.en.title": ["The title field is
- * required."] }`). The media manager takes them as they came (`errors`), each of the app's fields
+ * required."] }`). The media manager takes them as they came (`errors`), each of the fields it draws
  * finding its own by its `errorKey`, and each pick its own by `choiceErrorKey`.
  */
 export type FieldErrors = Readonly<Record<string, string | readonly string[]>>;
@@ -56,15 +56,19 @@ interface PropertyBase<V> {
     /** Marked as to be filled in. */
     required?: boolean;
     /**
+     * In `MediaFields`, shown but off for now, as a form says while what it depends on is off: a
+     * video's qualities while it isn't streamed. Not read in the properties, whose `editable` says
+     * what can be changed there.
+     */
+    disabled?: boolean;
+    /**
      * Where its errors are in the media manager's `errors`, for a pick's field: the backend's key
      * for it, made from the pick's place, ``({ index }) => `media.${index}.loop` ``, or its keys,
      * for a field holding several, such as a title in each language under tabs
      * (``({ index }) => ["en", "ar"].map((code) => `media.${index}.translations.${code}.title`)``).
-     * Its messages then show under it, its control is marked as wrong, and the pick's row counts it,
-     * once however many of its keys have one. It's the only way a field is counted: one the app
-     * draws reads `errors` with `index` from its params only to mark finer parts of its own, such as
-     * the tab of a language with an error. Not used in the properties, whose saves show their own
-     * failures.
+     * Its messages then show under it and its control is marked as wrong. One the app draws reads
+     * `errors` with `index` from its params only to mark finer parts of its own, such as the tab of
+     * a language with an error. Not used in the properties, whose saves show their own failures.
      */
     errorKey?(params: PropertyErrorKeyParams): string | readonly string[];
     /** Gives it a button copying its text (`formattedValue`), e.g. for an address or a checksum. */
@@ -178,7 +182,7 @@ export interface PropertyParams<V = unknown> {
     /** Its text: `valueFormatter`'s, else its kind's, else its type's. What Copy copies. */
     formattedValue: string;
     /**
-     * The entry, or the media manager's asset, it's a property of. In upload fields, a stand-in for
+     * The entry, or the media manager's asset, it's a property of. In an upload form, a stand-in for
      * the files about to be uploaded (see `files`).
      */
     entry: FileEntry;
@@ -206,9 +210,9 @@ export interface PropertyParams<V = unknown> {
      */
     errorId?: string;
     /**
-     * In a media manager's upload fields (`MediaSection.uploadFields`), the files about to be
-     * uploaded, which `entry` only stands in for (the first one's name and type, their size
-     * together, and no id), as nothing is uploaded yet; undefined elsewhere.
+     * In a media manager's upload form (`MediaSection.uploadForm`), the files about to be uploaded,
+     * which `entry` only stands in for (the first one's name and type, their size together, and no
+     * id), as nothing is uploaded yet; undefined elsewhere.
      */
     files?: readonly File[];
 }
@@ -217,8 +221,8 @@ export interface PropertyRenderParams<V = unknown> extends PropertyParams<V> {
     /**
      * Saves a new value, for a control changing it in place: through the adapter's
      * `updateProperties` in the properties, while the property is `editable`, the adapter can save
-     * and the entry can change there, or into the pick's values at once in a pick's fields.
-     * Missing otherwise. Resolves with whether it was saved; a failure shows under it.
+     * and the entry can change there, or into what the form holds at once in `MediaFields`, unless
+     * it's `disabled`. Missing otherwise. Resolves with whether it was saved; a failure shows under it.
      */
     save?(value: V): Promise<boolean>;
     /** Whether a save of it is under way. */
@@ -235,7 +239,7 @@ export interface PropertyEditParams<V = unknown> extends PropertyParams<V> {
      * sends; in a pick's fields, the pick's value at once.
      */
     onChange(value: V | undefined): void;
-    /** While it's saved, when it can't be changed. */
+    /** While it's saved, or it's `disabled`, when it can't be changed. */
     disabled: boolean;
     /**
      * Its save failed, in the properties, or its `errorKey` finds an error, in a pick's fields,

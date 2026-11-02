@@ -56,7 +56,7 @@ const ENTRY_DEPTHS = { trashed: 3 };
 
 // An entry a new listing brings as it was: every field the same, `meta`'s, `media`'s and
 // `permissions`' one level down, and `trashed`'s all the way down.
-const sameEntry = (a: FileEntry, b: FileEntry) =>
+export const sameEntry = (a: FileEntry, b: FileEntry) =>
     a === b || (Object.getPrototypeOf(a) === Object.getPrototypeOf(b) && sameFields(a, b, 1, ENTRY_DEPTHS));
 
 // A folder's own permissions as a new listing gives them, kept as they were when they're the same.

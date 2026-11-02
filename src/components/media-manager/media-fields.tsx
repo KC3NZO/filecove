@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useMemo } from "react";
 import type { KeyboardEvent } from "react";
 
 import Box from "@mui/material/Box";
@@ -6,33 +6,34 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
-import { NO_MESSAGES, fieldMessages } from "../../utils/field-errors";
+import { NO_ERRORS, NO_MESSAGES, fieldMessages } from "../../utils/field-errors";
+import { uploadStandIn } from "../../utils/media";
 import { formatValue, hasBuiltInEditor, isEmptyValue, readValue } from "../../utils/property-value";
 import PropertyDisplay from "../properties/property-display";
 import PropertyInput from "../properties/property-input";
 
 import type { FieldErrors, FileAdapter, FileEntry, PropertyDefinition, PropertyDefinitionGroup } from "../../types";
 
-interface ChoiceFieldsProps {
+export interface MediaFieldsProps<V = Record<string, unknown>> {
+    /** What to draw, made fresh from `values` each time if it likes, as it's only read to be drawn. */
     groups: readonly PropertyDefinitionGroup[];
-    /** What the pick holds, by the fields' keys. */
-    values: Readonly<Record<string, unknown>>;
-    /** The asset picked, and the adapter of its library, for the app's own fields. */
-    asset: FileEntry;
+    /** What the form holds, each field's value under its `field`. */
+    values: V;
+    /** Takes all of what the form holds once a field has changed, for the form to keep or change further. */
+    setValues: (next: V) => void;
+    /** The library's adapter, handed to the fields' own `render` and `renderEdit`. */
     adapter: FileAdapter;
-    /** The media manager's `errors`, as the app passed them, each field finding its own by its `errorKey`. */
-    errors: FieldErrors;
-    /**
-     * The pick's place in the order the app was handed the picks in, which the fields' keys in
-     * `errors` are made from; undefined for upload fields, which have no errors.
-     */
-    index: number | undefined;
-    /** The pick's own messages, about it as a whole, which `choiceErrorKey` finds, shown above its fields. */
-    messages: readonly string[];
-    /** The files about to be uploaded, for upload fields, which `asset` only stands in for. */
+    /** The asset they're for; in an upload form there's none yet, but `files`. */
+    asset?: FileEntry;
+    /** The files about to be uploaded, in an upload form. */
     files?: readonly File[];
-    onChange: (key: string, value: unknown) => void;
+    /** In a pick's form, the media manager's `errors`, each field finding its own by its `errorKey`. */
+    errors?: FieldErrors;
+    /** In a pick's form, the pick's place, which the fields' keys in `errors` are made from. */
+    index?: number;
 }
+
+const NO_FILES: readonly File[] = [];
 
 interface FieldProps {
     definition: PropertyDefinition;
@@ -57,21 +58,9 @@ interface LabelProps {
     htmlFor?: string;
     /** Whether its `errorKey` finds an error, which colours it. */
     error: boolean;
+    /** Whether it's `disabled`, which greys it. */
+    disabled: boolean;
 }
-
-// The pick's own errors, above its fields, each message on a line of its own, marked by a rule at
-// their start side, which forced colors keep.
-const ownMessagesSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0.5,
-    mb: 2,
-    paddingInlineStart: 1.25,
-    borderInlineStart: "3px solid",
-    color: "error.main",
-    fontSize: "0.8125rem",
-    overflowWrap: "anywhere",
-};
 
 // The groups in a box of their own, so the first of them is its first child, whatever the pick's
 // details put above it.
@@ -118,6 +107,11 @@ const errorLabelSx: SxProps<Theme> = {
     color: "error.main",
 };
 
+const disabledLabelSx: SxProps<Theme> = {
+    ...labelSx,
+    color: "text.disabled",
+};
+
 const requiredSx: SxProps<Theme> = {
     color: "error.main",
 };
@@ -157,7 +151,7 @@ const keepEnter = (event: KeyboardEvent) => {
     }
 };
 
-const Label = ({ definition, labelId, htmlFor, error }: LabelProps) => {
+const Label = ({ definition, labelId, htmlFor, error, disabled }: LabelProps) => {
     const content = (
         <>
             {definition.label}
@@ -169,7 +163,7 @@ const Label = ({ definition, labelId, htmlFor, error }: LabelProps) => {
         </>
     );
 
-    const sx = error ? errorLabelSx : labelSx;
+    const sx = error ? errorLabelSx : disabled ? disabledLabelSx : labelSx;
 
     return htmlFor ? (
         <Typography component="label" htmlFor={htmlFor} id={labelId} sx={sx}>
@@ -183,21 +177,23 @@ const Label = ({ definition, labelId, htmlFor, error }: LabelProps) => {
 };
 
 /**
- * One of the app's fields for a pick, as it's to be filled in: its own editor (`renderEdit`), the
- * built-in one of its type, or its `render` changing it in place through `save`. One that isn't
- * `editable` only shows what it holds, left out while it's empty and has no error. With an error its
- * `errorKey` finds, its label and control are marked, and its messages, under it, describe it.
+ * One of the app's fields, as it's to be filled in: its own editor (`renderEdit`), the built-in one
+ * of its type, or its `render` changing it in place through `save`. One that isn't `editable` only
+ * shows what it holds, left out while it's empty and has no error. One `disabled` shows, greyed, and
+ * can't be changed. With an error its `errorKey` finds, its label and control are marked, and its
+ * messages, under it, describe it.
  */
 const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, errorId, files, onChange }: FieldProps) => {
     const locale = useLocale();
     const formattedValue = formatValue(definition, value, asset, locale);
     const error = errorId !== undefined;
+    const disabled = !!definition.disabled;
     const base = { definition, value, formattedValue, entry: asset, adapter, labelId, errors, index, errorId, files };
 
     if (definition.editable === false) {
         return (
             <>
-                <Label definition={definition} labelId={labelId} error={error} />
+                <Label definition={definition} labelId={labelId} error={error} disabled={disabled} />
                 {definition.render ? (
                     <Box sx={ownSx}>{definition.render({ ...base, saving: false, error })}</Box>
                 ) : (
@@ -212,13 +208,13 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
     if (definition.renderEdit) {
         return (
             <>
-                <Label definition={definition} labelId={labelId} error={error} />
+                <Label definition={definition} labelId={labelId} error={error} disabled={disabled} />
                 <Box sx={ownSx}>
                     {definition.renderEdit({
                         ...base,
                         id,
                         onChange: (next) => onChange(next),
-                        disabled: false,
+                        disabled,
                         error,
                     })}
                 </Box>
@@ -235,6 +231,8 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
                     onChange={onChange}
                     id={id}
                     labelId={labelId}
+                    disabled={disabled}
+                    off={disabled}
                     error={error}
                     describedBy={errorId}
                 />
@@ -243,7 +241,7 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
                     htmlFor={id}
                     id={labelId}
                     variant="body2"
-                    color={error ? "error" : undefined}
+                    color={error ? "error" : disabled ? "text.disabled" : undefined}
                 >
                     {definition.label}
                 </Typography>
@@ -254,13 +252,15 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
     if (hasBuiltInEditor(definition)) {
         return (
             <>
-                <Label definition={definition} labelId={labelId} htmlFor={id} error={error} />
+                <Label definition={definition} labelId={labelId} htmlFor={id} error={error} disabled={disabled} />
                 <PropertyInput
                     definition={definition}
                     value={value}
                     onChange={onChange}
                     id={id}
                     labelId={labelId}
+                    disabled={disabled}
+                    off={disabled}
                     error={error}
                     describedBy={errorId}
                 />
@@ -268,19 +268,21 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
         );
     }
 
-    // Its `render` sets the pick's value as it saves, at once.
+    // Its `render` sets its value as it saves, at once.
     return (
         <>
-            <Label definition={definition} labelId={labelId} error={error} />
+            <Label definition={definition} labelId={labelId} error={error} disabled={disabled} />
             {definition.render && (
                 <Box sx={ownSx}>
                     {definition.render({
                         ...base,
-                        save: (next: unknown) => {
-                            onChange(next);
+                        save: disabled
+                            ? undefined
+                            : (next: unknown) => {
+                                  onChange(next);
 
-                            return Promise.resolve(true);
-                        },
+                                  return Promise.resolve(true);
+                              },
                         saving: false,
                         error,
                     })}
@@ -291,95 +293,87 @@ const Field = ({ definition, value, asset, adapter, id, labelId, errors, index, 
 };
 
 /**
- * The app's fields for one pick, by groups, each drawn as its definition says, with what the pick
- * holds under its key, and each change handed back by that key, under the pick's own errors. The
- * fields and their labels are the app's; the media manager knows nothing of what they mean, nor of
- * the languages they're in. A library's upload fields are drawn the same way, with no errors, for
- * the files about to be uploaded.
+ * Fields from their definitions, by groups, for a form of the app's to draw all or part of itself
+ * with: each drawn as its definition says, with what's held under its `field`, and each change handed
+ * back with the rest. They're made fresh as the form likes, from what it holds, so a field can
+ * follow another: gone, or `disabled`, as it's unticked. The labels are the app's; the media manager
+ * knows nothing of what they mean, nor of the languages they're in. `{...form}` hands it all it needs.
  */
-const ChoiceFields = ({
+const MediaFields = <V,>({
     groups,
     values,
-    asset,
+    setValues,
     adapter,
-    errors,
+    asset,
+    files = NO_FILES,
+    errors = NO_ERRORS,
     index: pickIndex,
-    messages: ownMessages,
-    files,
-    onChange,
-}: ChoiceFieldsProps) => {
+}: MediaFieldsProps<V>) => {
     // Ids made from the indexes, as the app's keys may hold spaces, which an id can't.
     const baseId = useId();
+    const held = values as Readonly<Record<string, unknown>>;
+    const entry = useMemo(() => asset ?? uploadStandIn(files), [asset, files]);
 
     return (
-        <>
-            {ownMessages.length > 0 && (
-                <Box sx={ownMessagesSx}>
-                    {ownMessages.map((message, place) => (
-                        <bdi key={place}>{message}</bdi>
-                    ))}
-                </Box>
-            )}
-            <Box sx={groupsSx} onKeyDown={keepEnter}>
-                {groups.map((group, groupIndex) => {
-                    const fields = group.properties.flatMap((definition, index) => {
-                        const value = readValue(definition, values, asset);
+        <Box sx={groupsSx} onKeyDown={keepEnter}>
+            {groups.map((group, groupIndex) => {
+                const fields = group.properties.flatMap((definition, index) => {
+                    const value = readValue(definition, held, entry);
 
-                        const messages =
-                            pickIndex === undefined ? NO_MESSAGES : fieldMessages(definition, errors, pickIndex, asset);
-                        const errorId = messages.length > 0 ? `${baseId}-${groupIndex}-${index}-error` : undefined;
+                    const messages =
+                        pickIndex === undefined ? NO_MESSAGES : fieldMessages(definition, errors, pickIndex, entry);
+                    const errorId = messages.length > 0 ? `${baseId}-${groupIndex}-${index}-error` : undefined;
 
-                        if (definition.editable === false && isEmptyValue(value) && !errorId) {
-                            return [];
-                        }
+                    if (definition.editable === false && isEmptyValue(value) && !errorId) {
+                        return [];
+                    }
 
-                        return [
-                            <Box key={definition.field} sx={fieldSx}>
-                                <Field
-                                    definition={definition}
-                                    value={value}
-                                    asset={asset}
-                                    adapter={adapter}
-                                    id={`${baseId}-${groupIndex}-${index}`}
-                                    labelId={`${baseId}-${groupIndex}-${index}-label`}
-                                    errors={errors}
-                                    index={pickIndex}
-                                    errorId={errorId}
-                                    files={files}
-                                    onChange={(next) => onChange(definition.field, next)}
-                                />
-                                {errorId && (
-                                    <Box id={errorId} sx={messagesSx}>
-                                        {messages.map((message, place) => (
-                                            <bdi key={place}>{message}</bdi>
-                                        ))}
-                                    </Box>
-                                )}
-                            </Box>,
-                        ];
-                    });
+                    return [
+                        <Box key={definition.field} sx={fieldSx}>
+                            <Field
+                                definition={definition}
+                                value={value}
+                                asset={entry}
+                                adapter={adapter}
+                                id={`${baseId}-${groupIndex}-${index}`}
+                                labelId={`${baseId}-${groupIndex}-${index}-label`}
+                                errors={errors}
+                                index={pickIndex}
+                                errorId={errorId}
+                                files={asset ? undefined : files}
+                                onChange={(next) => setValues({ ...held, [definition.field]: next } as V)}
+                            />
+                            {errorId && (
+                                <Box id={errorId} sx={messagesSx}>
+                                    {messages.map((message, place) => (
+                                        <bdi key={place}>{message}</bdi>
+                                    ))}
+                                </Box>
+                            )}
+                        </Box>,
+                    ];
+                });
 
-                    return (
-                        fields.length > 0 && (
-                            <Box
-                                key={group.id}
-                                role="group"
-                                aria-labelledby={group.title ? `${baseId}-${groupIndex}` : undefined}
-                                sx={groupSx}
-                            >
-                                {group.title && (
-                                    <Typography id={`${baseId}-${groupIndex}`} component="h3" sx={groupTitleSx}>
-                                        {group.title}
-                                    </Typography>
-                                )}
-                                {fields}
-                            </Box>
-                        )
-                    );
-                })}
-            </Box>
-        </>
+                return (
+                    fields.length > 0 && (
+                        <Box
+                            key={group.id}
+                            role="group"
+                            aria-labelledby={group.title ? `${baseId}-${groupIndex}` : undefined}
+                            sx={groupSx}
+                        >
+                            {group.title && (
+                                <Typography id={`${baseId}-${groupIndex}`} component="h3" sx={groupTitleSx}>
+                                    {group.title}
+                                </Typography>
+                            )}
+                            {fields}
+                        </Box>
+                    )
+                );
+            })}
+        </Box>
     );
 };
 
-export default ChoiceFields;
+export default MediaFields;

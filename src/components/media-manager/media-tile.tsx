@@ -38,6 +38,8 @@ interface MediaTileProps {
      * isn't selected then, but is opened.
      */
     hold: AssetHold | undefined;
+    /** The backend's work on it while it can be chosen all the same, shown the same way, unfaded. */
+    work: AssetHold | undefined;
     /** Whether the tile has the grid's Tab stop. */
     focused: boolean;
     onPress: (index: number, event: MouseEvent) => void;
@@ -193,6 +195,7 @@ const MediaTile = memo(
         index,
         selected,
         hold,
+        work,
         focused,
         onPress,
         onActivate,
@@ -205,6 +208,7 @@ const MediaTile = memo(
         const duration = kind === "video" ? entry.media?.duration : undefined;
         const { width, height } = entry.media ?? {};
         const measured = kind !== "document" && width !== undefined && height !== undefined;
+        const standing = hold ?? work;
 
         return (
             <Box
@@ -238,14 +242,14 @@ const MediaTile = memo(
                         <Icon name="check" />
                     </Box>
                     <OpenButton name={entry.name} index={index} onOpen={onOpen} sx={openSx} />
-                    {hold && <HoldBar hold={hold} place="frame" />}
+                    {standing && <HoldBar hold={standing} place="frame" />}
                 </Box>
                 <Box sx={textSx}>
                     <Typography variant="body2" noWrap sx={nameSx}>
                         {entry.name}
                     </Typography>
-                    {hold ? (
-                        <HoldLine hold={hold} />
+                    {standing ? (
+                        <HoldLine hold={standing} />
                     ) : measured ? (
                         <Typography variant="caption" noWrap sx={detailSx} aria-hidden>
                             <bdi>{`${formatNumber(width)} × ${formatNumber(height)}`}</bdi>

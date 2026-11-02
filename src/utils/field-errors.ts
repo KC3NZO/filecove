@@ -1,10 +1,4 @@
-import type {
-    FieldErrors,
-    FileEntry,
-    PropertyDefinition,
-    PropertyDefinitionGroup,
-    PropertyErrorKeyParams,
-} from "../types";
+import type { FieldErrors, FileEntry, PropertyDefinition, PropertyErrorKeyParams } from "../types";
 
 /** No errors: what the properties hand their definitions, and a media manager without `errors`. */
 export const NO_ERRORS: FieldErrors = Object.freeze({});
@@ -67,26 +61,14 @@ export const choiceMessages = (
     return messagesUnder(errors, choiceErrorKey({ index, entry }));
 };
 
-/** How many of one pick's fields have an error their `errorKey` finds, for its row. */
-export const countFieldErrors = (
-    groups: readonly PropertyDefinitionGroup[],
-    errors: FieldErrors,
-    index: number,
-    entry: FileEntry,
-) => {
-    if (errors === NO_ERRORS) {
-        return 0;
-    }
+/**
+ * How many of a pick's keys have a message, under the prefix `choiceErrorPrefix` makes from its place,
+ * for its row; its own keys, which `choiceErrorKey` names and are counted apart, aside.
+ */
+export const countErrorsUnder = (errors: FieldErrors, prefix: string, own: ErrorKeys | undefined) => {
+    const asides = new Set(typeof own === "string" ? [own] : own);
 
-    let count = 0;
-
-    for (const group of groups) {
-        for (const definition of group.properties) {
-            if (fieldMessages(definition, errors, index, entry).length > 0) {
-                count++;
-            }
-        }
-    }
-
-    return count;
+    return Object.keys(errors).filter(
+        (key) => key.startsWith(prefix) && !asides.has(key) && messagesAt(errors, key).length > 0,
+    ).length;
 };

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -6,17 +6,13 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
-import { focusOutline } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
-import { NO_ERRORS, NO_MESSAGES } from "../../utils/field-errors";
 import { uploadPatterns } from "../../utils/files";
-import { asksAnything, uploadStandIn } from "../../utils/media";
-import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon } from "../icons/file-icon";
-import Icon from "../icons/icon";
-import ChoiceFields from "./choice-fields";
+import { MediaFormBody } from "./media-form";
+import MediaStep from "./media-step";
 
-import type { FileAdapter, MediaSection, MediaUploadCheck, PropertyDefinitionGroup } from "../../types";
+import type { FileAdapter, MediaForm, MediaSection, MediaUploadCheck, MediaUploadFormParams } from "../../types";
 
 interface MediaUploadProps {
     section: MediaSection;
@@ -24,63 +20,12 @@ interface MediaUploadProps {
     adapter: FileAdapter;
     /** What was given, as the check before sending sorted it. */
     check: MediaUploadCheck;
-    /** What the library asks of these files: its upload fields, for them. */
-    groups: readonly PropertyDefinitionGroup[];
+    /** What the library asks of these files: its upload form, for them, or nothing. */
+    form: MediaForm<MediaUploadFormParams> | null;
     onCancel: () => void;
-    /** Sends the files, with what the upload fields hold. */
+    /** Sends the files, with what the upload form holds. */
     onUpload: (values: Readonly<Record<string, unknown>>) => void;
 }
-
-const NO_VALUES: Readonly<Record<string, unknown>> = {};
-
-// Over the library, in its place, as the asset view is, its grid kept underneath as it was.
-const rootSx: SxProps<Theme> = {
-    position: "absolute",
-    inset: 0,
-    zIndex: 1,
-    display: "flex",
-    flexDirection: "column",
-    bgcolor: "background.paper",
-    outline: "none",
-    "&:focus-visible": { ...focusOutline, borderRadius: "inherit" },
-};
-
-const headerSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 0.5,
-    flexShrink: 0,
-    minHeight: 52,
-    paddingInlineStart: 0.5,
-    paddingInlineEnd: 1.5,
-    borderBottom: 1,
-    borderColor: "divider",
-};
-
-const titleSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    px: 0.5,
-    fontSize: "0.9375rem",
-    fontWeight: 700,
-};
-
-const bodySx: SxProps<Theme> = {
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-};
-
-// A column of a form's width, in the middle of the library's room.
-const columnSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    maxWidth: "36rem",
-    marginInline: "auto",
-    px: 2,
-    py: 2,
-};
 
 const notesSx: SxProps<Theme> = {
     display: "flex",
@@ -116,43 +61,27 @@ const fileSizeSx: SxProps<Theme> = {
     fontSize: "0.8125rem",
 };
 
-// The fields under the files, set apart by a rule, as a pick's fields are under its heading.
+// The form under the files, set apart by a rule, as a pick's form is under its heading.
 const fieldsSx: SxProps<Theme> = {
     pt: 2,
     borderTop: 1,
     borderColor: "divider",
 };
 
-const footerSx: SxProps<Theme> = {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 1,
-    flexShrink: 0,
-    p: 1.5,
-    borderTop: 1,
-    borderColor: "divider",
-};
-
 /**
  * The step before files are uploaded into a library, in its place, as the asset view is: what's
- * about to go, what's left out and why, and the library's upload fields for them, filled in with its
- * defaults, with Cancel and Upload; or, with nothing left to send, why, with Close. Shown only when
- * there's something to ask or to say.
+ * about to go, what's left out and why, and the library's upload form for them, with Cancel and
+ * Upload; or, with nothing left to send, why, with Close. Shown only when there's something to ask or
+ * to say.
  */
-const MediaUpload = ({ section, adapter, check, groups, onCancel, onUpload }: MediaUploadProps) => {
+const MediaUpload = ({ section, adapter, check, form, onCancel, onUpload }: MediaUploadProps) => {
     const { text, describeAccepted, formatSize } = useLocale();
-    const titleId = useId();
-    const rootRef = useRef<HTMLElement>(null);
-    const [values, setValues] = useState(section.uploadDefaults ?? NO_VALUES);
+    const [values, setValues] = useState<Record<string, unknown>>(() => ({ ...form?.defaults }));
     const { files, refused, folders, misnamed } = check;
-    const standIn = useMemo(() => uploadStandIn(files), [files]);
     const patterns = uploadPatterns(section);
     const types = patterns ? describeAccepted(patterns) : "";
     const library = isolate(section.label);
     const sending = files.length > 0;
-
-    // Takes the focus as it opens, so it's read out by its title.
-    useEffect(() => rootRef.current?.focus(), []);
 
     const title = sending
         ? text.uploadTitle(files.length, isolate(files[0].name), library)
@@ -175,73 +104,12 @@ const MediaUpload = ({ section, adapter, check, groups, onCancel, onUpload }: Me
     ].filter((note): note is string => !!note);
 
     return (
-        <Box
-            component="section"
-            ref={rootRef}
-            tabIndex={-1}
-            aria-labelledby={titleId}
-            sx={rootSx}
-            onKeyDown={(event) => {
-                if (event.key === "Escape" && !event.defaultPrevented) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onCancel();
-                }
-            }}
-        >
-            <Box sx={headerSx}>
-                <TooltipIconButton label={text.mediaBackToLibrary(section.label)} onClick={onCancel}>
-                    <Icon name="arrowBack" fontSize="small" />
-                </TooltipIconButton>
-                <Typography id={titleId} component="h2" noWrap sx={titleSx}>
-                    {title}
-                </Typography>
-            </Box>
-            <Box sx={bodySx}>
-                <Box sx={columnSx}>
-                    {notes.length > 0 && (
-                        <Box sx={notesSx}>
-                            {notes.map((note) => (
-                                <Typography key={note} variant="body2" color="text.secondary">
-                                    {note}
-                                </Typography>
-                            ))}
-                        </Box>
-                    )}
-                    {sending && (
-                        <Box component="ul" aria-label={text.mediaUploadFiles} sx={listSx}>
-                            {files.map((file, index) => (
-                                <Box component="li" key={index} sx={fileSx}>
-                                    <FileTypeIcon fileName={file.name} size={24} />
-                                    <Typography noWrap sx={fileNameSx}>
-                                        {file.name}
-                                    </Typography>
-                                    <Typography component="span" sx={fileSizeSx}>
-                                        <bdi>{formatSize(file.size)}</bdi>
-                                    </Typography>
-                                </Box>
-                            ))}
-                        </Box>
-                    )}
-                    {sending && asksAnything(groups) && (
-                        <Box sx={fieldsSx}>
-                            <ChoiceFields
-                                groups={groups}
-                                values={values}
-                                asset={standIn}
-                                adapter={adapter}
-                                errors={NO_ERRORS}
-                                index={undefined}
-                                messages={NO_MESSAGES}
-                                files={files}
-                                onChange={(key, value) => setValues((previous) => ({ ...previous, [key]: value }))}
-                            />
-                        </Box>
-                    )}
-                </Box>
-            </Box>
-            <Box sx={footerSx}>
-                {sending ? (
+        <MediaStep
+            title={title}
+            backLabel={text.mediaBackToLibrary(section.label)}
+            onBack={onCancel}
+            footer={
+                sending ? (
                     <>
                         <Button color="inherit" onClick={onCancel}>
                             {text.cancel}
@@ -254,9 +122,39 @@ const MediaUpload = ({ section, adapter, check, groups, onCancel, onUpload }: Me
                     <Button variant="contained" disableElevation onClick={onCancel}>
                         {text.close}
                     </Button>
-                )}
-            </Box>
-        </Box>
+                )
+            }
+        >
+            {notes.length > 0 && (
+                <Box sx={notesSx}>
+                    {notes.map((note) => (
+                        <Typography key={note} variant="body2" color="text.secondary">
+                            {note}
+                        </Typography>
+                    ))}
+                </Box>
+            )}
+            {sending && (
+                <Box component="ul" aria-label={text.mediaUploadFiles} sx={listSx}>
+                    {files.map((file, index) => (
+                        <Box component="li" key={index} sx={fileSx}>
+                            <FileTypeIcon fileName={file.name} size={24} />
+                            <Typography noWrap sx={fileNameSx}>
+                                {file.name}
+                            </Typography>
+                            <Typography component="span" sx={fileSizeSx}>
+                                <bdi>{formatSize(file.size)}</bdi>
+                            </Typography>
+                        </Box>
+                    ))}
+                </Box>
+            )}
+            {sending && form && (
+                <Box sx={fieldsSx}>
+                    <MediaFormBody form={form} params={{ files, section, adapter, values, setValues }} />
+                </Box>
+            )}
+        </MediaStep>
     );
 };
 

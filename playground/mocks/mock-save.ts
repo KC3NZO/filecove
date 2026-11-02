@@ -34,15 +34,16 @@ const problemsOf = async ({ asset, section, values }: MediaChoice): Promise<Reco
             problems["translations.en.alt"] = ["The English alt text is required unless the picture is decorative."];
         }
 
-        if (values.fit === "contain" && has(values.focus) && values.focus !== "center") {
-            problems.focus = ["The focal point is only used when the picture fills the slide."];
+        if (values.focus === "bottom-end") {
+            problems.focus = ["The slide's caption covers that corner, so the focal point can't go there."];
         }
     }
 
     if (section.kind === "video") {
         const renditions = await pollRenditions(asset);
 
-        if (renditions.some(({ status }) => status === "queued" || status === "processing")) {
+        // One made again still plays what it had, so it can go on as it is.
+        if (!asset.processing?.usable && renditions.some(({ status }) => status === "queued" || status === "processing")) {
             problems[""] = ["This video is still being processed, so it can't go on the carousel yet."];
         }
 

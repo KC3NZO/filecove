@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ClipboardEvent, DragEvent } from "react";
+import type { ClipboardEvent, DragEvent, SetStateAction } from "react";
 
 import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
@@ -14,23 +14,29 @@ import { CHOICES_WIDTH, mediaMedium, mediaWide } from "../../styles/media-layout
 import { focusOutline, selectedBackground } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
 import { focusLost } from "../../utils/dom";
-import { NO_ERRORS, choiceMessages, countFieldErrors } from "../../utils/field-errors";
+import { NO_ERRORS, choiceMessages, countErrorsUnder } from "../../utils/field-errors";
 import { carriesFiles, filesIn, mayAccept, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
-import { asksAnything, checkMediaUpload, holdOf, uploadFieldsFor, withState } from "../../utils/media";
+import {
+    checkMediaUpload,
+    holdOf,
+    withState,
+    workOf,
+} from "../../utils/media";
 import { allows } from "../../utils/permissions";
 import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
 import Icon from "../icons/icon";
 import UploadPanel from "../uploads/upload-panel";
-import ChoiceFields from "./choice-fields";
 import { choiceKey } from "./choice-list";
 import ChoicesPane from "./choices-pane";
 import ChooseBar from "./choose-bar";
 import LibraryList from "./library-list";
 import MediaAsset from "./media-asset";
+import { ChoiceMessages, MediaFormBody } from "./media-form";
 import MediaGrid from "./media-grid";
 import MediaHeader from "./media-header";
+import MediaProcess from "./media-process";
 import MediaUpload from "./media-upload";
 
 import type { PropertiesCache } from "../../store/properties-cache";
@@ -45,35 +51,42 @@ import type {
     FieldErrors,
     FollowedAssets,
     MediaChoice,
+    MediaForm,
+    MediaPickFormParams,
+    MediaProcessFormParams,
     MediaSection,
     MediaSectionGroup,
     MediaUploadCheck,
+    MediaUploadFormParams,
     PropertyDefinitionGroup,
     PropertyErrorKeyParams,
 } from "../../types";
 
-interface MediaFrameProps {
+export interface MediaFrameProps {
     groups: readonly MediaSectionGroup[];
     adapter: FileAdapter;
     multiple: boolean;
     onChoose: ((choices: MediaChoice[]) => void) | undefined;
-    fields: ((asset: FileEntry, section: MediaSection) => PropertyDefinitionGroup[]) | undefined;
+    pickForm: ((asset: FileEntry, section: MediaSection) => MediaForm<MediaPickFormParams> | null) | undefined;
     /** What an asset shows as it's opened, where its library has no `properties` of its own. */
     properties: ((asset: FileEntry, section: MediaSection) => PropertyDefinitionGroup[]) | undefined;
     /** The media manager's own previewers, asked after a library's. */
     previewers: readonly FilePreviewer[] | undefined;
     /** What's selected as it mounts. */
     defaultValue: readonly MediaChoice[] | undefined;
-    /** The app's backend's errors, for the picks and their fields, as the app passed them. */
+    /** The app's backend's errors, for the picks and their forms, as the app passed them. */
     errors: FieldErrors;
     /** Where a pick's own errors are in `errors`, about it as a whole. */
     choiceErrorKey: ((params: PropertyErrorKeyParams) => string | readonly string[]) | undefined;
+    /** What the keys of a pick's fields in `errors` start with, for its row's count. */
+    choiceErrorPrefix: ((params: PropertyErrorKeyParams) => string) | undefined;
     propertiesCache: PropertiesCache;
 }
 
 /**
  * An asset selected, by the id of the library it was picked in, as it was listed when it was picked,
- * with what the app's fields hold for this use of it.
+ * with what the app's form holds for this use of it: `NO_VALUES` until it's changed, for the form's
+ * defaults.
  */
 interface Pick {
     sectionId: string;
@@ -100,7 +113,14 @@ interface Viewing {
 interface UploadStep {
     sectionId: string;
     check: MediaUploadCheck;
-    groups: readonly PropertyDefinitionGroup[];
+    form: MediaForm<MediaUploadFormParams> | null;
+}
+
+/** An asset of a library being asked what's to be made of it, with what can be asked as it opened. */
+interface ProcessStep {
+    sectionId: string;
+    entry: FileEntry;
+    form: MediaForm<MediaProcessFormParams>;
 }
 
 /**
@@ -117,7 +137,6 @@ interface Arrival {
 const NO_ENTRIES: FileEntry[] = [];
 const NO_PICKS: Picks = { items: [], anchor: null };
 const NO_VALUES: Record<string, unknown> = {};
-const NO_GROUPS: PropertyDefinitionGroup[] = [];
 const NO_PREVIEWERS: readonly FilePreviewer[] = [];
 const NO_ARRIVALS: readonly Arrival[] = [];
 const NO_UPLOADS: readonly FileUploadItem[] = [];
@@ -287,12 +306,13 @@ const MediaFrame = ({
     adapter,
     multiple,
     onChoose,
-    fields,
+    pickForm,
     properties,
     previewers = NO_PREVIEWERS,
     defaultValue,
     errors,
     choiceErrorKey,
+    choiceErrorPrefix,
     propertiesCache,
 }: MediaFrameProps) => {
     const { text, foldLetters, compareNames, formatPercent } = useLocale();
@@ -326,6 +346,7 @@ const MediaFrame = ({
     const arrivalCount = useRef(0);
     const pickerRef = useRef<HTMLInputElement>(null);
     const uploadButtonRef = useRef<HTMLButtonElement>(null);
+    const [processStep, setProcessStep] = useState<ProcessStep | null>(null);
 
     // The selected column: docked where there's room, or an overlay while opened.
     const [chosenOverlay, setChosenOverlay] = useState(false);
@@ -484,6 +505,30 @@ const MediaFrame = ({
         }
     }, [state?.status, listed, sectionAdapter, forgetStates]);
 
+    // A pick keeps its entry as last listed, so what's handed over while another library is shown has
+    // what's been made of it since, and it's followed there as what it's listed as.
+    useEffect(() => {
+        const listedById = new Map(listed.map((entry) => [entry.id, entry]));
+
+        setPicks((previous) => {
+            let changed = false;
+            const items = previous.items.map((item) => {
+                const from = sectionsById.get(item.sectionId);
+                const now = from && adapterOf(from) === sectionAdapter ? listedById.get(item.asset.id) : undefined;
+
+                if (!now || now === item.asset) {
+                    return item;
+                }
+
+                changed = true;
+
+                return { ...item, asset: now };
+            });
+
+            return changed ? { ...previous, items } : previous;
+        });
+    }, [listed, sectionsById, adapterOf, sectionAdapter]);
+
     const terms = useMemo(() => searchTerms(query, foldLetters), [query, foldLetters]);
 
     const shownEntries = useMemo(
@@ -514,6 +559,21 @@ const MediaFrame = ({
         return held.size > 0 ? held : NO_HOLDS;
     }, [shownEntries, section, text, formatPercent]);
 
+    // The backend's work on assets shown that can be chosen all the same, which their tiles show.
+    const works = useMemo(() => {
+        const working = new Map<string, AssetHold>();
+
+        shownEntries.forEach((entry) => {
+            const work = workOf(entry, { text, formatPercent });
+
+            if (work) {
+                working.set(entry.id, work);
+            }
+        });
+
+        return working.size > 0 ? working : NO_HOLDS;
+    }, [shownEntries, text, formatPercent]);
+
     const uploads = useUploadQueue(relist, text.keptBothName);
 
     // Whether the open library takes files: its adapter has `upload`, it isn't `readOnly` nor
@@ -525,6 +585,12 @@ const MediaFrame = ({
         takesUploads(section) &&
         state?.status !== "error" &&
         allows("write", state?.permissions);
+
+    // What the app's form holds for a pick until it's changed.
+    const defaultsOf = useCallback(
+        (asset: FileEntry, from: MediaSection) => (pickForm?.(asset, from)?.defaults as Record<string, unknown>) ?? NO_VALUES,
+        [pickForm],
+    );
 
     // What's selected, as it is now: in a library that's gone, it goes; picked in the open library,
     // once that's listed, as it's listed now, and gone when it isn't any more; picked in another,
@@ -546,9 +612,9 @@ const MediaFrame = ({
                     ? listedNow
                     : (listedNow ?? withState(asset, assetStates.get(served)?.get(asset.id)));
 
-            return now ? [{ asset: now, section: from, values }] : [];
+            return now ? [{ asset: now, section: from, values: values === NO_VALUES ? defaultsOf(now, from) : values }] : [];
         });
-    }, [picks.items, sectionsById, state?.status, library, sectionId, adapterOf, sectionAdapter, assetStates]);
+    }, [picks.items, sectionsById, state?.status, library, sectionId, adapterOf, sectionAdapter, assetStates, defaultsOf]);
 
     // Until the app has been handed any, as with errors for the picks it gave as `defaultValue`, the
     // order of the picks as the errors came.
@@ -719,14 +785,20 @@ const MediaFrame = ({
         [samePick],
     );
 
-    // What one of the app's fields holds for one pick, kept with it.
-    const setChoiceValue = useCallback(
-        (choice: MediaChoice, key: string, value: unknown) => {
+    // What the app's form holds for one pick, kept with it.
+    const setChoiceValues = useCallback(
+        (choice: MediaChoice, next: SetStateAction<Record<string, unknown>>) => {
             setPicks((previous) => ({
                 ...previous,
-                items: previous.items.map((item) =>
-                    samePick(item, choice) ? { ...item, values: { ...item.values, [key]: value } } : item,
-                ),
+                items: previous.items.map((item) => {
+                    if (!samePick(item, choice)) {
+                        return item;
+                    }
+
+                    const held = item.values === NO_VALUES ? choice.values : item.values;
+
+                    return { ...item, values: typeof next === "function" ? next(held) : next };
+                }),
             }));
         },
         [samePick],
@@ -816,7 +888,7 @@ const MediaFrame = ({
             const chosen = choices.find((choice) => inOpen(choice) && choice.asset.id === entry.id) ?? {
                 asset: entry,
                 section,
-                values: NO_VALUES,
+                values: defaultsOf(entry, section),
             };
             const handed = multiple ? [...choices.filter((choice) => choice !== chosen), chosen] : [chosen];
 
@@ -825,7 +897,7 @@ const MediaFrame = ({
                 handOver(handed);
             }
         },
-        [shownEntries, onChoose, handOver, multiple, choices, inOpen, section, openAsset, holds, choiceHolds],
+        [shownEntries, onChoose, handOver, multiple, choices, inOpen, section, openAsset, holds, choiceHolds, defaultsOf],
     );
 
     const closeLibraries = useCallback(() => {
@@ -840,6 +912,7 @@ const MediaFrame = ({
             setQuery("");
             setViewing(null);
             setUploadStep(null);
+            setProcessStep(null);
 
             if (librariesOpen) {
                 closeLibraries();
@@ -859,13 +932,14 @@ const MediaFrame = ({
         setQuery("");
         setViewing({ sectionId: choice.section.id, entry: choice.asset });
         setUploadStep(null);
+        setProcessStep(null);
         setChosenOverlay(false);
     }, []);
 
     const reloadLibrary = useCallback(() => reload(), [reload]);
 
     // Sends files into a library, each its own upload, kept both with what's there of its name, as a
-    // library is listed flat, with what its upload fields held.
+    // library is listed flat, with what its upload form held.
     const sendUpload = useCallback(
         (target: MediaSection, files: File[], values: Readonly<Record<string, unknown>> | undefined) => {
             const into = { id: target.rootId, name: target.label };
@@ -885,17 +959,17 @@ const MediaFrame = ({
             }
 
             const check = checkMediaUpload(section, sectionAdapter, dropped);
-            const groups = check.files.length > 0 ? uploadFieldsFor(section, check.files) : NO_GROUPS;
+            const form = check.files.length > 0 ? (section.uploadForm?.(check.files) ?? null) : null;
             const leftOut = check.refused.length + check.folders.length + check.misnamed.length > 0;
 
-            if (!leftOut && !asksAnything(groups)) {
-                sendUpload(section, check.files, section.uploadDefaults);
+            if (!leftOut && !form) {
+                sendUpload(section, check.files, undefined);
 
                 return;
             }
 
             setViewing(null);
-            setUploadStep({ sectionId: section.id, check, groups });
+            setUploadStep({ sectionId: section.id, check, form });
         },
         [section, takesFiles, sectionAdapter, sendUpload],
     );
@@ -1003,7 +1077,8 @@ const MediaFrame = ({
         const keys = new Set(here.map((waiting) => waiting.key));
         const assets = here
             .flatMap((waiting) => listedById.get(waiting.entryId) ?? [])
-            .filter((asset) => asset.processing?.status !== "failed" && (section.selectable?.(asset) ?? true) === true);
+            .filter(({ processing }) => processing?.status !== "failed" || processing.usable)
+            .filter((asset) => (section.selectable?.(asset) ?? true) === true);
         const last = assets[assets.length - 1];
 
         setArrivals((previous) => previous.filter((waiting) => !keys.has(waiting.key)));
@@ -1064,38 +1139,46 @@ const MediaFrame = ({
         arrivedRef.current.forEach((id) => !kept.has(id) && arrivedRef.current.delete(id));
     }, [uploads.queue]);
 
-    // One pick's details: its own errors, then the app's fields for it, drawn with what it holds,
+    // One pick's details: its own errors, then the app's form for it, drawn with what it holds,
     // with the errors the app's backend answered, found by its place in the order the app was
     // handed the picks in. One added since has none, as the backend never saw it, and its place now.
     const renderDetails = useMemo(
         () =>
-            (fields || choiceErrorKey) &&
+            (pickForm || choiceErrorKey) &&
             ((choice: MediaChoice, index: number) => {
                 const place = errorPlaces.get(choiceKey(choice));
                 const answered = place === undefined ? NO_ERRORS : errors;
                 const at = place ?? index;
+                const form = pickForm?.(choice.asset, choice.section);
 
                 return (
-                    <ChoiceFields
-                        groups={fields?.(choice.asset, choice.section) ?? NO_GROUPS}
-                        values={choice.values}
-                        asset={choice.asset}
-                        adapter={adapterOf(choice.section)}
-                        errors={answered}
-                        index={at}
-                        messages={choiceMessages(choiceErrorKey, answered, at, choice.asset)}
-                        onChange={(key, value) => setChoiceValue(choice, key, value)}
-                    />
+                    <>
+                        <ChoiceMessages messages={choiceMessages(choiceErrorKey, answered, at, choice.asset)} />
+                        {form && (
+                            <MediaFormBody
+                                form={form}
+                                params={{
+                                    asset: choice.asset,
+                                    section: choice.section,
+                                    adapter: adapterOf(choice.section),
+                                    index: at,
+                                    errors: answered,
+                                    values: choice.values,
+                                    setValues: (next) => setChoiceValues(choice, next),
+                                }}
+                            />
+                        )}
+                    </>
                 );
             }),
-        [fields, choiceErrorKey, errorPlaces, adapterOf, setChoiceValue, errors],
+        [pickForm, choiceErrorKey, errorPlaces, adapterOf, setChoiceValues, errors],
     );
 
-    // How much of a pick there is to fix, for its row in the list: each of its fields with an
-    // error, and its own errors as one more.
+    // How much of a pick there is to fix, for its row in the list, whose form isn't open: each key
+    // under its prefix with an error, and its own errors as one more.
     const problemsOf = useMemo(
         () =>
-            (fields || choiceErrorKey) && errors !== NO_ERRORS
+            (choiceErrorPrefix || choiceErrorKey) && errors !== NO_ERRORS
                 ? (choice: MediaChoice) => {
                       const place = errorPlaces.get(choiceKey(choice));
 
@@ -1104,12 +1187,17 @@ const MediaFrame = ({
                       }
 
                       const own = choiceMessages(choiceErrorKey, errors, place, choice.asset).length > 0 ? 1 : 0;
-                      const groups = fields?.(choice.asset, choice.section) ?? NO_GROUPS;
+                      const params = { index: place, entry: choice.asset };
 
-                      return own + countFieldErrors(groups, errors, place, choice.asset);
+                      return (
+                          own +
+                          (choiceErrorPrefix
+                              ? countErrorsUnder(errors, choiceErrorPrefix(params), choiceErrorKey?.(params))
+                              : 0)
+                      );
                   }
                 : undefined,
-        [fields, choiceErrorKey, errors, errorPlaces],
+        [choiceErrorPrefix, choiceErrorKey, errors, errorPlaces],
     );
 
     // A library's own previewers first, as its backend delivers what it holds, then the media
@@ -1131,6 +1219,42 @@ const MediaFrame = ({
     const viewedHold = useMemo(
         () => (viewedEntry && section ? holdOf(viewedEntry, section, { text, formatPercent }) : undefined),
         [viewedEntry, section, text, formatPercent],
+    );
+
+    // The backend's work on it while it can be chosen all the same, which its view shows.
+    const viewedWork = useMemo(
+        () => (viewedEntry ? workOf(viewedEntry, { text, formatPercent }) : undefined),
+        [viewedEntry, text, formatPercent],
+    );
+
+    // What can be asked of the asset shown: its library's process form for it, where its adapter
+    // takes them and it can be changed.
+    const viewedProcess = useMemo(
+        () =>
+            viewedEntry &&
+            section &&
+            sectionAdapter.process &&
+            !section.readOnly &&
+            allows("write", state?.permissions, viewedEntry.permissions)
+                ? (section.processForm?.(viewedEntry) ?? null)
+                : null,
+        [viewedEntry, section, sectionAdapter, state?.permissions],
+    );
+
+    const shownProcess =
+        processStep && processStep.sectionId === sectionId && processStep.entry.id === viewedEntry?.id
+            ? processStep
+            : null;
+
+    // The backend took it on: what was said of the asset before no longer stands, as it may have
+    // failed, and its listings say how it stands now.
+    const processSent = useCallback(
+        (entry: FileEntry) => {
+            forgetStates(sectionAdapter, [entry.id]);
+            relistAll(sectionAdapter);
+            setProcessStep(null);
+        },
+        [forgetStates, sectionAdapter, relistAll],
     );
 
     const errorMessage =
@@ -1217,6 +1341,7 @@ const MediaFrame = ({
                                 label={section.label}
                                 selectedIds={selectedIds}
                                 holds={holds}
+                                works={works}
                                 multiple={multiple}
                                 status={state?.status ?? "loading"}
                                 hasMedia={library.length > 0}
@@ -1243,6 +1368,7 @@ const MediaFrame = ({
                             choosing={choosing}
                             selected={selectedIds.has(viewed.entry.id)}
                             hold={viewedHold}
+                            work={viewedWork}
                             previewers={sectionPreviewers}
                             definitions={viewedDefinitions}
                             propertiesCache={propertiesCache}
@@ -1254,7 +1380,29 @@ const MediaFrame = ({
                                     : undefined
                             }
                             onToggleSelected={toggleViewed}
+                            onProcess={
+                                viewedProcess
+                                    ? () =>
+                                          setProcessStep({
+                                              sectionId: section.id,
+                                              entry: viewed.entry,
+                                              form: viewedProcess,
+                                          })
+                                    : undefined
+                            }
+                            covered={!!shownProcess}
                             onUpdated={reloadLibrary}
+                        />
+                    )}
+                    {shownProcess && section && (
+                        <MediaProcess
+                            key={shownProcess.entry.id}
+                            entry={shownProcess.entry}
+                            section={section}
+                            adapter={sectionAdapter}
+                            form={shownProcess.form}
+                            onCancel={() => setProcessStep(null)}
+                            onSent={() => processSent(shownProcess.entry)}
                         />
                     )}
                     {shownStep && section && (
@@ -1262,7 +1410,7 @@ const MediaFrame = ({
                             section={section}
                             adapter={sectionAdapter}
                             check={shownStep.check}
-                            groups={shownStep.groups}
+                            form={shownStep.form}
                             onCancel={closeUploadStep}
                             onUpload={(values) => {
                                 sendUpload(section, shownStep.check.files, values);

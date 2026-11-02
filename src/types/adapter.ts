@@ -57,11 +57,11 @@ export interface FileEntry {
      */
     trashed?: TrashInfo;
     /**
-     * Files: the backend's work on it, while it isn't usable yet, or failed so it never became so,
-     * such as a video still being transcoded after its upload. The media manager shows it on the
-     * asset's tile and won't have it chosen, and follows it through `processing` or
-     * `watchProcessing` until it's usable. Leave it out once it's usable, which it may be while work
-     * still runs on it, such as a video made again in another quality; the file manager ignores it.
+     * Files: the backend's work on it, under way or failed, such as a video still being transcoded
+     * after its upload. The media manager shows it on the asset's tile, follows it through
+     * `processing` or `watchProcessing`, and won't have it chosen meanwhile, unless it says it's
+     * `usable`, as a piece of audio being transcribed is. Leave it out once there's nothing to show;
+     * the file manager ignores it.
      */
     processing?: AssetProcessing;
     /** Anything else the adapter wants to carry for custom actions; the file manager ignores it. */
@@ -69,9 +69,9 @@ export interface FileEntry {
 }
 
 /**
- * The backend's work on an asset that isn't usable yet (`FileEntry.processing`): under way, or
- * failed. What the work is, its jobs and its parts, is the backend's own; this is only how the asset
- * as a whole stands, for its tile: one line and a bar.
+ * The backend's work on an asset (`FileEntry.processing`): under way, or failed. What the work is,
+ * its jobs and its parts, is the backend's own; this is only how the asset as a whole stands, for
+ * its tile: one line and a bar.
  */
 export interface AssetProcessing {
     status: "processing" | "failed";
@@ -87,6 +87,13 @@ export interface AssetProcessing {
     label?: string;
     /** Why it failed, in the app's language, for its tile's description and the asset's view. */
     message?: string;
+    /**
+     * Whether the asset can be used and chosen all the same: what it had still works while this
+     * runs, or after this failed, such as a video that plays while it's made into HLS, or a
+     * transcript that couldn't be made of a piece of audio. Its tile still shows the bar and the
+     * line, without fading or holding it back. Say it each time it's said how the asset stands.
+     */
+    usable?: boolean;
 }
 
 /**
@@ -332,12 +339,11 @@ export interface UploadOptions extends OperationOptions {
      */
     onProgress: (loaded: number, total: number) => void;
     /**
-     * What the library's upload fields held as the user sent the file, by their `field` keys, in a
-     * media manager's library with `uploadFields`: the processing asked of the backend for it, such
-     * as `{ hls: false }` for a video not to be streamed, or `{ format: "avif" }`. The media manager
-     * never reads them; the backend decides what they mean. The same object for every file sent
-     * together, and kept for Try again. Undefined from the file manager, and for a library without
-     * upload fields.
+     * What the library's upload form held as the user sent the file, in a media manager's library
+     * with `uploadForm`: the processing asked of the backend for it, such as `{ hls: false }` for a
+     * video not to be streamed, or `{ format: "avif" }`. The media manager never reads it; the
+     * backend decides what it means. The same object for every file sent together, and kept for Try
+     * again. Undefined from the file manager, and where the library asks nothing of the files.
      */
     values?: Readonly<Record<string, unknown>>;
 }
@@ -750,4 +756,15 @@ export interface FileAdapter {
      * view, and as the media manager unmounts. Used in place of `processing`.
      */
     watchProcessing?(entries: FileEntry[], onChange: (id: string, state: AssetState) => void): () => void;
+    /**
+     * Asks the backend to process an asset already uploaded, from the media manager's asset view:
+     * what its library's `processForm` holds, which the media manager never reads, such as
+     * `{ transcribe: true, language: "fr" }` or `{ responsive: true }`. Resolve once
+     * the work is taken on, not once it's done. The library is then listed again, so list the asset
+     * with `FileEntry.processing` from then on, and it's followed as any, `usable` when what it has
+     * still works meanwhile. Reject with an `Error` to show its message over the form, which stays
+     * as the user left it, to try again. Without it, or without a form for the asset, nothing is
+     * offered.
+     */
+    process?(entry: FileEntry, values: Readonly<Record<string, unknown>>, options: OperationOptions): Promise<void>;
 }

@@ -3,6 +3,7 @@ import { acceptsFile, uploadPatterns } from "./files";
 
 import type {
     AssetHold,
+    AssetProcessing,
     AssetState,
     DroppedFiles,
     FileAdapter,
@@ -12,7 +13,6 @@ import type {
     MediaKind,
     MediaSection,
     MediaUploadCheck,
-    PropertyDefinitionGroup,
     RefusedName,
 } from "../types";
 
@@ -23,8 +23,6 @@ export const KIND_ICONS: Record<MediaKind, IconName> = {
     audio: "music",
     document: "documents",
 };
-
-const NO_GROUPS: PropertyDefinitionGroup[] = [];
 
 /**
  * Sorts what was picked, dropped or pasted into a library before anything is sent: files of types it
@@ -55,17 +53,9 @@ export const checkMediaUpload = (
     return { files: sent, refused: files.filter((file) => !acceptsFile(patterns, file)), folders, misnamed };
 };
 
-/** What a library asks of these files before they're uploaded: its upload fields, for them. */
-export const uploadFieldsFor = (section: MediaSection, files: readonly File[]) =>
-    (typeof section.uploadFields === "function" ? section.uploadFields(files) : section.uploadFields) ?? NO_GROUPS;
-
-/** Whether the groups ask anything at all. */
-export const asksAnything = (groups: readonly PropertyDefinitionGroup[]) =>
-    groups.some((group) => group.properties.length > 0);
-
 /**
- * What upload fields are handed as their entry, which a definition's functions take, as nothing is
- * uploaded yet: the first file's name and type, the files' size together, and no id.
+ * What fields in an upload form are handed as their entry, which a definition's functions take, as
+ * nothing is uploaded yet: the first file's name and type, the files' size together, and no id.
  */
 export const uploadStandIn = (files: readonly File[]): FileEntry => ({
     id: "",
@@ -92,35 +82,52 @@ export const withState = (entry: FileEntry, state: AssetState | undefined): File
     return { ...entry, processing: state };
 };
 
+// The line and the bar of the backend's work on an asset: what it's doing and how far along, or that
+// it failed.
+const standing = (
+    processing: AssetProcessing,
+    { text, formatPercent }: Pick<Locale, "text" | "formatPercent">,
+): AssetHold => {
+    if (processing.status === "failed") {
+        return { status: "failed", text: text.mediaProcessingFailed, detail: processing.message || undefined };
+    }
+
+    const step = processing.label || text.mediaProcessing;
+    const { progress } = processing;
+
+    return {
+        status: "processing",
+        progress,
+        text: progress === undefined ? step : joinIsolated([step, formatPercent(progress)]),
+    };
+};
+
 /**
  * Why an asset can't be chosen now, in one line, or nothing when it can: its backend's work on it,
- * with what it's doing and how far along, or failed; or its library refusing it, with why.
+ * with what it's doing and how far along, or failed, unless it's usable all the same; or its library
+ * refusing it, with why.
  */
 export const holdOf = (
     entry: FileEntry,
     section: MediaSection,
-    { text, formatPercent }: Pick<Locale, "text" | "formatPercent">,
+    locale: Pick<Locale, "text" | "formatPercent">,
 ): AssetHold | undefined => {
     const { processing } = entry;
 
-    if (processing?.status === "processing") {
-        const step = processing.label || text.mediaProcessing;
-        const { progress } = processing;
-
-        return {
-            status: "processing",
-            progress,
-            text: progress === undefined ? step : joinIsolated([step, formatPercent(progress)]),
-        };
-    }
-
-    if (processing?.status === "failed") {
-        return { status: "failed", text: text.mediaProcessingFailed, detail: processing.message || undefined };
+    if (processing && !processing.usable) {
+        return standing(processing, locale);
     }
 
     const allowed = section.selectable?.(entry) ?? true;
 
     return allowed === true
         ? undefined
-        : { status: "refused", text: typeof allowed === "string" && allowed ? allowed : text.mediaUnavailable };
+        : { status: "refused", text: typeof allowed === "string" && allowed ? allowed : locale.text.mediaUnavailable };
 };
+
+/**
+ * The backend's work on an asset that can be used all the same, in the same line and bar, or nothing
+ * when there's none: it shows, but holds nothing back.
+ */
+export const workOf = (entry: FileEntry, locale: Pick<Locale, "text" | "formatPercent">) =>
+    entry.processing?.usable ? standing(entry.processing, locale) : undefined;

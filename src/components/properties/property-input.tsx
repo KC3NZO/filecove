@@ -28,6 +28,11 @@ interface PropertyInputProps {
     labelId: string;
     /** While it's saved: shown, but not changed. */
     disabled?: boolean;
+    /**
+     * With `disabled`, off for now, as a form says, rather than only while it's saved: a text field
+     * looks it too, rather than being read-only with the focus kept in it.
+     */
+    off?: boolean;
     /** Its save failed, or it has an error the host shows. */
     error?: boolean;
     /** The element saying what's wrong with it, while there's something. */
@@ -91,6 +96,7 @@ const TextInput = ({
     id,
     labelId,
     disabled,
+    off,
     error,
     describedBy,
 }: InputProps<Typed<"string">>) => {
@@ -99,6 +105,7 @@ const TextInput = ({
 
     return (
         <TextField
+            disabled={off}
             id={id}
             fullWidth
             size="small"
@@ -134,6 +141,7 @@ const NumberInput = ({
     id,
     labelId,
     disabled,
+    off,
     error,
     describedBy,
 }: InputProps<Typed<"number">>) => {
@@ -152,6 +160,7 @@ const NumberInput = ({
 
     return (
         <TextField
+            disabled={off}
             id={id}
             size="small"
             type="number"
@@ -192,6 +201,7 @@ const DateInput = ({
     id,
     labelId,
     disabled,
+    off,
     error,
     describedBy,
 }: InputProps<Typed<"date">>) => {
@@ -199,6 +209,7 @@ const DateInput = ({
 
     return (
         <TextField
+            disabled={off}
             id={id}
             size="small"
             type={time ? "datetime-local" : "date"}
@@ -369,7 +380,7 @@ const ChoicesInput = ({
  * Enter, a comma between texts, or the focus leaving; Backspace with nothing typed removes the
  * last. A date is added as it's picked.
  */
-const ListInput = ({ definition, value, onChange, id, labelId, disabled, error, describedBy, handle }: InputProps) => {
+const ListInput = ({ definition, value, onChange, id, labelId, disabled, off, error, describedBy, handle }: InputProps) => {
     const locale = useLocale();
     const { text } = locale;
     const [typed, setTyped] = useState("");
@@ -455,6 +466,7 @@ const ListInput = ({ definition, value, onChange, id, labelId, disabled, error, 
                 })}
             </Box>
             <TextField
+                disabled={off}
                 id={id}
                 fullWidth
                 size="small"

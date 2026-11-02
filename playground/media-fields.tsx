@@ -5,8 +5,13 @@ import ButtonBase from "@mui/material/ButtonBase";
 import TextField from "@mui/material/TextField";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { MediaFields } from "../src";
+
 import type {
     FileEntry,
+    MediaForm,
+    MediaKind,
+    MediaPickFormParams,
     MediaSection,
     PropertyDefinition,
     PropertyDefinitionGroup,
@@ -15,11 +20,11 @@ import type {
     PropertyRenderParams,
 } from "../src";
 
-// The playground's own fields for each pick (`fields`), as a site's carousel would have them:
+// The playground's own form for each pick (`pickForm`), as a site's carousel would have it:
 // everything here is the app's, its languages too, a picture's texts as a field per language, a
-// video's title as one field with a tab a language. Each is a property's definition, as what an
-// asset shows is. The media manager only draws them, keeps what's filled in with the pick, and hands
-// it back with what's chosen. Each finds its errors in what the playground's backend answers
+// video's title as one field with a tab a language. Its fields are drawn by `MediaFields`, from
+// definitions as what an asset shows is. The media manager keeps what's filled in with the pick, and
+// hands it back with what's chosen. Each finds its errors in what the playground's backend answers
 // (`mocks/mock-save.ts`) by its `errorKey`, the request's key for it, or its keys: the video's
 // title names one a language, and reads `errors` itself only to mark the tab of each language with
 // one.
@@ -81,7 +86,7 @@ const translationKey = (index: number, code: Language, name: string) => `media.$
 
 /**
  * A field of the playground's own, drawn as it likes: where a picture's crop keeps its subject, set
- * through `save`, which in a pick's fields keeps it with the pick at once. Its `errorKey` finds its
+ * through `save`, which keeps it with the pick at once, and missing while it's off. Its `errorKey` finds its
  * error, which the media manager shows under it; it only marks itself as wrong, and is described by
  * the message.
  */
@@ -188,13 +193,37 @@ const perLanguage = (
     })),
 });
 
-/** What the carousel asks of each pick, by its kind: the media manager draws whatever this returns. */
-export const pickFields = (_asset: FileEntry, section: MediaSection): PropertyDefinitionGroup[] => {
-    switch (section.kind) {
-        case "image":
-            return [
-                perLanguage("title", "Title"),
-                perLanguage("alt", "Alt text", { multiline: true, required: "en" }),
+const altKeys = LANGUAGES.map(({ code }) => `alt.${code}`);
+
+const titleGroup = perLanguage("title", "Title");
+const altGroup = perLanguage("alt", "Alt text", { multiline: true, required: "en" });
+
+/**
+ * A picture's: its title, its alt text unless it's decorative, which takes what was written, and how
+ * it sits in the slide, its focal point off and forgotten while it's shown whole, when nothing's cut.
+ */
+const PictureFields = (form: MediaPickFormParams) => {
+    const { values, setValues } = form;
+
+    return (
+        <MediaFields
+            {...form}
+            setValues={(next) => {
+                const kept = { ...next };
+
+                if (kept.decorative) {
+                    altKeys.forEach((key) => delete kept[key]);
+                }
+
+                if (kept.fit === "contain") {
+                    delete kept.focus;
+                }
+
+                setValues(kept);
+            }}
+            groups={[
+                titleGroup,
+                ...(values.decorative ? [] : [altGroup]),
                 {
                     id: "layout",
                     title: "Layout",
@@ -212,52 +241,64 @@ export const pickFields = (_asset: FileEntry, section: MediaSection): PropertyDe
                         {
                             field: "focus",
                             label: "Focal point",
+                            disabled: values.fit === "contain",
                             errorKey: keyOf("focus"),
                             render: (params) => <FocalPoint {...params} />,
                         },
                     ],
                 },
-            ];
-        case "video":
-            return [
-                { id: "about", properties: [translated("title", "Title", true)] },
-                {
-                    id: "playback",
-                    title: "Playback",
-                    properties: [
-                        { field: "autoplay", label: "Play on its own, muted", type: "boolean" },
-                        { field: "loop", label: "Loop", type: "boolean" },
-                        {
-                            field: "start",
-                            label: "Start at (seconds)",
-                            type: "number",
-                            min: 0,
-                            errorKey: keyOf("start"),
-                        },
-                        {
-                            field: "showOn",
-                            label: "Show on",
-                            type: "string",
-                            multiple: true,
-                            errorKey: keyOf("showOn"),
-                            options: [
-                                { value: "desktop", label: "Desktop" },
-                                { value: "tablet", label: "Tablet" },
-                                { value: "phone", label: "Phone" },
-                            ],
-                        },
-                    ],
-                },
-            ];
-        case "audio":
-            return [
-                perLanguage("title", "Title"),
-                { id: "about", properties: [{ field: "keywords", label: "Keywords", type: "string", multiple: true }] },
-            ];
-        case "document":
-            return [
-                perLanguage("link", "Link text"),
-                { id: "visibility", properties: [{ field: "until", label: "Show until", type: "date" }] },
-            ];
-    }
+            ]}
+        />
+    );
 };
+
+const videoGroups: PropertyDefinitionGroup[] = [
+    { id: "about", properties: [translated("title", "Title", true)] },
+    {
+        id: "playback",
+        title: "Playback",
+        properties: [
+            { field: "autoplay", label: "Play on its own, muted", type: "boolean" },
+            { field: "loop", label: "Loop", type: "boolean" },
+            {
+                field: "start",
+                label: "Start at (seconds)",
+                type: "number",
+                min: 0,
+                errorKey: keyOf("start"),
+            },
+            {
+                field: "showOn",
+                label: "Show on",
+                type: "string",
+                multiple: true,
+                errorKey: keyOf("showOn"),
+                options: [
+                    { value: "desktop", label: "Desktop" },
+                    { value: "tablet", label: "Tablet" },
+                    { value: "phone", label: "Phone" },
+                ],
+            },
+        ],
+    },
+];
+
+const audioGroups: PropertyDefinitionGroup[] = [
+    perLanguage("title", "Title"),
+    { id: "about", properties: [{ field: "keywords", label: "Keywords", type: "string", multiple: true }] },
+];
+
+const documentGroups: PropertyDefinitionGroup[] = [
+    perLanguage("link", "Link text"),
+    { id: "visibility", properties: [{ field: "until", label: "Show until", type: "date" }] },
+];
+
+const FORMS: Record<MediaKind, MediaForm<MediaPickFormParams>> = {
+    image: { defaults: { fit: "cover" }, render: (form) => <PictureFields {...form} /> },
+    video: { render: (form) => <MediaFields {...form} groups={videoGroups} /> },
+    audio: { render: (form) => <MediaFields {...form} groups={audioGroups} /> },
+    document: { defaults: { "link.en": "Read it" }, render: (form) => <MediaFields {...form} groups={documentGroups} /> },
+};
+
+/** What the carousel asks of each pick, by its kind. */
+export const pickForm = (_asset: FileEntry, section: MediaSection) => FORMS[section.kind];

@@ -360,7 +360,11 @@ const BY_KIND: Record<MediaKind, PropertyDefinitionGroup[]> = {
     image: imageProperties,
     // A video of a library without its own, which knows nothing of its delivery.
     video: [{ id: "video", properties: [dimensions, quality, length, format, size, added] }, labels],
-    audio: [{ id: "audio", properties: [length, bitrate, format, size, added] }, labels],
+    audio: [
+        { id: "audio", properties: [length, bitrate, format, size, added] },
+        { id: "transcript", properties: [{ field: "transcript", label: "Transcript", type: "string" }] },
+        labels,
+    ],
     document: [
         { id: "document", properties: [{ field: "pages", label: "Pages", type: "number" }, format, size, added] },
         labels,

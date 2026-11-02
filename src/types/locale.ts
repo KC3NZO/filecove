@@ -868,7 +868,7 @@ export interface MediaManagerLocaleText
     mediaChoiceItem: (name: string, position: string, count: string) => string;
     /** How to move one in the selected column, and take it out, from the keyboard, read after its name. */
     mediaChoicesHint: string;
-    /** Read after `mediaChoicesHint` while the app has fields for each pick (`fields`). */
+    /** Read after `mediaChoicesHint` while the app has a form for each pick (`pickForm`). */
     mediaChoicesDetailsHint: string;
     /** Said as one in the selected column is picked up from the keyboard, moved, put down, or put back. */
     mediaChoicePickedUp: (name: string, position: string, count: string) => string;
@@ -922,6 +922,14 @@ export interface MediaManagerLocaleText
     mediaProcessingFailed: string;
     /** An asset its library won't have chosen, on its tile, where the library gives no reason. */
     mediaUnavailable: string;
+    /** The asset view's button opening what can be asked of the asset, and the step's button sending it. */
+    mediaProcess: string;
+    /** The title of the step asking how to process an asset; `name` comes isolated. */
+    mediaProcessTitle: (name: string) => string;
+    /** The step's way back to the asset; `name` comes isolated. */
+    mediaBackToAsset: (name: string) => string;
+    /** Over the step's fields when the adapter's `process` failed and didn't say why. */
+    mediaProcessFailed: string;
     /** Beside Choose while selected assets are still being processed, holding it back. */
     mediaChoicesProcessing: (count: number) => string;
     /** Beside Choose while selected assets can't be chosen at all, which have to be taken out. */

@@ -706,7 +706,7 @@ export const createUploadQueue = (
         /**
          * Queues files to be uploaded into `folder` through `adapter`, which takes uploads, and
          * returns the ids of their uploads, in the order of `files`. `values`, what a media
-         * manager's library's upload fields held, goes to the adapter with each of them.
+         * manager's library's upload form held, goes to the adapter with each of them.
          */
         add(
             adapter: FileAdapter,

@@ -33,6 +33,8 @@ interface MediaGridProps {
     selectedIds: ReadonlySet<string>;
     /** Why assets can't be chosen now, by their ids, which their tiles show. */
     holds: ReadonlyMap<string, AssetHold>;
+    /** The backend's work on assets that can be chosen all the same, by their ids. */
+    works: ReadonlyMap<string, AssetHold>;
     multiple: boolean;
     status: "loading" | "ready" | "error";
     /** Whether the library has assets at all, whatever the search leaves. */
@@ -138,6 +140,7 @@ const MediaGrid = ({
     label,
     selectedIds,
     holds,
+    works,
     multiple,
     status,
     hasMedia,
@@ -298,6 +301,7 @@ const MediaGrid = ({
                             index={index}
                             selected={selectedIds.has(entry.id)}
                             hold={holds.get(entry.id)}
+                            work={works.get(entry.id)}
                             focused={index === tabStop}
                             onPress={handlePress}
                             onActivate={onActivate}
@@ -314,6 +318,7 @@ const MediaGrid = ({
                             index={index}
                             selected={selectedIds.has(entry.id)}
                             hold={holds.get(entry.id)}
+                            work={works.get(entry.id)}
                             focused={index === tabStop}
                             onPress={handlePress}
                             onActivate={onActivate}

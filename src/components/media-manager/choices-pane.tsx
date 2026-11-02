@@ -32,8 +32,8 @@ interface ChoicesPaneProps {
      */
     multiple: boolean;
     /**
-     * One pick's own errors and the app's fields for it, for this use of it, drawn with what they
-     * hold, by its place among those selected now; none without either.
+     * One pick's own errors and the app's form for it, for this use of it, drawn with what it holds,
+     * by its place among those selected now; none without either.
      */
     renderDetails: ((choice: MediaChoice, index: number) => ReactNode) | undefined;
     /** How much of a pick the app's `errors` have to fix, for its row; none without them. */
@@ -198,7 +198,7 @@ const showSx: SxProps<Theme> = {
     marginInlineStart: -1,
 };
 
-/** One pick's details: what it is, a way to the asset itself, and the app's own fields for this use of it. */
+/** One pick's details: what it is, a way to the asset itself, and the app's own form for this use of it. */
 const ChoiceDetails = ({ choice, adapter, hold, children, onShowInLibrary }: ChoiceDetailsProps) => {
     const { text } = useLocale();
     const { asset, section } = choice;

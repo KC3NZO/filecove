@@ -5,17 +5,11 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { MediaManager } from "../src";
-import { pickFields } from "./media-fields";
+import { pickForm } from "./media-fields";
 import { audioPreviewer, hlsPreviewer } from "./media-previewers";
+import { audioProcessForm, imageProcessForm, videoProcessForm } from "./media-processing";
 import { assetProperties, videoProperties } from "./media-properties";
-import {
-    audioUploadDefaults,
-    audioUploadFields,
-    imageUploadDefaults,
-    imageUploadFields,
-    videoUploadDefaults,
-    videoUploadFields,
-} from "./media-uploads";
+import { audioUploadForm, imageUploadForm, videoUploadForm } from "./media-uploads";
 import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
 import { savePicks } from "./mocks/mock-save";
 import { browse, locale, multiple, single } from "./options";
@@ -39,7 +33,7 @@ const stockSelectable = (entry: FileEntry) => !/-(?:06|12|18)\./.test(entry.name
  * delivered by HLS and so previewed by its own player, and show their renditions, poster and tracks
  * by definitions of their own, and a stock library's, read-only. This site's take uploads of their
  * own kind, asking first what its backend should make of them, but documents, which it takes as
- * they are.
+ * they are; and what's uploaded can be processed again from its view.
  */
 const libraries: MediaSectionGroup[] = [
     {
@@ -52,8 +46,8 @@ const libraries: MediaSectionGroup[] = [
                 kind: "image",
                 rootId: "/images",
                 acceptUploads: "image/*",
-                uploadFields: imageUploadFields,
-                uploadDefaults: imageUploadDefaults,
+                uploadForm: imageUploadForm,
+                processForm: imageProcessForm,
             },
             {
                 id: "videos",
@@ -63,8 +57,8 @@ const libraries: MediaSectionGroup[] = [
                 previewers: [hlsPreviewer],
                 properties: videoProperties,
                 acceptUploads: "video/*",
-                uploadFields: videoUploadFields,
-                uploadDefaults: videoUploadDefaults,
+                uploadForm: videoUploadForm,
+                processForm: videoProcessForm,
             },
             {
                 id: "audio",
@@ -72,8 +66,8 @@ const libraries: MediaSectionGroup[] = [
                 kind: "audio",
                 rootId: "/audio",
                 acceptUploads: "audio/*",
-                uploadFields: audioUploadFields,
-                uploadDefaults: audioUploadDefaults,
+                uploadForm: audioUploadForm,
+                processForm: audioProcessForm,
             },
             {
                 id: "documents",
@@ -131,6 +125,9 @@ const footerSx: SxProps<Theme> = {
 
 /** Where a pick's own errors are, as the playground's backend names them: `media.0`, `media.0.id`. */
 const choiceErrorKey = ({ index }: PropertyErrorKeyParams) => [`media.${index}`, `media.${index}.id`];
+
+/** What the keys of a pick's fields start with, as the playground's backend names them: `media.0.`. */
+const choiceErrorPrefix = ({ index }: PropertyErrorKeyParams) => `media.${index}.`;
 
 /** A pick as an app would store it: its library's id with the asset's, and what's filled in. */
 const describeOne = ({ asset, section, values }: MediaChoice) => {
@@ -201,11 +198,12 @@ const MediaApp = () => {
         multiple,
         locale,
         onChoose: browse ? undefined : choose,
-        fields: pickFields,
+        pickForm,
         properties: assetProperties,
         previewers,
         errors,
         choiceErrorKey,
+        choiceErrorPrefix,
     };
 
     return (

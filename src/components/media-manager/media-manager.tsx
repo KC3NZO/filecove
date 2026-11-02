@@ -17,6 +17,7 @@ import { MEDIA_CONTAINER } from "../../styles/media-layout";
 import { withSx } from "../../styles/sx";
 import { NO_ERRORS } from "../../utils/field-errors";
 import MediaFrame from "./media-frame";
+import type { MediaFrameProps } from "./media-frame";
 
 import type {
     FieldErrors,
@@ -24,7 +25,9 @@ import type {
     FileEntry,
     FilePreviewer,
     MediaChoice,
+    MediaForm,
     MediaManagerLocaleText,
+    MediaPickFormParams,
     MediaSection,
     MediaSectionGroup,
     PropertyDefinitionGroup,
@@ -46,22 +49,22 @@ interface BaseProps<V> extends RootAttributes {
     /**
      * Takes what's chosen, with the Choose button, a double click or Enter on an asset: each as it
      * was listed, `meta` and all, with the library it's from, whose `kind` says what it is, and what
-     * the app's fields hold for it (`values`), in the order set in the selected column. Pass only
+     * the app's form holds for it (`values`), in the order set in the selected column. Pass only
      * the libraries of the kinds the app takes. Without it there's no selected column, and the media
      * manager is a library to look through.
      */
     onChoose?: (choices: MediaChoice<V>[]) => void;
     /**
-     * The app's own fields for each pick, for this use of the asset, by the asset and its library:
-     * an alt text and a caption for a picture in a carousel, "Play on its own" for a video, a field
-     * per language when the app has several, or none. They're the use's, not the backend's, so the
-     * same library picked from elsewhere may ask for others. Each is a property's definition, as
-     * `properties` are, editable unless it says otherwise. The media manager draws them in the
-     * selected column as a pick's details are opened, keeps what's filled in with the pick by each
-     * one's `field`, as it's moved and as other libraries are shown, and hands it back with
-     * `onChoose` (`values`). Without it, picks have no details.
+     * The app's own form for each pick, for this use of the asset, by the asset and its library: an
+     * alt text and a caption for a picture in a carousel, "Play on its own" for a video, a field per
+     * language when the app has several, or `null` for none. It's the use's, not the backend's, so
+     * the same library picked from elsewhere may ask for something else. It's drawn in the selected
+     * column as a pick's details are opened, with what the media manager keeps with the pick, as it's
+     * moved and as other libraries are shown, and hands back with `onChoose` (`values`): its `defaults`
+     * from the moment it's picked. Without it, picks have no details. Keep it outside the component,
+     * or memoized.
      */
-    fields?: (asset: FileEntry, section: MediaSection) => PropertyDefinitionGroup[];
+    pickForm?: (asset: FileEntry, section: MediaSection) => MediaForm<MediaPickFormParams<V>> | null;
     /**
      * What an asset shows as it's opened, by the asset and its library, for the libraries without
      * `properties` of their own: the app's definitions of the values the adapter's `properties`
@@ -77,7 +80,7 @@ interface BaseProps<V> extends RootAttributes {
      */
     previewers?: FilePreviewer[];
     /**
-     * What's selected as it mounts, with what the app's fields held for each, such as a product's
+     * What's selected as it mounts, with what the app's form held for each, such as a product's
      * carousel being edited, in its order. Each is matched to its library by `section.id`.
      */
     defaultValue?: readonly MediaChoice<V>[];
@@ -86,10 +89,11 @@ interface BaseProps<V> extends RootAttributes {
      * message or several each, as Laravel's validation errors are:
      * `{ "media.0.translations.en.title": ["The title field is required."] }`. Pass it all: only
      * the keys the app names are read, and the rest, the form's other fields' and the list's own
-     * (`media`), are left for the app to show. Each of the app's fields finds its own by its
+     * (`media`), are left for the app to show. Each field `MediaFields` draws finds its own by its
      * `errorKey`, made from the pick's place (``({ index }) => `media.${index}.loop` ``), shown
-     * under it, and each pick its own by `choiceErrorKey`, with the pick's row in the selected
-     * column saying how many there are to fix. The keys go by the order the app was handed the
+     * under it, a form of the app's reads them itself (`MediaPickFormParams.errors`), and each pick
+     * finds its own by `choiceErrorKey`, with the pick's row in the selected column saying how many
+     * there are to fix (`choiceErrorPrefix`). The keys go by the order the app was handed the
      * picks in, at Choose (or, before any, the order as the errors came), so each pick keeps its own
      * as it's moved; one taken out takes them with it, and one added since has none. Pass the same
      * object for as long as they're the same.
@@ -99,9 +103,17 @@ interface BaseProps<V> extends RootAttributes {
      * Where a pick's own errors are in `errors`, about it as a whole rather than one of its fields,
      * such as "This video is still processing.": the backend's key for it, or its keys, made from
      * its place, ``({ index }) => [`media.${index}`, `media.${index}.id`]``. Its messages show at
-     * the top of its details, above its fields, and its row counts them as one more to fix.
+     * the top of its details, above its form, and its row counts them as one more to fix.
      */
     choiceErrorKey?: (params: PropertyErrorKeyParams) => string | readonly string[];
+    /**
+     * What the keys of a pick's fields in `errors` start with, made from its place, its separator
+     * included, ``({ index }) => `media.${index}.` ``, so its row in the selected column can count
+     * what there is to fix while its form isn't open: each key with a message, so a title with an error
+     * in two languages counts as two. Those `choiceErrorKey` names count as one more, apart. Without
+     * it, only those count.
+     */
+    choiceErrorPrefix?: (params: PropertyErrorKeyParams) => string;
     /**
      * The component's own text, for another language or other wording. Keys left out stay in
      * English, as `enUS` has them. Functions written inline are new each render and make every
@@ -140,8 +152,8 @@ interface SingleSectionProps<V> extends BaseProps<V> {
 /**
  * Either `sections`, for several libraries to switch between, or a single `section`. Both may
  * change after mounting: the library shown goes back to the first when its section goes, and what
- * was picked in a library that's gone goes with it. `V` is the shape of what the app's fields hold
- * for each pick (`fields`), by their keys.
+ * was picked in a library that's gone goes with it. `V` is the shape of what the app's form holds
+ * for each pick (`pickForm`).
  */
 export type MediaManagerProps<V = Record<string, unknown>> = MultiSectionProps<V> | SingleSectionProps<V>;
 
@@ -163,9 +175,9 @@ const rootSx = {
  * square tiles, videos as wide ones, audio as rows, documents as pages, searched by name, each
  * opened in the library's place, shown by the app's previewers, with the properties its adapter
  * hands over. While the app takes a choice, what's selected is listed in a column beside them, put
- * in order there, each with the app's own fields for this use of it. Files are uploaded into a
- * library taking them by its Upload button, a drop or a paste, asked first what its `uploadFields`
- * ask, and selected as they arrive while the app takes a choice. Built from the parts it shares
+ * in order there, each with the app's own form for this use of it. Files are uploaded into a
+ * library taking them by its Upload button, a drop or a paste, asked first what its `uploadForm`
+ * asks, and selected as they arrive while the app takes a choice. Built from the parts it shares
  * with `FileManager` (the adapter, the listing store, thumbnails, the properties panel, the upload
  * queue and panel), not from the file manager itself.
  */
@@ -175,12 +187,13 @@ const MediaManager = <V,>({
     section: singleSection,
     multiple = false,
     onChoose,
-    fields,
+    pickForm,
     properties,
     previewers,
     defaultValue,
     errors = NO_ERRORS,
     choiceErrorKey,
+    choiceErrorPrefix,
     localeText,
     locale,
     ref,
@@ -217,12 +230,13 @@ const MediaManager = <V,>({
                             multiple={multiple}
                             // The frame keeps the app's values by their keys, not knowing their shape.
                             onChoose={onChoose as ((choices: MediaChoice[]) => void) | undefined}
-                            fields={fields}
+                            pickForm={pickForm as MediaFrameProps["pickForm"]}
                             properties={properties}
                             previewers={previewers}
                             defaultValue={defaultValue as readonly MediaChoice[] | undefined}
                             errors={errors}
                             choiceErrorKey={choiceErrorKey}
+                            choiceErrorPrefix={choiceErrorPrefix}
                             propertiesCache={propertiesCache}
                         />
                     </Box>

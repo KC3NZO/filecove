@@ -1,4 +1,4 @@
-import { Component, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Component, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import Box from "@mui/material/Box";
@@ -18,6 +18,7 @@ import {
     TILE_LAYOUTS,
     assetWide,
 } from "../../styles/media-layout";
+import { sameEntry } from "../../store/folder-store";
 import { focusOutline, forcedColors, forcedPressed } from "../../styles/mixins";
 import { focusLost } from "../../utils/dom";
 import { KIND_ICONS } from "../../utils/media";
@@ -49,6 +50,8 @@ interface MediaAssetProps {
     selected: boolean;
     /** Why it can't be chosen now, shown under the header, with Select held unless it's selected. */
     hold: AssetHold | undefined;
+    /** The backend's work on it while it can be chosen all the same, shown as a hold is. */
+    work: AssetHold | undefined;
     /** What shows assets of its library: the library's own previewers, then the media manager's. */
     previewers: readonly FilePreviewer[];
     /** What it shows: the library's own definitions, or the media manager's; the adapter's groups without. */
@@ -58,6 +61,10 @@ interface MediaAssetProps {
     onPrevious: (() => void) | undefined;
     onNext: (() => void) | undefined;
     onToggleSelected: () => void;
+    /** Opens what can be asked of it, while there's anything. */
+    onProcess: (() => void) | undefined;
+    /** Whether that's shown over it: it's hidden, but stays as it was, and takes the focus back. */
+    covered: boolean;
     /** Lists the library again once a field of the asset's is saved. */
     onUpdated: () => void;
     propertiesCache: PropertiesCache;
@@ -75,6 +82,7 @@ const rootSx: SxProps<Theme> = {
     containerName: MEDIA_ASSET_CONTAINER,
     outline: "none",
     "&:focus-visible": { ...focusOutline, borderRadius: "inherit" },
+    '&[data-covered="true"]': { visibility: "hidden" },
 };
 
 const headerSx: SxProps<Theme> = {
@@ -117,6 +125,8 @@ const noticeDetailSx: SxProps<Theme> = {
     color: "text.secondary",
     fontSize: "0.8125rem",
 };
+
+const processSx: SxProps<Theme> = { flexShrink: 0, marginInlineStart: 0.5 };
 
 const selectSx: SxProps<Theme> = {
     flexShrink: 0,
@@ -203,6 +213,29 @@ interface BoundaryProps {
     children: ReactNode;
     onError: (error: unknown) => void;
 }
+
+// An asset without its backend's work on it, or with only whether there's any and how it ended.
+const withoutWork = (entry: FileEntry): FileEntry => ({ ...entry, processing: undefined });
+const withWorkStatus = (entry: FileEntry): FileEntry => ({
+    ...entry,
+    processing: entry.processing && { status: entry.processing.status },
+});
+
+/**
+ * An asset as it was until it's changed by more than `shape` leaves out, so a bit of progress doesn't
+ * load again what's made from it: a video playing while it's processed would start over.
+ */
+const useSteadyEntry = (entry: FileEntry, shape: (entry: FileEntry) => FileEntry) => {
+    const [steady, setSteady] = useState(entry);
+
+    if (steady !== entry && !sameEntry(shape(steady), shape(entry))) {
+        setSteady(entry);
+
+        return entry;
+    }
+
+    return steady;
+};
 
 const messageOf = (error: unknown) => (error instanceof Error && error.message ? error.message : undefined);
 
@@ -365,10 +398,14 @@ const Picture = ({ entry, section, adapter }: Pick<MediaAssetProps, "entry" | "s
  */
 const Stage = ({
     entry,
+    listed,
     section,
     adapter,
     previewers,
-}: Pick<MediaAssetProps, "entry" | "section" | "adapter" | "previewers">) => {
+}: Pick<MediaAssetProps, "entry" | "section" | "adapter" | "previewers"> & {
+    /** The asset as it is now, for its picture, asked for again only as its work ends. */
+    listed: FileEntry;
+}) => {
     const previewer = previewers.find(
         (each) => ((each.reads ?? "content") === "none" || !!adapter.content) && each.accepts(entry),
     );
@@ -378,7 +415,7 @@ const Stage = ({
             {previewer ? (
                 <Preview key={previewer.id} entry={entry} adapter={adapter} previewer={previewer} />
             ) : (
-                <Picture entry={entry} section={section} adapter={adapter} />
+                <Picture entry={listed} section={section} adapter={adapter} />
             )}
         </Box>
     );
@@ -396,12 +433,15 @@ const MediaAsset = ({
     choosing,
     selected,
     hold,
+    work,
     previewers,
     definitions,
     onBack,
     onPrevious,
     onNext,
     onToggleSelected,
+    onProcess,
+    covered,
     onUpdated,
     propertiesCache,
 }: MediaAssetProps) => {
@@ -410,6 +450,13 @@ const MediaAsset = ({
     const holdId = useId();
     const rootRef = useRef<HTMLElement>(null);
     const opened = useRef(false);
+    const processRef = useRef<HTMLButtonElement>(null);
+    const wasCovered = useRef(covered);
+    const standing = hold ?? work;
+    // What plays stays as it is while the asset's work goes on, and its details are asked for again
+    // only as that starts and ends, which is when there's more of them to show.
+    const staged = useSteadyEntry(entry, withoutWork);
+    const detailed = useSteadyEntry(entry, withWorkStatus);
 
     // Takes the focus as it opens, so it's read out by its name, and again when going to the next
     // one took it away, as Previous does at the first, disabled as it gets there.
@@ -422,16 +469,35 @@ const MediaAsset = ({
         rootRef.current?.focus();
     }, [entry.id]);
 
+    // Back from what's shown over it, the focus goes to the button that opened it, or else to the view.
+    useLayoutEffect(() => {
+        if (wasCovered.current && !covered && focusLost()) {
+            (processRef.current ?? rootRef.current)?.focus();
+        }
+
+        wasCovered.current = covered;
+    }, [covered]);
+
+    // The button going with the focus on it, as the backend takes the work on and there's nothing more
+    // to ask, the view takes the focus, so Escape still goes back.
+    const offered = !!onProcess;
+
+    useEffect(() => {
+        if (!offered && !covered && focusLost()) {
+            rootRef.current?.focus();
+        }
+    }, [offered, covered]);
+
     const items = useMemo<PropertiesItem[]>(
         () => [
             {
-                entry,
+                entry: detailed,
                 adapter,
                 readOnly: section.readOnly,
                 onUpdated,
             },
         ],
-        [entry, adapter, section.readOnly, onUpdated],
+        [detailed, adapter, section.readOnly, onUpdated],
     );
 
     return (
@@ -440,6 +506,7 @@ const MediaAsset = ({
             ref={rootRef}
             tabIndex={-1}
             aria-labelledby={nameId}
+            data-covered={covered}
             sx={rootSx}
             onKeyDown={(event) => {
                 if (event.key === "Escape" && !event.defaultPrevented) {
@@ -462,6 +529,11 @@ const MediaAsset = ({
                 <TooltipIconButton label={text.mediaNextAsset} disabled={!onNext} onClick={onNext}>
                     <Icon name="chevronRight" fontSize="small" />
                 </TooltipIconButton>
+                {onProcess && (
+                    <Button ref={processRef} color="inherit" sx={processSx} onClick={onProcess}>
+                        {text.mediaProcess}
+                    </Button>
+                )}
                 {choosing && (
                     <Button
                         variant={selected ? "contained" : "outlined"}
@@ -478,21 +550,28 @@ const MediaAsset = ({
                     </Button>
                 )}
             </Box>
-            {hold && (
+            {standing && (
                 <Box id={holdId} sx={noticeSx}>
-                    <Typography data-status={hold.status} sx={noticeTextSx}>
-                        <bdi>{hold.text}</bdi>
+                    <Typography data-status={standing.status} sx={noticeTextSx}>
+                        <bdi>{standing.text}</bdi>
                     </Typography>
-                    {hold.detail && (
+                    {standing.detail && (
                         <Typography sx={noticeDetailSx}>
-                            <bdi>{hold.detail}</bdi>
+                            <bdi>{standing.detail}</bdi>
                         </Typography>
                     )}
-                    <HoldBar hold={hold} place="view" />
+                    <HoldBar hold={standing} place="view" />
                 </Box>
             )}
             <Box sx={bodySx}>
-                <Stage key={entry.id} entry={entry} section={section} adapter={adapter} previewers={previewers} />
+                <Stage
+                    key={entry.id}
+                    entry={staged}
+                    listed={entry}
+                    section={section}
+                    adapter={adapter}
+                    previewers={previewers}
+                />
                 <Box sx={detailsSx}>
                     <PropertiesPanel
                         items={items}

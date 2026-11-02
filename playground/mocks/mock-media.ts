@@ -7,6 +7,7 @@ import type {
     AssetState,
     EntryProperties,
     FileAdapter,
+    FileContent,
     FileEntry,
     PropertyValues,
 } from "../../src";
@@ -148,6 +149,67 @@ const framesOf = (entry: FileEntry) => {
 /** The name of a video's poster frame's made-up picture. */
 const frameName = (entry: FileEntry, index: number) => `${entry.name.replace(/\.\w+$/, "")}-${index}.jpg`;
 
+/** The poster taken from a moment of a video, by its id, as this backend keeps it. */
+const takenPosters = new Map<string, { at: number; made: Date; blob: Blob; url: string }>();
+
+// How long a frame may take to be taken before a made-up one stands in, in ms.
+const FRAME_WORK = 5_000;
+
+/** The frame of a video at a moment, as a transcoder would take it, or null when it can't be. */
+const takeFrame = async (content: FileContent, at: number, signal: AbortSignal): Promise<Blob | null> => {
+    const objectUrl = content.blob ? URL.createObjectURL(content.blob) : undefined;
+    const video = document.createElement("video");
+    const until = (event: string) =>
+        new Promise<void>((resolve, reject) => {
+            const timer = window.setTimeout(() => reject(new Error("Too slow.")), FRAME_WORK);
+
+            video.addEventListener(
+                event,
+                () => {
+                    window.clearTimeout(timer);
+                    resolve();
+                },
+                { once: true },
+            );
+            video.addEventListener("error", () => reject(new Error("Unreadable.")), { once: true });
+            signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+
+    try {
+        const loaded = until("loadeddata");
+
+        video.crossOrigin = "anonymous";
+        video.muted = true;
+        video.preload = "auto";
+        video.src = objectUrl ?? content.url ?? "";
+        await loaded;
+
+        const sought = until("seeked");
+
+        video.currentTime = at;
+        await sought;
+
+        const canvas = document.createElement("canvas");
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d")?.drawImage(video, 0, 0);
+
+        return await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    } catch {
+        signal.throwIfAborted();
+
+        return null;
+    } finally {
+        video.removeAttribute("src");
+        video.load();
+
+        if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+        }
+    }
+};
+
 const PICTURE_SIZES = [
     { width: 1920, height: 1080 },
     { width: 1080, height: 1350 },
@@ -184,28 +246,63 @@ const mediaOf = (entry: FileEntry): FileEntry["media"] => {
     return undefined;
 };
 
-/** What each file uploaded here was uploaded with, by its id, and when. */
-const uploads = new Map<string, { values: Readonly<Record<string, unknown>>; at: number }>();
+/**
+ * What each file uploaded here was uploaded with, by its id, and when; or what it was last asked to
+ * be made into since (`again`), which it stays usable through, HLS for the first time included.
+ */
+const uploads = new Map<
+    string,
+    { values: Readonly<Record<string, unknown>>; at: number; again?: boolean; firstStream?: boolean }
+>();
 
-/** Whether a video is streamed as HLS: every one but those uploaded without it. */
-const streamed = (entry: FileEntry) => uploads.get(entry.id)?.values.hls !== false;
+// A video that was never streamed, to make HLS of it from its view with nothing uploaded first.
+const NOT_STREAMED = "drone-harbour.mov";
+
+/** Whether a video is streamed as HLS: every one but that one and those uploaded without it. */
+const streamed = (entry: FileEntry) => {
+    const hls = uploads.get(entry.id)?.values.hls;
+
+    return hls === undefined ? entry.name !== NOT_STREAMED : hls !== false;
+};
+
+/** What a piece of audio was last asked to be made into, by its id, and the transcript it had. */
+const audioJobs = new Map<string, { at: number; language?: string; normalize: boolean; before?: string }>();
+
+// How long a piece of audio takes to be transcribed or evened out, in ms.
+const AUDIO_WORK = 8_000;
+
+/** A piece of audio's transcript: the one being made once it's done, and until then the one it had. */
+const transcriptOf = (entry: FileEntry) => {
+    const job = audioJobs.get(entry.id);
+
+    return job?.language && Date.now() - job.at >= AUDIO_WORK
+        ? `What was said in ${entry.name}, written down in “${job.language}”.`
+        : job?.before;
+};
 
 /**
  * What this backend delivers a video by, which the media manager carries in `meta` without reading
  * it, for the playground's own player and for the app once it's chosen: an HLS manifest, as a
- * transcoding backend hands over, and the poster in use. `sample` is the playground's alone, the
- * MDN clip its stand-in player plays, as there's no HLS server behind the mock.
+ * transcoding backend hands over, once it's made, and the poster in use. `sample` is the playground's
+ * alone, the MDN clip its stand-in player plays, as there's no HLS server behind the mock. A piece of
+ * audio says it has a transcript.
  */
-const metaOf = (entry: FileEntry): FileEntry["meta"] =>
-    isVideo(entry)
+const metaOf = (entry: FileEntry): FileEntry["meta"] => {
+    if (isAudio(entry)) {
+        return transcriptOf(entry) ? { transcript: true } : undefined;
+    }
+
+    return isVideo(entry)
         ? {
-              ...(streamed(entry)
+              ...(streamed(entry) && !(uploads.get(entry.id)?.firstStream && renditionJobs(entry).some(unfinished))
                   ? { hls: `https://cdn.example.com/media${entry.id.replace(/\.\w+$/, "")}/master.m3u8` }
                   : {}),
-              poster: frameUrl(frameName(entry, framesOf(entry).current)),
+              poster: takenPosters.get(entry.id)?.url ?? frameUrl(frameName(entry, framesOf(entry).current)),
+              ...(takenPosters.has(entry.id) ? { posterAt: takenPosters.get(entry.id)?.at } : {}),
               sample: "https://mdn.github.io/shared-assets/videos/flower.mp4",
           }
         : undefined;
+};
 
 const RENDITIONS = ["2160p", "1080p", "720p", "480p", "360p"];
 const LANGUAGE_NAMES = ["English", "Français", "Deutsch", "Español"];
@@ -225,6 +322,8 @@ export interface Track {
     default?: boolean;
     forced?: boolean;
 }
+
+const unfinished = ({ status }: RenditionJob) => status === "queued" || status === "processing";
 
 /** A video's poster: the frames to choose from, and the one in use. */
 export interface PosterChoice {
@@ -254,7 +353,7 @@ const madeSince = (names: string[], since: number): RenditionJob[] => {
 
 /**
  * A video's renditions, as this backend's jobs stand right now: one uploaded here made from when it
- * was, in the qualities it was uploaded with, or none when it isn't streamed.
+ * was, or was asked to be again, in the qualities it was given, or none when it isn't streamed.
  */
 const renditionJobs = (entry: FileEntry): RenditionJob[] => {
     const height = mediaOf(entry)?.height ?? 1080;
@@ -267,6 +366,10 @@ const renditionJobs = (entry: FileEntry): RenditionJob[] => {
         return streamed(entry)
             ? madeSince(Array.isArray(qualities) ? names.filter((name) => qualities.includes(name)) : names, upload.at)
             : [];
+    }
+
+    if (!streamed(entry)) {
+        return [];
     }
 
     if (entry.name === PROCESSING) {
@@ -292,22 +395,43 @@ const CHECK_WORK = 5_000;
  * uploaded here made smaller or turned into another format, with no percent, as that's one quick
  * request; a file uploaded with "broken" in its name failing once it's checked. Nothing once it's
  * done, or for what was never processed. A video whose rendition failed with the others done is
- * usable, as the rest play.
+ * usable, as the rest play. What's asked of an asset since (`process`) leaves it usable meanwhile, as
+ * what it has still works, and a piece of audio being transcribed; one that failed its check
+ * passes it, asked again.
  */
 const processingOf = (entry: FileEntry): AssetProcessing | undefined => {
     const upload = uploads.get(entry.id);
     const since = upload ? Date.now() - upload.at : Infinity;
+    const usable = upload?.again ? { usable: true } : {};
 
     if (upload && /broken/i.test(entry.name)) {
-        return since < CHECK_WORK
-            ? { status: "processing", label: "Checking the file" }
-            : { status: "failed", message: "The file couldn't be decoded, so nothing could be made of it." };
+        if (since < CHECK_WORK) {
+            return { status: "processing", label: "Checking the file" };
+        }
+
+        if (!upload.again) {
+            return { status: "failed", message: "The file couldn't be decoded, so nothing could be made of it." };
+        }
+    }
+
+    if (isAudio(entry)) {
+        const job = audioJobs.get(entry.id);
+        const done = job ? Date.now() - job.at : Infinity;
+
+        return job && done < AUDIO_WORK
+            ? {
+                  status: "processing",
+                  usable: true,
+                  progress: done / AUDIO_WORK,
+                  label: job.language ? "Transcribing" : "Normalizing loudness",
+              }
+            : undefined;
     }
 
     if (isVideo(entry)) {
         const jobs = renditionJobs(entry);
 
-        if (!jobs.some(({ status }) => status === "queued" || status === "processing")) {
+        if (!jobs.some(unfinished)) {
             return undefined;
         }
 
@@ -321,6 +445,7 @@ const processingOf = (entry: FileEntry): AssetProcessing | undefined => {
             status: "processing",
             progress: done / jobs.length,
             label: under ? `Making the ${under.name} rendition` : "Waiting for the transcoder",
+            ...usable,
         };
     }
 
@@ -328,15 +453,15 @@ const processingOf = (entry: FileEntry): AssetProcessing | undefined => {
         const { format, optimize, responsive } = upload.values;
 
         if (typeof format === "string" && format && entry.mimeType !== `image/${format}`) {
-            return { status: "processing", label: `Converting to ${format.toUpperCase()}` };
+            return { status: "processing", label: `Converting to ${format.toUpperCase()}`, ...usable };
         }
 
         if (responsive) {
-            return { status: "processing", label: "Making responsive sizes" };
+            return { status: "processing", label: "Making responsive sizes", ...usable };
         }
 
         if (optimize) {
-            return { status: "processing", label: "Optimizing" };
+            return { status: "processing", label: "Optimizing", ...usable };
         }
     }
 
@@ -346,6 +471,8 @@ const processingOf = (entry: FileEntry): AssetProcessing | undefined => {
 /** An asset as this backend lists it: what it's like, how it's delivered, and its processing. */
 const listedAs = (entry: FileEntry): FileEntry => ({
     ...entry,
+    // A new poster is a change to the asset, so its thumbnail is asked for again.
+    modifiedAt: takenPosters.get(entry.id)?.made ?? entry.modifiedAt,
     media: mediaOf(entry),
     meta: metaOf(entry),
     processing: processingOf(entry),
@@ -406,11 +533,15 @@ const propertiesOf = (entry: FileEntry, key: string, stock: boolean): EntryPrope
         });
     } else if (isVideo(entry)) {
         const { count, current } = framesOf(entry);
+        const taken = takenPosters.get(entry.id);
 
         Object.assign(values, {
             poster: {
-                frames: Array.from({ length: count }, (_, index) => frameUrl(frameName(entry, index))),
-                current,
+                frames: [
+                    ...Array.from({ length: count }, (_, index) => frameUrl(frameName(entry, index))),
+                    ...(taken ? [taken.url] : []),
+                ],
+                current: taken ? count : current,
             } satisfies PosterChoice,
             renditions: renditionJobs(entry),
             audioTracks: LANGUAGE_NAMES.slice(0, 1 + (hash % 3)).map(
@@ -424,6 +555,7 @@ const propertiesOf = (entry: FileEntry, key: string, stock: boolean): EntryPrope
         });
     } else if (isAudio(entry)) {
         values.bitrate = [128, 192, 256, 320][hash % 4];
+        values.transcript = transcriptOf(entry) ?? "";
     } else {
         values.pages = 2 + (hash % 60);
     }
@@ -438,7 +570,7 @@ const propertiesOf = (entry: FileEntry, key: string, stock: boolean): EntryPrope
  */
 const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
     ...adapter,
-    // Keeps what each file was uploaded with, which the media manager's upload fields held, as this
+    // Keeps what each file was uploaded with, which the library's upload form held, as this
     // backend acts on it: a video streamed or not, in the qualities chosen, a picture turned into
     // another format.
     upload: async (file, folderId, options) => {
@@ -450,6 +582,78 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
 
         return entry && listedAs(entry);
     },
+    // Takes on what's asked of an asset already uploaded, which its process form held, refusing
+    // nothing ticked, to see it refused: from now on its listing says it's being processed. A video
+    // stops being streamed at once, and its poster is taken before this answers, as neither is long.
+    process: (entry, values, { signal }) =>
+        wait(300, signal).then(async () => {
+            const before = uploads.get(entry.id);
+
+            if (isAudio(entry)) {
+                if (!values.transcribe && !values.normalize) {
+                    throw new Error("Tick what to make of it first.");
+                }
+
+                audioJobs.set(entry.id, {
+                    at: Date.now(),
+                    language: values.transcribe ? String(values.language || "en") : undefined,
+                    normalize: !!values.normalize,
+                    before: transcriptOf(entry),
+                });
+
+                return;
+            }
+
+            if (isVideo(entry)) {
+                const streaming = !!entry.meta?.hls;
+                const make = !!values.hls && (!streaming || !!values.remake);
+                const stop = streaming && !values.hls;
+                const posterAt = typeof values.posterAt === "number" ? values.posterAt : undefined;
+
+                if (!make && !stop && posterAt === undefined) {
+                    throw new Error("Change something first: HLS, its renditions or the poster.");
+                }
+
+                if (posterAt !== undefined) {
+                    const content = await adapter.content?.(entry, { signal, purpose: "preview", onProgress: () => {} });
+                    const frame = content && (await takeFrame(content, posterAt, signal));
+                    const blob = frame ?? (thumbnailSource(`${frameName(entry, 0)}@${posterAt}`, "image/jpeg") as Blob);
+                    const key = `${readOnly}:${entry.id}`;
+                    const saved = { ...savedValues.get(key) };
+
+                    // It's the poster in use now, over a frame picked before.
+                    delete saved.poster;
+                    savedValues.set(key, saved);
+                    takenPosters.set(entry.id, {
+                        at: posterAt,
+                        made: new Date(),
+                        blob,
+                        url: URL.createObjectURL(blob),
+                    });
+                }
+
+                if (make || stop) {
+                    uploads.set(entry.id, {
+                        values: { ...before?.values, ...values },
+                        at: Date.now(),
+                        again: true,
+                        firstStream: make && !streaming,
+                    });
+                }
+
+                return;
+            }
+
+            if (!values.responsive && !values.optimize && !values.format) {
+                throw new Error("Tick what to make of it first.");
+            }
+
+            uploads.set(entry.id, {
+                values: { ...before?.values, ...values },
+                at: Date.now(),
+                again: true,
+            });
+        }),
     list: (folderId, options) =>
         adapter.list(folderId, options).then((result) => ({
             ...result,
@@ -475,7 +679,13 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
     thumbnail: (entry, options) =>
         isVideo(entry)
             ? wait(200 + (hashOf(entry.name) % 400), options.signal)
-                  .then(() => shrink(thumbnailSource(frameName(entry, framesOf(entry).current)) as Blob, options.size))
+                  .then(() =>
+                      shrink(
+                          takenPosters.get(entry.id)?.blob ??
+                              (thumbnailSource(frameName(entry, framesOf(entry).current)) as Blob),
+                          options.size,
+                      ),
+                  )
                   .then((blob) => blob && { blob })
             : (adapter.thumbnail?.(entry, options) ?? Promise.resolve(null)),
     properties: (entry, { signal }) =>

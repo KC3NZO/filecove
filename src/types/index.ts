@@ -59,9 +59,14 @@ export type {
     AssetStates,
     FollowedAssets,
     MediaChoice,
+    MediaForm,
+    MediaFormParams,
     MediaKind,
+    MediaPickFormParams,
+    MediaProcessFormParams,
     MediaSection,
     MediaSectionGroup,
+    MediaUploadFormParams,
 } from "./media";
 export type {
     EntryGroup,

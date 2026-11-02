@@ -561,6 +561,10 @@ export const enUS: LocaleText = {
     mediaProcessing: "Processing",
     mediaProcessingFailed: "Processing failed",
     mediaUnavailable: "Can't be chosen",
+    mediaProcess: "Process",
+    mediaProcessTitle: (name) => `Process “${name}”`,
+    mediaBackToAsset: (name) => `Back to “${name}”`,
+    mediaProcessFailed: "Couldn't start processing this file.",
     mediaChoicesProcessing: (count) =>
         count === 1 ? "Waiting for 1 to finish processing" : `Waiting for ${count} to finish processing`,
     mediaChoicesUnavailable: (count) =>

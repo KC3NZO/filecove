@@ -34,6 +34,8 @@ interface MediaRowProps {
      * processed: it isn't selected then, but is opened.
      */
     hold: AssetHold | undefined;
+    /** The backend's work on it while it can be chosen all the same, shown the same way, unfaded. */
+    work: AssetHold | undefined;
     /** Whether the row has the list's Tab stop. */
     focused: boolean;
     onPress: (index: number, event: MouseEvent) => void;
@@ -138,6 +140,7 @@ const MediaRow = memo(
         index,
         selected,
         hold,
+        work,
         focused,
         onPress,
         onActivate,
@@ -149,6 +152,7 @@ const MediaRow = memo(
         const cover = useThumbnail(entry, adapter, "list", AUDIO_ROW);
         const duration = entry.media?.duration;
         const detail = [describeType(entry), ...(entry.size !== undefined ? [formatSize(entry.size)] : [])];
+        const standing = hold ?? work;
 
         return (
             <Box
@@ -172,10 +176,10 @@ const MediaRow = memo(
                     <Typography variant="body2" noWrap>
                         {entry.name}
                     </Typography>
-                    {hold ? (
+                    {standing ? (
                         <>
-                            <HoldLine hold={hold} />
-                            <HoldBar hold={hold} place="row" />
+                            <HoldLine hold={standing} />
+                            <HoldBar hold={standing} place="row" />
                         </>
                     ) : (
                         <Typography variant="caption" noWrap sx={detailSx}>

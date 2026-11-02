@@ -17,7 +17,7 @@ interface UploadBase {
     /** The folder it goes into. */
     folder: FolderRef;
     conflict: ConflictPolicy;
-    /** What the library's upload fields held for it, handed to the adapter's `upload` (`UploadOptions.values`). */
+    /** What the library's upload form held for it, handed to the adapter's `upload` (`UploadOptions.values`). */
     values?: Readonly<Record<string, unknown>>;
     status: UploadStatus;
     /** How much has been sent, from 0 to 1, once the adapter has reported any. */

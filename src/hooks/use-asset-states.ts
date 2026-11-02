@@ -36,7 +36,7 @@ const sameState = (a: AssetState | undefined, b: AssetState) => {
         return a.status === "ready" && b.status === "ready" && a.entry === b.entry;
     }
 
-    return a.progress === b.progress && a.label === b.label && a.message === b.message;
+    return a.progress === b.progress && a.label === b.label && a.message === b.message && a.usable === b.usable;
 };
 
 type Merge = (adapter: FileAdapter, states: Iterable<[string, AssetState]>) => boolean;
