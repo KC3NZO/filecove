@@ -48,6 +48,8 @@ interface ChoiceRowProps {
     lifted: boolean;
     /** Whether it's being dragged. */
     dragged: boolean;
+    /** Whether another is being dragged, which it slides to make room for. */
+    sliding: boolean;
     /** How far it's moved up or down while one is dragged, in px: the one dragged, or one making room. */
     shift: number;
     hasDetails: boolean;
@@ -104,9 +106,7 @@ const SCROLL_STEP = 10;
 
 export const choiceKey = ({ asset, section }: MediaChoice) => `${section.id}\u0000${asset.id}`;
 
-// One under the other, scrolling once they're taller than the column. While one is dragged, the
-// others slide to make room for it; with no drag, they don't, so the order changing as it's
-// dropped doesn't slide.
+// One under the other, scrolling once they're taller than the column.
 const listSx: SxProps<Theme> = {
     display: "flex",
     flexDirection: "column",
@@ -119,10 +119,14 @@ const listSx: SxProps<Theme> = {
     listStyle: "none",
     overflowY: "auto",
     '&[data-dragging="true"]': { cursor: "grabbing" },
-    '&[data-dragging="true"] > li:not([data-dragged="true"])': { transition: "transform 150ms ease-out" },
     "@media (prefers-reduced-motion: reduce)": { "& > li": { transition: "none !important" } },
 };
 
+// While one is dragged, the others slide to make room for it; with no drag, they don't, so the
+// order changing as it's dropped doesn't slide. Each row says so itself, its transform and its
+// slide changing together: moving the focused row's element makes the browser work out the styles
+// partway through React's changes, when a row has lost its transform but the list would still say
+// it's dragging.
 const rowSx: SxProps<Theme> = (theme) => ({
     position: "relative",
     display: "flex",
@@ -132,6 +136,7 @@ const rowSx: SxProps<Theme> = (theme) => ({
     borderRadius: 2,
     bgcolor: "background.paper",
     "&:hover": { bgcolor: hoverBackground(theme) },
+    '&[data-sliding="true"]': { transition: "transform 150ms ease-out" },
     '&[data-dragged="true"]': { zIndex: 1, boxShadow: 6 },
     '&[data-dragged="true"], &[data-dragged="true"]:hover': { bgcolor: "background.paper" },
     [forcedColors]: { '&[data-dragged="true"]': { outline: "2px solid Highlight" } },
@@ -214,6 +219,7 @@ const ChoiceRow = ({
     tabStop,
     lifted,
     dragged,
+    sliding,
     shift,
     hasDetails,
     problems,
@@ -237,6 +243,7 @@ const ChoiceRow = ({
             component="li"
             data-choice-index={index}
             data-dragged={dragged}
+            data-sliding={sliding}
             sx={rowSx}
             style={shift ? { transform: `translateY(${shift}px)` } : undefined}
         >
@@ -747,6 +754,7 @@ const ChoiceList = ({
                         tabStop={keys[index] === tabStop}
                         lifted={lifted?.key === keys[index]}
                         dragged={drag?.key === keys[index]}
+                        sliding={!!drag && drag.key !== keys[index]}
                         shift={shiftOf(index)}
                         hasDetails={hasDetails}
                         problems={problemsOf?.(choice) ?? 0}
