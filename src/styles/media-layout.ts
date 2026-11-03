@@ -1,3 +1,5 @@
+import type { MediaKind } from "../types";
+
 /*
  * The media manager lays itself out from its own width, as the file manager does, through a named
  * container of its own, so one placed inside the other, or beside it, follows its own box.
@@ -38,17 +40,18 @@ export interface TileLayout {
 }
 
 /**
- * Each kind shown as tiles: pictures square, videos as wide as a screen, documents as tall as a
- * page. Audio has rows instead (`AUDIO_ROW`).
+ * Each kind's tiles: pictures square, videos as wide as a screen, documents as tall as a page, and
+ * audio as square as a cover.
  */
-export const TILE_LAYOUTS: Record<"image" | "video" | "document", TileLayout> = {
+export const TILE_LAYOUTS: Record<MediaKind, TileLayout> = {
     image: { min: 8.5, ratio: "1", thumbnail: 11 },
     video: { min: 13, ratio: "16 / 9", thumbnail: 17 },
     document: { min: 8.5, ratio: "3 / 4", thumbnail: 11 },
+    audio: { min: 8.5, ratio: "1", thumbnail: 11 },
 };
 
-/** The side of an audio row's square, its cover or its icon, in rem. */
-export const AUDIO_ROW = 2.75;
+/** The side of a row's square, its picture or its icon, in rem. */
+export const ROW_PICTURE = 2.75;
 
 /** The side of a picture in the selected column, in rem. */
 export const CHOICE_THUMBNAIL = 3;

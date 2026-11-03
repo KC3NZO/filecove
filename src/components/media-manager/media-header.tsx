@@ -14,7 +14,7 @@ import { mediaMedium } from "../../styles/media-layout";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import Icon from "../icons/icon";
 
-import type { MediaSection } from "../../types";
+import type { MediaLayout, MediaSection } from "../../types";
 
 interface MediaHeaderProps {
     section: MediaSection | undefined;
@@ -26,6 +26,9 @@ interface MediaHeaderProps {
     onOpenLibraries: () => void;
     query: string;
     onQueryChange: (query: string) => void;
+    /** The layout its button switches to, while the library offers another. */
+    otherLayout: MediaLayout | undefined;
+    onSwitchLayout: () => void;
     /** Picks files to upload into the library; missing while it takes none. */
     onUpload: (() => void) | undefined;
     uploadRef: Ref<HTMLButtonElement>;
@@ -73,7 +76,7 @@ const uploadSx: SxProps<Theme> = {
 
 /**
  * Above the library: the button opening the libraries where they don't dock, its name, the search,
- * and Upload, while the library takes files.
+ * the button switching its layout, while it offers another, and Upload, while it takes files.
  */
 const MediaHeader = ({
     section,
@@ -83,6 +86,8 @@ const MediaHeader = ({
     onOpenLibraries,
     query,
     onQueryChange,
+    otherLayout,
+    onSwitchLayout,
     onUpload,
     uploadRef,
 }: MediaHeaderProps) => {
@@ -127,6 +132,14 @@ const MediaHeader = ({
                         </TooltipIconButton>
                     )}
                 </Box>
+                {otherLayout && (
+                    <TooltipIconButton
+                        label={otherLayout === "grid" ? text.gridView : text.listView}
+                        onClick={onSwitchLayout}
+                    >
+                        <Icon name={otherLayout === "grid" ? "gridView" : "listView"} fontSize="small" />
+                    </TooltipIconButton>
+                )}
                 {onUpload && (
                     <Button
                         ref={uploadRef}

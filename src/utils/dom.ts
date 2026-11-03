@@ -11,6 +11,23 @@ export const scrollParent = (element: HTMLElement) => {
     return null;
 };
 
+/**
+ * Where in a list, directly inside what scrolls it, the first item in view is, to find again once
+ * its items change size; null while it isn't scrolled, so it stays at its top.
+ */
+export const firstInView = (list: Element | null | undefined) => {
+    const scroller = list?.parentElement;
+
+    if (!list || !scroller || scroller.scrollTop === 0) {
+        return null;
+    }
+
+    const { top } = scroller.getBoundingClientRect();
+    const index = Array.from(list.children).findIndex((item) => item.getBoundingClientRect().bottom > top);
+
+    return index === -1 ? null : index;
+};
+
 /** How many tracks a grid container lays out in each row. */
 export const gridColumns = (element: Element) =>
     getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length || 1;

@@ -11,6 +11,7 @@ import type {
     IconName,
     Locale,
     MediaKind,
+    MediaLayout,
     MediaSection,
     MediaUploadCheck,
     RefusedName,
@@ -23,6 +24,10 @@ export const KIND_ICONS: Record<MediaKind, IconName> = {
     audio: "music",
     document: "documents",
 };
+
+/** The layouts a library offers, the first as it starts: its own, or its kind's only one. */
+export const layoutsOf = (section: MediaSection): readonly MediaLayout[] =>
+    section.layouts?.length ? section.layouts : [section.kind === "audio" ? "list" : "grid"];
 
 /**
  * Sorts what was picked, dropped or pasted into a library before anything is sent: files of types it

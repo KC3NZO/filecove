@@ -10,11 +10,12 @@ import { useAnnouncer } from "../../hooks/use-announcer";
 import { useAssetStates } from "../../hooks/use-asset-states";
 import { useData, useFolder } from "../../hooks/use-folder";
 import { useLocale } from "../../hooks/use-locale";
+import { useSetting } from "../../hooks/use-setting";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { CHOICES_WIDTH, mediaMedium, mediaWide } from "../../styles/media-layout";
 import { focusOutline, selectedBackground, visuallyHiddenSx } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
-import { focusLost } from "../../utils/dom";
+import { firstInView, focusLost } from "../../utils/dom";
 import { NO_ERRORS, choiceMessages, countErrorsAt } from "../../utils/field-errors";
 import { carriesFiles, filesIn, mayAccept, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
@@ -22,6 +23,7 @@ import { countLimit } from "../../utils/limits";
 import {
     checkMediaUpload,
     holdOf,
+    layoutsOf,
     withState,
     workOf,
 } from "../../utils/media";
@@ -55,6 +57,8 @@ import type {
     MediaAssetDraw,
     MediaAssetParams,
     MediaChoice,
+    MediaLayout,
+    MediaLayouts,
     MediaPickForm,
     MediaProcessForm,
     MediaSection,
@@ -81,6 +85,11 @@ export interface MediaFrameProps {
     previewers: readonly FilePreviewer[] | undefined;
     /** Draws the assets of the libraries with no `renderAsset` of their own. */
     renderAsset: ((params: MediaAssetParams) => ReactNode) | undefined;
+    /** The layout each library is shown in, when the app keeps them. */
+    layout: MediaLayouts | undefined;
+    /** Where the libraries' layouts start, while it doesn't. */
+    defaultLayout: MediaLayouts | undefined;
+    onLayoutChange: ((layout: MediaLayouts) => void) | undefined;
     /** What's selected as it mounts. */
     defaultValue: readonly MediaChoice[] | undefined;
     /** The app's backend's errors, for the picks and their forms, as the app passed them. */
@@ -153,6 +162,9 @@ const NO_ERROR_KEYS: readonly string[] = [];
 // again is too, and they go on following the form.
 const DEFAULTED = new WeakSet<MediaChoice>();
 const NO_PREVIEWERS: readonly FilePreviewer[] = [];
+const NO_LAYOUTS: MediaLayouts = {};
+// What's offered with no library to show.
+const NO_SECTION_LAYOUTS: readonly MediaLayout[] = ["grid"];
 const NO_ARRIVALS: readonly Arrival[] = [];
 const NO_UPLOADS: readonly FileUploadItem[] = [];
 const NO_LIBRARIES: ReadonlyMap<number, string> = new Map();
@@ -332,6 +344,9 @@ const MediaFrame = ({
     properties,
     previewers = NO_PREVIEWERS,
     renderAsset,
+    layout: layoutProp,
+    defaultLayout = NO_LAYOUTS,
+    onLayoutChange,
     defaultValue,
     errors,
     choiceErrorKey,
@@ -1416,6 +1431,45 @@ const MediaFrame = ({
         () => (section && sectionRenderAsset ? (params) => sectionRenderAsset({ ...params, section }) : undefined),
         [section, sectionRenderAsset],
     );
+    const [layouts, setLayouts] = useSetting<MediaLayouts>({
+        name: "layout",
+        component: "MediaManager",
+        value: layoutProp,
+        defaultValue: defaultLayout,
+        onChange: onLayoutChange,
+    });
+    const offeredLayouts = section ? layoutsOf(section) : NO_SECTION_LAYOUTS;
+    const chosenLayout = section ? layouts[section.id] : undefined;
+    const layout = chosenLayout && offeredLayouts.includes(chosenLayout) ? chosenLayout : offeredLayouts[0];
+    const otherLayout = offeredLayouts.find((each) => each !== layout);
+    // The asset at the top of the library as its layout is switched, to scroll back to in the new one.
+    const layoutAnchorRef = useRef<number | null>(null);
+
+    const switchLayout = () => {
+        if (section && otherLayout) {
+            layoutAnchorRef.current = firstInView(panelRef.current?.querySelector('[role="listbox"]'));
+            setLayouts((current) => ({ ...current, [section.id]: otherLayout }));
+        }
+    };
+
+    useLayoutEffect(() => {
+        const index = layoutAnchorRef.current;
+
+        layoutAnchorRef.current = null;
+
+        if (index === null) {
+            return;
+        }
+
+        const list = panelRef.current?.querySelector('[role="listbox"]');
+        const item = list?.querySelector(`[data-index="${index}"]`);
+        const scroller = list?.parentElement;
+
+        if (item && scroller) {
+            scroller.scrollTop += item.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        }
+    }, [layout]);
+
     const sectionPreviewers = useMemo(
         () => (section?.previewers ? [...section.previewers, ...previewers] : previewers),
         [section?.previewers, previewers],
@@ -1538,6 +1592,9 @@ const MediaFrame = ({
                     onOpenLibraries={() => setLibrariesOpen(true)}
                     query={query}
                     onQueryChange={setQuery}
+                    // Nothing to switch while an asset or a step is shown in the library's place.
+                    otherLayout={viewed || shownStep ? undefined : otherLayout}
+                    onSwitchLayout={switchLayout}
                     onUpload={takesFiles ? () => pickerRef.current?.click() : undefined}
                     uploadRef={uploadButtonRef}
                 />
@@ -1574,6 +1631,7 @@ const MediaFrame = ({
                                 entries={shownEntries}
                                 uploads={shownUploads}
                                 kind={section.kind}
+                                layout={layout}
                                 adapter={sectionAdapter}
                                 drawAsset={drawAsset}
                                 label={section.label}
@@ -1603,6 +1661,7 @@ const MediaFrame = ({
                         <MediaAsset
                             entry={viewed.entry}
                             section={section}
+                            layout={layout}
                             adapter={sectionAdapter}
                             choosing={choosing}
                             selected={selectedIds.has(viewed.entry.id)}

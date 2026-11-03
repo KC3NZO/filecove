@@ -26,6 +26,7 @@ import type {
     FilePreviewer,
     MediaAssetParams,
     MediaChoice,
+    MediaLayouts,
     MediaManagerLocaleText,
     MediaPickForm,
     MediaSection,
@@ -106,6 +107,16 @@ interface BaseProps<V> extends RootAttributes {
      * `MediaSection.renderAsset`. Keep it outside the component, or memoized.
      */
     renderAsset?: (params: MediaAssetParams) => ReactNode;
+    /**
+     * The layout each library is shown in, of those it offers (`MediaSection.layouts`), by its `id`, for
+     * an app keeping what the user switched to across visits. Change it in `onLayoutChange`; leave it
+     * out for the media manager to keep it, starting from `defaultLayout`.
+     */
+    layout?: MediaLayouts;
+    /** Where the libraries' layouts start, while `layout` isn't passed. */
+    defaultLayout?: MediaLayouts;
+    /** Told every library's layout, as the user switches one. */
+    onLayoutChange?: (layout: MediaLayouts) => void;
     /**
      * What's selected as it mounts, with what the app's form held for each, such as a product's
      * carousel being edited, in its order. Each is matched to its library by `section.id`.
@@ -212,6 +223,9 @@ const MediaManager = <V,>({
     properties,
     previewers,
     renderAsset,
+    layout,
+    defaultLayout,
+    onLayoutChange,
     defaultValue,
     errors = NO_ERRORS,
     choiceErrorKey,
@@ -257,6 +271,9 @@ const MediaManager = <V,>({
                             properties={properties}
                             previewers={previewers}
                             renderAsset={renderAsset}
+                            layout={layout}
+                            defaultLayout={defaultLayout}
+                            onLayoutChange={onLayoutChange}
                             defaultValue={defaultValue as readonly MediaChoice[] | undefined}
                             errors={errors}
                             choiceErrorKey={choiceErrorKey}

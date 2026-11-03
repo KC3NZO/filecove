@@ -67,6 +67,8 @@ export type {
     MediaFormRefusal,
     MediaFormState,
     MediaKind,
+    MediaLayout,
+    MediaLayouts,
     MediaPickForm,
     MediaPickFormParams,
     MediaProcessForm,

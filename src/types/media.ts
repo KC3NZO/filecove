@@ -8,10 +8,20 @@ import type { FieldErrors, PropertyDefinitionGroup } from "./property-definition
 import type { Section } from "./section";
 
 /**
- * The one kind of asset a media manager's library holds, which only decides the shape of its
- * tiles: pictures square, videos wide with their length, audio as rows, documents as pages.
+ * The one kind of asset a media manager's library holds, which decides the shape of its tiles
+ * (pictures square, videos wide with their length, audio square, documents as pages) and how it's
+ * shown unless it says otherwise (`MediaSection.layouts`): audio as rows, the others as tiles.
  */
 export type MediaKind = "image" | "video" | "audio" | "document";
+
+/** How a library shows its assets: as tiles in a grid, or as rows in a list. */
+export type MediaLayout = "grid" | "list";
+
+/**
+ * The layout the user is shown each library in, of those it offers (`MediaSection.layouts`), by its
+ * `id`. A library left out, or set to one it doesn't offer, shows the first it offers.
+ */
+export type MediaLayouts = Readonly<Record<string, MediaLayout>>;
 
 /**
  * What the app's form is handed each time it's drawn. The media manager keeps what it holds, and the
@@ -138,14 +148,16 @@ export interface MediaFormRefusal extends Error {
  */
 export interface MediaAssetParams {
     asset: FileEntry;
-    /** Its library's kind, which it's drawn as: a tile in the kind's shape, or a row for audio. */
+    /** Its library's kind. */
     kind: MediaKind;
+    /** What it's drawn as now: a tile (`MediaTile`), or a row (`MediaRow`). */
+    layout: MediaLayout;
     section: MediaSection;
     /** Its library's adapter, its own or the media manager's. */
     adapter: FileAdapter;
     /**
-     * The URL of its picture, as the adapter's `thumbnail` gave it for the kind's size, once it has
-     * loaded; null until then, and for an asset with none. Cached and asked for a few at a time, so
+     * The URL of its picture, as the adapter's `thumbnail` gave it for the layout and the kind's size,
+     * once it has loaded; null until then, and for an asset with none. Cached and asked for a few at a time, so
      * use this rather than asking the adapter.
      */
     thumbnail: string | null;
@@ -190,6 +202,13 @@ export interface MediaSection
     extends Pick<Section, "id" | "label" | "icon" | "rootId" | "adapter" | "readOnly" | "acceptUploads"> {
     kind: MediaKind;
     /**
+     * How this library may show its assets, the first as it starts: `["list"]` only as rows,
+     * `["grid", "list"]` as tiles with a button in the header switching to rows. Without it, there's
+     * no button, and audio shows as rows and the others as tiles. What the user switches to can be
+     * kept across visits with `MediaManager`'s `layout` and `onLayoutChange`.
+     */
+    layouts?: readonly MediaLayout[];
+    /**
      * How this library's assets are shown as one is opened, as its backend delivers them: an HLS
      * player for a backend handing over a manifest in `FileEntry.meta`, say. Asked before the media
      * manager's own `previewers`, in order; the asset's thumbnail when none accepts it. The media
@@ -205,7 +224,8 @@ export interface MediaSection
     properties?: PropertyDefinitionGroup[];
     /**
      * Draws this library's assets, in place of the media manager's `renderAsset` and its own look.
-     * Return `MediaTile` or `MediaRow` with what to change, for a small change, or anything else. It
+     * Return `MediaTile` or `MediaRow` with what to change, for a small change, or anything else, going
+     * by `layout` if the library offers both. It
      * only draws: selecting, the keys, the check and the Open button at a tile's top corners or a
      * row's end stay the media manager's, as does why an asset can't be chosen, under what it draws,
      * so it's for showing, with no buttons or links of its own. May use hooks. Every asset of a

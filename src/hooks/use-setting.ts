@@ -5,6 +5,8 @@ import { useControlled } from "@mui/material/utils";
 interface SettingOptions<T> {
     /** Names the setting in MUI's warnings about switching between controlled and not. */
     name: string;
+    /** Names the component in those warnings; `FileManager` when omitted. */
+    component?: string;
     /** The consumer's value, when they control it. */
     value: T | undefined;
     defaultValue: T;
@@ -20,11 +22,18 @@ interface SettingOptions<T> {
  * it to what it is does nothing. It's set to a value, or with a function of the value as of the
  * latest render.
  */
-export const useSetting = <T>({ name, value, defaultValue, onChange, equal = Object.is }: SettingOptions<T>) => {
+export const useSetting = <T>({
+    name,
+    component = "FileManager",
+    value,
+    defaultValue,
+    onChange,
+    equal = Object.is,
+}: SettingOptions<T>) => {
     const [current, setOwn] = useControlled({
         controlled: value,
         default: defaultValue,
-        name: "FileManager",
+        name: component,
         state: name,
     });
     const latest = useRef({ current, onChange, equal });

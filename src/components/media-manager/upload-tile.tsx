@@ -7,18 +7,20 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
 import { mirroredBarSx } from "../../styles/direction";
-import { AUDIO_ROW, TILE_LAYOUTS } from "../../styles/media-layout";
+import { ROW_PICTURE, TILE_LAYOUTS } from "../../styles/media-layout";
 import { forcedBarSx } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 
-import type { FileUploadItem, MediaKind } from "../../types";
+import type { FileUploadItem, MediaKind, MediaLayout } from "../../types";
 
 interface UploadTileProps {
     item: FileUploadItem;
-    /** The library's kind, whose tiles' shape it takes, or a row for audio. */
+    /** The library's kind, whose tiles' shape it takes. */
     kind: MediaKind;
+    /** How the library shows its assets: as tiles, or as rows. */
+    layout: MediaLayout;
 }
 
 const tileSx: SxProps<Theme> = {
@@ -59,10 +61,11 @@ const frameSx = (ratio: string): SxProps<Theme> => ({
     "& > svg": { opacity: 0.55 },
 });
 
-const FRAME_SX: Record<keyof typeof TILE_LAYOUTS, SxProps<Theme>> = {
+const FRAME_SX: Record<MediaKind, SxProps<Theme>> = {
     image: frameSx(TILE_LAYOUTS.image.ratio),
     video: frameSx(TILE_LAYOUTS.video.ratio),
     document: frameSx(TILE_LAYOUTS.document.ratio),
+    audio: frameSx(TILE_LAYOUTS.audio.ratio),
 };
 
 const coverSx: SxProps<Theme> = {
@@ -70,11 +73,13 @@ const coverSx: SxProps<Theme> = {
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
-    width: `${AUDIO_ROW}rem`,
-    height: `${AUDIO_ROW}rem`,
+    width: `${ROW_PICTURE}rem`,
+    height: `${ROW_PICTURE}rem`,
     borderRadius: 1.5,
+    overflow: "hidden",
     bgcolor: "action.hover",
     color: "text.secondary",
+    "& > img": { width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 },
     "& > svg": { opacity: 0.55 },
 };
 
@@ -112,13 +117,14 @@ const statusSx: SxProps<Theme> = {
 };
 
 /**
- * A file being uploaded into the open library, shown before its assets as a tile of the library's
- * shape, or a row for audio: the picture itself when it's one, else its icon, faded, with how far
+ * A file being uploaded into the open library, shown before its assets as they are, as a tile of the
+ * library's shape or a row: the picture itself when it's one, else its icon, faded, with how far
  * it's got. It's no asset yet, so it can't be selected or opened; the upload panel cancels it.
  */
-const UploadTile = ({ item, kind }: UploadTileProps) => {
+const UploadTile = ({ item, kind, layout }: UploadTileProps) => {
     const { text, formatPercent } = useLocale();
     const { file, status, progress } = item;
+    const row = layout === "list";
     const picture = kind === "image" && file.type.startsWith("image/");
     const [url, setUrl] = useState<string>();
 
@@ -149,15 +155,21 @@ const UploadTile = ({ item, kind }: UploadTileProps) => {
             variant={status === "done" || progress !== undefined ? "determinate" : "indeterminate"}
             value={status === "done" ? 100 : (progress ?? 0) * 100}
             aria-label={text.mediaUploadingFile(isolate(file.name))}
-            sx={kind === "audio" ? rowBarSx : frameBarSx}
+            sx={row ? rowBarSx : frameBarSx}
         />
     );
 
-    if (kind === "audio") {
+    if (row) {
         return (
             <Box component="li" sx={rowSx}>
                 <Box sx={coverSx}>
-                    <Icon name="music" />
+                    {url ? (
+                        <img src={url} alt="" draggable={false} onError={() => setUrl(undefined)} />
+                    ) : kind === "audio" ? (
+                        <Icon name="music" />
+                    ) : (
+                        <FileTypeIcon fileName={file.name} size="60%" />
+                    )}
                 </Box>
                 <Box sx={rowTextSx}>
                     <Typography variant="body2" noWrap sx={nameSx}>

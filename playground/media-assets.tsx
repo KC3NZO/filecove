@@ -2,7 +2,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { MediaRow } from "../src";
+import { MediaRow, MediaTile } from "../src";
 
 import type { MediaAssetParams } from "../src";
 
@@ -33,13 +33,17 @@ const creditSx: SxProps<Theme> = {
  * This site's audio as the media manager draws it, but for a podcast's episodes, which go by their
  * title and show, as this backend hands them over in `meta`, rather than the file's name and type.
  */
-export const renderAudio = (params: MediaAssetParams) => (
-    <MediaRow
-        {...params}
-        title={params.asset.meta?.title as string | undefined}
-        detail={params.asset.meta?.show as string | undefined}
-    />
-);
+export const renderAudio = (params: MediaAssetParams) => {
+    const Look = params.layout === "list" ? MediaRow : MediaTile;
+
+    return (
+        <Look
+            {...params}
+            title={params.asset.meta?.title as string | undefined}
+            detail={params.asset.meta?.show as string | undefined}
+        />
+    );
+};
 
 /**
  * Stock photos drawn entirely by the playground, wider, with whom they're from. The check, the Open

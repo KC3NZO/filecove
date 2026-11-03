@@ -7,6 +7,7 @@ import { useLocale } from "../../hooks/use-locale";
 import { TILE_LAYOUTS } from "../../styles/media-layout";
 import { forcedColors, visuallyHiddenSx } from "../../styles/mixins";
 import { withSx } from "../../styles/sx";
+import { KIND_ICONS } from "../../utils/media";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 import { HoldBar, HoldLine } from "./asset-hold";
@@ -42,12 +43,11 @@ const frameSx = (ratio: string): SxProps<Theme> => ({
     [forcedColors]: { "[role='option'][aria-selected='true'] &": { outlineColor: "HighlightText" } },
 });
 
-// Audio has rows, but a tile of it, drawn by an app, is as square as a cover.
 const FRAME_SX: Record<MediaKind, SxProps<Theme>> = {
     image: frameSx(TILE_LAYOUTS.image.ratio),
     video: frameSx(TILE_LAYOUTS.video.ratio),
     document: frameSx(TILE_LAYOUTS.document.ratio),
-    audio: frameSx("1"),
+    audio: frameSx(TILE_LAYOUTS.audio.ratio),
 };
 
 const pictureBoxSx: SxProps<Theme> = {
@@ -66,7 +66,7 @@ const pictureSx: SxProps<Theme> = {
     '[data-kind="document"] &': { objectPosition: "top" },
 };
 
-// A video's length, when the listing says it, or the app's own badge, at the frame's bottom start
+// A video's or a piece of audio's length, when the listing says it, or the app's own badge, at the frame's bottom start
 // corner, on the panel's own surface, so it reads over any picture.
 const badgeSx: SxProps<Theme> = {
     position: "absolute",
@@ -107,14 +107,14 @@ const detailSx: SxProps<Theme> = {
 /**
  * How the media manager draws an asset of a library of tiles, for an app's `renderAsset` to change a
  * little: `<MediaTile {...params} detail={params.asset.meta?.show} />`. Its picture or icon in the
- * kind's shape, with a video's length over it, and its name, with a picture's or a video's size, or
- * a document's, under it, or in their place why it can't be chosen now, with a bar on the picture
+ * kind's shape, with a video's or a piece of audio's length over it, and its name, with a picture's
+ * or a video's dimensions, or a document's or a piece of audio's size, under it, or in their place why it can't be chosen now, with a bar on the picture
  * while it's processed. Its look only: what makes it an asset to select, its check and its Open
  * button stay the media manager's, around it, so it's only drawn inside `renderAsset`.
  */
 const MediaTile = ({ asset, kind, thumbnail, hold, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
     const { formatDuration, formatNumber, formatSize, text } = useLocale();
-    const duration = badge === undefined && kind === "video" ? asset.media?.duration : undefined;
+    const duration = badge === undefined && (kind === "video" || kind === "audio") ? asset.media?.duration : undefined;
     const { width, height } = asset.media ?? {};
     const measured = detail === undefined && kind !== "document" && width !== undefined && height !== undefined;
 
@@ -139,7 +139,7 @@ const MediaTile = ({ asset, kind, thumbnail, hold, title, detail, badge, picture
                 )}
                 {duration !== undefined && (
                     <Box component="span" sx={badgeSx} aria-hidden>
-                        <Icon name="videos" />
+                        <Icon name={KIND_ICONS[kind]} />
                         <bdi>{formatDuration(duration)}</bdi>
                     </Box>
                 )}
@@ -162,7 +162,7 @@ const MediaTile = ({ asset, kind, thumbnail, hold, title, detail, badge, picture
                         <bdi>{`${formatNumber(width)} × ${formatNumber(height)}`}</bdi>
                     </Typography>
                 ) : (
-                    kind === "document" &&
+                    (kind === "document" || kind === "audio") &&
                     asset.size !== undefined && (
                         <Typography variant="caption" noWrap sx={detailSx}>
                             <bdi>{formatSize(asset.size)}</bdi>

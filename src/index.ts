@@ -60,6 +60,8 @@ export type {
     MediaFormRefusal,
     MediaFormState,
     MediaKind,
+    MediaLayout,
+    MediaLayouts,
     MediaManagerLocaleText,
     MediaPickForm,
     MediaPickFormParams,

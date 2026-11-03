@@ -4,11 +4,12 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useAssetLook } from "../../hooks/use-asset-look";
 import { useLocale } from "../../hooks/use-locale";
-import { AUDIO_ROW } from "../../styles/media-layout";
+import { ROW_PICTURE } from "../../styles/media-layout";
 import { visuallyHiddenSx } from "../../styles/mixins";
 import { withSx } from "../../styles/sx";
 import { joinIsolated } from "../../utils/bidi";
 import { KIND_ICONS } from "../../utils/media";
+import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 import { HoldBar, HoldLine } from "./asset-hold";
 
@@ -22,21 +23,21 @@ const rootSx = {
     minWidth: 0,
 } as const;
 
-// Its cover, when the adapter has a thumbnail for it, or its kind's icon, in a rounded square.
+// Its picture or cover, when the adapter has a thumbnail for it, or its icon, in a rounded square.
 const coverSx: SxProps<Theme> = {
     position: "relative",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
-    width: `${AUDIO_ROW}rem`,
-    height: `${AUDIO_ROW}rem`,
+    width: `${ROW_PICTURE}rem`,
+    height: `${ROW_PICTURE}rem`,
     borderRadius: 1.5,
     overflow: "hidden",
     bgcolor: "action.hover",
     color: "text.secondary",
     "& > img": { width: "100%", height: "100%", objectFit: "cover" },
-    // A piece of audio that can't be chosen now is faded, as a file being uploaded is.
+    // An asset that can't be chosen now is faded, as a file being uploaded is.
     "[data-held='true'] & > *": { opacity: 0.55 },
     // One there's no room for is only dimmed, as taking another out makes room.
     "[data-limited='true'] & > *": { opacity: 0.7 },
@@ -62,15 +63,18 @@ const durationSx: SxProps<Theme> = {
 };
 
 /**
- * How the media manager draws a piece of audio, for an app's `renderAsset` to change a little:
- * `<MediaRow {...params} title={params.asset.meta?.title} />`. Its cover or icon, its name, its type
- * and size, or in their place why it can't be chosen now, with a bar while it's processed, and its
- * length. Its look only: what makes it an asset to select, its Open button and its check stay the
- * media manager's, beside it, so it's only drawn inside `renderAsset`.
+ * How the media manager draws an asset of a library shown as a list, for an app's `renderAsset` to
+ * change a little: `<MediaRow {...params} title={params.asset.meta?.title} />`. Its picture or icon,
+ * its name, its type, size and dimensions, or in their place why it can't be chosen now, with a bar
+ * while it's processed, and its length. Its look only: what makes it an asset to select, its Open
+ * button and its check stay the media manager's, beside it, so it's only drawn inside `renderAsset`.
  */
 const MediaRow = ({ asset, kind, thumbnail, hold, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
-    const { describeType, formatDuration, formatSize, text } = useLocale();
+    const { describeType, formatDuration, formatNumber, formatSize, text } = useLocale();
     const duration = badge === undefined ? asset.media?.duration : undefined;
+    const { width, height } = asset.media ?? {};
+    const facts = [describeType(asset), ...(asset.size !== undefined ? [formatSize(asset.size)] : [])];
+    const measured = detail === undefined && width !== undefined && height !== undefined;
 
     useAssetLook();
 
@@ -81,8 +85,10 @@ const MediaRow = ({ asset, kind, thumbnail, hold, title, detail, badge, picture,
                     picture
                 ) : thumbnail ? (
                     <img src={thumbnail} alt="" draggable={false} />
+                ) : kind === "audio" ? (
+                    <Icon name={KIND_ICONS.audio} />
                 ) : (
-                    <Icon name={KIND_ICONS[kind]} />
+                    <FileTypeIcon fileName={asset.name} size="60%" />
                 )}
             </Box>
             <Box sx={textSx}>
@@ -94,19 +100,25 @@ const MediaRow = ({ asset, kind, thumbnail, hold, title, detail, badge, picture,
                         <HoldLine hold={hold} />
                         <HoldBar hold={hold} place="row" />
                     </>
-                ) : (
+                ) : detail !== undefined ? (
                     detail !== null && (
                         <Typography variant="caption" noWrap sx={detailSx}>
-                            {detail !== undefined ? (
-                                <bdi>{detail}</bdi>
-                            ) : (
-                                joinIsolated([
-                                    describeType(asset),
-                                    ...(asset.size !== undefined ? [formatSize(asset.size)] : []),
-                                ])
-                            )}
+                            <bdi>{detail}</bdi>
                         </Typography>
                     )
+                ) : measured ? (
+                    <>
+                        <Typography variant="caption" noWrap sx={detailSx} aria-hidden>
+                            {joinIsolated([...facts, `${formatNumber(width)} × ${formatNumber(height)}`])}
+                        </Typography>
+                        <Box component="span" sx={visuallyHiddenSx}>
+                            {joinIsolated([...facts, text.mediaDimensions(formatNumber(width), formatNumber(height))])}
+                        </Box>
+                    </>
+                ) : (
+                    <Typography variant="caption" noWrap sx={detailSx}>
+                        {joinIsolated(facts)}
+                    </Typography>
                 )}
             </Box>
             {badge !== undefined && badge !== null && (

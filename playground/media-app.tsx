@@ -13,12 +13,14 @@ import { assetProperties, videoProperties } from "./media-properties";
 import { audioUploadForm, imageUploadForm, videoUploadForm } from "./media-uploads";
 import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
 import { savePicks } from "./mocks/mock-save";
-import { browse, locale, maxChoices, multiple, oneVideo, single } from "./options";
+import { useStoredState } from "./hooks/use-stored-state";
+import { browse, locale, maxChoices, multiple, oneVideo, single, uncontrolled } from "./options";
 
 import type {
     FieldErrors,
     FileEntry,
     MediaChoice,
+    MediaLayouts,
     MediaSection,
     MediaSectionGroup,
     PropertyErrorKeyParams,
@@ -59,6 +61,7 @@ const libraries: MediaSectionGroup[] = [
                 label: "Images",
                 kind: "image",
                 rootId: "/images",
+                layouts: ["grid", "list"],
                 acceptUploads: "image/*",
                 uploadForm: imageUploadForm,
                 processForm: imageProcessForm,
@@ -68,6 +71,7 @@ const libraries: MediaSectionGroup[] = [
                 label: "Videos",
                 kind: "video",
                 rootId: "/videos",
+                layouts: ["grid", "list"],
                 previewers: [hlsPreviewer],
                 properties: videoProperties,
                 acceptUploads: "video/*",
@@ -79,6 +83,7 @@ const libraries: MediaSectionGroup[] = [
                 label: "Audio",
                 kind: "audio",
                 rootId: "/audio",
+                layouts: ["list", "grid"],
                 renderAsset: renderAudio,
                 acceptUploads: "audio/*",
                 uploadForm: audioUploadForm,
@@ -89,6 +94,7 @@ const libraries: MediaSectionGroup[] = [
                 label: "Documents",
                 kind: "document",
                 rootId: "/documents",
+                layouts: ["list"],
                 acceptUploads: ".pdf,.doc,.docx,.odt,.xls,.xlsx,.ods,.ppt,.pptx,.odp,.txt,.csv",
             },
         ],
@@ -186,6 +192,8 @@ const MediaApp = () => {
     const [chosen, setChosen] = useState<MediaChoice[] | null>(null);
     const [errors, setErrors] = useState<FieldErrors>();
     const [saving, setSaving] = useState<Saving>({ status: "idle" });
+    // Which layout each library was last shown in, kept across reloads, as a consumer might.
+    const [layout, setLayout] = useStoredState<MediaLayouts>("media-layout", {});
 
     // Saved first, as an app would save a product's carousel: what the backend refuses goes back to
     // the media manager, and what it takes is chosen.
@@ -211,6 +219,7 @@ const MediaApp = () => {
         multiple,
         maxChoices,
         canSelect: oneVideo ? oneVideoAtMost : undefined,
+        ...(uncontrolled ? { defaultLayout: layout } : { layout, onLayoutChange: setLayout }),
         locale,
         onChoose: browse ? undefined : choose,
         pickForm,

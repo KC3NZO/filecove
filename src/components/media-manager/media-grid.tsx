@@ -17,15 +17,25 @@ import Icon from "../icons/icon";
 import AssetOption from "./asset-option";
 import UploadTile from "./upload-tile";
 
-import type { AssetHold, FileAdapter, FileEntry, FileUploadItem, MediaAssetDraw, MediaKind } from "../../types";
+import type {
+    AssetHold,
+    FileAdapter,
+    FileEntry,
+    FileUploadItem,
+    MediaAssetDraw,
+    MediaKind,
+    MediaLayout,
+} from "../../types";
 
 interface MediaGridProps {
     /** The library's assets the search leaves, in the order shown. */
     entries: readonly FileEntry[];
     /** Files being uploaded into the library, shown before its assets until they're listed. */
     uploads: readonly FileUploadItem[];
-    /** The library's kind, which shows them as tiles of its shape, or audio as rows. */
+    /** The library's kind, whose tiles' shape they take, and its icon. */
     kind: MediaKind;
+    /** How they're shown: as tiles, or as rows. */
+    layout: MediaLayout;
     adapter: FileAdapter;
     /** What the app draws the assets with, the library's `renderAsset` or the media manager's. */
     drawAsset: MediaAssetDraw | undefined;
@@ -82,13 +92,15 @@ const tilesSx = (min: number): SxProps<Theme> => ({
     gridTemplateColumns: `repeat(auto-fill, minmax(${min}rem, 1fr))`,
 });
 
-// Audio is a list of rows, one column, which the arrow keys move along as the tiles' do.
-const GRID_SX: Record<MediaKind, SxProps<Theme>> = {
+const TILES_SX: Record<MediaKind, SxProps<Theme>> = {
     image: tilesSx(TILE_LAYOUTS.image.min),
     video: tilesSx(TILE_LAYOUTS.video.min),
     document: tilesSx(TILE_LAYOUTS.document.min),
-    audio: { ...gridSx, gridTemplateColumns: "minmax(0, 1fr)", gap: 0.25, p: 1 },
+    audio: tilesSx(TILE_LAYOUTS.audio.min),
 };
+
+// A list of rows, one column, which the arrow keys move along as the tiles' do.
+const rowsSx: SxProps<Theme> = { ...gridSx, gridTemplateColumns: "minmax(0, 1fr)", gap: 0.25, p: 1 };
 
 const barSx: SxProps<Theme> = {
     position: "sticky",
@@ -131,7 +143,7 @@ const stepOf = (event: KeyboardEvent<HTMLElement>, columns: number) => {
 };
 
 /**
- * The library's assets as a grid of tiles, or rows for audio, a `listbox` of `option`s with one Tab stop, which the
+ * The library's assets as a grid of tiles, or a list of rows, a `listbox` of `option`s with one Tab stop, which the
  * arrow keys, Home and End move. Space selects, Enter chooses, Alt+Enter opens one in the
  * library's place, Ctrl+A selects them all.
  */
@@ -139,6 +151,7 @@ const MediaGrid = ({
     entries,
     uploads,
     kind,
+    layout,
     adapter,
     drawAsset,
     label,
@@ -158,6 +171,7 @@ const MediaGrid = ({
     onSelectAll,
 }: MediaGridProps) => {
     const { text } = useLocale();
+    const shownSx = layout === "list" ? rowsSx : TILES_SX[kind];
     const gridRef = useRef<HTMLDivElement>(null);
     const [focusIndex, setFocusIndex] = useState(0);
     // Set as a key moves the focus, so the tile it went to takes it once it renders as the Tab stop.
@@ -281,9 +295,9 @@ const MediaGrid = ({
         <Box sx={rootSx}>
             {busy && <LinearProgress sx={barSx} aria-label={text.loading} />}
             {uploads.length > 0 && (
-                <Box component="ul" aria-label={text.mediaUploading} data-part="uploads" sx={GRID_SX[kind]}>
+                <Box component="ul" aria-label={text.mediaUploading} data-part="uploads" sx={shownSx}>
                     {uploads.map((item) => (
-                        <UploadTile key={item.id} item={item} kind={kind} />
+                        <UploadTile key={item.id} item={item} kind={kind} layout={layout} />
                     ))}
                 </Box>
             )}
@@ -295,13 +309,14 @@ const MediaGrid = ({
                 aria-busy={busy}
                 hidden={entries.length === 0}
                 data-after-uploads={uploads.length > 0}
-                sx={GRID_SX[kind]}
+                sx={shownSx}
             >
                 {entries.map((entry, index) => (
                     <AssetOption
                         key={entry.id}
                         entry={entry}
                         kind={kind}
+                        layout={layout}
                         adapter={adapter}
                         index={index}
                         selected={selectedIds.has(entry.id)}

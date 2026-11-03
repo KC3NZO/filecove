@@ -816,6 +816,8 @@ export interface MediaManagerLocaleText
             | "cancel"
             | "close"
             | "tryAgain"
+            | "gridView"
+            | "listView"
             | "upload"
             | "uploadTitle"
             | "uploadFailedTitle"

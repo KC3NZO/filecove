@@ -13,7 +13,7 @@ import { startIconSx } from "../../styles/direction";
 import {
     ASSET_DETAILS_WIDTH,
     ASSET_PICTURE,
-    AUDIO_ROW,
+    ROW_PICTURE,
     MEDIA_ASSET_CONTAINER,
     TILE_LAYOUTS,
     assetWide,
@@ -35,6 +35,7 @@ import type {
     FileAdapter,
     FileEntry,
     FilePreviewer,
+    MediaLayout,
     MediaSection,
     PropertiesItem,
     PropertyDefinitionGroup,
@@ -43,6 +44,8 @@ import type {
 interface MediaAssetProps {
     entry: FileEntry;
     section: MediaSection;
+    /** How its library shows it, whose smaller picture stands in while its own loads. */
+    layout: MediaLayout;
     /** The library's adapter, its own or the media manager's. */
     adapter: FileAdapter;
     /** Whether something can be chosen, which shows the Select toggle. */
@@ -158,7 +161,7 @@ const stageSx: SxProps<Theme> = {
     bgcolor: "action.hover",
     color: "text.secondary",
     "& > img": { width: "100%", height: "100%", objectFit: "contain" },
-    "& > svg": { fontSize: `${AUDIO_ROW * 2}rem`, opacity: 0.6 },
+    "& > svg": { fontSize: `${ROW_PICTURE * 2}rem`, opacity: 0.6 },
     [assetWide]: { flex: 1, flexShrink: 1, height: "auto", minWidth: 0 },
     '&[data-previewer="true"]': { position: "relative", bgcolor: "transparent" },
     [forcedColors]: { outline: "1px solid CanvasText" },
@@ -371,14 +374,19 @@ const Preview = ({ entry, adapter, previewer }: PreviewProps) => {
  * The asset's picture, as large as the view has room for, the tile's smaller one standing in while it
  * loads, or its type's icon: what's shown of an asset no previewer shows.
  */
-const Picture = ({ entry, section, adapter }: Pick<MediaAssetProps, "entry" | "section" | "adapter">) => {
+const Picture = ({
+    entry,
+    section,
+    layout,
+    adapter,
+}: Pick<MediaAssetProps, "entry" | "section" | "layout" | "adapter">) => {
     const { kind } = section;
     const large = useThumbnail(entry, adapter, "grid", ASSET_PICTURE);
     const small = useThumbnail(
         entry,
         adapter,
-        kind === "audio" ? "list" : "grid",
-        kind === "audio" ? AUDIO_ROW : TILE_LAYOUTS[kind].thumbnail,
+        layout,
+        layout === "list" ? ROW_PICTURE : TILE_LAYOUTS[kind].thumbnail,
     );
     const picture = large ?? small;
 
@@ -400,9 +408,10 @@ const Stage = ({
     entry,
     listed,
     section,
+    layout,
     adapter,
     previewers,
-}: Pick<MediaAssetProps, "entry" | "section" | "adapter" | "previewers"> & {
+}: Pick<MediaAssetProps, "entry" | "section" | "layout" | "adapter" | "previewers"> & {
     /** The asset as it is now, for its picture, asked for again only as its work ends. */
     listed: FileEntry;
 }) => {
@@ -415,7 +424,7 @@ const Stage = ({
             {previewer ? (
                 <Preview key={previewer.id} entry={entry} adapter={adapter} previewer={previewer} />
             ) : (
-                <Picture entry={listed} section={section} adapter={adapter} />
+                <Picture entry={listed} section={section} layout={layout} adapter={adapter} />
             )}
         </Box>
     );
@@ -429,6 +438,7 @@ const Stage = ({
 const MediaAsset = ({
     entry,
     section,
+    layout,
     adapter,
     choosing,
     selected,
@@ -569,6 +579,7 @@ const MediaAsset = ({
                     entry={staged}
                     listed={entry}
                     section={section}
+                    layout={layout}
                     adapter={adapter}
                     previewers={previewers}
                 />

@@ -6,7 +6,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { AssetLookContext } from "../../contexts/asset-look-context";
 import { useThumbnail } from "../../hooks/use-thumbnail";
-import { AUDIO_ROW, TILE_LAYOUTS } from "../../styles/media-layout";
+import { ROW_PICTURE, TILE_LAYOUTS } from "../../styles/media-layout";
 import {
     focusOutline,
     forcedColors,
@@ -20,11 +20,13 @@ import MediaRow from "./media-row";
 import MediaTile from "./media-tile";
 import OpenButton from "./open-button";
 
-import type { AssetHold, FileAdapter, FileEntry, MediaAssetDraw, MediaKind } from "../../types";
+import type { AssetHold, FileAdapter, FileEntry, MediaAssetDraw, MediaKind, MediaLayout } from "../../types";
 
 interface AssetOptionProps {
     entry: FileEntry;
     kind: MediaKind;
+    /** What it's shown as: a tile of the kind's shape, or a row. */
+    layout: MediaLayout;
     adapter: FileAdapter;
     /** Where the entry is shown, from 0. */
     index: number;
@@ -185,7 +187,7 @@ const rowOpenSx: SxProps<Theme> = {
 const AssetBody = memo(({ draw, params }: AssetBodyProps): ReactNode => draw(params));
 
 /**
- * One asset in the grid, as a tile, or a row for audio: what makes it an asset to select, whoever
+ * One asset in the grid, as a tile or a row: what makes it an asset to select, whoever
  * draws it. The `option` with its keys, clicks and marks, the check and the Open button. Inside it,
  * the media manager's own look (`MediaTile`, `MediaRow`), or what the app's `renderAsset` returns.
  * An app may use the same looks there. When it has drawn something else entirely, this says why the
@@ -196,6 +198,7 @@ const AssetOption = memo(
     ({
         entry,
         kind,
+        layout,
         adapter,
         index,
         selected,
@@ -210,12 +213,12 @@ const AssetOption = memo(
         onFocus,
         onKeyDown,
     }: AssetOptionProps) => {
-        const row = kind === "audio";
+        const row = layout === "list";
         const thumbnail = useThumbnail(
             entry,
             adapter,
-            row ? "list" : "grid",
-            kind === "audio" ? AUDIO_ROW : TILE_LAYOUTS[kind].thumbnail,
+            layout,
+            row ? ROW_PICTURE : TILE_LAYOUTS[kind].thumbnail,
         );
         const standing = hold ?? work;
         const contentId = useId();
@@ -230,8 +233,8 @@ const AssetOption = memo(
         // Whether the app has drawn this entirely itself.
         const own = !!draw && looks === 0;
         const params = useMemo(
-            () => ({ asset: entry, kind, adapter, thumbnail, selected, hold: standing }),
-            [entry, kind, adapter, thumbnail, selected, standing],
+            () => ({ asset: entry, kind, layout, adapter, thumbnail, selected, hold: standing }),
+            [entry, kind, layout, adapter, thumbnail, selected, standing],
         );
         const Look = row ? MediaRow : MediaTile;
 
