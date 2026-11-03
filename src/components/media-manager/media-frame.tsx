@@ -36,6 +36,7 @@ import UploadPanel from "../uploads/upload-panel";
 import { choiceKey } from "./choice-list";
 import ChoicesPane from "./choices-pane";
 import ChooseBar from "./choose-bar";
+import GroupCreate from "./group-create";
 import LibraryList from "./library-list";
 import MediaAsset from "./media-asset";
 import { ChoiceMessages, MediaFormBody } from "./media-form";
@@ -410,6 +411,7 @@ const MediaFrame = ({
     const inGroup = !!openGroup;
     const folderId = openGroup?.id ?? section?.rootId ?? "";
     const levelName = openGroup?.name ?? section?.label ?? "";
+    const levelKey = `${section?.id}/${folderId}`;
     const { state, reload } = useFolder(section ?? NO_SECTION, folderId, !!section, true);
     const choosing = !!onChoose;
     // Limits are on what's chosen, so they're nothing while the media manager is only looked through.
@@ -437,6 +439,11 @@ const MediaFrame = ({
     const deletedAtRef = useRef<number | null>(null);
     const levelFocusRef = useRef<LevelFocus | null>(null);
     const levelUpRef = useRef<HTMLButtonElement>(null);
+    // The level a new group's name is being asked at, the button asking it, and the group just made,
+    // whose tile takes the focus once it's listed, with no details to open.
+    const [creatingAt, setCreatingAt] = useState<string | null>(null);
+    const newGroupRef = useRef<HTMLButtonElement>(null);
+    const createdRef = useRef<string | null>(null);
     const { store } = useData();
 
     // Uploading: the step before files are sent, files dragged over the library, the library each
@@ -714,6 +721,20 @@ const MediaFrame = ({
         takesUploads(section) &&
         state?.status !== "error" &&
         allows("write", state?.permissions);
+
+    // Whether a group can be made at the open level: its library says so, for this level, as an
+    // adapter's `createFolder` alone doesn't say a library holds groups, it can be changed, and it could
+    // be listed, its listing not saying it can't be written to.
+    const allowsGroups =
+        typeof section?.createGroups === "function" ? section.createGroups(openGroup ?? null) : section?.createGroups;
+    const createsGroups =
+        !!section &&
+        !!allowsGroups &&
+        !!sectionAdapter.createFolder &&
+        !section.readOnly &&
+        state?.status !== "error" &&
+        allows("write", state?.permissions);
+    const creatingGroup = createsGroups && creatingAt === levelKey;
 
     // What the app's form holds for a pick until it's changed.
     const defaultsOf = useCallback(
@@ -1130,8 +1151,15 @@ const MediaFrame = ({
         }
     }, [viewed, section, selectedIds, removeChoice, multiple, text, formatPercent, refusedNow, trail]);
 
-    // Whether a group has anything to show as it's opened: what the app defines, or the adapter's own.
-    const opensGroups = !!section && (!!section.properties || !!properties || !!sectionAdapter.properties);
+    // Whether what's open can be deleted from: its adapter does, its library can be changed, and its
+    // listing doesn't say it can't be written to. A listing's own `delete` is about the folder, not what's
+    // in it.
+    const deletes =
+        !!section && !!sectionAdapter.delete && !section.readOnly && allows("write", state?.permissions);
+    // Whether a group has details: what the app defines, or the adapter's own.
+    const hasDetails = !!section && (!!section.properties || !!properties || !!sectionAdapter.properties);
+    // A group opens for those, or to be deleted, the one way there is to.
+    const opensGroups = hasDetails || deletes;
 
     // Opens an asset, or a group's details, in the library's place.
     const openAsset = useCallback(
@@ -1163,6 +1191,7 @@ const MediaFrame = ({
             setViewing(null);
             setUploadStep(null);
             setProcessStep(null);
+            setCreatingAt(null);
             announce(text.mediaInGroup(isolate(next.at(-1)?.name ?? section.label)));
         },
         [section, sectionAdapter, announce, text],
@@ -1225,6 +1254,25 @@ const MediaFrame = ({
         }
     }, [shownEntries, state?.status, folderId]);
 
+    // A group just made, with no details to open, takes the focus from the button once it's listed.
+    useLayoutEffect(() => {
+        const id = createdRef.current;
+        const index = id === null ? -1 : shownEntries.findIndex((entry) => entry.id === id);
+
+        if (index === -1) {
+            return;
+        }
+
+        createdRef.current = null;
+
+        if (focusLost() || document.activeElement === newGroupRef.current) {
+            const tile = panelRef.current?.querySelector<HTMLElement>(`[role="listbox"] [data-index="${index}"]`);
+
+            tile?.focus();
+            tile?.scrollIntoView({ block: "nearest" });
+        }
+    }, [shownEntries]);
+
     // Back to the library, the asset's tile taking the focus when the view had it.
     const closeAsset = useCallback(() => {
         const view = panelRef.current?.querySelector("section");
@@ -1251,8 +1299,13 @@ const MediaFrame = ({
                 : shownEntries.findIndex((entry) => entry.id === id);
         const tile = panelRef.current?.querySelector<HTMLElement>(`[role="listbox"] [data-index="${index}"]`);
 
-        tile?.focus();
-        tile?.scrollIntoView({ block: "nearest" });
+        // With no tile to go to, as the last one in it was deleted, the way back, or the search.
+        if (tile) {
+            tile.focus();
+            tile.scrollIntoView({ block: "nearest" });
+        } else {
+            (levelUpRef.current ?? searchButtonRef.current)?.focus();
+        }
     }, [viewed, shownEntries]);
 
     // A double click or Enter: chooses the asset, with the rest selected when several can be; without
@@ -1346,6 +1399,7 @@ const MediaFrame = ({
             setViewing(null);
             setUploadStep(null);
             setProcessStep(null);
+            setCreatingAt(null);
 
             if (librariesOpen) {
                 closeLibraries();
@@ -1381,6 +1435,7 @@ const MediaFrame = ({
         setViewing({ sectionId: choice.section.id, entry: choice.asset });
         setUploadStep(null);
         setProcessStep(null);
+        setCreatingAt(null);
         setChosenOverlay(false);
     }, [adapterOf]);
 
@@ -1832,16 +1887,8 @@ const MediaFrame = ({
         [viewedEntry, viewedGroup, section, sectionAdapter, state?.permissions],
     );
 
-    // Whether the asset shown can be deleted: where its adapter does, its library can be changed and
-    // it allows it. A listing's own `delete` is about the folder, not what's in it.
-    const viewedDeletable =
-        !!viewedEntry &&
-        !viewedGroup &&
-        !!section &&
-        !!sectionAdapter.delete &&
-        !section.readOnly &&
-        allows("write", state?.permissions) &&
-        allows("delete", viewedEntry.permissions);
+    // Whether the asset or group shown can be deleted: where what's open can be, and it allows it.
+    const viewedDeletable = !!viewedEntry && deletes && allows("delete", viewedEntry.permissions);
 
     const shownProcess =
         processStep && processStep.sectionId === sectionId && processStep.entry.id === viewedEntry?.id
@@ -1860,16 +1907,48 @@ const MediaFrame = ({
     );
 
     // Deleted: back to the library, the asset gone from it and from what's selected, wherever it was
-    // picked through this adapter, and its libraries listed again.
+    // picked through this adapter, and its libraries listed again. A group goes with what's known to be
+    // in it: what was picked among it, a library left open inside it, which goes back to where it was
+    // gone into from, and its listings. What the app gave as `defaultValue` has no known level, so it
+    // stays for the backend to refuse.
     const assetDeleted = useCallback(
         (entry: FileEntry, index: number) => {
+            const group = isGroup(entry);
+            const sameAdapter = (id: string) => {
+                const from = sectionsById.get(id);
+
+                return !!from && adapterOf(from) === sectionAdapter;
+            };
+
             if (section) {
                 const gone: MediaChoice = { asset: entry, section, values: NO_VALUES };
+                const wasIn = (item: Pick) =>
+                    group && sameAdapter(item.sectionId) && !!item.trail?.some(({ id }) => id === entry.id);
 
                 setPicks((previous) => ({
                     ...previous,
-                    items: previous.items.filter((item) => !samePick(item, gone)),
+                    items: previous.items.filter((item) => !samePick(item, gone) && !wasIn(item)),
                 }));
+            }
+
+            if (group) {
+                setLevels((previous) =>
+                    Object.fromEntries(
+                        Object.entries(previous).map(([id, open]) => {
+                            const at = open.trail.findIndex((walked) => walked.id === entry.id);
+
+                            return [
+                                id,
+                                at === -1 || open.adapter !== sectionAdapter
+                                    ? open
+                                    : { ...open, trail: open.trail.slice(0, at) },
+                            ];
+                        }),
+                    ),
+                );
+                sections
+                    .filter((item) => adapterOf(item) === sectionAdapter)
+                    .forEach(({ id }) => store.forget(id, [entry.id]));
             }
 
             setDeletedIds((previous) => new Set(previous).add(entry.id));
@@ -1881,8 +1960,47 @@ const MediaFrame = ({
             setProcessStep(null);
             announce(text.deleteDone(1, isolate(entry.name)));
         },
-        [section, samePick, forgetStates, propertiesCache, sectionAdapter, relistAll, announce, text],
+        [
+            section,
+            sections,
+            sectionsById,
+            adapterOf,
+            store,
+            samePick,
+            forgetStates,
+            propertiesCache,
+            sectionAdapter,
+            relistAll,
+            announce,
+            text,
+        ],
     );
+
+    const closeNewGroup = () => {
+        setCreatingAt(null);
+        newGroupRef.current?.focus();
+    };
+
+    // Made: listed where it is, with what was over the level gone, so it shows; its details open next,
+    // for the rest of what the app defines, or with none, its tile takes the focus once it's listed.
+    const groupCreated = (group: FileEntry) => {
+        if (!section) {
+            return;
+        }
+
+        setCreatingAt(null);
+        setQuery("");
+        setSearching(false);
+        relistAll(sectionAdapter);
+        announce(text.mediaGroupCreated(isolate(group.name)));
+
+        if (hasDetails) {
+            setViewing({ sectionId: section.id, entry: group });
+        } else {
+            createdRef.current = group.id;
+            newGroupRef.current?.focus();
+        }
+    };
 
     // How many are selected, of how many may be, and that there's no room left, once there's exactly
     // none: past it, what holds Choose back says more.
@@ -1986,6 +2104,13 @@ const MediaFrame = ({
                     // Nothing to switch while an asset or a step is shown in the library's place.
                     otherLayout={viewed || shownStep ? undefined : otherLayout}
                     onSwitchLayout={switchLayout}
+                    onNewGroup={
+                        createsGroups && !viewed && !shownStep
+                            ? () => (creatingGroup ? closeNewGroup() : setCreatingAt(levelKey))
+                            : undefined
+                    }
+                    creatingGroup={creatingGroup}
+                    newGroupRef={newGroupRef}
                     onUpload={takesFiles ? () => pickerRef.current?.click() : undefined}
                     uploadRef={uploadButtonRef}
                 />
@@ -2014,11 +2139,21 @@ const MediaFrame = ({
                     onPaste={pasteFiles}
                 >
                     <Box sx={gridSx} data-covered={!!viewed || !!shownStep}>
+                        {creatingGroup && (
+                            <GroupCreate
+                                key={levelKey}
+                                adapter={sectionAdapter}
+                                parentId={folderId}
+                                onCancel={closeNewGroup}
+                                onCreated={groupCreated}
+                                onLeft={() => relistAll(sectionAdapter)}
+                            />
+                        )}
                         {section ? (
                             <MediaGrid
                                 // Each level's own, as another library's `renderAsset`, with hooks of
                                 // its own, may draw an asset of the same id, and each starts at its top.
-                                key={`${section.id}/${folderId}`}
+                                key={levelKey}
                                 entries={shownEntries}
                                 uploads={shownUploads}
                                 kind={section.kind}

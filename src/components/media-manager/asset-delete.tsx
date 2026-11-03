@@ -44,7 +44,7 @@ const warningSx: SxProps<Theme> = { color: "text.secondary", fontSize: "0.8125re
 const buttonsSx: SxProps<Theme> = { display: "flex", gap: 1, flexShrink: 0, marginInlineStart: "auto" };
 
 /**
- * Asks before deleting the asset shown, in the view rather than in a dialog of its own, as a picker is
+ * Asks before deleting the asset or group shown, in the view rather than in a dialog of its own, as a picker is
  * often in the app's own dialog already. Cancel takes the focus as it opens, as deleting can't be
  * undone, and Escape cancels. It stays until the adapter's `delete` answers, to say why when it's refused.
  */
@@ -94,7 +94,7 @@ const AssetDelete = ({ entry, adapter, onCancel, onDeleted, onLeft }: AssetDelet
                     {text.deleteTitle(1, isolate(entry.name))}
                 </Typography>
                 <Typography id={warningId} sx={warningSx}>
-                    {text.deleteWarning(1, false)}
+                    {text.deleteWarning(1, entry.kind === "folder")}
                 </Typography>
                 {failure && <FormFailure message={failure} />}
             </Box>

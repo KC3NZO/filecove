@@ -252,6 +252,15 @@ export interface MediaSection
      */
     groupHeader?: (group: FileEntry, section: MediaSection) => ReactNode;
     /**
+     * Whether new groups can be made in this library, which puts New group in its header at the levels
+     * that say so: one answer for all of them, or a function of the group open (`null` at the root),
+     * for a backend whose albums hold no more groups, say. It asks only for a name, through the
+     * adapter's `createFolder`, the group's details opening next where it has any, for the rest of what
+     * the app defines. Off by default, as an adapter's `createFolder` doesn't say this library holds
+     * groups, and a `readOnly` library never makes them.
+     */
+    createGroups?: boolean | ((parent: FileEntry | null) => boolean);
+    /**
      * What's asked of files uploaded into this library, before they're sent: the processing its
      * backend offers, such as whether a video is streamed as HLS, or a picture made smaller or turned
      * into WebP or AVIF. Handed the files, it returns the form for them, or `null` when there's

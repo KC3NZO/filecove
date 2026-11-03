@@ -446,7 +446,8 @@ const Stage = ({
  * One asset in the library's place: shown by the app's previewers, or its picture, with the
  * properties its adapter hands over, editable where the library is, a way back to the library, to
  * the assets before and after it, and, while the app takes a choice, a toggle selecting it. A group
- * opens here for its fields, with what the app's previewers show of it and nothing of an asset's.
+ * opens here for its fields and to be deleted, with what the app's previewers show of it and nothing
+ * else of an asset's.
  */
 const MediaAsset = ({
     entry,

@@ -53,6 +53,11 @@ interface MediaHeaderProps {
     /** The layout its button switches to, while the library offers another. */
     otherLayout: MediaLayout | undefined;
     onSwitchLayout: () => void;
+    /** Opens or closes the field asking a new group's name; missing while none can be made here. */
+    onNewGroup: (() => void) | undefined;
+    /** Whether that field is open. */
+    creatingGroup: boolean;
+    newGroupRef: Ref<HTMLButtonElement>;
     /** Picks files to upload into the library; missing while it takes none. */
     onUpload: (() => void) | undefined;
     uploadRef: Ref<HTMLButtonElement>;
@@ -108,7 +113,7 @@ const uploadSx: SxProps<Theme> = {
  * Above the library: the button opening the libraries where they don't dock, inside a group the
  * button going up a level, its name, or the path to the group open, or the search field in its place
  * while searching, the button opening that, the button switching its layout, while
- * it offers another, and Upload, while it takes files.
+ * it offers another, New group, while one can be made here, and Upload, while it takes files.
  */
 const MediaHeader = ({
     section,
@@ -132,6 +137,9 @@ const MediaHeader = ({
     onFocusAssets,
     otherLayout,
     onSwitchLayout,
+    onNewGroup,
+    creatingGroup,
+    newGroupRef,
     onUpload,
     uploadRef,
 }: MediaHeaderProps) => {
@@ -260,6 +268,16 @@ const MediaHeader = ({
                         onClick={onSwitchLayout}
                     >
                         <Icon name={otherLayout === "grid" ? "gridView" : "listView"} fontSize="small" />
+                    </TooltipIconButton>
+                )}
+                {onNewGroup && (
+                    <TooltipIconButton
+                        ref={newGroupRef}
+                        label={text.mediaNewGroup}
+                        aria-expanded={creatingGroup}
+                        onClick={onNewGroup}
+                    >
+                        <Icon name="newFolder" fontSize="small" />
                     </TooltipIconButton>
                 )}
                 {onUpload && (

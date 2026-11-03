@@ -119,7 +119,7 @@ const imageGroups: MockNode[] = [
  * What this backend says of its groups, by id: what each is, and what's written about it, which the
  * playground shows and changes as it likes. Those left out are only a name.
  */
-const GROUPS: Readonly<Record<string, { type: string; description?: string; cover?: boolean }>> = {
+const GROUPS: Record<string, { type: string; description?: string; cover?: boolean }> = {
     "/audio/The Harbour Hour": { type: "Series", description: "Stories from the docks, every other Tuesday.", cover: true },
     "/audio/The Harbour Hour/Season 1": { type: "Season", description: "Where it all began.", cover: true },
     "/audio/The Harbour Hour/Season 2": { type: "Season", cover: true },
@@ -764,7 +764,7 @@ const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
                     : {
                           ...entry,
                           meta: {
-                              type: GROUPS[entry.id]?.type,
+                              type: savedValues.get(`${readOnly}:${entry.id}`)?.type ?? GROUPS[entry.id]?.type,
                               description:
                                   savedValues.get(`${readOnly}:${entry.id}`)?.description ??
                                   GROUPS[entry.id]?.description,
@@ -836,6 +836,13 @@ const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
         }),
 });
 
+/** Forgets what's kept under a key and, as a group's id is a path here, what's below it. */
+const forgetBelow = <V>(kept: Map<string, V>, key: string) => {
+    [...kept.keys()]
+        .filter((each) => each === key || each.startsWith(`${key}/`))
+        .forEach((each) => kept.delete(each));
+};
+
 /**
  * A media backend whose assets are renamed and deleted: a name is a value kept with the asset, its id
  * staying as a database's would, so what's kept by id follows it. The mock's tree has paths for ids,
@@ -879,16 +886,20 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => {
                 storedNames.set(keyOf(entry), given.name);
             }
         },
-        // What's kept of it goes too, as a file uploaded later under its name gets its id.
+        // What's kept of it goes too, and of all that's in a group, as a file uploaded or a group made
+        // later under its name gets its id.
         delete: async (entries, options) => {
             await backend.delete?.(entries.map(stored), options);
 
             entries.forEach((entry) => {
-                savedValues.delete(keyOf(entry));
-                storedNames.delete(keyOf(entry));
-                uploads.delete(entry.id);
-                audioJobs.delete(entry.id);
-                takenPosters.delete(entry.id);
+                forgetBelow(savedValues, keyOf(entry));
+                forgetBelow(storedNames, keyOf(entry));
+                forgetBelow(uploads, entry.id);
+                forgetBelow(audioJobs, entry.id);
+                forgetBelow(takenPosters, entry.id);
+                Object.keys(GROUPS)
+                    .filter((id) => id === entry.id || id.startsWith(`${entry.id}/`))
+                    .forEach((id) => delete GROUPS[id]);
             });
         },
         ...(backend.processing && {

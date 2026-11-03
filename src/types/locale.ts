@@ -864,6 +864,14 @@ export interface MediaManagerLocaleText
     mediaInGroup: (name: string) => string;
     /** A group's button, and Alt+Enter on it, opening its details; `name` comes isolated. */
     mediaGroupDetails: (name: string) => string;
+    /** The header's button making a group in the level open (`MediaSection.createGroups`). */
+    mediaNewGroup: string;
+    /** The label of the field asking its name. */
+    mediaGroupName: string;
+    /** Why it wasn't made, when the adapter didn't say. */
+    mediaCreateGroupFailed: string;
+    /** Said once it's made; `name` comes isolated. */
+    mediaGroupCreated: (name: string) => string;
     /** How many are selected, in every library: the selected column's count, and its button where it doesn't dock. */
     mediaSelected: (count: number) => string;
     /** The selected column's title, and its list's name for screen readers. */

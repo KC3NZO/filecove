@@ -32,6 +32,10 @@ import type {
 // validation does, handed back to the media manager as they came; the list's own (`media`), which
 // is about no pick, the footer shows, as an app would beside it.
 
+// What this site's groups hold, by what they are: an album or a season holds only assets, and anything
+// else, a collection or a series, or one not said yet, may hold more groups.
+const holdsGroups = (parent: FileEntry | null) => parent?.meta?.type !== "Album" && parent?.meta?.type !== "Season";
+
 /**
  * Whether a stock photo may be used, as the app's own rule: not one whose licence has run out, those
  * numbered 06, 12 and 18, which its backend refuses as well when the picks are saved.
@@ -62,6 +66,7 @@ const libraries: MediaSectionGroup[] = [
                 kind: "image",
                 rootId: "/images",
                 layouts: ["grid", "list"],
+                createGroups: holdsGroups,
                 acceptUploads: "image/*",
                 uploadForm: imageUploadForm,
                 processForm: imageProcessForm,
@@ -72,6 +77,7 @@ const libraries: MediaSectionGroup[] = [
                 kind: "video",
                 rootId: "/videos",
                 layouts: ["grid", "list"],
+                createGroups: holdsGroups,
                 previewers: [hlsPreviewer],
                 properties: videoEntryProperties,
                 acceptUploads: "video/*",
@@ -84,6 +90,7 @@ const libraries: MediaSectionGroup[] = [
                 kind: "audio",
                 rootId: "/audio",
                 layouts: ["list", "grid"],
+                createGroups: holdsGroups,
                 renderAsset: renderAudio,
                 acceptUploads: "audio/*",
                 uploadForm: audioUploadForm,

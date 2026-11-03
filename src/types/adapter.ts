@@ -564,8 +564,9 @@ export interface FileAdapter {
     /**
      * Creates a folder named `name` in `parentId` and resolves with its entry. Without it, the file
      * manager has no way to create folders, nor to upload folders or copy them in from another
-     * adapter, which it makes with it. Reject with an `Error` to show its message to the user, e.g.
-     * when the name is taken or not allowed.
+     * adapter, which it makes with it, and the media manager's libraries that make groups
+     * (`MediaSection.createGroups`), which are folders to it, have no New group. Reject with an `Error`
+     * to show its message to the user, e.g. when the name is taken or not allowed.
      */
     createFolder?(parentId: string, name: string, options: OperationOptions): Promise<FileEntry>;
     /**
@@ -614,8 +615,8 @@ export interface FileAdapter {
      * the user has already confirmed. It also empties the trash (`Section.trash`), with every entry
      * its root lists, and deletes an entry moved into a folder another adapter serves once it has
      * been copied there, one entry a call. Without it, the file manager has no way to delete, nor to
-     * move entries to another adapter, and the media manager's asset view has no Delete button. Reject
-     * with an `Error` to show its message to the user.
+     * move entries to another adapter, and the media manager's asset view has no Delete button, for an
+     * asset or a group. Reject with an `Error` to show its message to the user.
      */
     delete?(entries: FileEntry[], options: OperationOptions): Promise<void>;
     /**

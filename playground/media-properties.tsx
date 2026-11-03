@@ -405,6 +405,9 @@ const NAMED_BY_KIND: Record<MediaKind, PropertyDefinitionGroup[]> = {
     document: [naming, ...BY_KIND.document],
 };
 
+// What this backend calls its groups, chosen once one's made, as it's made with only a name.
+const GROUP_TYPES = ["Series", "Season", "Collection", "Album"].map((type) => ({ value: type, label: type }));
+
 // What a group shows, whichever kind its library holds: this backend's own words for it, and what's
 // written about it. The media manager knows nothing of these.
 const groupProperties: PropertyDefinitionGroup[] = [
@@ -412,7 +415,7 @@ const groupProperties: PropertyDefinitionGroup[] = [
     {
         id: "about",
         properties: [
-            { field: "type", label: "Type", type: "string" },
+            { field: "type", label: "Type", type: "string", options: GROUP_TYPES, editable: true },
             { field: "description", label: "Description", type: "string", multiline: true, editable: true },
         ],
     },
