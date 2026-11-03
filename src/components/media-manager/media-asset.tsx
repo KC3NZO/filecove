@@ -27,6 +27,7 @@ import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 import PropertiesPanel from "../properties/properties-panel";
+import AssetDelete from "./asset-delete";
 import { HoldBar } from "./asset-hold";
 
 import type { PropertiesCache } from "../../store/properties-cache";
@@ -68,6 +69,11 @@ interface MediaAssetProps {
     onProcess: (() => void) | undefined;
     /** Whether that's shown over it: it's hidden, but stays as it was, and takes the focus back. */
     covered: boolean;
+    /** Whether it can be deleted, which shows the Delete button. */
+    deletable: boolean;
+    onDeleted: () => void;
+    /** Left while its delete was being asked for, which the backend may have done by then. */
+    onDeleteLeft: () => void;
     /** Lists the library again once a field of the asset's is saved. */
     onUpdated: () => void;
     propertiesCache: PropertiesCache;
@@ -452,6 +458,9 @@ const MediaAsset = ({
     onToggleSelected,
     onProcess,
     covered,
+    deletable,
+    onDeleted,
+    onDeleteLeft,
     onUpdated,
     propertiesCache,
 }: MediaAssetProps) => {
@@ -461,12 +470,26 @@ const MediaAsset = ({
     const rootRef = useRef<HTMLElement>(null);
     const opened = useRef(false);
     const processRef = useRef<HTMLButtonElement>(null);
+    const deleteRef = useRef<HTMLButtonElement>(null);
     const wasCovered = useRef(covered);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [confirmingFor, setConfirmingFor] = useState(entry.id);
     const standing = hold ?? work;
     // What plays stays as it is while the asset's work goes on, and its details are asked for again
     // only as that starts and ends, which is when there's more of them to show.
     const staged = useSteadyEntry(entry, withoutWork);
     const detailed = useSteadyEntry(entry, withWorkStatus);
+
+    // Asking about one asset says nothing of the next one gone to.
+    if (confirmingFor !== entry.id) {
+        setConfirmingFor(entry.id);
+        setConfirmingDelete(false);
+    }
+
+    const cancelDelete = () => {
+        setConfirmingDelete(false);
+        deleteRef.current?.focus();
+    };
 
     // Takes the focus as it opens, so it's read out by its name, and again when going to the next
     // one took it away, as Previous does at the first, disabled as it gets there.
@@ -496,7 +519,7 @@ const MediaAsset = ({
         if (!offered && !covered && focusLost()) {
             rootRef.current?.focus();
         }
-    }, [offered, covered]);
+    }, [offered, deletable, covered]);
 
     const items = useMemo<PropertiesItem[]>(
         () => [
@@ -539,6 +562,16 @@ const MediaAsset = ({
                 <TooltipIconButton label={text.mediaNextAsset} disabled={!onNext} onClick={onNext}>
                     <Icon name="chevronRight" fontSize="small" />
                 </TooltipIconButton>
+                {deletable && (
+                    <TooltipIconButton
+                        ref={deleteRef}
+                        label={text.delete}
+                        aria-expanded={confirmingDelete}
+                        onClick={() => setConfirmingDelete((confirming) => !confirming)}
+                    >
+                        <Icon name="delete" fontSize="small" />
+                    </TooltipIconButton>
+                )}
                 {onProcess && (
                     <Button ref={processRef} color="inherit" sx={processSx} onClick={onProcess}>
                         {text.mediaProcess}
@@ -560,6 +593,16 @@ const MediaAsset = ({
                     </Button>
                 )}
             </Box>
+            {deletable && confirmingDelete && (
+                <AssetDelete
+                    key={entry.id}
+                    entry={entry}
+                    adapter={adapter}
+                    onCancel={cancelDelete}
+                    onDeleted={onDeleted}
+                    onLeft={onDeleteLeft}
+                />
+            )}
             {standing && (
                 <Box id={holdId} sx={noticeSx}>
                     <Typography data-status={standing.status} sx={noticeTextSx}>

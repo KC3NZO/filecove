@@ -501,7 +501,7 @@ const statesOf = (entries: readonly FileEntry[]): Record<string, AssetState> =>
  * (or listen to its socket) to show them live.
  */
 export const pollRenditions = (entry: FileEntry): Promise<RenditionJob[]> =>
-    new Promise((resolve) => window.setTimeout(() => resolve(renditionJobs(entry)), 150));
+    new Promise((resolve) => window.setTimeout(() => resolve(renditionJobs(storedAs(entry))), 150));
 
 /**
  * The format a file is in, as this backend names it: the one a picture uploaded here was turned
@@ -528,7 +528,7 @@ const dayOf = (hash: number) => new Date(Date.UTC(2026, 4, 1) - (hash % 400) * D
  */
 const propertiesOf = (entry: FileEntry, key: string, stock: boolean): EntryProperties => {
     const hash = hashOf(entry.name);
-    const values: PropertyValues = { format: formatOf(entry), tags: [] };
+    const values: PropertyValues = { name: entry.name, format: formatOf(entry), tags: [] };
 
     if (isImage(entry)) {
         Object.assign(values, {
@@ -571,12 +571,21 @@ const propertiesOf = (entry: FileEntry, key: string, stock: boolean): EntryPrope
     return { values: { ...values, ...savedValues.get(key) } };
 };
 
+/** What assets renamed were called when they came, by `${readOnly}:${id}`, which the mock's tree still has. */
+const storedNames = new Map<string, string>();
+
+/** An asset as the mock's tree has it, whatever it's been renamed to, for what's made from its name. */
+const storedAs = (entry: FileEntry, readOnly = false): FileEntry => ({
+    ...entry,
+    name: storedNames.get(`${readOnly}:${entry.id}`) ?? entry.name,
+});
+
 /**
  * Makes an adapter of the mock a media backend: what its listings say of each asset (`media`, and
  * a video's delivery in `meta`), a video's poster frame in use as its thumbnail, and its properties,
  * with what's saved of them kept here.
  */
-const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
+const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
     ...adapter,
     // Keeps what each file was uploaded with, which the library's upload form held, as this
     // backend acts on it: a video streamed or not, in the qualities chosen, a picture turned into
@@ -729,6 +738,75 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
             savedValues.set(key, { ...savedValues.get(key), ...values });
         }),
 });
+
+/**
+ * A media backend whose assets are renamed and deleted: a name is a value kept with the asset, its id
+ * staying as a database's would, so what's kept by id follows it. The mock's tree has paths for ids,
+ * so it's left as it is, and whatever's made from a name goes on being made from the first one.
+ */
+const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => {
+    const backend = mediaBackend(adapter, readOnly);
+    const keyOf = (entry: FileEntry) => `${readOnly}:${entry.id}`;
+    const stored = (entry: FileEntry) => storedAs(entry, readOnly);
+
+    const named = (entry: FileEntry): FileEntry => {
+        const name = savedValues.get(keyOf(entry))?.name;
+
+        return typeof name === "string" ? { ...entry, name } : entry;
+    };
+
+    const namedState = (state: AssetState): AssetState =>
+        state.status === "ready" && state.entry ? { ...state, entry: named(state.entry) } : state;
+
+    return {
+        ...backend,
+        list: (folderId, options) =>
+            backend.list(folderId, options).then((result) => ({ ...result, entries: result.entries.map(named) })),
+        process: (entry, values, options) => backend.process?.(stored(entry), values, options) ?? Promise.resolve(),
+        content: (entry, options) =>
+            backend.content?.(stored(entry), options) ?? Promise.reject(new Error("No contents here.")),
+        thumbnail: (entry, options) => backend.thumbnail?.(stored(entry), options) ?? Promise.resolve(null),
+        properties: (entry, options) =>
+            backend.properties?.(stored(entry), options) ?? Promise.resolve({ values: {} }),
+        // A name goes with the rest, refusing none at all, kept over the one the tree has from then on.
+        updateProperties: async (entry, values, options) => {
+            if (typeof values.name === "string" && !values.name.trim()) {
+                throw new Error("An asset needs a name.");
+            }
+
+            const given = stored(entry);
+
+            await backend.updateProperties?.(given, values, options);
+
+            if (typeof values.name === "string") {
+                storedNames.set(keyOf(entry), given.name);
+            }
+        },
+        // What's kept of it goes too, as a file uploaded later under its name gets its id.
+        delete: async (entries, options) => {
+            await backend.delete?.(entries.map(stored), options);
+
+            entries.forEach((entry) => {
+                savedValues.delete(keyOf(entry));
+                storedNames.delete(keyOf(entry));
+                uploads.delete(entry.id);
+                audioJobs.delete(entry.id);
+                takenPosters.delete(entry.id);
+            });
+        },
+        ...(backend.processing && {
+            processing: (entries: FileEntry[], options: { signal: AbortSignal }) =>
+                backend.processing?.(entries.map(stored), options).then((states) =>
+                    Object.fromEntries(Object.entries(states).map(([id, state]) => [id, namedState(state)])),
+                ) ?? Promise.resolve({}),
+        }),
+        ...(backend.watchProcessing && {
+            watchProcessing: (entries: FileEntry[], onChange: (id: string, state: AssetState) => void) =>
+                backend.watchProcessing?.(entries.map(stored), (id, state) => onChange(id, namedState(state))) ??
+                (() => {}),
+        }),
+    };
+};
 
 /** This site's backend: images, videos (delivered by HLS), audio and documents, a root a kind. */
 export const siteMediaAdapter = withMedia(siteAdapter);

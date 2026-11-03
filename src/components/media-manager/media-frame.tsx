@@ -156,6 +156,7 @@ interface Arrival {
 }
 
 const NO_ENTRIES: FileEntry[] = [];
+const NO_IDS: ReadonlySet<string> = new Set();
 const NO_PICKS: Picks = { items: [], anchor: null };
 const NO_VALUES: Record<string, unknown> = {};
 const NO_ERROR_KEYS: readonly string[] = [];
@@ -377,12 +378,14 @@ const MediaFrame = ({
     const focusSearchAsked = useRef(false);
     const [picks, setPicks] = useState<Picks>(() => picksFrom(defaultValue));
     const [viewing, setViewing] = useState<Viewing | null>(null);
+    const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(NO_IDS);
     // The order the app was last handed the picks in, at Choose, by their keys, which the keys of
     // the errors its backend answers go by.
     const [handedOrder, setHandedOrder] = useState<readonly string[] | null>(null);
     const panelRef = useRef<HTMLDivElement>(null);
     // The asset the view went back from, whose tile takes the focus back.
     const backFromRef = useRef<string | null>(null);
+    const deletedAtRef = useRef<number | null>(null);
     const { store } = useData();
 
     // Uploading: the step before files are sent, files dragged over the library, the library each
@@ -476,10 +479,14 @@ const MediaFrame = ({
     const listed = useMemo(
         () =>
             (state?.entries ?? NO_ENTRIES)
-                .filter((entry) => entry.kind === "file" && !isHidden(entry))
+                .filter((entry) => entry.kind === "file" && !isHidden(entry) && !deletedIds.has(entry.id))
                 .sort(byDate(compareNames)),
-        [state?.entries, compareNames],
+        [state?.entries, deletedIds, compareNames],
     );
+
+    // Assets just deleted are gone at once, until the listing comes back without them. Forgotten then,
+    // as a backend whose ids are paths may give the id to a file uploaded later.
+    useEffect(() => setDeletedIds(NO_IDS), [state?.entries]);
 
     const sectionId = section?.id;
 
@@ -1040,14 +1047,20 @@ const MediaFrame = ({
 
     useLayoutEffect(() => {
         const id = backFromRef.current;
+        const deletedAt = deletedAtRef.current;
 
         backFromRef.current = null;
+        deletedAtRef.current = null;
 
-        if (viewed || id === null) {
+        if (viewed || (id === null && deletedAt === null)) {
             return;
         }
 
-        const index = shownEntries.findIndex((entry) => entry.id === id);
+        // The asset deleted leaves its place to the next one, or the last when it was the last.
+        const index =
+            deletedAt !== null
+                ? Math.min(Math.max(deletedAt, 0), shownEntries.length - 1)
+                : shownEntries.findIndex((entry) => entry.id === id);
         const tile = panelRef.current?.querySelector<HTMLElement>(`[role="listbox"] [data-index="${index}"]`);
 
         tile?.focus();
@@ -1581,6 +1594,16 @@ const MediaFrame = ({
         [viewedEntry, section, sectionAdapter, state?.permissions],
     );
 
+    // Whether the asset shown can be deleted: where its adapter does, its library can be changed and
+    // it allows it. A listing's own `delete` is about the folder, not what's in it.
+    const viewedDeletable =
+        !!viewedEntry &&
+        !!section &&
+        !!sectionAdapter.delete &&
+        !section.readOnly &&
+        allows("write", state?.permissions) &&
+        allows("delete", viewedEntry.permissions);
+
     const shownProcess =
         processStep && processStep.sectionId === sectionId && processStep.entry.id === viewedEntry?.id
             ? processStep
@@ -1595,6 +1618,31 @@ const MediaFrame = ({
             setProcessStep(null);
         },
         [forgetStates, sectionAdapter, relistAll],
+    );
+
+    // Deleted: back to the library, the asset gone from it and from what's selected, wherever it was
+    // picked through this adapter, and its libraries listed again.
+    const assetDeleted = useCallback(
+        (entry: FileEntry, index: number) => {
+            if (section) {
+                const gone: MediaChoice = { asset: entry, section, values: NO_VALUES };
+
+                setPicks((previous) => ({
+                    ...previous,
+                    items: previous.items.filter((item) => !samePick(item, gone)),
+                }));
+            }
+
+            setDeletedIds((previous) => new Set(previous).add(entry.id));
+            forgetStates(sectionAdapter, [entry.id]);
+            propertiesCache.forgetDetails(entry, sectionAdapter);
+            relistAll(sectionAdapter);
+            deletedAtRef.current = index;
+            setViewing(null);
+            setProcessStep(null);
+            announce(text.deleteDone(1, isolate(entry.name)));
+        },
+        [section, samePick, forgetStates, propertiesCache, sectionAdapter, relistAll, announce, text],
     );
 
     // How many are selected, of how many may be, and that there's no room left, once there's exactly
@@ -1785,6 +1833,9 @@ const MediaFrame = ({
                                     : undefined
                             }
                             covered={!!shownProcess}
+                            deletable={viewedDeletable}
+                            onDeleted={() => assetDeleted(viewed.entry, viewed.index)}
+                            onDeleteLeft={() => relistAll(sectionAdapter)}
                             onUpdated={reloadLibrary}
                         />
                     )}

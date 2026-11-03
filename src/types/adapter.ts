@@ -614,7 +614,8 @@ export interface FileAdapter {
      * the user has already confirmed. It also empties the trash (`Section.trash`), with every entry
      * its root lists, and deletes an entry moved into a folder another adapter serves once it has
      * been copied there, one entry a call. Without it, the file manager has no way to delete, nor to
-     * move entries to another adapter. Reject with an `Error` to show its message to the user.
+     * move entries to another adapter, and the media manager's asset view has no Delete button. Reject
+     * with an `Error` to show its message to the user.
      */
     delete?(entries: FileEntry[], options: OperationOptions): Promise<void>;
     /**

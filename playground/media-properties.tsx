@@ -286,6 +286,13 @@ const bitrate: PropertyDefinition<number> = {
     valueFormatter: (kbps) => `${kbps} kbps`,
 };
 
+// The asset's name, as this backend sees it: one more thing about the asset, not a file to rename,
+// saved with `updateProperties` as the caption is. A library that shouldn't have it just leaves it out.
+const naming: PropertyDefinitionGroup = {
+    id: "name",
+    properties: [{ field: "name", label: "Name", type: "string", editable: true }],
+};
+
 const caption: PropertyDefinition = {
     field: "caption",
     label: "Caption",
@@ -341,6 +348,7 @@ const imageProperties: PropertyDefinitionGroup[] = [
  * chosen from the site's own.
  */
 export const videoProperties: PropertyDefinitionGroup[] = [
+    naming,
     { id: "video", properties: [dimensions, quality, length, format, size, added] },
     {
         id: "delivery",
@@ -389,5 +397,14 @@ const BY_KIND: Record<MediaKind, PropertyDefinitionGroup[]> = {
     ],
 };
 
+// The same with its name to change, where its library can change anything.
+const NAMED_BY_KIND: Record<MediaKind, PropertyDefinitionGroup[]> = {
+    image: [naming, ...BY_KIND.image],
+    video: [naming, ...BY_KIND.video],
+    audio: [naming, ...BY_KIND.audio],
+    document: [naming, ...BY_KIND.document],
+};
+
 /** What an asset shows in a library without definitions of its own, by its kind. */
-export const assetProperties = (_asset: FileEntry, section: MediaSection) => BY_KIND[section.kind];
+export const assetProperties = (_asset: FileEntry, section: MediaSection) =>
+    (section.readOnly ? BY_KIND : NAMED_BY_KIND)[section.kind];
