@@ -99,7 +99,8 @@ const nameSlotSx: SxProps<Theme> = {
     minWidth: 0,
 };
 
-const searchButtonSx: SxProps<Theme> = {
+// The search's, and New group's: `primary` while what it opens is open.
+const toggleButtonSx: SxProps<Theme> = {
     '&[aria-pressed="true"]': { color: "primary.main" },
     [forcedColors]: forcedPressed,
 };
@@ -255,7 +256,7 @@ const MediaHeader = ({
                         label={text.search}
                         aria-pressed={searching}
                         aria-keyshortcuts="Control+F Meta+F"
-                        sx={searchButtonSx}
+                        sx={toggleButtonSx}
                         onMouseDown={(event) => searching && event.preventDefault()}
                         onClick={onToggleSearch}
                     >
@@ -274,7 +275,8 @@ const MediaHeader = ({
                     <TooltipIconButton
                         ref={newGroupRef}
                         label={text.mediaNewGroup}
-                        aria-expanded={creatingGroup}
+                        aria-pressed={creatingGroup}
+                        sx={toggleButtonSx}
                         onClick={onNewGroup}
                     >
                         <Icon name="newFolder" fontSize="small" />
