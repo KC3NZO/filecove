@@ -6,6 +6,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { MediaFields } from "../src";
+import { posterField, teaserField } from "./media-relation";
 import { coverUrl } from "./mocks/mock-media";
 
 import type {
@@ -150,7 +151,10 @@ const typesIn = (parent: FileEntry | null) =>
 /** Only what's released as one has a release date. */
 const isReleased = (type: unknown) => type === "Season" || type === "Album";
 
-/** Its fields, following each other: a Season or an Album has a date, which goes when it's changed. */
+/**
+ * Its fields, following each other: a Season or an Album has a date, and a Series a teaser from Videos
+ * and a poster from Images, each going when the type's changed.
+ */
 const GroupFields = (form: MediaGroupFormParams) => {
     const { values, parent, group } = form;
     const name: PropertyDefinition = {
@@ -178,6 +182,7 @@ const GroupFields = (form: MediaGroupFormParams) => {
                 ...(isReleased(values.type)
                     ? [{ field: "released", label: "Released", type: "date" } satisfies PropertyDefinition]
                     : []),
+                ...(values.type === "Series" ? [teaserField, posterField] : []),
                 { field: "description", label: "Description", type: "string", multiline: true },
             ],
         },
@@ -190,9 +195,13 @@ const GroupFields = (form: MediaGroupFormParams) => {
                 {...form}
                 groups={groups}
                 setValues={(next) => {
-                    const { released: _released, ...rest } = next;
+                    const { released, teaser, poster, ...rest } = next;
 
-                    form.setValues(isReleased(next.type) ? next : rest);
+                    form.setValues({
+                        ...rest,
+                        ...(isReleased(next.type) ? { released } : {}),
+                        ...(next.type === "Series" ? { teaser, poster } : {}),
+                    });
                 }}
             />
         </>

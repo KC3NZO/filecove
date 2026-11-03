@@ -45,6 +45,8 @@ interface AssetOptionProps {
     drawGroup: MediaAssetDraw | undefined;
     /** Whether a group has details to open, which puts the Open button on it. */
     opensGroups: boolean;
+    /** Whether an asset has a view to open, which puts the Open button on it. */
+    opensAssets: boolean;
     onPress: (index: number, event: MouseEvent) => void;
     /** A double click, which chooses it, or opens it while nothing is chosen. */
     onActivate: (index: number) => void;
@@ -213,6 +215,7 @@ const AssetOption = memo(
         draw,
         drawGroup,
         opensGroups,
+        opensAssets,
         onPress,
         onActivate,
         onOpen,
@@ -284,7 +287,7 @@ const AssetOption = memo(
                 ) : (
                     <Look asset={entry} kind={kind} thumbnail={thumbnail} hold={standing} />
                 )}
-                {(!group || opensGroups) && (
+                {(group ? opensGroups : opensAssets) && (
                     <OpenButton
                         name={entry.name}
                         group={group}

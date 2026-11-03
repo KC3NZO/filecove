@@ -43,6 +43,8 @@ interface MediaGridProps {
     drawGroup: MediaAssetDraw | undefined;
     /** Whether a group has details to open, which puts the Open button on it. */
     opensGroups: boolean;
+    /** Whether an asset has a view to open, which puts the Open button on it; the picker's have none. */
+    opensAssets?: boolean;
     /** What the app draws above an open group's contents. */
     header: ReactNode;
     /** The name of the library or group open, which the grid is named by for screen readers. */
@@ -176,6 +178,7 @@ const MediaGrid = ({
     drawAsset,
     drawGroup,
     opensGroups,
+    opensAssets = true,
     header,
     label,
     selectedIds,
@@ -389,6 +392,7 @@ const MediaGrid = ({
                         draw={drawAsset}
                         drawGroup={drawGroup}
                         opensGroups={opensGroups}
+                        opensAssets={opensAssets}
                         onPress={handlePress}
                         onActivate={handleDoubleClick}
                         onOpen={onOpen}

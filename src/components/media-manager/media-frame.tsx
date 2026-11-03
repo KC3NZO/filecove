@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ClipboardEvent, DragEvent, ReactNode, SetStateAction } from "react";
+import type { ReactNode, SetStateAction } from "react";
 
 import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
@@ -9,19 +9,22 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { useAnnouncer } from "../../hooks/use-announcer";
 import { useAssetStates } from "../../hooks/use-asset-states";
 import { useData, useFolder } from "../../hooks/use-folder";
+import { useFilesDrop } from "../../hooks/use-files-drop";
 import { useLocale } from "../../hooks/use-locale";
+import { useMediaSearch } from "../../hooks/use-media-search";
 import { useTransferQueue } from "../../hooks/use-transfer-queue";
 import { useSetting } from "../../hooks/use-setting";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { CHOICES_WIDTH, mediaMedium, mediaWide } from "../../styles/media-layout";
-import { focusOutline, selectedBackground, visuallyHiddenSx } from "../../styles/mixins";
+import { visuallyHiddenSx } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
 import { firstInView, focusLost } from "../../utils/dom";
 import { NO_ERRORS, choiceMessages, countErrorsAt } from "../../utils/field-errors";
-import { carriesFiles, filesIn, mayAccept, takesUploads, uploadPatterns } from "../../utils/files";
+import { carriesFiles, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
 import { countLimit } from "../../utils/limits";
 import {
+    byDate,
     checkMediaUpload,
     groupRule,
     holdOf,
@@ -39,6 +42,7 @@ import UploadPanel from "../uploads/upload-panel";
 import { choiceKey } from "./choice-list";
 import ChoicesPane from "./choices-pane";
 import ChooseBar from "./choose-bar";
+import DropZone from "./drop-zone";
 import GroupCreate from "./group-create";
 import LibraryList from "./library-list";
 import MediaAsset from "./media-asset";
@@ -249,10 +253,6 @@ const ARRIVAL_WAIT = 10_000;
 // Stands in for a library while there's none, so the listing's hook has one to not list.
 const NO_SECTION: MediaSection = { id: "", label: "", rootId: "", kind: "image" };
 
-// The newest first, as media libraries show them, then by name.
-const byDate = (compareNames: (a: string, b: string) => number) => (a: FileEntry, b: FileEntry) =>
-    (b.modifiedAt?.getTime() ?? 0) - (a.modifiedAt?.getTime() ?? 0) || compareNames(a.name, b.name);
-
 const pickOf = (choice: MediaChoice): Pick => ({
     sectionId: choice.section.id,
     asset: choice.asset,
@@ -313,33 +313,6 @@ const gridSx: SxProps<Theme> = {
     flex: 1,
     minHeight: 0,
     '&[data-covered="true"]': { visibility: "hidden" },
-};
-
-// Over the library while files dragged over it can be dropped there: an outline inside its edge,
-// and what a drop does, in its middle.
-const dropZoneSx: SxProps<Theme> = (theme) => ({
-    position: "absolute",
-    inset: 0,
-    zIndex: 2,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    p: 3,
-    borderRadius: "inherit",
-    bgcolor: selectedBackground(theme),
-    pointerEvents: "none",
-    ...focusOutline,
-});
-
-const dropLabelSx: SxProps<Theme> = {
-    px: 2,
-    py: 1,
-    borderRadius: 2,
-    bgcolor: "background.paper",
-    boxShadow: 2,
-    fontSize: "0.875rem",
-    fontWeight: 600,
-    textAlign: "center",
 };
 
 // Under the library, an inset panel as it is, above the choose bar; where the library has no
@@ -457,14 +430,17 @@ const MediaFrame = ({
     const rule = choosing ? canSelect : undefined;
     const { announcement, announce } = useAnnouncer();
 
-    const [query, setQuery] = useState("");
-    const [searching, setSearching] = useState(false);
-    const searchInputRef = useRef<HTMLInputElement>(null);
-    const searchButtonRef = useRef<HTMLButtonElement>(null);
-    // What had the focus as the search opened, to give it back to as it closes.
-    const searchOpenerRef = useRef<HTMLElement | null>(null);
-    // Asks the field to take the focus once it's there, as it's only drawn by the render that follows.
-    const focusSearchAsked = useRef(false);
+    const {
+        query,
+        setQuery,
+        searching,
+        setSearching,
+        searchInputRef,
+        searchButtonRef,
+        openSearch,
+        stopSearching,
+        closeSearch,
+    } = useMediaSearch();
     const [picks, setPicks] = useState<Picks>(() => picksFrom(defaultValue));
     const [viewing, setViewing] = useState<Viewing | null>(null);
     const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(NO_IDS);
@@ -508,7 +484,6 @@ const MediaFrame = ({
     // upload went into, by its id, and what's just arrived, waiting to be listed.
     const [uploadStep, setUploadStep] = useState<UploadStep | null>(null);
     const uploadStepCount = useRef(0);
-    const [dropping, setDropping] = useState(false);
     const [uploadLevels, setUploadLevels] = useState(NO_UPLOAD_LEVELS);
     const [arrivals, setArrivals] = useState(NO_ARRIVALS);
     const arrivedRef = useRef(new Set<number>());
@@ -1556,56 +1531,6 @@ const MediaFrame = ({
 
     const reloadLibrary = useCallback(() => reload(), [reload]);
 
-    useLayoutEffect(() => {
-        if (focusSearchAsked.current) {
-            focusSearchAsked.current = false;
-            searchInputRef.current?.focus();
-            searchInputRef.current?.select();
-        }
-    });
-
-    // Opens the search field and focuses it, or, open already, focuses it with what's typed selected.
-    const openSearch = () => {
-        if (!searching) {
-            searchOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        }
-
-        focusSearchAsked.current = true;
-        setSearching(true);
-
-        const input = searchInputRef.current;
-
-        if (input) {
-            focusSearchAsked.current = false;
-            input.focus();
-            input.select();
-        }
-    };
-
-    const stopSearching = () => {
-        setSearching(false);
-        setQuery("");
-        searchOpenerRef.current = null;
-    };
-
-    // Closing with the focus in the field gives it back to what had it before the search opened, or
-    // else to the search button, as when that was an asset the search has left out since.
-    const closeSearch = () => {
-        const opener = searchOpenerRef.current;
-
-        if (searchInputRef.current?.closest('[role="search"]')?.contains(document.activeElement)) {
-            if (opener && opener !== document.body) {
-                opener.focus();
-            }
-
-            if (document.activeElement !== opener) {
-                searchButtonRef.current?.focus();
-            }
-        }
-
-        stopSearching();
-    };
-
     // Down or Enter in the field goes on to the assets shown, staying in the field with none.
     const focusAssets = () => {
         panelRef.current?.querySelector<HTMLElement>('[role="listbox"] [role="option"][tabindex="0"]')?.focus();
@@ -1675,42 +1600,7 @@ const MediaFrame = ({
     const dropsFiles = takesFiles && !viewed && !shownStep && !formingGroup;
     const patterns = useMemo(() => (section ? uploadPatterns(section) : null), [section]);
 
-    const offerDrop = (event: DragEvent<HTMLElement>) => {
-        if (carriesFiles(event) && dropsFiles && mayAccept(patterns, event.dataTransfer.items)) {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "copy";
-            setDropping(true);
-        }
-    };
-
-    const leaveDrop = (event: DragEvent<HTMLElement>) => {
-        if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))) {
-            setDropping(false);
-        }
-    };
-
-    const takeDrop = (event: DragEvent<HTMLElement>) => {
-        setDropping(false);
-
-        if (carriesFiles(event) && dropsFiles) {
-            event.preventDefault();
-            askUpload(filesIn(event.dataTransfer));
-        }
-    };
-
-    // Files pasted in the library, with the browser's paste key, as the file manager takes them.
-    const pasteFiles = (event: ClipboardEvent<HTMLElement>) => {
-        if (!dropsFiles) {
-            return;
-        }
-
-        const pasted = filesIn(event.clipboardData);
-
-        if (pasted.files.length + pasted.folders.length > 0) {
-            event.preventDefault();
-            askUpload(pasted);
-        }
-    };
+    const { dropping, offerDrop, leaveDrop, takeDrop, pasteFiles } = useFilesDrop(dropsFiles, patterns, askUpload);
 
     // Each upload done, by its entry's id, waits to be listed in its library.
     useEffect(() => {
@@ -2658,11 +2548,7 @@ const MediaFrame = ({
                             }}
                         />
                     )}
-                    {dropping && dropsFiles && section && (
-                        <Box sx={dropZoneSx}>
-                            <Typography sx={dropLabelSx}>{text.mediaDropToUpload(isolate(levelName))}</Typography>
-                        </Box>
-                    )}
+                    {dropping && section && <DropZone label={text.mediaDropToUpload(isolate(levelName))} />}
                 </Box>
                 {uploads.items.length > 0 && (
                     <Box sx={uploadsSx}>

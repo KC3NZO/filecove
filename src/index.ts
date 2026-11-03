@@ -2,6 +2,7 @@ export { default as FileManager } from "./components/file-manager/file-manager";
 export { default as IconProvider } from "./components/icons/icon-provider";
 export { default as MediaFields } from "./components/media-manager/media-fields";
 export { default as MediaManager } from "./components/media-manager/media-manager";
+export { default as MediaPicker } from "./components/media-manager/media-picker";
 export { default as MediaRow } from "./components/media-manager/media-row";
 export { default as MediaTile } from "./components/media-manager/media-tile";
 export { default as PropertyDisplay } from "./components/properties/property-display";
@@ -10,6 +11,7 @@ export { enUS } from "./locales/en-us";
 export type { FileManagerProps } from "./components/file-manager/file-manager";
 export type { MediaFieldsProps } from "./components/media-manager/media-fields";
 export type { MediaManagerProps } from "./components/media-manager/media-manager";
+export type { MediaPickerProps } from "./components/media-manager/media-picker";
 export type { PropertyDisplayProps } from "./components/properties/property-display";
 export type {
     ActionContext,

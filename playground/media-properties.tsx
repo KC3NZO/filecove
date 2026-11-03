@@ -7,6 +7,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { PropertyDisplay } from "../src";
+import { posterField, teaserField } from "./media-relation";
 import { pollRenditions } from "./mocks/mock-media";
 
 import type {
@@ -418,6 +419,8 @@ const groupProperties: PropertyDefinitionGroup[] = [
             { field: "type", label: "Type", type: "string", options: GROUP_TYPES, editable: true },
             { field: "description", label: "Description", type: "string", multiline: true, editable: true },
             { field: "released", label: "Released", type: "date", editable: false },
+            teaserField,
+            posterField,
         ],
     },
 ];

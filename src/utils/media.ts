@@ -25,6 +25,10 @@ export const KIND_ICONS: Record<MediaKind, IconName> = {
     document: "documents",
 };
 
+/** The newest first, as media libraries show them, then by name. */
+export const byDate = (compareNames: (a: string, b: string) => number) => (a: FileEntry, b: FileEntry) =>
+    (b.modifiedAt?.getTime() ?? 0) - (a.modifiedAt?.getTime() ?? 0) || compareNames(a.name, b.name);
+
 /** The layouts a library offers, the first as it starts: its own, or its kind's only one. */
 export const layoutsOf = (section: MediaSection): readonly MediaLayout[] =>
     section.layouts?.length ? section.layouts : [section.kind === "audio" ? "list" : "grid"];
