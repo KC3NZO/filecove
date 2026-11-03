@@ -7,6 +7,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { MediaManager } from "../src";
 import { renderAudio, renderGroup, renderGroupHeader, renderStock } from "./media-assets";
 import { pickForm } from "./media-fields";
+import { groupForm } from "./media-groups";
 import { audioPreviewer, hlsPreviewer } from "./media-previewers";
 import { audioProcessForm, imageProcessForm, videoProcessForm } from "./media-processing";
 import { assetProperties, videoEntryProperties } from "./media-properties";
@@ -91,6 +92,7 @@ const libraries: MediaSectionGroup[] = [
                 rootId: "/audio",
                 layouts: ["list", "grid"],
                 createGroups: holdsGroups,
+                groupForm,
                 renderAsset: renderAudio,
                 acceptUploads: "audio/*",
                 uploadForm: audioUploadForm,

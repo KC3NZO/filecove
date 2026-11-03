@@ -44,6 +44,7 @@ import LibraryList from "./library-list";
 import MediaAsset from "./media-asset";
 import { ChoiceMessages, MediaFormBody } from "./media-form";
 import MediaGrid from "./media-grid";
+import MediaGroup from "./media-group";
 import MediaHeader from "./media-header";
 import MediaMove from "./media-move";
 import MediaProcess from "./media-process";
@@ -64,6 +65,7 @@ import type {
     MediaAssetDraw,
     MediaAssetParams,
     MediaChoice,
+    MediaGroupForm,
     MediaLayout,
     MediaLayouts,
     MediaPickForm,
@@ -185,6 +187,13 @@ interface ProcessStep {
 interface MoveStep {
     sectionId: string;
     entry: FileEntry;
+}
+
+/** A group being edited in its details, by its library's id, with its form as it opened. */
+interface EditStep {
+    sectionId: string;
+    entry: FileEntry;
+    form: MediaGroupForm;
 }
 
 /** Where a move under way is taking its asset or group: its library, and the groups open there. */
@@ -474,6 +483,7 @@ const MediaFrame = ({
     const { store } = useData();
     // Moves run in the background, as the file manager's do, whose queue and panel these are.
     const [moveStep, setMoveStep] = useState<MoveStep | null>(null);
+    const [editStep, setEditStep] = useState<EditStep | null>(null);
     const movePlaces = useRef(new Map<number, MovePlace>());
     const moveEnded = useRef<TransferEnded | null>(null);
     const transfers = useTransferQueue(
@@ -765,14 +775,25 @@ const MediaFrame = ({
     // Whether a group can be made at the open level: its library says so, for this level, as an
     // adapter's `createFolder` alone doesn't say a library holds groups, it can be changed, and it could
     // be listed, its listing not saying it can't be written to.
+    // A new group is asked of by the library's form, where its adapter takes what it holds, or else only
+    // named, where its adapter makes one from a name.
+    const newGroupForm = useMemo(
+        () =>
+            section?.groupForm && sectionAdapter.createGroup
+                ? section.groupForm({ group: null, parent: openGroup ?? null })
+                : null,
+        [section, sectionAdapter, openGroup],
+    );
     const createsGroups =
         !!section &&
         !!groupRule(section, openGroup ?? null) &&
-        !!sectionAdapter.createFolder &&
+        (!!newGroupForm || !!sectionAdapter.createFolder) &&
         !section.readOnly &&
         state?.status !== "error" &&
         writable;
     const creatingGroup = createsGroups && creatingAt === levelKey;
+    // Its form is a step in the library's place; a name alone is asked above it.
+    const formingGroup = creatingGroup && !!newGroupForm;
 
     // What the app's form holds for a pick until it's changed.
     const defaultsOf = useCallback(
@@ -1198,8 +1219,10 @@ const MediaFrame = ({
     const hasDetails = !!section && (!!section.properties || !!properties || !!sectionAdapter.properties);
     // Whether what's open can be moved from: as for deleting, by its adapter's `move`.
     const moves = !!section && !!sectionAdapter.move && !section.readOnly && writable;
-    // A group opens for those, or to be moved or deleted, the one way there is to.
-    const opensGroups = hasDetails || deletes || moves;
+    // Whether a group may have a form to edit it by.
+    const editsGroups = !!section?.groupForm && !!sectionAdapter.updateGroup && !section.readOnly && writable;
+    // A group opens for those, or to be edited, moved or deleted, the one way there is to.
+    const opensGroups = hasDetails || deletes || moves || editsGroups;
 
     // Opens an asset, or a group's details, in the library's place.
     const openAsset = useCallback(
@@ -1232,6 +1255,7 @@ const MediaFrame = ({
             setUploadStep(null);
             setProcessStep(null);
             setMoveStep(null);
+            setEditStep(null);
             setCreatingAt(null);
             announce(text.mediaInGroup(isolate(next.at(-1)?.name ?? section.label)));
         },
@@ -1441,6 +1465,7 @@ const MediaFrame = ({
             setUploadStep(null);
             setProcessStep(null);
             setMoveStep(null);
+            setEditStep(null);
             setCreatingAt(null);
 
             if (librariesOpen) {
@@ -1478,6 +1503,7 @@ const MediaFrame = ({
         setUploadStep(null);
         setProcessStep(null);
         setMoveStep(null);
+        setEditStep(null);
         setCreatingAt(null);
         setChosenOverlay(false);
     }, [adapterOf]);
@@ -1596,11 +1622,11 @@ const MediaFrame = ({
     const shownStep = uploadStep && uploadStep.sectionId === sectionId ? uploadStep : null;
     // Nothing to search while an asset or a step is shown in the library's place; a search under way
     // comes back with the library.
-    const searchable = !!section && !viewed && !shownStep;
+    const searchable = !!section && !viewed && !shownStep && !formingGroup;
 
     // Files dragged over the library are taken there while it's shown and takes them, of the types
     // it takes as far as a drag tells; otherwise the frame refuses them.
-    const dropsFiles = takesFiles && !viewed && !shownStep;
+    const dropsFiles = takesFiles && !viewed && !shownStep && !formingGroup;
     const patterns = useMemo(() => (section ? uploadPatterns(section) : null), [section]);
 
     const offerDrop = (event: DragEvent<HTMLElement>) => {
@@ -1955,6 +1981,19 @@ const MediaFrame = ({
             ? processStep
             : null;
 
+    // What can be edited of the group shown: its library's form for it, where its adapter takes what it
+    // holds and it can be changed.
+    const viewedEdit = useMemo(
+        () =>
+            viewedEntry && viewedGroup && editsGroups && allows("write", viewedEntry.permissions)
+                ? (section?.groupForm?.({ group: viewedEntry, parent: openGroup ?? null }) ?? null)
+                : null,
+        [viewedEntry, viewedGroup, editsGroups, section, openGroup],
+    );
+
+    const shownEdit =
+        editStep && editStep.sectionId === sectionId && editStep.entry.id === viewedEntry?.id ? editStep : null;
+
     const shownMove =
         moveStep && moveStep.sectionId === sectionId && moveStep.entry.id === viewedEntry?.id ? moveStep : null;
 
@@ -2029,6 +2068,7 @@ const MediaFrame = ({
             setViewing(null);
             setProcessStep(null);
             setMoveStep(null);
+            setEditStep(null);
             announce(text.deleteDone(1, isolate(entry.name)));
         },
         [
@@ -2067,6 +2107,7 @@ const MediaFrame = ({
         deletedAtRef.current = viewed.index;
         setViewing(null);
         setMoveStep(null);
+        setEditStep(null);
     };
 
     const retryMove = (item: TransferItem) => {
@@ -2172,6 +2213,55 @@ const MediaFrame = ({
         };
     });
 
+    // Saved: the group as it now is takes its place in any way through it and what's selected inside it,
+    // or with an id of its own now, those go, as what's inside may have new ids too. What's shown of it is
+    // asked for again, and it's listed again.
+    const groupEdited = (group: FileEntry, now: FileEntry | undefined) => {
+        const swapped = (trail: readonly FileEntry[]) =>
+            now && trail.some(({ id }) => id === group.id)
+                ? trail.map((walked) => (walked.id === group.id ? now : walked))
+                : trail;
+        const inGroup = (trail: readonly FileEntry[] | undefined) => !!trail?.some(({ id }) => id === group.id);
+        const sameAdapter = (id: string) => {
+            const from = sectionsById.get(id);
+
+            return !!from && adapterOf(from) === sectionAdapter;
+        };
+
+        if (now && now.id !== group.id) {
+            setPicks((previous) => ({
+                ...previous,
+                items: previous.items.filter((pick) => !(sameAdapter(pick.sectionId) && inGroup(pick.trail))),
+            }));
+            leaveGroup(group, sectionAdapter);
+        } else if (now) {
+            setPicks((previous) => ({
+                ...previous,
+                items: previous.items.map((pick) =>
+                    sameAdapter(pick.sectionId) && pick.trail ? { ...pick, trail: swapped(pick.trail) } : pick,
+                ),
+            }));
+            setLevels((previous) =>
+                Object.fromEntries(
+                    Object.entries(previous).map(([id, open]) => [
+                        id,
+                        open.adapter === sectionAdapter ? { ...open, trail: swapped(open.trail) } : open,
+                    ]),
+                ),
+            );
+        }
+
+        propertiesCache.forgetDetails(group, sectionAdapter);
+        relistAll(sectionAdapter);
+        setEditStep(null);
+
+        if (now && section) {
+            setViewing({ sectionId: section.id, entry: now });
+        }
+
+        announce(text.mediaGroupSaved(isolate((now ?? group).name)));
+    };
+
     const closeNewGroup = () => {
         setCreatingAt(null);
         newGroupRef.current?.focus();
@@ -2190,7 +2280,8 @@ const MediaFrame = ({
         relistAll(sectionAdapter);
         announce(text.mediaGroupCreated(isolate(group.name)));
 
-        if (hasDetails) {
+        // A form has asked what it has to, so there's nothing to go on filling in.
+        if (hasDetails && !newGroupForm) {
             setViewing({ sectionId: section.id, entry: group });
         } else {
             createdRef.current = group.id;
@@ -2283,7 +2374,7 @@ const MediaFrame = ({
                     section={section}
                     trail={trail}
                     onGoToLevel={goToLevel}
-                    showsLevelUp={!viewed && !shownStep}
+                    showsLevelUp={!viewed && !shownStep && !formingGroup}
                     levelUpRef={levelUpRef}
                     several={several}
                     librariesOpen={librariesOpen}
@@ -2300,16 +2391,17 @@ const MediaFrame = ({
                     onDismissSearch={stopSearching}
                     onFocusAssets={focusAssets}
                     // Nothing to switch while an asset or a step is shown in the library's place.
-                    otherLayout={viewed || shownStep ? undefined : otherLayout}
+                    otherLayout={viewed || shownStep || formingGroup ? undefined : otherLayout}
                     onSwitchLayout={switchLayout}
                     onNewGroup={
                         createsGroups && !viewed && !shownStep
                             ? () => (creatingGroup ? closeNewGroup() : setCreatingAt(levelKey))
                             : undefined
                     }
+                    newGroupLabel={newGroupForm?.title ?? text.mediaNewGroup}
                     creatingGroup={creatingGroup}
                     newGroupRef={newGroupRef}
-                    onUpload={takesFiles ? () => pickerRef.current?.click() : undefined}
+                    onUpload={takesFiles && !formingGroup ? () => pickerRef.current?.click() : undefined}
                     uploadRef={uploadButtonRef}
                 />
                 <input
@@ -2336,8 +2428,8 @@ const MediaFrame = ({
                     onDrop={takeDrop}
                     onPaste={pasteFiles}
                 >
-                    <Box sx={gridSx} data-covered={!!viewed || !!shownStep}>
-                        {creatingGroup && (
+                    <Box sx={gridSx} data-covered={!!viewed || !!shownStep || formingGroup}>
+                        {creatingGroup && !newGroupForm && (
                             <GroupCreate
                                 // Beside the grid, so it can't have the same key, which would leave it behind.
                                 key={`new/${levelKey}`}
@@ -2426,12 +2518,18 @@ const MediaFrame = ({
                                           })
                                     : undefined
                             }
+                            onEdit={
+                                viewedEdit
+                                    ? () =>
+                                          setEditStep({ sectionId: section.id, entry: viewed.entry, form: viewedEdit })
+                                    : undefined
+                            }
                             onMove={
                                 viewedMovable
                                     ? () => setMoveStep({ sectionId: section.id, entry: viewed.entry })
                                     : undefined
                             }
-                            covered={!!shownProcess || !!shownMove}
+                            covered={!!shownProcess || !!shownMove || !!shownEdit}
                             deletable={viewedDeletable}
                             onDeleted={() => assetDeleted(viewed.entry, viewed.index)}
                             onDeleteLeft={() => relistAll(sectionAdapter)}
@@ -2448,6 +2546,39 @@ const MediaFrame = ({
                             unavailable={!viewedProcess}
                             onCancel={() => setProcessStep(null)}
                             onSent={() => processSent(shownProcess.entry)}
+                        />
+                    )}
+                    {shownEdit && section && (
+                        <MediaGroup
+                            key={shownEdit.entry.id}
+                            group={viewed?.entry ?? shownEdit.entry}
+                            parent={openGroup ?? null}
+                            parentId={folderId}
+                            section={section}
+                            adapter={sectionAdapter}
+                            form={viewedEdit ?? shownEdit.form}
+                            backLabel={text.mediaBackToAsset(isolate(shownEdit.entry.name))}
+                            onCancel={() => setEditStep(null)}
+                            onDone={(now) => groupEdited(viewed?.entry ?? shownEdit.entry, now)}
+                            onLeft={() => {
+                                propertiesCache.forgetDetails(shownEdit.entry, sectionAdapter);
+                                relistAll(sectionAdapter);
+                            }}
+                        />
+                    )}
+                    {formingGroup && newGroupForm && section && (
+                        <MediaGroup
+                            key={`new/${levelKey}`}
+                            group={null}
+                            parent={openGroup ?? null}
+                            parentId={folderId}
+                            section={section}
+                            adapter={sectionAdapter}
+                            form={newGroupForm}
+                            backLabel={text.mediaBackToLibrary(levelName)}
+                            onCancel={closeNewGroup}
+                            onDone={(made) => made && groupCreated(made)}
+                            onLeft={() => relistAll(sectionAdapter)}
                         />
                     )}
                     {shownMove && section && (

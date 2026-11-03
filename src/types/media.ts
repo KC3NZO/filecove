@@ -71,6 +71,22 @@ export interface MediaProcessFormParams<V = Record<string, unknown>> extends Med
     sending: boolean;
 }
 
+/** What a library's group form is asked for (`MediaSection.groupForm`). */
+export interface MediaGroupTarget {
+    /** The group being edited, or `null` for one being made. */
+    group: FileEntry | null;
+    /** The group it's in, or would be made in, `null` at the library's root. */
+    parent: FileEntry | null;
+}
+
+/** What a library's group form is handed (`MediaSection.groupForm`). */
+export interface MediaGroupFormParams<V = Record<string, unknown>> extends MediaFormParams<V>, MediaGroupTarget {
+    /** The group again, or nothing for one being made, so `<MediaFields {...form} />` has it as its asset. */
+    asset: FileEntry | undefined;
+    /** Whether it's being sent to the adapter, while nothing in it should change. */
+    sending: boolean;
+}
+
 /** What a pick's form is handed (`MediaManager`'s `pickForm`). */
 export interface MediaPickFormParams<V = Record<string, unknown>> extends MediaFormParams<V> {
     asset: FileEntry;
@@ -133,8 +149,28 @@ export type MediaUploadForm<V = Record<string, unknown>> = MediaForm<MediaUpload
 /** A library's process form (`MediaSection.processForm`). */
 export type MediaProcessForm<V = Record<string, unknown>> = MediaForm<MediaProcessFormParams<V>>;
 
+/** A library's group form (`MediaSection.groupForm`). */
+export type MediaGroupForm<V = Record<string, unknown>> = MediaForm<MediaGroupFormParams<V>> & {
+    /**
+     * Its step's title, "New season" or "Edit “Season 1”", and for one being made, the name of the
+     * header's button; "New group" and "Edit “name”" without it.
+     */
+    title?: string;
+    /** Its main button; "Create" or "Save" without it. */
+    submitLabel?: string;
+    /**
+     * What it starts from when editing, in place of `defaults`, such as what the adapter's `properties`
+     * hands over or the app's own API: the form shows once it's answered, with Try again should it be
+     * refused, as a listing rarely has all of what a form asks. Not asked for a group being made.
+     */
+    load?(
+        params: { group: FileEntry; section: MediaSection; adapter: FileAdapter },
+        options: { signal: AbortSignal },
+    ): Promise<V>;
+};
+
 /**
- * What the adapter's `process`, or an upload form's `validate`, rejects with: its `message` shows over
+ * What the adapter's `process` or `createGroup` or `updateGroup`, or an upload form's `validate`, rejects with: its `message` shows over
  * the form, and `errors`, the backend's by its own keys, under the fields their `errorKey`s name, as
  * Laravel's validation answers: `Object.assign(new Error(body.message), { errors: body.errors })`.
  */
@@ -261,6 +297,15 @@ export interface MediaSection
      * where this says no; left out, moving asks nothing of it, and the backend has the say.
      */
     createGroups?: boolean | ((parent: FileEntry | null) => boolean);
+    /**
+     * What's asked of a group as it's made and edited, a form as `processForm` is, drawing anything and
+     * holding what it likes under the app's own keys, so what a group has, a cover, a teaser, is the
+     * app's: told which group and where, it returns the form, or `null` for none. Where there's one,
+     * New group shows it (where `createGroups` says one can be made) and hands what it holds to the
+     * adapter's `createGroup`, and a group's details have Edit, handing it to `updateGroup`. Without
+     * one, New group asks only a name, through `createFolder`, and there's no Edit.
+     */
+    groupForm?: (target: MediaGroupTarget) => MediaGroupForm | null;
     /**
      * What's asked of files uploaded into this library, before they're sent: the processing its
      * backend offers, such as whether a video is streamed as HLS, or a picture made smaller or turned

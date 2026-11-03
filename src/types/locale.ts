@@ -872,6 +872,18 @@ export interface MediaManagerLocaleText
     mediaCreateGroupFailed: string;
     /** Said once it's made; `name` comes isolated. */
     mediaGroupCreated: (name: string) => string;
+    /** A group's details' button opening its form (`MediaSection.groupForm`). */
+    mediaEditGroup: string;
+    /** That form's title, without one of its own; `name` comes isolated. */
+    mediaEditGroupTitle: (name: string) => string;
+    /** That form's main button, without one of its own. */
+    mediaSaveGroup: string;
+    /** Why it wasn't saved, when the adapter didn't say. */
+    mediaSaveGroupFailed: string;
+    /** Why what it starts from couldn't be loaded, when `load` didn't say. */
+    mediaLoadGroupFailed: string;
+    /** Said once it's saved; `name` comes isolated. */
+    mediaGroupSaved: (name: string) => string;
     /** The asset view's button choosing where an asset or group goes. */
     mediaMove: string;
     /** The move step's main button. */

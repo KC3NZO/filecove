@@ -55,7 +55,9 @@ interface MediaHeaderProps {
     onSwitchLayout: () => void;
     /** Opens or closes the field asking a new group's name; missing while none can be made here. */
     onNewGroup: (() => void) | undefined;
-    /** Whether that field is open. */
+    /** What it's named: the library's form's title for a new group, or else the media manager's. */
+    newGroupLabel: string;
+    /** Whether that field, or that form, is open. */
     creatingGroup: boolean;
     newGroupRef: Ref<HTMLButtonElement>;
     /** Picks files to upload into the level open; missing while it takes none. */
@@ -139,6 +141,7 @@ const MediaHeader = ({
     otherLayout,
     onSwitchLayout,
     onNewGroup,
+    newGroupLabel,
     creatingGroup,
     newGroupRef,
     onUpload,
@@ -274,7 +277,7 @@ const MediaHeader = ({
                 {onNewGroup && (
                     <TooltipIconButton
                         ref={newGroupRef}
-                        label={text.mediaNewGroup}
+                        label={newGroupLabel}
                         aria-pressed={creatingGroup}
                         sx={toggleButtonSx}
                         onClick={onNewGroup}

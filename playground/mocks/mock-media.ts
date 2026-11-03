@@ -198,6 +198,9 @@ const frameUrl = (name: string) => {
     return url;
 };
 
+/** The picture of a cover of that name, as its group's thumbnail is made from it, for the playground's form. */
+export const coverUrl = (name: string) => frameUrl(`${name}.jpg`);
+
 const isVideo = (entry: FileEntry) => entry.mimeType?.startsWith("video/") ?? false;
 const isAudio = (entry: FileEntry) => entry.mimeType?.startsWith("audio/") ?? false;
 const isImage = (entry: FileEntry) => entry.mimeType?.startsWith("image/") ?? false;
@@ -582,6 +585,9 @@ const formatOf = (entry: FileEntry) => {
 /** What's saved of an asset's editable properties, by adapter and id, as a backend keeps it. */
 const savedValues = new Map<string, PropertyValues>();
 
+/** When a group's cover was last changed, by the same keys, so its thumbnail is asked for again. */
+const coversChanged = new Map<string, Date>();
+
 /** A day some months before the playground's today, made up from a name, as ISO: "2026-05-14". */
 const dayOf = (hash: number) => new Date(Date.UTC(2026, 4, 1) - (hash % 400) * DAY).toISOString().slice(0, 10);
 
@@ -597,6 +603,7 @@ const propertiesOf = (entry: FileEntry, key: string, stock: boolean): EntryPrope
                 name: entry.name,
                 type: GROUPS[entry.id]?.type ?? "",
                 description: GROUPS[entry.id]?.description ?? "",
+                cover: GROUPS[entry.id]?.cover ? entry.name : "",
                 ...savedValues.get(key),
             },
         };
@@ -763,6 +770,7 @@ const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
                     ? listedAs(entry)
                     : {
                           ...entry,
+                          modifiedAt: coversChanged.get(`${readOnly}:${entry.id}`) ?? entry.modifiedAt,
                           meta: {
                               type: savedValues.get(`${readOnly}:${entry.id}`)?.type ?? GROUPS[entry.id]?.type,
                               description:
@@ -790,11 +798,15 @@ const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
                   wait(150, signal).then(() => statesOf(entries)),
           }),
     thumbnail: (entry, options) => {
-        // A group's cover, for those that have one, as this backend keeps it.
+        // A group's cover, for those that have one, as this backend keeps it: the one picked, or else
+        // the one it came with.
         if (entry.kind === "folder") {
-            return GROUPS[entry.id]?.cover
+            const picked = savedValues.get(`${readOnly}:${entry.id}`)?.cover;
+            const cover = typeof picked === "string" ? picked : GROUPS[entry.id]?.cover ? entry.name : "";
+
+            return cover
                 ? wait(200, options.signal)
-                      .then(() => shrink(thumbnailSource(`${entry.name}.jpg`) as Blob, options.size))
+                      .then(() => shrink(thumbnailSource(`${cover}.jpg`) as Blob, options.size))
                       .then((blob) => blob && { blob })
                 : Promise.resolve(null);
         }
@@ -896,6 +908,59 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => {
                 storedNames.set(keyOf(entry), given.name);
             }
         },
+        // A group made from what the library's form held, its name for the tree and the rest kept with
+        // it, refusing a name with "fail" in it by the field, as a Laravel validation error does.
+        createGroup: async (parentId, values, options) => {
+            const name = String(values.name ?? "").trim();
+
+            if (/fail/i.test(name)) {
+                throw Object.assign(new Error("The given data was invalid."), {
+                    errors: { name: [`The server refused “${name}”.`] },
+                });
+            }
+
+            const made = await backend.createFolder?.(parentId, name, options);
+
+            if (!made) {
+                throw new Error("Groups can't be made here.");
+            }
+
+            const { name: _named, ...rest } = values;
+
+            savedValues.set(keyOf(made), rest as PropertyValues);
+
+            return { ...made, meta: { type: rest.type, description: rest.description } };
+        },
+        // What it holds now, kept with it, its id staying, and its name a value as any asset's is.
+        updateGroup: async (group, values, options) => {
+            const name = String(values.name ?? group.name).trim();
+
+            if (/fail/i.test(name)) {
+                throw Object.assign(new Error("The given data was invalid."), {
+                    errors: { name: [`The server refused “${name}”.`] },
+                });
+            }
+
+            await wait(400, options.signal);
+
+            const given = stored(group);
+
+            const changed = values.cover !== (savedValues.get(keyOf(group))?.cover ?? "") ? new Date() : undefined;
+
+            savedValues.set(keyOf(group), { ...savedValues.get(keyOf(group)), ...values, name } as PropertyValues);
+            storedNames.set(keyOf(group), given.name);
+
+            if (changed) {
+                coversChanged.set(keyOf(group), changed);
+            }
+
+            return {
+                ...group,
+                name,
+                modifiedAt: coversChanged.get(keyOf(group)) ?? group.modifiedAt,
+                meta: { type: values.type, description: values.description },
+            };
+        },
         // What's kept of it goes with it, and of all that's in a group, as ids here are paths, and it's
         // handed back as listed, so what's selected of it keeps its delivery.
         move: async (entries, targetId, options) => {
@@ -908,6 +973,7 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => {
 
                         moveBelow(savedValues, `${readOnly}:${id}`, `${readOnly}:${moved.id}`);
                         moveBelow(storedNames, `${readOnly}:${id}`, `${readOnly}:${moved.id}`);
+                        moveBelow(coversChanged, `${readOnly}:${id}`, `${readOnly}:${moved.id}`);
                         moveBelow(uploads, id, moved.id);
                         moveBelow(audioJobs, id, moved.id);
                         moveBelow(takenPosters, id, moved.id);
@@ -931,6 +997,7 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => {
             entries.forEach((entry) => {
                 forgetBelow(savedValues, keyOf(entry));
                 forgetBelow(storedNames, keyOf(entry));
+                forgetBelow(coversChanged, keyOf(entry));
                 forgetBelow(uploads, entry.id);
                 forgetBelow(audioJobs, entry.id);
                 forgetBelow(takenPosters, entry.id);

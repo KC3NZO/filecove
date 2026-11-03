@@ -69,9 +69,11 @@ interface MediaAssetProps {
     onToggleSelected: () => void;
     /** Opens what can be asked of it, while there's anything. */
     onProcess: (() => void) | undefined;
+    /** Opens a group's form, while it has one. */
+    onEdit: (() => void) | undefined;
     /** Opens where it can be moved to, while it can be. */
     onMove: (() => void) | undefined;
-    /** Whether either is shown over it: it's hidden, but stays as it was, and takes the focus back. */
+    /** Whether any of those is shown over it: it's hidden, but stays as it was, and takes the focus back. */
     covered: boolean;
     /** Whether it can be deleted, which shows the Delete button. */
     deletable: boolean;
@@ -448,7 +450,7 @@ const Stage = ({
  * One asset in the library's place: shown by the app's previewers, or its picture, with the
  * properties its adapter hands over, editable where the library is, a way back to the library, to
  * the assets before and after it, and, while the app takes a choice, a toggle selecting it. A group
- * opens here for its fields, and to be moved or deleted, with what the app's previewers show of it and nothing
+ * opens here for its fields, to be edited, moved or deleted, with what the app's previewers show of it and nothing
  * else of an asset's.
  */
 const MediaAsset = ({
@@ -468,6 +470,7 @@ const MediaAsset = ({
     onNext,
     onToggleSelected,
     onProcess,
+    onEdit,
     onMove,
     covered,
     deletable,
@@ -528,7 +531,7 @@ const MediaAsset = ({
 
     // The button going with the focus on it, as the backend takes the work on and there's nothing more
     // to ask, the view takes the focus, so Escape still goes back.
-    const offered = !!onProcess || !!onMove;
+    const offered = !!onProcess || !!onEdit || !!onMove;
 
     useEffect(() => {
         if (!offered && !covered && focusLost()) {
@@ -601,6 +604,18 @@ const MediaAsset = ({
                     >
                         <Icon name="delete" fontSize="small" />
                     </TooltipIconButton>
+                )}
+                {onEdit && (
+                    <Button
+                        color="inherit"
+                        sx={processSx}
+                        onClick={(event) => {
+                            openerRef.current = event.currentTarget;
+                            onEdit();
+                        }}
+                    >
+                        {text.mediaEditGroup}
+                    </Button>
                 )}
                 {onProcess && (
                     <Button

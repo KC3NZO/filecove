@@ -417,6 +417,7 @@ const groupProperties: PropertyDefinitionGroup[] = [
         properties: [
             { field: "type", label: "Type", type: "string", options: GROUP_TYPES, editable: true },
             { field: "description", label: "Description", type: "string", multiline: true, editable: true },
+            { field: "released", label: "Released", type: "date", editable: false },
         ],
     },
 ];

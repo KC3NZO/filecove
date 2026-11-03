@@ -772,4 +772,18 @@ export interface FileAdapter {
      * offered.
      */
     process?(entry: FileEntry, values: Readonly<Record<string, unknown>>, options: OperationOptions): Promise<void>;
+    /**
+     * Makes a group in `parentId` from what the library's `groupForm` holds, which the media manager
+     * never reads, and resolves with its entry, of `kind: "folder"`. Reject with an `Error` to show its
+     * message over the form, which stays as the user left it, naming fields as `process` can
+     * (`MediaFormRefusal`). Without it, New group asks only a name, through `createFolder`.
+     */
+    createGroup?(parentId: string, values: Readonly<Record<string, unknown>>, options: OperationOptions): Promise<FileEntry>;
+    /**
+     * Changes a group by what the library's `groupForm` holds, and resolves with its entry as it now
+     * is, when it can say, which any way through it and what's selected inside it follow. Its id
+     * changing, what's selected inside it is dropped, as those ids may be dead too. Reject as
+     * `createGroup` does. Without it, a group's details have no Edit.
+     */
+    updateGroup?(group: FileEntry, values: Readonly<Record<string, unknown>>, options: OperationOptions): Promise<FileEntry | void>;
 }
