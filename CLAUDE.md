@@ -27,10 +27,10 @@ There is no test runner configured.
 
 **Source.** `src/` is organised by kind of code, and `src/components/` holds only components. File names are lowercase.
 
-- `index.ts` is the public entry. It exports `FileManager`, `MediaManager`, `MediaFields`, `MediaTile`, `MediaRow`, `PropertyDisplay`, `IconProvider`, `enUS` (the English text of both) and the public types, and nothing else is public.
+- `index.ts` is the public entry. It exports `FileManager`, `MediaManager`, `MediaPicker`, `MediaFields`, `MediaTile`, `MediaRow`, `PropertyDisplay`, `IconProvider`, `enUS` (the English text of both) and the public types, and nothing else is public.
 - `components/file-manager/` is the frame and its parts (`sidebar/`, `header-bar/`, `content/`, `context-menu/`, `dialogs/`, and `properties-pane.tsx`, which places the properties panel).
 - `components/uploads/`, `components/downloads/`, `components/transfers/` and `components/properties/` have the upload, download, copy and move, and properties panels, kept free of file manager imports so the planned media manager can reuse them (see `uploads.md`, `download.md`, `transfers.md` and `properties.md`).
-- `components/media-manager/` is `MediaManager`, a sibling of the file manager for looking through and choosing media, built from the shared parts and importing nothing from `components/file-manager/` (see `media-manager.md`).
+- `components/media-manager/` is `MediaManager`, a sibling of the file manager for looking through and choosing media, built from the shared parts and importing nothing from `components/file-manager/`, and `MediaPicker`, one library to find or upload an asset in for a field pointing at it, with nothing for managing it (see `media-manager.md`).
 - `components/buttons/` has `TooltipIconButton`, the icon-only button with a tooltip, and `ToolbarActions`, the app's actions as a header's buttons and "More actions" menu, shared by the file manager and the panels.
 - `components/icons/` has `Icon`, `IconProvider`, `IconSlot` (a name or the consumer's element in an icon's box), and `FileTypeIcon` / `FolderTypeIcon`, the only way to render `@react-symbols/icons`.
 - `types/` holds shared and exported types, one file per domain, re-exported from `types/index.ts`. Files marked internal stay out of `src/index.ts`.

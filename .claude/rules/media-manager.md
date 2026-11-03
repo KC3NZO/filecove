@@ -6,6 +6,8 @@ paths:
   - "src/utils/field-errors.ts"
   - "src/hooks/use-asset-states.ts"
   - "src/hooks/use-asset-look.ts"
+  - "src/hooks/use-media-search.ts"
+  - "src/hooks/use-files-drop.ts"
   - "src/contexts/asset-look-context.ts"
   - "src/components/properties/property-display.tsx"
   - "src/types/media.ts"
@@ -21,6 +23,7 @@ paths:
   - "playground/media-properties.tsx"
   - "playground/media-processing.tsx"
   - "playground/poster-time.tsx"
+  - "playground/media-relation.tsx"
   - "playground/media-uploads.tsx"
   - "playground/mocks/mock-media.ts"
   - "playground/mocks/mock-save.ts"
@@ -231,6 +234,20 @@ An asset already uploaded can be asked to be made into something more or again (
 - **Afterwards** (`processSent`): what was said of the asset before is forgotten (`forget`), as a failed one isn't followed and would stay failed over its new listing, and every library on its adapter is listed again, so it's followed as any. Process going from the view, as it's busy, with the focus on it, the view takes the focus.
 - **A pick** keeps its entry as last listed (an effect on `listed`, by adapter and id), so what's handed over while another library is shown has what's been made of it since (a new `meta`), and is followed there as it's listed.
 
+## The picker
+
+`MediaPicker` (`media-picker.tsx`, public, with `picker-frame.tsx` inside its contexts) is one library to find an asset in and choose it, for a field pointing at an asset of another library, such as a series' teaser or its poster. The user's objection (2026-11-03) to opening a `MediaManager` inside a property's `renderEdit`: it has no guards there and its design doesn't fit. So it's a sibling, not a mode, and **what it can't do is left out rather than turned off**: no list of libraries, asset view, selected column, pick forms, Delete, Move or New group. A `mode` on the frame was declined, as every management feature would then have to be checked against it.
+
+- **What it has**: `section` (one, the same object `MediaManager` takes, of which only `layouts`, the drawing props, `selectable`, `acceptUploads` and `uploadForm` count), the levels and the search of the header (`MediaHeader`), the grid (`MediaGrid`, `opensAssets={false}`, so no Open button, and a double click or Enter on one held only says why), `multiple`, `maxChoices`, `defaultValue`, `onChoose(assets)`, `FileEntry[]`, and `onCancel`, a Cancel button beside Choose. Its foot is its own, as `ChooseBar` hides beside the selected column. It has no dialog: where it's placed is the app's.
+- **Uploading** (`allowUpload`, off by default, as nothing else in it changes the backend): Upload, a drop and a paste into the level open, needing the adapter's `upload` and `takesUploads`, the library's `uploadForm` asked first on the shared `MediaUpload` step, the shared panel, and each file selected as it arrives, holding Choose back while processed, as in the media manager. The uploads go as the picker unmounts (`useUploadQueue`).
+- **What's filled in** (the user's question, 2026-11-03): what an asset needs to exist is its library's `uploadForm`, so it's asked here; what's about this use of it is a field of the app's, beside the picker's field. One already there and missing something is refused by the library's `selectable`, and fixed in the media manager, as there's no details here.
+- **Nested**: it has a folder store and caches of its own, so an upload here doesn't list the media manager around it again until it next lists that level. Drags, drops and pastes stop at its root, as they'd bubble through a dialog's portal to a media manager's panel; Ctrl+F goes by `defaultPrevented` and `contains`, and Escape by the dialog.
+- **Shared with the frame**: `useMediaSearch`, `useFilesDrop`, `DropZone`, `byDate`, the header, grid, tiles, upload step and panel. Levels and arrivals are written again in `picker-frame.tsx`, smaller, as one library has no picks across libraries; `media-frame.tsx` wasn't split further, so a fix to either may belong in both.
+- **The search** filters the open level by name, as the media manager's does until "Search" on the roadmap is done, when both should follow.
+- **Not there**: the layout controlled (it's kept inside, starting from the first offered), `canSelect` (a `selectable` on the section passed does it, as each use can pass its own), reordering.
+- **For a list of names**: an app wanting only to find one by typing, such as a document, can use MUI's `Autocomplete` over `adapter.search`, with nothing of ours; the picker is for what's recognised by looking, what's in groups, or what may need uploading.
+- **The playground**: `playground/media-relation.tsx`, Teaser (Videos) and Poster (Images) on a Series, by `renderEdit` in Audio's `groupForm` and `render` in a group's details: a button opening the picker in a MUI `Dialog`, `allowUpload`. Audio, The Harbour Hour, its details, Edit.
+
 ## Text
 
 `MediaManagerLocaleText` (public) has the media manager's own keys, named `media…` (`mediaPreviewFailed` for a previewer that failed without saying why), extends the properties panel's (`PropertiesLocaleText`, whose `propertiesNone`, `propertiesAddOption`, `propertiesAddTag`, `propertiesRemoveTag`, `propertiesYes` and `propertiesNo` `MediaFields` reads too, as it draws by the same controls) and the upload panel's (`UploadLocaleText`), and picks the few of the file manager's both show (`loading`, `cancel`, `close`, `tryAgain`, `itemCount`, the type labels, and the upload check's `upload`, `uploadTitle`, `uploadFailedTitle`, `uploadFoldersFailedTitle`, `uploadFoldersOnly`, `uploadFoldersLeftOut`, `uploadTypesOnly`, `uploadTypesLeftOut` and `uploadNamesRefused`). The app's forms, properties and previewers bring their own text, in the app's language. `enUS` has every key of both components (`LocaleText`, internal), and `Locale.text` is that, so the shared panels read theirs whichever component provides it (see `locale.md`).
@@ -253,7 +270,7 @@ An asset already uploaded can be asked to be made into something more or again (
 
 - **Renaming where the id changes with the name**, as paths are: the asset view and the picks go by id, and `updateProperties` can't say what it became.
 - What the app gets to prefill a pick's form from (the asset's own properties).
-- **Acting on an asset's parts**: choosing the poster in use, uploading into one (a custom poster, a subtitle file), picking an asset of another library to link (the media manager opened as a picker), "used by" before an asset others link to is deleted. They're property groups until then.
+- **Acting on an asset's parts**: choosing the poster in use, uploading into one (a custom poster, a subtitle file), picking an asset of another library to link is `MediaPicker` in a field of the app's (see "The picker"), "used by" before an asset others link to is deleted. They're property groups until then.
 - **Upload forms per file**, for a batch of several, should apps need them.
 - **Processing**: a panel of everything being processed across libraries, should apps want one (each tile says it for now, and the listing again after a reload); taking out what can't be chosen in one go; processing several assets at once (one at a time from its view for now); a job of its own named in the header ("Transcribe") or started beside what it makes, as a `render` of the app's could, should apps want them (the one Process button and its fields for now); and more than one standing per asset, as one bar says all its work.
 - **The props checklist** (`props.md`): the open library, the search, the selection (`value` / `onChange`, `MediaChoice[]` with their values; only `defaultValue` so far) and the asset open controlled (`x` / `defaultX` / `onXChange`), an `apiRef` (focus, refresh, open a library, open an asset, select, choose), `limits`, `relistAfter`, and announcements, such as the number of matches.
