@@ -162,13 +162,14 @@ Tests, moving entries to another adapter's trash (each backend's trash holds its
 
 #### Optional
 - [ ] Prefilling a pick's fields from the asset's own properties.
-- [ ] The selected column's extras, if apps need them: a `max`, the app's own check disabling Choose with its message, resizing it.
+- [ ] The selected column's extras, if apps need them: a least number to choose, resizing it.
 - [ ] Resizing the docked libraries (`ResizeEdge`, once shared out of `file-manager/`).
 - [ ] Touch: a long-press, and the check on every tile while selecting several.
 - [ ] Other sort orders than newest first, and a list view.
 - [ ] Folders a library lists, left out for now.
 
 #### Done
+- [x] Limiting the selection. *Done 2026-11-02: `maxChoices`, how many with `multiple`, the column and the choose bar saying "3 of 5", those not selected dimmed once there's no room, a range adding what fits; and `canSelect(asset, section, choices)`, the app's rule beside what's picked, such as one video at most, whose refusals show on their tiles. Too many from `defaultValue` stay, those past it or breaking the rule holding Choose back (see "Limiting the selection" in `media-manager.md`). The playground's `?max=` and `?oneVideo`.*
 - [x] Reordering the selected column. *Done 2026-10-27: by dragging, a long press on touch, and the keyboard (Space to pick one up, the arrows to move it), each step announced.*
 - [x] The backend's errors for the picks' fields. *Done 2026-10-31: `errors` (`FieldErrors`, public) takes what the app's backend answered as it came, by its own keys, a message or several each, as Laravel's validation errors are; a field's `errorKey({ index, entry })` names its key from the pick's place among those selected, its messages show under it, its control marked as wrong and described by them, and the pick's row in the list says how many of its fields have one (`mediaChoiceProblems`); a field the app draws reads `errors` and `index` from its params itself (`PropertyParams.errors`, `index`, `errorId`, and `error` for `render` too). The playground's Choose saves to a mock backend first (`mocks/mock-save.ts`).*
 - [x] The backend's errors no field claims, and errors following their pick. *Done 2026-10-31: `choiceErrorKey({ index, entry })` names a pick's own keys (`media.0`, `media.0.id`), shown at the top of its details and counted on its row as one more to fix ("2 to fix"); a field's `errorKey` may name several keys, such as a title a language under tabs, counted once with every language's messages under it, so it's the only way a field is counted, and a field the app draws reads `errors` only to mark finer parts of its own; the keys go by the order the app was handed the picks in at Choose, so a pick moved keeps its errors, one taken out takes them, and one added since has none, with nothing asked of the app. The list's own errors (`media`) are the app's to show, and keys nobody names aren't shown, as the app may pass its whole form's (`selectionErrorKey` declined). The playground's backend answers by `media.N.translations.en.title`, with a video's title as one tabbed field.*
