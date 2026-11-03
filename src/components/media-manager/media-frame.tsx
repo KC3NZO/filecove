@@ -161,6 +161,8 @@ interface Picks {
 interface Viewing {
     sectionId: string;
     entry: FileEntry;
+    /** Whether it's the group that was open, opened from inside it, so going back goes back in. */
+    fromInside?: boolean;
 }
 
 /**
@@ -474,7 +476,9 @@ const MediaFrame = ({
     const backFromRef = useRef<string | null>(null);
     const deletedAtRef = useRef<number | null>(null);
     const levelFocusRef = useRef<LevelFocus | null>(null);
-    const levelUpRef = useRef<HTMLButtonElement>(null);
+    const groupDetailsRef = useRef<HTMLButtonElement>(null);
+    // Going back into a group from its details, which gives the focus back to the button they opened from.
+    const backInsideRef = useRef(false);
     // The level a new group's name is being asked at, the button asking it, and the group just made,
     // whose tile takes the focus once it's listed, with no details to open.
     const [creatingAt, setCreatingAt] = useState<string | null>(null);
@@ -1223,6 +1227,14 @@ const MediaFrame = ({
     const editsGroups = !!section?.groupForm && !!sectionAdapter.updateGroup && !section.readOnly && writable;
     // A group opens for those, or to be edited, moved or deleted, the one way there is to.
     const opensGroups = hasDetails || deletes || moves || editsGroups;
+    // The same from inside one, where what's allowed at the level it's in isn't known until it's there.
+    const opensOpenGroup =
+        !!section &&
+        (hasDetails ||
+            (!section.readOnly &&
+                (!!sectionAdapter.delete ||
+                    !!sectionAdapter.move ||
+                    (!!section.groupForm && !!sectionAdapter.updateGroup))));
 
     // Opens an asset, or a group's details, in the library's place.
     const openAsset = useCallback(
@@ -1315,7 +1327,7 @@ const MediaFrame = ({
             tile.focus();
             tile.scrollIntoView({ block: "nearest" });
         } else {
-            (levelUpRef.current ?? searchButtonRef.current)?.focus();
+            (groupDetailsRef.current ?? searchButtonRef.current)?.focus();
         }
     }, [shownEntries, state?.status, folderId]);
 
@@ -1338,13 +1350,47 @@ const MediaFrame = ({
         }
     }, [shownEntries]);
 
-    // Back to the library, the asset's tile taking the focus when the view had it.
+    // The details of the group open, shown from the level it's in, as it's that level it's moved from,
+    // deleted from and listed in. The view takes the focus, so no tile is asked to.
+    const openGroupDetails = useCallback(() => {
+        if (!section || !openGroup) {
+            return;
+        }
+
+        setLevels((previous) => ({
+            ...previous,
+            [section.id]: { rootId: section.rootId, adapter: sectionAdapter, trail: trail.slice(0, -1) },
+        }));
+        setQuery("");
+        setSearching(false);
+        setCreatingAt(null);
+        setViewing({ sectionId: section.id, entry: openGroup, fromInside: true });
+    }, [section, sectionAdapter, openGroup, trail]);
+
+    // Back to the library, the asset's tile taking the focus when the view had it; or back into the
+    // group its details were opened from, as it was left.
     const closeAsset = useCallback(() => {
         const view = panelRef.current?.querySelector("section");
+        const hadFocus = view?.contains(document.activeElement) || focusLost();
 
-        backFromRef.current = view?.contains(document.activeElement) || focusLost() ? (viewing?.entry.id ?? null) : null;
+        if (viewing?.fromInside) {
+            showLevel([...trail, viewed?.entry ?? viewing.entry], null);
+            levelFocusRef.current = null;
+            backInsideRef.current = hadFocus;
+
+            return;
+        }
+
+        backFromRef.current = hadFocus ? (viewing?.entry.id ?? null) : null;
         setViewing(null);
-    }, [viewing]);
+    }, [viewing, viewed, trail, showLevel]);
+
+    useLayoutEffect(() => {
+        if (backInsideRef.current && groupDetailsRef.current) {
+            backInsideRef.current = false;
+            groupDetailsRef.current.focus();
+        }
+    }, [viewed, trail]);
 
     useLayoutEffect(() => {
         const id = backFromRef.current;
@@ -1369,7 +1415,7 @@ const MediaFrame = ({
             tile.focus();
             tile.scrollIntoView({ block: "nearest" });
         } else {
-            (levelUpRef.current ?? searchButtonRef.current)?.focus();
+            (groupDetailsRef.current ?? searchButtonRef.current)?.focus();
         }
     }, [viewed, shownEntries]);
 
@@ -2256,7 +2302,7 @@ const MediaFrame = ({
         setEditStep(null);
 
         if (now && section) {
-            setViewing({ sectionId: section.id, entry: now });
+            setViewing((previous) => ({ ...previous, sectionId: section.id, entry: now }));
         }
 
         announce(text.mediaGroupSaved(isolate((now ?? group).name)));
@@ -2374,8 +2420,8 @@ const MediaFrame = ({
                     section={section}
                     trail={trail}
                     onGoToLevel={goToLevel}
-                    showsLevelUp={!viewed && !shownStep && !formingGroup}
-                    levelUpRef={levelUpRef}
+                    onGroupDetails={opensOpenGroup && !viewed && !shownStep && !formingGroup ? openGroupDetails : undefined}
+                    groupDetailsRef={groupDetailsRef}
                     several={several}
                     librariesOpen={librariesOpen}
                     librariesOpenerRef={librariesOpenerRef}
@@ -2401,7 +2447,12 @@ const MediaFrame = ({
                     newGroupLabel={newGroupForm?.title ?? text.mediaNewGroup}
                     creatingGroup={creatingGroup}
                     newGroupRef={newGroupRef}
-                    onUpload={takesFiles && !formingGroup ? () => pickerRef.current?.click() : undefined}
+                    // Not from a group's details opened from inside it, where it would go in the level above.
+                    onUpload={
+                        takesFiles && !formingGroup && !viewing?.fromInside
+                            ? () => pickerRef.current?.click()
+                            : undefined
+                    }
                     uploadRef={uploadButtonRef}
                 />
                 <input
@@ -2488,7 +2539,7 @@ const MediaFrame = ({
                             section={section}
                             layout={layout}
                             adapter={sectionAdapter}
-                            backTo={levelName}
+                            backTo={viewing?.fromInside ? viewed.entry.name : levelName}
                             choosing={choosing}
                             selected={selectedIds.has(viewed.entry.id)}
                             hold={viewedHold}

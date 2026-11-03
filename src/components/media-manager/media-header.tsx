@@ -25,9 +25,9 @@ interface MediaHeaderProps {
     trail: readonly FileEntry[];
     /** Goes to the level with that many groups of the trail open. */
     onGoToLevel: (depth: number) => void;
-    /** Whether the button going up a level is shown, which it isn't while something's in the library's place. */
-    showsLevelUp: boolean;
-    levelUpRef: Ref<HTMLButtonElement>;
+    /** Opens the details of the group open; missing at the root, and while something's in the library's place. */
+    onGroupDetails: (() => void) | undefined;
+    groupDetailsRef: Ref<HTMLButtonElement>;
     /** Whether there's more than one library, to choose among from a drawer where the list doesn't dock. */
     several: boolean;
     /** Whether that drawer is open. */
@@ -113,17 +113,17 @@ const uploadSx: SxProps<Theme> = {
 };
 
 /**
- * Above the library: the button opening the libraries where they don't dock, inside a group the
- * button going up a level, its name, or the path to the group open, or the search field in its place
- * while searching, the button opening that, the button switching its layout, while
- * it offers another, New group, while one can be made here, and Upload, while it takes files.
+ * Above the library: the button opening the libraries where they don't dock, its name, or the path
+ * to the group open, each step of it going back there, or the search field in its place while
+ * searching, the button opening that, the button switching its layout, while it offers another, the
+ * details of the group open, New group, while one can be made here, and Upload, while it takes files.
  */
 const MediaHeader = ({
     section,
     trail,
     onGoToLevel,
-    showsLevelUp,
-    levelUpRef,
+    onGroupDetails,
+    groupDetailsRef,
     several,
     librariesOpen,
     librariesOpenerRef,
@@ -151,7 +151,6 @@ const MediaHeader = ({
     const inGroup = trail.length > 0;
     // What's open: the search goes through this, and a level up goes to the one before.
     const levelName = trail.at(-1)?.name ?? section?.label ?? "";
-    const parentName = trail.at(-2)?.name ?? section?.label ?? "";
 
     const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
         const plain = !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
@@ -198,15 +197,6 @@ const MediaHeader = ({
                         onClick={onOpenLibraries}
                     >
                         <Icon name="menu" fontSize="small" />
-                    </TooltipIconButton>
-                )}
-                {inGroup && showsLevelUp && !searching && (
-                    <TooltipIconButton
-                        ref={levelUpRef}
-                        label={text.mediaBackToLibrary(isolate(parentName))}
-                        onClick={() => onGoToLevel(trail.length - 1)}
-                    >
-                        <Icon name="arrowBack" fontSize="small" />
                     </TooltipIconButton>
                 )}
                 <Box sx={nameSlotSx}>
@@ -272,6 +262,15 @@ const MediaHeader = ({
                         onClick={onSwitchLayout}
                     >
                         <Icon name={otherLayout === "grid" ? "gridView" : "listView"} fontSize="small" />
+                    </TooltipIconButton>
+                )}
+                {inGroup && onGroupDetails && !searching && (
+                    <TooltipIconButton
+                        ref={groupDetailsRef}
+                        label={text.mediaGroupDetails(isolate(levelName))}
+                        onClick={onGroupDetails}
+                    >
+                        <Icon name="info" fontSize="small" />
                     </TooltipIconButton>
                 )}
                 {onNewGroup && (
