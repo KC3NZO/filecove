@@ -16,6 +16,8 @@ interface GroupPathProps {
     trail: readonly FileEntry[];
     /** Goes to the level with that many groups of the trail open. */
     onGoToLevel: (depth: number) => void;
+    /** Whether the level it ends at names what's shown as a heading, as it does in the header. */
+    heading?: boolean;
 }
 
 const pathSx: SxProps<Theme> = {
@@ -75,11 +77,11 @@ const separatorSx: SxProps<Theme> = {
 /**
  * Where the group open is, as it was walked to, as it's only ever listed a level at a time: the
  * library's name and the groups on the way, each going back there, and the one open, which names
- * what's shown.
+ * what's shown: the library itself, with no group open.
  */
-const GroupPath = ({ label, trail, onGoToLevel }: GroupPathProps) => {
+const GroupPath = ({ label, trail, onGoToLevel, heading = true }: GroupPathProps) => {
     const { text } = useLocale();
-    const before = [label, ...trail.slice(0, -1).map(({ name }) => name)];
+    const before = trail.length > 0 ? [label, ...trail.slice(0, -1).map(({ name }) => name)] : [];
 
     return (
         <Box component="nav" aria-label={text.mediaGroupPath} sx={pathSx}>
@@ -93,8 +95,8 @@ const GroupPath = ({ label, trail, onGoToLevel }: GroupPathProps) => {
                     </Box>
                 ))}
                 <Box component="li" sx={itemSx}>
-                    <Typography component="h2" noWrap aria-current="page" sx={currentSx}>
-                        <bdi>{trail.at(-1)?.name}</bdi>
+                    <Typography component={heading ? "h2" : "span"} noWrap aria-current="page" sx={currentSx}>
+                        <bdi>{trail.at(-1)?.name ?? label}</bdi>
                     </Typography>
                 </Box>
             </Box>

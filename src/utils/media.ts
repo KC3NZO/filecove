@@ -29,6 +29,10 @@ export const KIND_ICONS: Record<MediaKind, IconName> = {
 export const layoutsOf = (section: MediaSection): readonly MediaLayout[] =>
     section.layouts?.length ? section.layouts : [section.kind === "audio" ? "list" : "grid"];
 
+/** What a library says of groups going into a level, the group open or `null` at its root; nothing unsaid. */
+export const groupRule = (section: MediaSection, parent: FileEntry | null) =>
+    typeof section.createGroups === "function" ? section.createGroups(parent) : section.createGroups;
+
 /**
  * Sorts what was picked, dropped or pasted into a level of a library before anything is sent: files of
  * types it doesn't take (`acceptUploads`), folders, as what a group is, and so what one given would make,

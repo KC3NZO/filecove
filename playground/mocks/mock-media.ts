@@ -843,6 +843,16 @@ const forgetBelow = <V>(kept: Map<string, V>, key: string) => {
         .forEach((each) => kept.delete(each));
 };
 
+/** Moves what's kept under a key, and below it, to another, as a moved group's ids change here. */
+const moveBelow = <V>(kept: Map<string, V>, from: string, to: string) => {
+    [...kept]
+        .filter(([each]) => each === from || each.startsWith(`${from}/`))
+        .forEach(([each, value]) => {
+            kept.delete(each);
+            kept.set(`${to}${each.slice(from.length)}`, value);
+        });
+};
+
 /**
  * A media backend whose assets are renamed and deleted: a name is a value kept with the asset, its id
  * staying as a database's would, so what's kept by id follows it. The mock's tree has paths for ids,
@@ -885,6 +895,33 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => {
             if (typeof values.name === "string") {
                 storedNames.set(keyOf(entry), given.name);
             }
+        },
+        // What's kept of it goes with it, and of all that's in a group, as ids here are paths, and it's
+        // handed back as listed, so what's selected of it keeps its delivery.
+        move: async (entries, targetId, options) => {
+            const result = await backend.move?.(entries.map(stored), targetId, options);
+
+            return (
+                result && {
+                    entries: result.entries.map((moved, index) => {
+                        const { id } = entries[index];
+
+                        moveBelow(savedValues, `${readOnly}:${id}`, `${readOnly}:${moved.id}`);
+                        moveBelow(storedNames, `${readOnly}:${id}`, `${readOnly}:${moved.id}`);
+                        moveBelow(uploads, id, moved.id);
+                        moveBelow(audioJobs, id, moved.id);
+                        moveBelow(takenPosters, id, moved.id);
+                        Object.keys(GROUPS)
+                            .filter((each) => each === id || each.startsWith(`${id}/`))
+                            .forEach((each) => {
+                                GROUPS[`${moved.id}${each.slice(id.length)}`] = GROUPS[each];
+                                delete GROUPS[each];
+                            });
+
+                        return named(moved.kind === "file" ? listedAs(moved) : moved);
+                    }),
+                }
+            );
         },
         // What's kept of it goes too, and of all that's in a group, as a file uploaded or a group made
         // later under its name gets its id.

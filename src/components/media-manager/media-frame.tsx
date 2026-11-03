@@ -10,6 +10,7 @@ import { useAnnouncer } from "../../hooks/use-announcer";
 import { useAssetStates } from "../../hooks/use-asset-states";
 import { useData, useFolder } from "../../hooks/use-folder";
 import { useLocale } from "../../hooks/use-locale";
+import { useTransferQueue } from "../../hooks/use-transfer-queue";
 import { useSetting } from "../../hooks/use-setting";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { CHOICES_WIDTH, mediaMedium, mediaWide } from "../../styles/media-layout";
@@ -22,6 +23,7 @@ import { isHidden } from "../../utils/hidden";
 import { countLimit } from "../../utils/limits";
 import {
     checkMediaUpload,
+    groupRule,
     holdOf,
     layoutsOf,
     withState,
@@ -32,6 +34,7 @@ import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
 import { pressesKey } from "../../utils/shortcut";
 import Icon from "../icons/icon";
+import TransferPanel from "../transfers/transfer-panel";
 import UploadPanel from "../uploads/upload-panel";
 import { choiceKey } from "./choice-list";
 import ChoicesPane from "./choices-pane";
@@ -42,10 +45,12 @@ import MediaAsset from "./media-asset";
 import { ChoiceMessages, MediaFormBody } from "./media-form";
 import MediaGrid from "./media-grid";
 import MediaHeader from "./media-header";
+import MediaMove from "./media-move";
 import MediaProcess from "./media-process";
 import MediaUpload from "./media-upload";
 
 import type { PropertiesCache } from "../../store/properties-cache";
+import type { TransferEnded } from "../../store/transfer-queue";
 import type {
     AssetHold,
     DroppedFiles,
@@ -69,6 +74,7 @@ import type {
     MediaUploadForm,
     PropertyDefinitionGroup,
     PropertyErrorKeyParams,
+    TransferItem,
 } from "../../types";
 
 export interface MediaFrameProps {
@@ -175,6 +181,18 @@ interface ProcessStep {
     form: MediaProcessForm;
 }
 
+/** An asset or group being asked where it goes, by its library's id, as it was when that opened. */
+interface MoveStep {
+    sectionId: string;
+    entry: FileEntry;
+}
+
+/** Where a move under way is taking its asset or group: its library, and the groups open there. */
+interface MovePlace {
+    sectionId: string;
+    trail: readonly FileEntry[];
+}
+
 /** Where an upload went: its library, and the root or group in it. */
 interface UploadLevel {
     sectionId: string;
@@ -197,6 +215,7 @@ const NO_IDS: ReadonlySet<string> = new Set();
 const NO_PICKS: Picks = { items: [], anchor: null };
 const NO_VALUES: Record<string, unknown> = {};
 const NO_ERROR_KEYS: readonly string[] = [];
+const NO_FOLDER_IDS: readonly string[] = [];
 // The choices made from a pick's form's defaults, nothing being changed yet, so what's made from them
 // again is too, and they go on following the form.
 const DEFAULTED = new WeakSet<MediaChoice>();
@@ -453,6 +472,23 @@ const MediaFrame = ({
     const newGroupRef = useRef<HTMLButtonElement>(null);
     const createdRef = useRef<string | null>(null);
     const { store } = useData();
+    // Moves run in the background, as the file manager's do, whose queue and panel these are.
+    const [moveStep, setMoveStep] = useState<MoveStep | null>(null);
+    const movePlaces = useRef(new Map<number, MovePlace>());
+    const moveEnded = useRef<TransferEnded | null>(null);
+    const transfers = useTransferQueue(
+        (item, outcome, items, made) => moveEnded.current?.(item, outcome, items, made),
+        text,
+    );
+
+    // What's on its way elsewhere is gone from where it was, until it's back should it not go.
+    const movingIds = useMemo(() => {
+        const moving = transfers.items.filter(
+            (item) => item.adapter === sectionAdapter && (item.status === "queued" || item.status === "running"),
+        );
+
+        return moving.length > 0 ? new Set(moving.flatMap((item) => item.entries.map(({ id }) => id))) : NO_IDS;
+    }, [transfers.items, sectionAdapter]);
 
     // Uploading: the step before files are sent, files dragged over the library, the level each
     // upload went into, by its id, and what's just arrived, waiting to be listed.
@@ -545,11 +581,11 @@ const MediaFrame = ({
     // on a later page doesn't jump.
     const level = useMemo(() => {
         const shown = (state?.entries ?? NO_ENTRIES).filter(
-            (entry) => !isHidden(entry) && !deletedIds.has(entry.id),
+            (entry) => !isHidden(entry) && !deletedIds.has(entry.id) && !movingIds.has(entry.id),
         );
 
         return inGroup ? shown : shown.sort(byDate(compareNames));
-    }, [state?.entries, deletedIds, compareNames, inGroup]);
+    }, [state?.entries, deletedIds, movingIds, compareNames, inGroup]);
 
     // Its assets: they're all of the library's kind, so nothing is sorted into kinds here.
     const listed = useMemo(() => level.filter((entry) => !isGroup(entry)), [level]);
@@ -578,19 +614,19 @@ const MediaFrame = ({
     );
 
     // An asset done with being processed: every library on its adapter is listed again, as what it
-    // has may have changed with it.
+    // has may have changed with it, and any other folders asked for.
     const relistAll = useCallback(
-        (served: FileAdapter) =>
-            relist(
-                served,
-                sections
+        (served: FileAdapter, others: readonly string[] = NO_FOLDER_IDS) =>
+            relist(served, [
+                ...others,
+                ...sections
                     .filter((item) => adapterOf(item) === served)
                     .flatMap(({ id, rootId }) => {
                         const groupId = levels[id]?.trail.at(-1)?.id;
 
                         return groupId === undefined ? [rootId] : [rootId, groupId];
                     }),
-            ),
+            ]),
         [relist, sections, adapterOf, levels],
     );
 
@@ -729,11 +765,9 @@ const MediaFrame = ({
     // Whether a group can be made at the open level: its library says so, for this level, as an
     // adapter's `createFolder` alone doesn't say a library holds groups, it can be changed, and it could
     // be listed, its listing not saying it can't be written to.
-    const allowsGroups =
-        typeof section?.createGroups === "function" ? section.createGroups(openGroup ?? null) : section?.createGroups;
     const createsGroups =
         !!section &&
-        !!allowsGroups &&
+        !!groupRule(section, openGroup ?? null) &&
         !!sectionAdapter.createFolder &&
         !section.readOnly &&
         state?.status !== "error" &&
@@ -750,7 +784,8 @@ const MediaFrame = ({
     // open library, once that's listed, as it's listed now, and gone when it isn't any more; picked
     // anywhere else, as the open level lists it when it does, through the same adapter, or else as it
     // was picked. One the app gave has no known level, so it's only known to be gone from a library
-    // whose root holds no groups, where it can only have been.
+    // whose root holds no groups, where it can only have been. One on its way elsewhere isn't listed
+    // only for that, so it stays as it was.
     const choices = useMemo<MediaChoice[]>(() => {
         const listedById = state?.status === "ready" ? new Map(library.map((entry) => [entry.id, entry])) : undefined;
         const flat = !inGroup && library.length === leveled.length;
@@ -767,7 +802,7 @@ const MediaFrame = ({
             const atOpenLevel =
                 pickedIn === sectionId && (pickedAmong ? (pickedAmong.at(-1)?.id ?? from.rootId) === folderId : flat);
             const now =
-                listedById && atOpenLevel
+                listedById && atOpenLevel && !(served === sectionAdapter && movingIds.has(asset.id))
                     ? listedNow
                     : (listedNow ?? withState(asset, assetStates.get(served)?.get(asset.id)));
 
@@ -800,6 +835,7 @@ const MediaFrame = ({
         sectionAdapter,
         assetStates,
         defaultsOf,
+        movingIds,
     ]);
 
     // Until the app has been handed any, as with errors for the picks it gave as `defaultValue`, the
@@ -1160,8 +1196,10 @@ const MediaFrame = ({
     const deletes = !!section && !!sectionAdapter.delete && !section.readOnly && writable;
     // Whether a group has details: what the app defines, or the adapter's own.
     const hasDetails = !!section && (!!section.properties || !!properties || !!sectionAdapter.properties);
-    // A group opens for those, or to be deleted, the one way there is to.
-    const opensGroups = hasDetails || deletes;
+    // Whether what's open can be moved from: as for deleting, by its adapter's `move`.
+    const moves = !!section && !!sectionAdapter.move && !section.readOnly && writable;
+    // A group opens for those, or to be moved or deleted, the one way there is to.
+    const opensGroups = hasDetails || deletes || moves;
 
     // Opens an asset, or a group's details, in the library's place.
     const openAsset = useCallback(
@@ -1193,6 +1231,7 @@ const MediaFrame = ({
             setViewing(null);
             setUploadStep(null);
             setProcessStep(null);
+            setMoveStep(null);
             setCreatingAt(null);
             announce(text.mediaInGroup(isolate(next.at(-1)?.name ?? section.label)));
         },
@@ -1401,6 +1440,7 @@ const MediaFrame = ({
             setViewing(null);
             setUploadStep(null);
             setProcessStep(null);
+            setMoveStep(null);
             setCreatingAt(null);
 
             if (librariesOpen) {
@@ -1437,6 +1477,7 @@ const MediaFrame = ({
         setViewing({ sectionId: choice.section.id, entry: choice.asset });
         setUploadStep(null);
         setProcessStep(null);
+        setMoveStep(null);
         setCreatingAt(null);
         setChosenOverlay(false);
     }, [adapterOf]);
@@ -1901,10 +1942,21 @@ const MediaFrame = ({
     // Whether the asset or group shown can be deleted: where what's open can be, and it allows it.
     const viewedDeletable = !!viewedEntry && deletes && allows("delete", viewedEntry.permissions);
 
+    // Whether the asset or group shown can be moved: where what's open can be, it allows it, and there's
+    // somewhere for it to go, a level above or another group here, so a flat library offers nothing.
+    const viewedMovable =
+        !!viewedEntry &&
+        moves &&
+        allows("move", viewedEntry.permissions) &&
+        (inGroup || leveled.some((entry) => isGroup(entry) && entry.id !== viewedEntry.id));
+
     const shownProcess =
         processStep && processStep.sectionId === sectionId && processStep.entry.id === viewedEntry?.id
             ? processStep
             : null;
+
+    const shownMove =
+        moveStep && moveStep.sectionId === sectionId && moveStep.entry.id === viewedEntry?.id ? moveStep : null;
 
     // The backend took it on: what was said of the asset before no longer stands, as it may have
     // failed, and its listings say how it stands now.
@@ -1915,6 +1967,29 @@ const MediaFrame = ({
             setProcessStep(null);
         },
         [forgetStates, sectionAdapter, relistAll],
+    );
+
+    // A group gone from where it was, by a delete or a move: any library left open inside it goes back to
+    // where it was gone into from, and what's kept of its listings goes, as their ids may mean nothing now.
+    const leaveGroup = useCallback(
+        (group: FileEntry, served: FileAdapter) => {
+            setLevels((previous) =>
+                Object.fromEntries(
+                    Object.entries(previous).map(([id, open]) => {
+                        const at = open.trail.findIndex((walked) => walked.id === group.id);
+
+                        return [
+                            id,
+                            at === -1 || open.adapter !== served ? open : { ...open, trail: open.trail.slice(0, at) },
+                        ];
+                    }),
+                ),
+            );
+            sections
+                .filter((item) => adapterOf(item) === served)
+                .forEach(({ id }) => store.forget(id, [group.id]));
+        },
+        [sections, adapterOf, store],
     );
 
     // Deleted: back to the library, the asset gone from it and from what's selected, wherever it was
@@ -1943,23 +2018,7 @@ const MediaFrame = ({
             }
 
             if (group) {
-                setLevels((previous) =>
-                    Object.fromEntries(
-                        Object.entries(previous).map(([id, open]) => {
-                            const at = open.trail.findIndex((walked) => walked.id === entry.id);
-
-                            return [
-                                id,
-                                at === -1 || open.adapter !== sectionAdapter
-                                    ? open
-                                    : { ...open, trail: open.trail.slice(0, at) },
-                            ];
-                        }),
-                    ),
-                );
-                sections
-                    .filter((item) => adapterOf(item) === sectionAdapter)
-                    .forEach(({ id }) => store.forget(id, [entry.id]));
+                leaveGroup(entry, sectionAdapter);
             }
 
             setDeletedIds((previous) => new Set(previous).add(entry.id));
@@ -1969,14 +2028,14 @@ const MediaFrame = ({
             deletedAtRef.current = index;
             setViewing(null);
             setProcessStep(null);
+            setMoveStep(null);
             announce(text.deleteDone(1, isolate(entry.name)));
         },
         [
             section,
-            sections,
             sectionsById,
             adapterOf,
-            store,
+            leaveGroup,
             samePick,
             forgetStates,
             propertiesCache,
@@ -1986,6 +2045,132 @@ const MediaFrame = ({
             text,
         ],
     );
+
+    // Sent off into the level with these groups open, back to the library, the next one taking the
+    // focus, as it's gone from here at once.
+    const startMove = (to: readonly FileEntry[]) => {
+        if (!section || !viewed) {
+            return;
+        }
+
+        const id = transfers.queue.add(
+            "move",
+            sectionAdapter,
+            sectionAdapter,
+            [viewed.entry],
+            { id: folderId, name: levelName },
+            { id: to.at(-1)?.id ?? section.rootId, name: to.at(-1)?.name ?? section.label },
+            "keepBoth",
+        );
+
+        movePlaces.current.set(id, { sectionId: section.id, trail: to });
+        deletedAtRef.current = viewed.index;
+        setViewing(null);
+        setMoveStep(null);
+    };
+
+    const retryMove = (item: TransferItem) => {
+        const place = movePlaces.current.get(item.id);
+
+        transfers.queue.forget(item.id);
+        movePlaces.current.delete(item.id);
+
+        const id = transfers.queue.add(
+            "move",
+            item.adapter,
+            item.targetAdapter,
+            item.entries,
+            item.source,
+            item.target,
+            item.conflict,
+        );
+
+        if (place) {
+            movePlaces.current.set(id, place);
+        }
+    };
+
+    const clearMoves = () => {
+        transfers.queue.clear();
+
+        const kept = new Set(transfers.queue.getItems().map(({ id }) => id));
+
+        movePlaces.current.forEach((_, id) => !kept.has(id) && movePlaces.current.delete(id));
+    };
+
+    // A move ended: the levels it touched are listed again, whatever came of it once it reached the
+    // backend. Gone, what's selected of it follows it there, with the entry as it now is: without one its
+    // id may be dead, so it's dropped, as are the picks inside a group whose id changed, those inside one
+    // keeping its own staying, with the way to them through where it went. The way there is only known
+    // in the library it was moved in, so another library's picks just don't know their level.
+    useLayoutEffect(() => {
+        moveEnded.current = (item, outcome, _items, made) => {
+            const place = movePlaces.current.get(item.id);
+            const [entry] = item.entries;
+            const now = made?.[0] ?? item.went[0]?.made;
+            const went = outcome === "done" || item.went.length > 0;
+
+            if (outcome !== "failed") {
+                movePlaces.current.delete(item.id);
+            }
+
+            if (outcome !== "cancelled" || item.status === "running") {
+                relistAll(item.adapter, [item.source.id, item.target.id]);
+            }
+
+            if (!went) {
+                if (outcome === "failed") {
+                    announce(text.moveFailedNotice(1, isolate(entry.name), isolate(item.target.name)));
+                }
+
+                return;
+            }
+
+            const group = isGroup(entry);
+            const kept = group && now?.id === entry.id;
+            const trailIn = (sectionIdOf: string) => (place?.sectionId === sectionIdOf ? place.trail : undefined);
+
+            setPicks((previous) => ({
+                ...previous,
+                items: previous.items.flatMap((pick) => {
+                    const from = sectionsById.get(pick.sectionId);
+
+                    if (!from || adapterOf(from) !== item.adapter) {
+                        return [pick];
+                    }
+
+                    if (pick.asset.id === entry.id) {
+                        return now ? [{ ...pick, asset: now, trail: trailIn(pick.sectionId) }] : [];
+                    }
+
+                    const at = group ? (pick.trail?.findIndex(({ id }) => id === entry.id) ?? -1) : -1;
+
+                    if (at === -1 || !pick.trail) {
+                        return [pick];
+                    }
+
+                    const to = trailIn(pick.sectionId);
+
+                    return kept && now
+                        ? [{ ...pick, trail: to && [...to, now, ...pick.trail.slice(at + 1)] }]
+                        : [];
+                }),
+            }));
+
+            if (group) {
+                leaveGroup(entry, item.adapter);
+            }
+
+            // Gone from here at once, as what's on its way was, until the listing comes back without it.
+            if (item.source.id === folderId && item.adapter === sectionAdapter) {
+                setDeletedIds((previous) => new Set(previous).add(entry.id));
+            }
+
+            forgetStates(item.adapter, [entry.id]);
+            propertiesCache.forgetDetails(entry, item.adapter);
+            announce(text.moveDone(1, isolate(now?.name ?? entry.name), isolate(item.target.name)));
+        };
+    });
 
     const closeNewGroup = () => {
         setCreatingAt(null);
@@ -2028,6 +2213,8 @@ const MediaFrame = ({
           ? formatNumber(count)
           : undefined;
     const limitNote = count === limit ? text.mediaChoicesFull : undefined;
+
+    const shownMoves = transfers.items.filter((item) => item.shown);
 
     const errorMessage =
         state?.status !== "error"
@@ -2238,7 +2425,12 @@ const MediaFrame = ({
                                           })
                                     : undefined
                             }
-                            covered={!!shownProcess}
+                            onMove={
+                                viewedMovable
+                                    ? () => setMoveStep({ sectionId: section.id, entry: viewed.entry })
+                                    : undefined
+                            }
+                            covered={!!shownProcess || !!shownMove}
                             deletable={viewedDeletable}
                             onDeleted={() => assetDeleted(viewed.entry, viewed.index)}
                             onDeleteLeft={() => relistAll(sectionAdapter)}
@@ -2255,6 +2447,17 @@ const MediaFrame = ({
                             unavailable={!viewedProcess}
                             onCancel={() => setProcessStep(null)}
                             onSent={() => processSent(shownProcess.entry)}
+                        />
+                    )}
+                    {shownMove && section && (
+                        <MediaMove
+                            key={shownMove.entry.id}
+                            entry={viewed?.entry ?? shownMove.entry}
+                            section={section}
+                            from={trail}
+                            movingIds={movingIds}
+                            onCancel={() => setMoveStep(null)}
+                            onMove={startMove}
                         />
                     )}
                     {shownStep && section && (
@@ -2286,6 +2489,17 @@ const MediaFrame = ({
                             onRetry={uploads.queue.retry}
                             onCancelAll={uploads.queue.cancelAll}
                             onClear={clearUploads}
+                        />
+                    </Box>
+                )}
+                {shownMoves.length > 0 && (
+                    <Box sx={uploadsSx}>
+                        <TransferPanel
+                            items={shownMoves}
+                            onCancel={transfers.queue.cancel}
+                            onRetry={retryMove}
+                            onCancelAll={transfers.queue.cancelAll}
+                            onClear={clearMoves}
                         />
                     </Box>
                 )}

@@ -257,7 +257,8 @@ export interface MediaSection
      * for a backend whose albums hold no more groups, say. It asks only for a name, through the
      * adapter's `createFolder`, the group's details opening next where it has any, for the rest of what
      * the app defines. Off by default, as an adapter's `createFolder` doesn't say this library holds
-     * groups, and a `readOnly` library never makes them.
+     * groups, and a `readOnly` library never makes them. Moving a group goes by it too, so it can't go
+     * where this says no; left out, moving asks nothing of it, and the backend has the say.
      */
     createGroups?: boolean | ((parent: FileEntry | null) => boolean);
     /**

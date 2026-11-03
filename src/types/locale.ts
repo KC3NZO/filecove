@@ -872,6 +872,18 @@ export interface MediaManagerLocaleText
     mediaCreateGroupFailed: string;
     /** Said once it's made; `name` comes isolated. */
     mediaGroupCreated: (name: string) => string;
+    /** The asset view's button choosing where an asset or group goes. */
+    mediaMove: string;
+    /** The move step's main button. */
+    mediaMoveHere: string;
+    /** In the move step, with nothing in the level to go on into. */
+    mediaMoveNoGroups: string;
+    /** Why Move here is held back: it's in this level already. */
+    mediaMoveAlreadyHere: string;
+    /** Why Move here is held back: the library says no group can be in this level (`createGroups`). */
+    mediaMoveNoGroupsHere: string;
+    /** Why Move here is held back: the backend says this level can't be written to. */
+    mediaMoveRefusedHere: string;
     /** How many are selected, in every library: the selected column's count, and its button where it doesn't dock. */
     mediaSelected: (count: number) => string;
     /** The selected column's title, and its list's name for screen readers. */

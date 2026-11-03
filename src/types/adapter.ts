@@ -605,7 +605,9 @@ export interface FileAdapter {
      * the folder they're in. The entries share a parent. It runs in the background as `copy` does.
      * Resolve with the entries as they now are (`TransferResult`), so the user can undo the move;
      * without them, it can't be undone. Without `move`, the file manager has no way to move within
-     * this adapter. Reject with an `Error` to show its message to the user. A move into a folder
+     * this adapter, and the media manager's asset view no Move button; there, without those entries,
+     * what's selected of it is dropped, as its id may have changed. Reject with an `Error` to show its
+     * message to the user. A move into a folder
      * another adapter serves is copied as `copy` says, and each entry deleted here with `delete`
      * once all of it is there.
      */
