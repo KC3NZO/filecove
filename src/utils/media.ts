@@ -30,14 +30,16 @@ export const layoutsOf = (section: MediaSection): readonly MediaLayout[] =>
     section.layouts?.length ? section.layouts : [section.kind === "audio" ? "list" : "grid"];
 
 /**
- * Sorts what was picked, dropped or pasted into a library before anything is sent: files of types it
- * doesn't take (`acceptUploads`), folders, as a library is listed flat, and names its backend's own
- * rules refuse (`checkName`, asked with the library's root as the folder) are left out.
+ * Sorts what was picked, dropped or pasted into a level of a library before anything is sent: files of
+ * types it doesn't take (`acceptUploads`), folders, as what a group is, and so what one given would make,
+ * is the backend's, and names its backend's own rules refuse (`checkName`, asked with that level as the
+ * folder) are left out.
  */
 export const checkMediaUpload = (
     section: MediaSection,
     adapter: FileAdapter,
     { files, folders }: DroppedFiles,
+    parentId: string,
 ): MediaUploadCheck => {
     const patterns = uploadPatterns(section);
     const misnamed: RefusedName[] = [];
@@ -46,7 +48,7 @@ export const checkMediaUpload = (
             return false;
         }
 
-        const reason = adapter.checkName?.(file.name, { kind: "file", parentId: section.rootId });
+        const reason = adapter.checkName?.(file.name, { kind: "file", parentId });
 
         if (reason) {
             misnamed.push({ name: file.name, reason });

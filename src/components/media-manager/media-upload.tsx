@@ -17,6 +17,8 @@ import type { FileAdapter, MediaSection, MediaUploadCheck, MediaUploadForm } fro
 
 interface MediaUploadProps {
     section: MediaSection;
+    /** The name of the library or group they go into, as the title says and its back button goes to. */
+    levelName: string;
     /** The library's adapter, its own or the media manager's. */
     adapter: FileAdapter;
     /** What was given, as the check before sending sorted it. */
@@ -76,7 +78,7 @@ const fieldsSx: SxProps<Theme> = {
  * this open, saying why; or, with nothing left to send, why, with Close. Shown only when there's
  * something to ask or to say.
  */
-const MediaUpload = ({ section, adapter, check, form, onCancel, onUpload }: MediaUploadProps) => {
+const MediaUpload = ({ section, levelName, adapter, check, form, onCancel, onUpload }: MediaUploadProps) => {
     const { text, describeAccepted, formatSize } = useLocale();
     const noteId = useId();
     const [values, setValues] = useState<Record<string, unknown>>(() => ({ ...form?.defaults }));
@@ -104,7 +106,7 @@ const MediaUpload = ({ section, adapter, check, form, onCancel, onUpload }: Medi
     };
 
     const title = sending
-        ? text.uploadTitle(files.length, isolate(files[0].name), library)
+        ? text.uploadTitle(files.length, isolate(files[0].name), isolate(levelName))
         : refused.length + misnamed.length > 0
           ? text.uploadFailedTitle(
                 refused.length + folders.length + misnamed.length,
@@ -126,7 +128,7 @@ const MediaUpload = ({ section, adapter, check, form, onCancel, onUpload }: Medi
     return (
         <MediaStep
             title={title}
-            backLabel={text.mediaBackToLibrary(section.label)}
+            backLabel={text.mediaBackToLibrary(levelName)}
             onBack={leave}
             note={sending && typeof ready === "string" ? ready : undefined}
             noteId={noteId}

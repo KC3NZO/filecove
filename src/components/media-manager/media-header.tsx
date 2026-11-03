@@ -58,7 +58,7 @@ interface MediaHeaderProps {
     /** Whether that field is open. */
     creatingGroup: boolean;
     newGroupRef: Ref<HTMLButtonElement>;
-    /** Picks files to upload into the library; missing while it takes none. */
+    /** Picks files to upload into the level open; missing while it takes none. */
     onUpload: (() => void) | undefined;
     uploadRef: Ref<HTMLButtonElement>;
 }

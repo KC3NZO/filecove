@@ -162,6 +162,8 @@ interface Viewing {
 interface UploadStep {
     key: number;
     sectionId: string;
+    /** The level they go into, as it was when they were given. */
+    into: { id: string; name: string };
     check: MediaUploadCheck;
     form: MediaUploadForm | null;
 }
@@ -171,6 +173,12 @@ interface ProcessStep {
     sectionId: string;
     entry: FileEntry;
     form: MediaProcessForm;
+}
+
+/** Where an upload went: its library, and the root or group in it. */
+interface UploadLevel {
+    sectionId: string;
+    folderId: string;
 }
 
 /**
@@ -202,7 +210,7 @@ const NO_LAYOUTS: MediaLayouts = {};
 const NO_SECTION_LAYOUTS: readonly MediaLayout[] = ["grid"];
 const NO_ARRIVALS: readonly Arrival[] = [];
 const NO_UPLOADS: readonly FileUploadItem[] = [];
-const NO_LIBRARIES: ReadonlyMap<number, string> = new Map();
+const NO_UPLOAD_LEVELS: ReadonlyMap<number, UploadLevel> = new Map();
 const NO_HOLDS: ReadonlyMap<string, AssetHold> = new Map();
 const NO_CHOICES: readonly MediaChoice[] = [];
 
@@ -446,12 +454,12 @@ const MediaFrame = ({
     const createdRef = useRef<string | null>(null);
     const { store } = useData();
 
-    // Uploading: the step before files are sent, files dragged over the library, the library each
+    // Uploading: the step before files are sent, files dragged over the library, the level each
     // upload went into, by its id, and what's just arrived, waiting to be listed.
     const [uploadStep, setUploadStep] = useState<UploadStep | null>(null);
     const uploadStepCount = useRef(0);
     const [dropping, setDropping] = useState(false);
-    const [uploadLibraries, setUploadLibraries] = useState(NO_LIBRARIES);
+    const [uploadLevels, setUploadLevels] = useState(NO_UPLOAD_LEVELS);
     const [arrivals, setArrivals] = useState(NO_ARRIVALS);
     const arrivedRef = useRef(new Set<number>());
     const arrivalCount = useRef(0);
@@ -710,17 +718,13 @@ const MediaFrame = ({
 
     const uploads = useUploadQueue(relist, text.keptBothName);
 
-    // Whether the open library takes files: its adapter has `upload`, it isn't `readOnly` nor
-    // refusing them (`acceptUploads`), and it could be listed, its listing not saying it can't be
-    // written to. Not inside a group yet, as files only go into the library's root for now, which
-    // isn't what's shown.
+    // Whether the open level can be changed, as far as its listing and the group's own entry say.
+    const writable = allows("write", state?.permissions, openGroup?.permissions);
+
+    // Whether the open level takes files: its library's adapter has `upload`, it isn't `readOnly` nor
+    // refusing them (`acceptUploads`), and it could be listed and written to.
     const takesFiles =
-        !!section &&
-        !inGroup &&
-        !!sectionAdapter.upload &&
-        takesUploads(section) &&
-        state?.status !== "error" &&
-        allows("write", state?.permissions);
+        !!section && !!sectionAdapter.upload && takesUploads(section) && state?.status !== "error" && writable;
 
     // Whether a group can be made at the open level: its library says so, for this level, as an
     // adapter's `createFolder` alone doesn't say a library holds groups, it can be changed, and it could
@@ -733,7 +737,7 @@ const MediaFrame = ({
         !!sectionAdapter.createFolder &&
         !section.readOnly &&
         state?.status !== "error" &&
-        allows("write", state?.permissions);
+        writable;
     const creatingGroup = createsGroups && creatingAt === levelKey;
 
     // What the app's form holds for a pick until it's changed.
@@ -1151,11 +1155,9 @@ const MediaFrame = ({
         }
     }, [viewed, section, selectedIds, removeChoice, multiple, text, formatPercent, refusedNow, trail]);
 
-    // Whether what's open can be deleted from: its adapter does, its library can be changed, and its
-    // listing doesn't say it can't be written to. A listing's own `delete` is about the folder, not what's
-    // in it.
-    const deletes =
-        !!section && !!sectionAdapter.delete && !section.readOnly && allows("write", state?.permissions);
+    // Whether what's open can be deleted from: its adapter does, its library can be changed, and it can
+    // be written to. A listing's own `delete` is about the folder, not what's in it.
+    const deletes = !!section && !!sectionAdapter.delete && !section.readOnly && writable;
     // Whether a group has details: what the app defines, or the adapter's own.
     const hasDetails = !!section && (!!section.properties || !!properties || !!sectionAdapter.properties);
     // A group opens for those, or to be deleted, the one way there is to.
@@ -1496,19 +1498,24 @@ const MediaFrame = ({
         panelRef.current?.querySelector<HTMLElement>('[role="listbox"] [role="option"][tabindex="0"]')?.focus();
     };
 
-    // Sends files into a library, each its own upload, kept both with what's there of its name, as a
-    // library is listed flat, with what its upload form held.
+    // Sends files into a level of a library, each its own upload, kept both with what's there of its
+    // name, with what its upload form held.
     const sendUpload = useCallback(
-        (target: MediaSection, files: File[], values: Readonly<Record<string, unknown>> | undefined) => {
-            const into = { id: target.rootId, name: target.label };
+        (
+            target: MediaSection,
+            into: UploadStep["into"],
+            files: File[],
+            values: Readonly<Record<string, unknown>> | undefined,
+        ) => {
             const ids = uploads.queue.add(adapterOf(target), into, files, "keepBoth", values);
+            const level: UploadLevel = { sectionId: target.id, folderId: into.id };
 
-            setUploadLibraries((previous) => new Map([...previous, ...ids.map((id): [number, string] => [id, target.id])]));
+            setUploadLevels((previous) => new Map([...previous, ...ids.map((id): [number, UploadLevel] => [id, level])]));
         },
         [uploads.queue, adapterOf],
     );
 
-    // What was picked, dropped or pasted into the open library: checked first, and sent at once when
+    // What was picked, dropped or pasted into the open level: checked first, and sent at once when
     // there's nothing to ask or say; otherwise the upload step shows in the library's place.
     const askUpload = useCallback(
         (dropped: DroppedFiles) => {
@@ -1516,21 +1523,22 @@ const MediaFrame = ({
                 return;
             }
 
-            const check = checkMediaUpload(section, sectionAdapter, dropped);
+            const into = { id: folderId, name: levelName };
+            const check = checkMediaUpload(section, sectionAdapter, dropped, folderId);
             const form = check.files.length > 0 ? (section.uploadForm?.(check.files) ?? null) : null;
             const leftOut = check.refused.length + check.folders.length + check.misnamed.length > 0;
 
             if (!leftOut && !form) {
-                sendUpload(section, check.files, undefined);
+                sendUpload(section, into, check.files, undefined);
 
                 return;
             }
 
             setViewing(null);
             uploadStepCount.current += 1;
-            setUploadStep({ key: uploadStepCount.current, sectionId: section.id, check, form });
+            setUploadStep({ key: uploadStepCount.current, sectionId: section.id, into, check, form });
         },
-        [section, takesFiles, sectionAdapter, sendUpload],
+        [section, takesFiles, sectionAdapter, folderId, levelName, sendUpload],
     );
 
     // Leaves the upload step, the focus going to Upload when the step had it.
@@ -1595,7 +1603,7 @@ const MediaFrame = ({
     useEffect(() => {
         uploads.items.forEach((item) => {
             const { id, status, entryId } = item;
-            const target = uploadLibraries.get(id);
+            const target = uploadLevels.get(id)?.sectionId;
 
             if (status !== "done" || arrivedRef.current.has(id)) {
                 return;
@@ -1615,7 +1623,7 @@ const MediaFrame = ({
                 ARRIVAL_WAIT,
             );
         });
-    }, [uploads.items, uploadLibraries]);
+    }, [uploads.items, uploadLevels]);
 
     // Once the open library lists what arrived, its tile takes the place of the upload's, and while
     // the app takes a choice, it's selected, as a media picker does: added to what's selected, or
@@ -1700,32 +1708,35 @@ const MediaFrame = ({
         trail,
     ]);
 
-    // The open library's uploads, before its assets: those waiting or being sent, and those done
-    // until they're listed.
+    // The open level's uploads, before what it holds: those waiting or being sent, and those done until
+    // they're listed. Each shows only where it's going.
     const shownUploads = useMemo(() => {
-        // They go into the root for now, so a group isn't where they show.
-        if (sectionId === undefined || inGroup) {
+        if (sectionId === undefined) {
             return NO_UPLOADS;
         }
 
         const waiting = new Set(arrivals.map((arrival) => arrival.uploadId));
-        const shown = uploads.items.filter(
-            (item): item is FileUploadItem =>
+        const shown = uploads.items.filter((item): item is FileUploadItem => {
+            const level = uploadLevels.get(item.id);
+
+            return (
                 item.kind === "file" &&
-                uploadLibraries.get(item.id) === sectionId &&
-                (item.status === "queued" || item.status === "uploading" || waiting.has(item.id)),
-        );
+                level?.sectionId === sectionId &&
+                level.folderId === folderId &&
+                (item.status === "queued" || item.status === "uploading" || waiting.has(item.id))
+            );
+        });
 
         return shown.length > 0 ? shown : NO_UPLOADS;
-    }, [sectionId, inGroup, arrivals, uploads.items, uploadLibraries]);
+    }, [sectionId, folderId, arrivals, uploads.items, uploadLevels]);
 
-    // Forgets the ended uploads, and the libraries they went into.
+    // Forgets the ended uploads, and the levels they went into.
     const clearUploads = useCallback(() => {
         uploads.queue.clear();
 
         const kept = new Set(uploads.queue.getItems().map((item) => item.id));
 
-        setUploadLibraries((previous) => new Map([...previous].filter(([id]) => kept.has(id))));
+        setUploadLevels((previous) => new Map([...previous].filter(([id]) => kept.has(id))));
         arrivedRef.current.forEach((id) => !kept.has(id) && arrivedRef.current.delete(id));
     }, [uploads.queue]);
 
@@ -2250,19 +2261,20 @@ const MediaFrame = ({
                         <MediaUpload
                             key={shownStep.key}
                             section={section}
+                            levelName={shownStep.into.name}
                             adapter={sectionAdapter}
                             check={shownStep.check}
                             form={shownStep.form}
                             onCancel={closeUploadStep}
                             onUpload={(values) => {
-                                sendUpload(section, shownStep.check.files, values);
+                                sendUpload(section, shownStep.into, shownStep.check.files, values);
                                 closeUploadStep();
                             }}
                         />
                     )}
                     {dropping && dropsFiles && section && (
                         <Box sx={dropZoneSx}>
-                            <Typography sx={dropLabelSx}>{text.mediaDropToUpload(isolate(section.label))}</Typography>
+                            <Typography sx={dropLabelSx}>{text.mediaDropToUpload(isolate(levelName))}</Typography>
                         </Box>
                     )}
                 </Box>
