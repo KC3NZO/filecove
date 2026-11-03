@@ -68,6 +68,70 @@ const audio: MockNode[] = [
     file("interview-raw.flac", 210_000_000, "2026-08-30T13:15", "audio/flac"),
 ];
 
+// Groups inside each other, as this backend keeps them: to any depth, a series with its seasons, a
+// collection with its albums, beside what's in no group at all.
+const seasonOne: MockNode[] = [
+    file("podcast-episode-1.mp3", 40_100_000, "2025-03-04T07:00", "audio/mpeg"),
+    file("podcast-episode-2.mp3", 37_800_000, "2025-03-18T07:00", "audio/mpeg"),
+    file("podcast-episode-3.mp3", 42_300_000, "2025-04-01T07:00", "audio/mpeg"),
+];
+
+const seasonTwo: MockNode[] = [
+    file("podcast-episode-4.mp3", 39_500_000, "2025-09-02T07:00", "audio/mpeg"),
+    file("podcast-episode-5.mp3", 41_700_000, "2025-09-16T07:00", "audio/mpeg"),
+];
+
+const audioGroups: MockNode[] = [
+    folder("The Harbour Hour", "2025-09-16T07:00", [
+        folder("Season 1", "2025-04-01T07:00", seasonOne),
+        folder("Season 2", "2025-09-16T07:00", seasonTwo),
+    ]),
+    folder("Field recordings", "2026-02-11T10:00", [
+        folder("Coasts", "2026-02-11T10:00", [
+            file("gulls-at-dawn.flac", 62_000_000, "2026-02-11T10:00", "audio/flac"),
+            file("low-tide.flac", 58_400_000, "2026-02-10T10:00", "audio/flac"),
+        ]),
+        // Nothing in it yet, to see an empty group.
+        folder("Forests", "2026-01-20T10:00", []),
+    ]),
+];
+
+const videoGroups: MockNode[] = [
+    folder("Getting started", "2026-05-05T09:00", [
+        folder("Season 1", "2026-05-05T09:00", [
+            file("welcome.mp4", 34_000_000, "2026-05-01T09:00", "video/mp4"),
+            file("your-first-project.mp4", 58_000_000, "2026-05-05T09:00", "video/mp4"),
+        ]),
+    ]),
+];
+
+const imageGroups: MockNode[] = [
+    folder("Summer 2026", "2026-08-20T18:00", [
+        folder("Harbour festival", "2026-08-20T18:00", [
+            file("festival-stage.jpg", 2_400_000, "2026-08-20T18:00", "image/jpeg"),
+            file("festival-crowd.jpg", 3_100_000, "2026-08-20T17:30", "image/jpeg"),
+        ]),
+        file("summer-poster.png", 1_200_000, "2026-06-01T09:00", "image/png"),
+    ]),
+];
+
+/**
+ * What this backend says of its groups, by id: what each is, and what's written about it, which the
+ * playground shows and changes as it likes. Those left out are only a name.
+ */
+const GROUPS: Readonly<Record<string, { type: string; description?: string; cover?: boolean }>> = {
+    "/audio/The Harbour Hour": { type: "Series", description: "Stories from the docks, every other Tuesday.", cover: true },
+    "/audio/The Harbour Hour/Season 1": { type: "Season", description: "Where it all began.", cover: true },
+    "/audio/The Harbour Hour/Season 2": { type: "Season", cover: true },
+    "/audio/Field recordings": { type: "Collection", description: "Sounds recorded outdoors." },
+    "/audio/Field recordings/Coasts": { type: "Album", description: "Shorelines at first light.", cover: true },
+    "/audio/Field recordings/Forests": { type: "Album" },
+    "/videos/Getting started": { type: "Series", description: "From signing up to your first project.", cover: true },
+    "/videos/Getting started/Season 1": { type: "Season", cover: true },
+    "/images/Summer 2026": { type: "Collection", description: "What the summer looked like.", cover: true },
+    "/images/Summer 2026/Harbour festival": { type: "Album", cover: true },
+};
+
 const documents: MockNode[] = [
     file("brand-guidelines.pdf", 2_400_000, "2026-06-30T12:00", "application/pdf"),
     file("price-list.pdf", 310_000, "2026-10-02T08:20", "application/pdf"),
@@ -88,9 +152,9 @@ const stock: MockNode[] = Array.from({ length: 18 }, (_, index) =>
 
 const siteAdapter = createMockAdapter(
     {
-        "/images": images,
-        "/videos": videos,
-        "/audio": audio,
+        "/images": [...imageGroups, ...images],
+        "/videos": [...videoGroups, ...videos],
+        "/audio": [...audioGroups, ...audio],
         "/documents": documents,
         // A library whose root refuses to be listed, to see the error.
         "/old": [{ ...folder("archive", "2020-01-01T00:00", []), fails: true }],
@@ -527,6 +591,17 @@ const dayOf = (hash: number) => new Date(Date.UTC(2026, 4, 1) - (hash % 400) * D
  * would bring it; the playground's definitions decide what's shown of it, and how.
  */
 const propertiesOf = (entry: FileEntry, key: string, stock: boolean): EntryProperties => {
+    if (entry.kind === "folder") {
+        return {
+            values: {
+                name: entry.name,
+                type: GROUPS[entry.id]?.type ?? "",
+                description: GROUPS[entry.id]?.description ?? "",
+                ...savedValues.get(key),
+            },
+        };
+    }
+
     const hash = hashOf(entry.name);
     const values: PropertyValues = { name: entry.name, format: formatOf(entry), tags: [] };
 
@@ -683,7 +758,19 @@ const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
     list: (folderId, options) =>
         adapter.list(folderId, options).then((result) => ({
             ...result,
-            entries: result.entries.map((entry) => (entry.kind === "file" ? listedAs(entry) : entry)),
+            entries: result.entries.map((entry) =>
+                entry.kind === "file"
+                    ? listedAs(entry)
+                    : {
+                          ...entry,
+                          meta: {
+                              type: GROUPS[entry.id]?.type,
+                              description:
+                                  savedValues.get(`${readOnly}:${entry.id}`)?.description ??
+                                  GROUPS[entry.id]?.description,
+                          },
+                      },
+            ),
         })),
     // How its assets' processing stands, asked by the media manager as it polls, or with `?push`,
     // pushed every second as a socket would, rather than asked.
@@ -702,8 +789,17 @@ const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
               processing: (entries: FileEntry[], { signal }: { signal: AbortSignal }) =>
                   wait(150, signal).then(() => statesOf(entries)),
           }),
-    thumbnail: (entry, options) =>
-        isVideo(entry)
+    thumbnail: (entry, options) => {
+        // A group's cover, for those that have one, as this backend keeps it.
+        if (entry.kind === "folder") {
+            return GROUPS[entry.id]?.cover
+                ? wait(200, options.signal)
+                      .then(() => shrink(thumbnailSource(`${entry.name}.jpg`) as Blob, options.size))
+                      .then((blob) => blob && { blob })
+                : Promise.resolve(null);
+        }
+
+        return isVideo(entry)
             ? wait(200 + (hashOf(entry.name) % 400), options.signal)
                   .then(() =>
                       shrink(
@@ -717,7 +813,8 @@ const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
               ? wait(200, options.signal)
                     .then(() => shrink(thumbnailSource("the-harbour-hour.jpg") as Blob, options.size))
                     .then((blob) => blob && { blob })
-              : (adapter.thumbnail?.(entry, options) ?? Promise.resolve(null)),
+              : (adapter.thumbnail?.(entry, options) ?? Promise.resolve(null));
+    },
     properties: (entry, { signal }) =>
         wait(250 + (hashOf(entry.name) % 500), signal).then(() =>
             propertiesOf(entry, `${readOnly}:${entry.id}`, readOnly),

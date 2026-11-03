@@ -691,7 +691,8 @@ export interface FileAdapter {
      * comes into view, once per view, a few at a time, so resolve with null at once for a file that
      * can't have one, rather than asking the server. Thumbnails are kept while the file manager is
      * mounted, and asked for again when a file's size or date modified changes. Without it, or when
-     * it rejects, the file's icon shows.
+     * it rejects, the file's icon shows. The media manager asks it of the groups it lists too, entries
+     * of `kind: "folder"`, for an album's cover, say; the file manager only of files.
      */
     thumbnail?(entry: FileEntry, options: ThumbnailOptions): Promise<FileContent | null>;
     /**

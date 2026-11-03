@@ -513,7 +513,12 @@ const PropertiesPanel = ({
     const { text, formatDate, formatNumber, formatDuration, formatSize } = locale;
     const [own] = useState(createPropertiesCache);
     const cache = given ?? own;
-    const { details, totals, retryDetails, retryTotals } = useProperties(items, { cache, changes, showHidden });
+    const { details, totals, retryDetails, retryTotals } = useProperties(items, {
+        cache,
+        changes,
+        showHidden,
+        measures: ownRows,
+    });
     const rootRef = useRef<HTMLElement>(null);
     const bodyRef = useRef<HTMLDivElement>(null);
     const [pictureSize, setPictureSize] = useState(PICTURE_SIZES[0]);

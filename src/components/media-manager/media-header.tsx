@@ -15,11 +15,19 @@ import { forcedColors, forcedPressed } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import Icon from "../icons/icon";
+import GroupPath from "./group-path";
 
-import type { MediaLayout, MediaSection } from "../../types";
+import type { FileEntry, MediaLayout, MediaSection } from "../../types";
 
 interface MediaHeaderProps {
     section: MediaSection | undefined;
+    /** The groups gone into from the library's root, to the one open; none at its root. */
+    trail: readonly FileEntry[];
+    /** Goes to the level with that many groups of the trail open. */
+    onGoToLevel: (depth: number) => void;
+    /** Whether the button going up a level is shown, which it isn't while something's in the library's place. */
+    showsLevelUp: boolean;
+    levelUpRef: Ref<HTMLButtonElement>;
     /** Whether there's more than one library, to choose among from a drawer where the list doesn't dock. */
     several: boolean;
     /** Whether that drawer is open. */
@@ -97,12 +105,17 @@ const uploadSx: SxProps<Theme> = {
 };
 
 /**
- * Above the library: the button opening the libraries where they don't dock, its name, or the search
- * field in its place while searching, the button opening that, the button switching its layout, while
+ * Above the library: the button opening the libraries where they don't dock, inside a group the
+ * button going up a level, its name, or the path to the group open, or the search field in its place
+ * while searching, the button opening that, the button switching its layout, while
  * it offers another, and Upload, while it takes files.
  */
 const MediaHeader = ({
     section,
+    trail,
+    onGoToLevel,
+    showsLevelUp,
+    levelUpRef,
     several,
     librariesOpen,
     librariesOpenerRef,
@@ -123,6 +136,10 @@ const MediaHeader = ({
     uploadRef,
 }: MediaHeaderProps) => {
     const { text } = useLocale();
+    const inGroup = trail.length > 0;
+    // What's open: the search goes through this, and a level up goes to the one before.
+    const levelName = trail.at(-1)?.name ?? section?.label ?? "";
+    const parentName = trail.at(-2)?.name ?? section?.label ?? "";
 
     const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
         const plain = !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
@@ -171,6 +188,15 @@ const MediaHeader = ({
                         <Icon name="menu" fontSize="small" />
                     </TooltipIconButton>
                 )}
+                {inGroup && showsLevelUp && !searching && (
+                    <TooltipIconButton
+                        ref={levelUpRef}
+                        label={text.mediaBackToLibrary(isolate(parentName))}
+                        onClick={() => onGoToLevel(trail.length - 1)}
+                    >
+                        <Icon name="arrowBack" fontSize="small" />
+                    </TooltipIconButton>
+                )}
                 <Box sx={nameSlotSx}>
                     {searching && section ? (
                         <Box role="search" sx={headerFieldSx} onKeyDown={handleFieldKeyDown} onBlur={handleFieldBlur}>
@@ -179,7 +205,7 @@ const MediaHeader = ({
                                 inputRef={searchInputRef}
                                 type="search"
                                 value={query}
-                                placeholder={text.searchIn(isolate(section.label))}
+                                placeholder={text.searchIn(isolate(levelName))}
                                 autoComplete="off"
                                 spellCheck={false}
                                 slotProps={{ input: { "aria-label": text.search } }}
@@ -206,6 +232,8 @@ const MediaHeader = ({
                                 <Icon name="close" fontSize="small" />
                             </TooltipIconButton>
                         </Box>
+                    ) : inGroup && section ? (
+                        <GroupPath label={section.label} trail={trail} onGoToLevel={onGoToLevel} />
                     ) : (
                         <Typography component="h2" noWrap sx={titleSx}>
                             {section?.label}

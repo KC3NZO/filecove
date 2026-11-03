@@ -5,11 +5,11 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { MediaManager } from "../src";
-import { renderAudio, renderStock } from "./media-assets";
+import { renderAudio, renderGroup, renderGroupHeader, renderStock } from "./media-assets";
 import { pickForm } from "./media-fields";
 import { audioPreviewer, hlsPreviewer } from "./media-previewers";
 import { audioProcessForm, imageProcessForm, videoProcessForm } from "./media-processing";
-import { assetProperties, videoProperties } from "./media-properties";
+import { assetProperties, videoEntryProperties } from "./media-properties";
 import { audioUploadForm, imageUploadForm, videoUploadForm } from "./media-uploads";
 import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
 import { savePicks } from "./mocks/mock-save";
@@ -73,7 +73,7 @@ const libraries: MediaSectionGroup[] = [
                 rootId: "/videos",
                 layouts: ["grid", "list"],
                 previewers: [hlsPreviewer],
-                properties: videoProperties,
+                properties: videoEntryProperties,
                 acceptUploads: "video/*",
                 uploadForm: videoUploadForm,
                 processForm: videoProcessForm,
@@ -223,6 +223,8 @@ const MediaApp = () => {
         locale,
         onChoose: browse ? undefined : choose,
         pickForm,
+        renderGroup,
+        groupHeader: renderGroupHeader,
         properties: assetProperties,
         previewers,
         errors,

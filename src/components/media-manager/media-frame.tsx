@@ -86,6 +86,10 @@ export interface MediaFrameProps {
     previewers: readonly FilePreviewer[] | undefined;
     /** Draws the assets of the libraries with no `renderAsset` of their own. */
     renderAsset: ((params: MediaAssetParams) => ReactNode) | undefined;
+    /** Draws the groups of the libraries with no `renderGroup` of their own. */
+    renderGroup: ((params: MediaAssetParams) => ReactNode) | undefined;
+    /** Draws what's above an open group's contents, in the libraries with no `groupHeader` of their own. */
+    groupHeader: ((group: FileEntry, section: MediaSection) => ReactNode) | undefined;
     /** The layout each library is shown in, when the app keeps them. */
     layout: MediaLayouts | undefined;
     /** Where the libraries' layouts start, while it doesn't. */
@@ -103,12 +107,36 @@ export interface MediaFrameProps {
 /**
  * An asset selected, by the id of the library it was picked in, as it was listed when it was picked,
  * with what the app's form holds for this use of it: `NO_VALUES` until it's changed, for the form's
- * defaults.
+ * defaults, and the groups it was picked among, unknown for one the app gave.
  */
 interface Pick {
     sectionId: string;
     asset: FileEntry;
     values: Record<string, unknown>;
+    trail?: readonly FileEntry[];
+}
+
+/**
+ * The groups a library is open at, gone into from its root, for the root and the adapter they were
+ * walked from, as ids mean nothing under another of either.
+ */
+interface OpenLevel {
+    rootId: string;
+    adapter: FileAdapter;
+    trail: readonly FileEntry[];
+}
+
+/** Who takes the focus as a level shows: the group left, or with none, the first thing in it. */
+interface LevelFocus {
+    groupId: string | null;
+    /** Whether it had to wait for the listing, when the user may have gone on elsewhere. */
+    waited: boolean;
+}
+
+interface GroupHeaderProps {
+    draw: (group: FileEntry, section: MediaSection) => ReactNode;
+    group: FileEntry;
+    section: MediaSection;
 }
 
 /**
@@ -163,6 +191,10 @@ const NO_ERROR_KEYS: readonly string[] = [];
 // The choices made from a pick's form's defaults, nothing being changed yet, so what's made from them
 // again is too, and they go on following the form.
 const DEFAULTED = new WeakSet<MediaChoice>();
+// The groups each choice was picked among, kept with it this way as it's no business of the app's.
+const PICK_TRAILS = new WeakMap<MediaChoice, readonly FileEntry[]>();
+const NO_TRAIL: readonly FileEntry[] = [];
+const NO_LEVELS: Readonly<Record<string, OpenLevel>> = {};
 const NO_PREVIEWERS: readonly FilePreviewer[] = [];
 const NO_LAYOUTS: MediaLayouts = {};
 // What's offered with no library to show.
@@ -186,7 +218,13 @@ const pickOf = (choice: MediaChoice): Pick => ({
     sectionId: choice.section.id,
     asset: choice.asset,
     values: DEFAULTED.has(choice) ? NO_VALUES : choice.values,
+    trail: PICK_TRAILS.get(choice),
 });
+
+const isGroup = (entry: FileEntry) => entry.kind === "folder";
+
+/** What the app draws above a group's contents, as a component of its own, so it may use hooks. */
+const GroupHeader = ({ draw, group, section }: GroupHeaderProps) => draw(group, section);
 
 const picksFrom = (choices: readonly MediaChoice[] | undefined): Picks =>
     choices && choices.length > 0
@@ -346,6 +384,8 @@ const MediaFrame = ({
     properties,
     previewers = NO_PREVIEWERS,
     renderAsset,
+    renderGroup,
+    groupHeader,
     layout: layoutProp,
     defaultLayout = NO_LAYOUTS,
     onLayoutChange,
@@ -361,7 +401,16 @@ const MediaFrame = ({
     const section = sections.find(({ id }) => id === openId) ?? sections[0];
     const sectionAdapter = section?.adapter ?? adapter;
     const several = sections.length > 1;
-    const { state, reload } = useFolder(section ?? NO_SECTION, section?.rootId ?? "", !!section, true);
+    // Each library stays at the group it was left at, going by the root and the adapter it was walked
+    // from, as an app may change either.
+    const [levels, setLevels] = useState(NO_LEVELS);
+    const kept = section && levels[section.id];
+    const trail = kept && kept.rootId === section.rootId && kept.adapter === sectionAdapter ? kept.trail : NO_TRAIL;
+    const openGroup = trail.at(-1);
+    const inGroup = !!openGroup;
+    const folderId = openGroup?.id ?? section?.rootId ?? "";
+    const levelName = openGroup?.name ?? section?.label ?? "";
+    const { state, reload } = useFolder(section ?? NO_SECTION, folderId, !!section, true);
     const choosing = !!onChoose;
     // Limits are on what's chosen, so they're nothing while the media manager is only looked through.
     const limit = choosing && multiple ? (countLimit(maxChoices, 1) ?? Infinity) : Infinity;
@@ -386,6 +435,8 @@ const MediaFrame = ({
     // The asset the view went back from, whose tile takes the focus back.
     const backFromRef = useRef<string | null>(null);
     const deletedAtRef = useRef<number | null>(null);
+    const levelFocusRef = useRef<LevelFocus | null>(null);
+    const levelUpRef = useRef<HTMLButtonElement>(null);
     const { store } = useData();
 
     // Uploading: the step before files are sent, files dragged over the library, the library each
@@ -474,15 +525,19 @@ const MediaFrame = ({
         }
     }, [chosenOverlay]);
 
-    // The library's assets, as its adapter lists them under its root: they're all of its kind, so
-    // nothing is sorted into kinds here.
-    const listed = useMemo(
-        () =>
-            (state?.entries ?? NO_ENTRIES)
-                .filter((entry) => entry.kind === "file" && !isHidden(entry) && !deletedIds.has(entry.id))
-                .sort(byDate(compareNames)),
-        [state?.entries, deletedIds, compareNames],
-    );
+    // What the open level holds, as its adapter lists it: inside a group, in the backend's order, as an
+    // album's tracks have theirs; at the root, the newest first. Groups aren't put first, so one coming
+    // on a later page doesn't jump.
+    const level = useMemo(() => {
+        const shown = (state?.entries ?? NO_ENTRIES).filter(
+            (entry) => !isHidden(entry) && !deletedIds.has(entry.id),
+        );
+
+        return inGroup ? shown : shown.sort(byDate(compareNames));
+    }, [state?.entries, deletedIds, compareNames, inGroup]);
+
+    // Its assets: they're all of the library's kind, so nothing is sorted into kinds here.
+    const listed = useMemo(() => level.filter((entry) => !isGroup(entry)), [level]);
 
     // Assets just deleted are gone at once, until the listing comes back without them. Forgotten then,
     // as a backend whose ids are paths may give the id to a file uploaded later.
@@ -513,9 +568,15 @@ const MediaFrame = ({
         (served: FileAdapter) =>
             relist(
                 served,
-                sections.filter((item) => adapterOf(item) === served).map(({ rootId }) => rootId),
+                sections
+                    .filter((item) => adapterOf(item) === served)
+                    .flatMap(({ id, rootId }) => {
+                        const groupId = levels[id]?.trail.at(-1)?.id;
+
+                        return groupId === undefined ? [rootId] : [rootId, groupId];
+                    }),
             ),
-        [relist, sections, adapterOf],
+        [relist, sections, adapterOf, levels],
     );
 
     // Assets their listing says are being processed, in the library shown and among the picks, each
@@ -544,12 +605,14 @@ const MediaFrame = ({
 
     const { states: assetStates, forget: forgetStates } = useAssetStates(processed, relistAll);
 
-    // The library's assets with what their backend has said since of their processing.
-    const library = useMemo(() => {
+    // The open level with what the backend has said since of its assets' processing.
+    const leveled = useMemo(() => {
         const own = assetStates.get(sectionAdapter);
 
-        return own ? listed.map((entry) => withState(entry, own.get(entry.id))) : listed;
-    }, [listed, assetStates, sectionAdapter]);
+        return own ? level.map((entry) => withState(entry, own.get(entry.id))) : level;
+    }, [level, assetStates, sectionAdapter]);
+
+    const library = useMemo(() => leveled.filter((entry) => !isGroup(entry)), [leveled]);
 
     // Once the listing has caught up, what was said of its assets' processing is forgotten, so one
     // processed again later is followed afresh.
@@ -588,10 +651,17 @@ const MediaFrame = ({
 
     const terms = useMemo(() => searchTerms(query, foldLetters), [query, foldLetters]);
 
+    // What's shown of the open level, by the search: what the grid's indexes go by, and the focus.
     const shownEntries = useMemo(
         () =>
-            terms.length === 0 ? library : library.filter((entry) => holdsTerms(foldLetters(entry.name), terms)),
-        [library, terms, foldLetters],
+            terms.length === 0 ? leveled : leveled.filter((entry) => holdsTerms(foldLetters(entry.name), terms)),
+        [leveled, terms, foldLetters],
+    );
+
+    const shownAssets = useMemo(() => shownEntries.filter((entry) => !isGroup(entry)), [shownEntries]);
+    const shownGroupIds = useMemo(
+        () => new Set(shownEntries.filter(isGroup).map(({ id }) => id)),
+        [shownEntries],
     );
 
     const order = useMemo(() => shownEntries.map(({ id }) => id), [shownEntries]);
@@ -605,7 +675,7 @@ const MediaFrame = ({
 
         const held = new Map<string, AssetHold>();
 
-        shownEntries.forEach((entry) => {
+        shownAssets.forEach((entry) => {
             const hold = holdOf(entry, section, { text, formatPercent });
 
             if (hold) {
@@ -614,13 +684,13 @@ const MediaFrame = ({
         });
 
         return held.size > 0 ? held : NO_HOLDS;
-    }, [shownEntries, section, text, formatPercent]);
+    }, [shownAssets, section, text, formatPercent]);
 
     // The backend's work on assets shown that can be chosen all the same, which their tiles show.
     const works = useMemo(() => {
         const working = new Map<string, AssetHold>();
 
-        shownEntries.forEach((entry) => {
+        shownAssets.forEach((entry) => {
             const work = workOf(entry, { text, formatPercent });
 
             if (work) {
@@ -629,15 +699,17 @@ const MediaFrame = ({
         });
 
         return working.size > 0 ? working : NO_HOLDS;
-    }, [shownEntries, text, formatPercent]);
+    }, [shownAssets, text, formatPercent]);
 
     const uploads = useUploadQueue(relist, text.keptBothName);
 
     // Whether the open library takes files: its adapter has `upload`, it isn't `readOnly` nor
     // refusing them (`acceptUploads`), and it could be listed, its listing not saying it can't be
-    // written to.
+    // written to. Not inside a group yet, as files only go into the library's root for now, which
+    // isn't what's shown.
     const takesFiles =
         !!section &&
+        !inGroup &&
         !!sectionAdapter.upload &&
         takesUploads(section) &&
         state?.status !== "error" &&
@@ -649,13 +721,16 @@ const MediaFrame = ({
         [pickForm],
     );
 
-    // What's selected, as it is now: in a library that's gone, it goes; picked in the open library,
-    // once that's listed, as it's listed now, and gone when it isn't any more; picked in another,
-    // as the open library lists it when it does, through the same adapter, or else as it was picked.
+    // What's selected, as it is now: in a library that's gone, it goes; picked at the open level of the
+    // open library, once that's listed, as it's listed now, and gone when it isn't any more; picked
+    // anywhere else, as the open level lists it when it does, through the same adapter, or else as it
+    // was picked. One the app gave has no known level, so it's only known to be gone from a library
+    // whose root holds no groups, where it can only have been.
     const choices = useMemo<MediaChoice[]>(() => {
         const listedById = state?.status === "ready" ? new Map(library.map((entry) => [entry.id, entry])) : undefined;
+        const flat = !inGroup && library.length === leveled.length;
 
-        return picks.items.flatMap(({ sectionId: pickedIn, asset, values }) => {
+        return picks.items.flatMap(({ sectionId: pickedIn, asset, values, trail: pickedAmong }) => {
             const from = sectionsById.get(pickedIn);
 
             if (!from) {
@@ -664,8 +739,10 @@ const MediaFrame = ({
 
             const served = adapterOf(from);
             const listedNow = listedById && served === sectionAdapter ? listedById.get(asset.id) : undefined;
+            const atOpenLevel =
+                pickedIn === sectionId && (pickedAmong ? (pickedAmong.at(-1)?.id ?? from.rootId) === folderId : flat);
             const now =
-                listedById && pickedIn === sectionId
+                listedById && atOpenLevel
                     ? listedNow
                     : (listedNow ?? withState(asset, assetStates.get(served)?.get(asset.id)));
 
@@ -673,17 +750,32 @@ const MediaFrame = ({
                 return [];
             }
 
-            if (values !== NO_VALUES) {
-                return [{ asset: now, section: from, values }];
+            const choice = { asset: now, section: from, values: values === NO_VALUES ? defaultsOf(now, from) : values };
+
+            if (values === NO_VALUES) {
+                DEFAULTED.add(choice);
             }
 
-            const defaulted = { asset: now, section: from, values: defaultsOf(now, from) };
+            if (pickedAmong) {
+                PICK_TRAILS.set(choice, pickedAmong);
+            }
 
-            DEFAULTED.add(defaulted);
-
-            return [defaulted];
+            return [choice];
         });
-    }, [picks.items, sectionsById, state?.status, library, sectionId, adapterOf, sectionAdapter, assetStates, defaultsOf]);
+    }, [
+        picks.items,
+        sectionsById,
+        state?.status,
+        library,
+        leveled,
+        inGroup,
+        folderId,
+        sectionId,
+        adapterOf,
+        sectionAdapter,
+        assetStates,
+        defaultsOf,
+    ]);
 
     // Until the app has been handed any, as with errors for the picks it gave as `defaultValue`, the
     // order of the picks as the errors came.
@@ -812,7 +904,7 @@ const MediaFrame = ({
 
         const held = new Map(assetHolds);
 
-        shownEntries.forEach((entry) => {
+        shownAssets.forEach((entry) => {
             if (!held.has(entry.id) && !selectedIds.has(entry.id)) {
                 const refusal = refusalOf(entry, section, multiple ? choices : NO_CHOICES);
 
@@ -823,7 +915,7 @@ const MediaFrame = ({
         });
 
         return held.size > 0 ? held : NO_HOLDS;
-    }, [section, rule, assetHolds, shownEntries, selectedIds, refusalOf, multiple, choices]);
+    }, [section, rule, assetHolds, shownAssets, selectedIds, refusalOf, multiple, choices]);
 
     // Why picks can't be chosen now, by their keys, which holds Choose back until they can, or are
     // taken out: past the limit, still being processed, failed, refused by their library or the app's
@@ -882,16 +974,21 @@ const MediaFrame = ({
         [sectionsById, adapterOf],
     );
 
-    // The asset shown in the library's place, as it's listed now while it is.
+    // The asset or group shown in the library's place, as it's listed now while it is: where it is among
+    // what's shown, and among the assets, which Previous and Next go through.
     const viewed = useMemo(() => {
         if (!viewing || viewing.sectionId !== sectionId || !section) {
             return undefined;
         }
 
-        const entry = library.find(({ id }) => id === viewing.entry.id) ?? viewing.entry;
+        const entry = leveled.find(({ id }) => id === viewing.entry.id) ?? viewing.entry;
 
-        return { entry, index: shownEntries.findIndex(({ id }) => id === entry.id) };
-    }, [viewing, sectionId, section, library, shownEntries]);
+        return {
+            entry,
+            index: shownEntries.findIndex(({ id }) => id === entry.id),
+            step: shownAssets.findIndex(({ id }) => id === entry.id),
+        };
+    }, [viewing, sectionId, section, leveled, shownEntries, shownAssets]);
 
     // The picks with the open library's share made `ids`: those of other libraries stay when several
     // can be chosen, in their place, and those `ids` adds go at the end, in the order shown, as many
@@ -904,7 +1001,7 @@ const MediaFrame = ({
 
             const kept = choices.filter((choice) => (inOpen(choice) ? ids.has(choice.asset.id) : multiple));
             const { fit, cut } = fitting(
-                shownEntries.filter((entry) => ids.has(entry.id) && !selectedIds.has(entry.id)),
+                shownAssets.filter((entry) => ids.has(entry.id) && !selectedIds.has(entry.id)),
                 section,
                 kept,
             );
@@ -914,19 +1011,19 @@ const MediaFrame = ({
             }
 
             return {
-                items: [...kept.map(pickOf), ...fit.map((asset) => ({ sectionId, asset, values: NO_VALUES }))],
+                items: [...kept.map(pickOf), ...fit.map((asset) => ({ sectionId, asset, values: NO_VALUES, trail }))],
                 anchor: anchor === null ? null : { sectionId, id: anchor },
             };
         },
-        [sectionId, section, choices, inOpen, multiple, shownEntries, selectedIds, fitting, sayFull],
+        [sectionId, section, choices, inOpen, multiple, shownAssets, selectedIds, fitting, sayFull, trail],
     );
 
-    // The open library's share as `ids` would make it, without those it adds that can't be chosen
-    // now, as a Shift-click's range or Select all may hold.
+    // The open library's share as `ids` would make it, without the groups and those it adds that can't
+    // be chosen now, as a Shift-click's range or Select all may hold.
     const selectable = useCallback(
         (ids: ReadonlySet<string>) =>
-            holds.size === 0 ? ids : new Set([...ids].filter((id) => selectedIds.has(id) || !holds.has(id))),
-        [holds, selectedIds],
+            new Set([...ids].filter((id) => !shownGroupIds.has(id) && (selectedIds.has(id) || !holds.has(id)))),
+        [shownGroupIds, holds, selectedIds],
     );
 
     // Several at once, a click adds or takes away the asset, as a media picker does, and Shift adds
@@ -938,6 +1035,11 @@ const MediaFrame = ({
 
             // One that can't be chosen now isn't selected; one selected already can be taken out.
             if (id === undefined || (holds.has(id) && !selectedIds.has(id))) {
+                return;
+            }
+
+            // A group isn't selected, though a range may run through it.
+            if (shownGroupIds.has(id) && !(multiple && keys.range)) {
                 return;
             }
 
@@ -958,7 +1060,7 @@ const MediaFrame = ({
 
             setPicks(picksWith(selectable(next.ids), next.anchor));
         },
-        [order, holds, selectedIds, full, sayFull, picks.anchor, sectionId, multiple, picksWith, selectable],
+        [order, holds, shownGroupIds, selectedIds, full, sayFull, picks.anchor, sectionId, multiple, picksWith, selectable],
     );
 
     const selectAll = useCallback(() => {
@@ -1010,7 +1112,7 @@ const MediaFrame = ({
     // The asset view's Select: adds the asset, or with one at a time puts it in place of what was
     // selected, or takes it out.
     const toggleViewed = useCallback(() => {
-        if (!viewed || !section) {
+        if (!viewed || !section || isGroup(viewed.entry)) {
             return;
         }
 
@@ -1019,23 +1121,109 @@ const MediaFrame = ({
         if (selectedIds.has(viewed.entry.id)) {
             removeChoice(choice);
         } else if (!holdOf(viewed.entry, section, { text, formatPercent }) && !refusedNow(viewed.entry, section)) {
+            const pick = { ...pickOf(choice), trail };
+
             setPicks((previous) => ({
-                items: multiple ? [...previous.items, pickOf(choice)] : [pickOf(choice)],
+                items: multiple ? [...previous.items, pick] : [pick],
                 anchor: { sectionId: section.id, id: viewed.entry.id },
             }));
         }
-    }, [viewed, section, selectedIds, removeChoice, multiple, text, formatPercent, refusedNow]);
+    }, [viewed, section, selectedIds, removeChoice, multiple, text, formatPercent, refusedNow, trail]);
 
+    // Whether a group has anything to show as it's opened: what the app defines, or the adapter's own.
+    const opensGroups = !!section && (!!section.properties || !!properties || !!sectionAdapter.properties);
+
+    // Opens an asset, or a group's details, in the library's place.
     const openAsset = useCallback(
         (index: number) => {
             const entry = shownEntries[index];
 
-            if (entry && section) {
+            if (entry && section && (!isGroup(entry) || opensGroups)) {
                 setViewing({ sectionId: section.id, entry });
             }
         },
-        [shownEntries, section],
+        [shownEntries, section, opensGroups],
     );
+
+    // Shows another level of the open library, with what was over this one gone, as opening a folder
+    // ends a search in the file manager, and says where it is, as the focus only says what it's on.
+    const showLevel = useCallback(
+        (next: readonly FileEntry[], groupId: string | null) => {
+            if (!section) {
+                return;
+            }
+
+            levelFocusRef.current = { groupId, waited: false };
+            setLevels((previous) => ({
+                ...previous,
+                [section.id]: { rootId: section.rootId, adapter: sectionAdapter, trail: next },
+            }));
+            setQuery("");
+            setSearching(false);
+            setViewing(null);
+            setUploadStep(null);
+            setProcessStep(null);
+            announce(text.mediaInGroup(isolate(next.at(-1)?.name ?? section.label)));
+        },
+        [section, sectionAdapter, announce, text],
+    );
+
+    const enterGroup = useCallback((group: FileEntry) => showLevel([...trail, group], null), [showLevel, trail]);
+
+    // Back to a level on the way here, the group left through it taking the focus.
+    const goToLevel = useCallback(
+        (depth: number) => showLevel(trail.slice(0, depth), trail[depth]?.id ?? null),
+        [showLevel, trail],
+    );
+
+    // A click on a group in the grid, and Alt+Up there.
+    const enterGroupAt = useCallback(
+        (index: number) => {
+            const group = shownEntries[index];
+
+            if (group) {
+                enterGroup(group);
+            }
+        },
+        [shownEntries, enterGroup],
+    );
+
+    const levelUp = useCallback(() => goToLevel(trail.length - 1), [goToLevel, trail.length]);
+
+    // The focus goes in and comes back with the user, once what it goes to is listed: the group left,
+    // or the first thing in the level; or with nothing to take it, the way back, or the search. If
+    // that took a moment and the focus went elsewhere meanwhile, it stays there.
+    useLayoutEffect(() => {
+        const asked = levelFocusRef.current;
+
+        if (!asked) {
+            return;
+        }
+
+        const index = asked.groupId === null ? 0 : shownEntries.findIndex(({ id }) => id === asked.groupId);
+        const found = index !== -1 && index < shownEntries.length;
+
+        if (!found && state?.status !== "ready" && state?.status !== "error") {
+            asked.waited = true;
+
+            return;
+        }
+
+        levelFocusRef.current = null;
+
+        if (asked.waited && !focusLost()) {
+            return;
+        }
+
+        const tile = found && panelRef.current?.querySelector<HTMLElement>(`[role="listbox"] [data-index="${index}"]`);
+
+        if (tile) {
+            tile.focus();
+            tile.scrollIntoView({ block: "nearest" });
+        } else {
+            (levelUpRef.current ?? searchButtonRef.current)?.focus();
+        }
+    }, [shownEntries, state?.status, folderId]);
 
     // Back to the library, the asset's tile taking the focus when the view had it.
     const closeAsset = useCallback(() => {
@@ -1077,9 +1265,15 @@ const MediaFrame = ({
                 return;
             }
 
+            if (isGroup(entry)) {
+                enterGroup(entry);
+
+                return;
+            }
+
             if (!onChoose) {
                 setPicks({
-                    items: [{ sectionId: section.id, asset: entry, values: NO_VALUES }],
+                    items: [{ sectionId: section.id, asset: entry, values: NO_VALUES, trail }],
                     anchor: { sectionId: section.id, id: entry.id },
                 });
                 openAsset(index);
@@ -1133,6 +1327,8 @@ const MediaFrame = ({
             unfilledOf,
             press,
             full,
+            enterGroup,
+            trail,
         ],
     );
 
@@ -1165,6 +1361,20 @@ const MediaFrame = ({
 
     // A pick's "Show in library": its library, open at it, the overlay closing so it shows.
     const showInLibrary = useCallback((choice: MediaChoice) => {
+        const pickedAmong = PICK_TRAILS.get(choice);
+
+        // Among the groups it was picked in, so back from it goes to its fellows.
+        if (pickedAmong) {
+            setLevels((previous) => ({
+                ...previous,
+                [choice.section.id]: {
+                    rootId: choice.section.rootId,
+                    adapter: adapterOf(choice.section),
+                    trail: pickedAmong,
+                },
+            }));
+        }
+
         setOpenId(choice.section.id);
         setQuery("");
         setSearching(false);
@@ -1172,7 +1382,7 @@ const MediaFrame = ({
         setUploadStep(null);
         setProcessStep(null);
         setChosenOverlay(false);
-    }, []);
+    }, [adapterOf]);
 
     const reloadLibrary = useCallback(() => reload(), [reload]);
 
@@ -1400,7 +1610,7 @@ const MediaFrame = ({
         setPicks((previous) => {
             if (!multiple) {
                 return {
-                    items: [{ sectionId: section.id, asset: last, values: NO_VALUES }],
+                    items: [{ sectionId: section.id, asset: last, values: NO_VALUES, trail }],
                     anchor: { sectionId: section.id, id: last.id },
                 };
             }
@@ -1415,16 +1625,31 @@ const MediaFrame = ({
                       ...previous,
                       items: [
                           ...previous.items,
-                          ...added.map((asset) => ({ sectionId: section.id, asset, values: NO_VALUES })),
+                          ...added.map((asset) => ({ sectionId: section.id, asset, values: NO_VALUES, trail })),
                       ],
                   };
         });
-    }, [section, state?.status, library, arrivals, onChoose, multiple, samePick, refusalOf, fitting, choices, inOpen, sayFull]);
+    }, [
+        section,
+        state?.status,
+        library,
+        arrivals,
+        onChoose,
+        multiple,
+        samePick,
+        refusalOf,
+        fitting,
+        choices,
+        inOpen,
+        sayFull,
+        trail,
+    ]);
 
     // The open library's uploads, before its assets: those waiting or being sent, and those done
     // until they're listed.
     const shownUploads = useMemo(() => {
-        if (sectionId === undefined) {
+        // They go into the root for now, so a group isn't where they show.
+        if (sectionId === undefined || inGroup) {
             return NO_UPLOADS;
         }
 
@@ -1437,7 +1662,7 @@ const MediaFrame = ({
         );
 
         return shown.length > 0 ? shown : NO_UPLOADS;
-    }, [sectionId, arrivals, uploads.items, uploadLibraries]);
+    }, [sectionId, inGroup, arrivals, uploads.items, uploadLibraries]);
 
     // Forgets the ended uploads, and the libraries they went into.
     const clearUploads = useCallback(() => {
@@ -1512,6 +1737,12 @@ const MediaFrame = ({
         () => (section && sectionRenderAsset ? (params) => sectionRenderAsset({ ...params, section }) : undefined),
         [section, sectionRenderAsset],
     );
+    const sectionRenderGroup = section?.renderGroup ?? renderGroup;
+    const drawGroup = useMemo<MediaAssetDraw | undefined>(
+        () => (section && sectionRenderGroup ? (params) => sectionRenderGroup({ ...params, section }) : undefined),
+        [section, sectionRenderGroup],
+    );
+    const drawHeader = section?.groupHeader ?? groupHeader;
     const [layouts, setLayouts] = useSetting<MediaLayouts>({
         name: "layout",
         component: "MediaManager",
@@ -1556,22 +1787,28 @@ const MediaFrame = ({
         [section?.previewers, previewers],
     );
 
-    // What the asset shown shows: its library's own definitions, as its backend's data is its own,
-    // or else the media manager's, by the asset; without either, the adapter's own groups.
+    // What the asset or group shown shows: its library's own definitions, as its backend's data is its
+    // own, or else the media manager's, by the entry; without either, the adapter's own groups.
     const viewedEntry = viewed?.entry;
-    const viewedDefinitions = useMemo(
-        () => (viewedEntry && section ? (section.properties ?? properties?.(viewedEntry, section)) : undefined),
-        [viewedEntry, section, properties],
-    );
+    const viewedGroup = !!viewedEntry && isGroup(viewedEntry);
+    const viewedDefinitions = useMemo(() => {
+        if (!viewedEntry || !section) {
+            return undefined;
+        }
+
+        const own = section.properties;
+
+        return (typeof own === "function" ? own(viewedEntry) : own) ?? properties?.(viewedEntry, section);
+    }, [viewedEntry, section, properties]);
 
     // Why the asset shown can't be chosen now, which its view shows, with Select held.
     const viewedHold = useMemo(
         () =>
-            viewedEntry && section
+            viewedEntry && section && !viewedGroup
                 ? (holdOf(viewedEntry, section, { text, formatPercent }) ??
                   (selectedIds.has(viewedEntry.id) ? undefined : refusedNow(viewedEntry, section)))
                 : undefined,
-        [viewedEntry, section, text, formatPercent, selectedIds, refusedNow],
+        [viewedEntry, viewedGroup, section, text, formatPercent, selectedIds, refusedNow],
     );
 
     // The backend's work on it while it can be chosen all the same, which its view shows.
@@ -1585,19 +1822,21 @@ const MediaFrame = ({
     const viewedProcess = useMemo(
         () =>
             viewedEntry &&
+            !viewedGroup &&
             section &&
             sectionAdapter.process &&
             !section.readOnly &&
             allows("write", state?.permissions, viewedEntry.permissions)
                 ? (section.processForm?.(viewedEntry) ?? null)
                 : null,
-        [viewedEntry, section, sectionAdapter, state?.permissions],
+        [viewedEntry, viewedGroup, section, sectionAdapter, state?.permissions],
     );
 
     // Whether the asset shown can be deleted: where its adapter does, its library can be changed and
     // it allows it. A listing's own `delete` is about the folder, not what's in it.
     const viewedDeletable =
         !!viewedEntry &&
+        !viewedGroup &&
         !!section &&
         !!sectionAdapter.delete &&
         !section.readOnly &&
@@ -1662,9 +1901,13 @@ const MediaFrame = ({
     const limitNote = count === limit ? text.mediaChoicesFull : undefined;
 
     const errorMessage =
-        state?.status === "error" && state.error instanceof Error && state.error.message
-            ? isolate(state.error.message)
-            : undefined;
+        state?.status !== "error"
+            ? undefined
+            : state.error instanceof Error && state.error.message
+              ? isolate(state.error.message)
+              : inGroup
+                ? text.mediaGroupLoadFailed
+                : undefined;
 
     return (
         <Box
@@ -1722,6 +1965,10 @@ const MediaFrame = ({
             <Box sx={mainSx}>
                 <MediaHeader
                     section={section}
+                    trail={trail}
+                    onGoToLevel={goToLevel}
+                    showsLevelUp={!viewed && !shownStep}
+                    levelUpRef={levelUpRef}
                     several={several}
                     librariesOpen={librariesOpen}
                     librariesOpenerRef={librariesOpenerRef}
@@ -1769,28 +2016,36 @@ const MediaFrame = ({
                     <Box sx={gridSx} data-covered={!!viewed || !!shownStep}>
                         {section ? (
                             <MediaGrid
-                                // Each library's own, as another's `renderAsset`, with hooks of its
-                                // own, may draw an asset of the same id.
-                                key={section.id}
+                                // Each level's own, as another library's `renderAsset`, with hooks of
+                                // its own, may draw an asset of the same id, and each starts at its top.
+                                key={`${section.id}/${folderId}`}
                                 entries={shownEntries}
                                 uploads={shownUploads}
                                 kind={section.kind}
                                 layout={layout}
                                 adapter={sectionAdapter}
                                 drawAsset={drawAsset}
-                                label={section.label}
+                                drawGroup={drawGroup}
+                                opensGroups={opensGroups}
+                                header={
+                                    openGroup &&
+                                    drawHeader && <GroupHeader draw={drawHeader} group={openGroup} section={section} />
+                                }
+                                label={levelName}
                                 selectedIds={selectedIds}
                                 holds={holds}
                                 works={works}
                                 full={full}
                                 multiple={multiple}
                                 status={state?.status ?? "loading"}
-                                hasMedia={library.length > 0}
+                                hasMedia={leveled.length > 0}
                                 busy={state?.status === "loading" || !!state?.checking}
                                 error={errorMessage}
                                 onRetry={reloadLibrary}
                                 onPress={press}
                                 onActivate={activate}
+                                onEnterGroup={enterGroupAt}
+                                onLevelUp={inGroup ? levelUp : undefined}
                                 onOpen={openAsset}
                                 onSelectAll={selectAll}
                             />
@@ -1807,6 +2062,7 @@ const MediaFrame = ({
                             section={section}
                             layout={layout}
                             adapter={sectionAdapter}
+                            backTo={levelName}
                             choosing={choosing}
                             selected={selectedIds.has(viewed.entry.id)}
                             hold={viewedHold}
@@ -1815,10 +2071,14 @@ const MediaFrame = ({
                             definitions={viewedDefinitions}
                             propertiesCache={propertiesCache}
                             onBack={closeAsset}
-                            onPrevious={viewed.index > 0 ? () => openAsset(viewed.index - 1) : undefined}
+                            onPrevious={
+                                viewed.step > 0
+                                    ? () => setViewing({ sectionId: section.id, entry: shownAssets[viewed.step - 1] })
+                                    : undefined
+                            }
                             onNext={
-                                viewed.index !== -1 && viewed.index < shownEntries.length - 1
-                                    ? () => openAsset(viewed.index + 1)
+                                viewed.step !== -1 && viewed.step < shownAssets.length - 1
+                                    ? () => setViewing({ sectionId: section.id, entry: shownAssets[viewed.step + 1] })
                                     : undefined
                             }
                             onToggleSelected={toggleViewed}

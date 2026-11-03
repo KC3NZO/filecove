@@ -7,6 +7,8 @@ import Icon from "../icons/icon";
 
 interface OpenButtonProps {
     name: string;
+    /** Whether it's a group's, opening its details. */
+    group: boolean;
     index: number;
     onOpen: (index: number) => void;
     sx?: SxProps<Theme>;
@@ -17,7 +19,7 @@ interface OpenButtonProps {
  * hidden from screen readers, as the file manager's ⋮ is, since Alt+Enter on the asset does the
  * same; a click on it neither selects nor chooses.
  */
-const OpenButton = ({ name, index, onOpen, sx }: OpenButtonProps) => {
+const OpenButton = ({ name, group, index, onOpen, sx }: OpenButtonProps) => {
     const { text } = useLocale();
 
     return (
@@ -25,7 +27,7 @@ const OpenButton = ({ name, index, onOpen, sx }: OpenButtonProps) => {
             size="small"
             tabIndex={-1}
             aria-hidden
-            label={text.mediaOpenAsset(isolate(name))}
+            label={group ? text.mediaGroupDetails(isolate(name)) : text.mediaOpenAsset(isolate(name))}
             sx={sx}
             onClick={(event) => {
                 event.stopPropagation();

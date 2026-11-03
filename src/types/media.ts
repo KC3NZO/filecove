@@ -216,12 +216,14 @@ export interface MediaSection
      */
     previewers?: FilePreviewer[];
     /**
-     * What this library's assets show as one is opened, in groups: the app's definitions of the
-     * values its adapter's `properties` hands over (`values`), as this backend's data has its own
-     * shape, renditions with how far each is along, say. Used in place of the media manager's
-     * `properties`; without either, the adapter's own groups show.
+     * What this library's assets, and its groups, show as one is opened, in groups of fields: the
+     * app's definitions of the values its adapter's `properties` hands over (`values`), as this
+     * backend's data has its own shape, renditions with how far each is along, say. One list for
+     * all it holds, or a function of the entry, for what differs between them, as an album's fields
+     * do from a track's (a group is an entry of `kind: "folder"`). Used in place of the media
+     * manager's `properties`; without either, the adapter's own groups show.
      */
-    properties?: PropertyDefinitionGroup[];
+    properties?: PropertyDefinitionGroup[] | ((entry: FileEntry) => PropertyDefinitionGroup[]);
     /**
      * Draws this library's assets, in place of the media manager's `renderAsset` and its own look.
      * Return `MediaTile` or `MediaRow` with what to change, for a small change, or anything else, going
@@ -233,6 +235,22 @@ export interface MediaSection
      * draws every asset again.
      */
     renderAsset?: (params: MediaAssetParams) => ReactNode;
+    /**
+     * Draws this library's groups (a collection, an album, a season: whatever it lists as an entry of
+     * `kind: "folder"`), in place of the media manager's `renderGroup` and its own look, which is its
+     * thumbnail if the adapter gives one, its name and how many it holds. It's handed the group as
+     * `asset`, so `MediaTile` or `MediaRow` take what it's handed, with what to change, as they do in
+     * `renderAsset`, and what's said there of drawing goes here too. What a group is, and what it
+     * has of its own, such as a cover, is the app's: the media manager only goes into it.
+     */
+    renderGroup?: (params: MediaAssetParams) => ReactNode;
+    /**
+     * Draws what's above a group's contents while it's open, scrolling with them, such as an album's
+     * cover and description: it's outside the list of assets, so it may have buttons and links of its
+     * own, and may use hooks. Nothing without it. The group is as it was listed when it was opened,
+     * `meta` and all.
+     */
+    groupHeader?: (group: FileEntry, section: MediaSection) => ReactNode;
     /**
      * What's asked of files uploaded into this library, before they're sent: the processing its
      * backend offers, such as whether a video is streamed as HLS, or a picture made smaller or turned

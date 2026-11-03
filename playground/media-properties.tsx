@@ -405,6 +405,23 @@ const NAMED_BY_KIND: Record<MediaKind, PropertyDefinitionGroup[]> = {
     document: [naming, ...BY_KIND.document],
 };
 
-/** What an asset shows in a library without definitions of its own, by its kind. */
-export const assetProperties = (_asset: FileEntry, section: MediaSection) =>
-    (section.readOnly ? BY_KIND : NAMED_BY_KIND)[section.kind];
+// What a group shows, whichever kind its library holds: this backend's own words for it, and what's
+// written about it. The media manager knows nothing of these.
+const groupProperties: PropertyDefinitionGroup[] = [
+    naming,
+    {
+        id: "about",
+        properties: [
+            { field: "type", label: "Type", type: "string" },
+            { field: "description", label: "Description", type: "string", multiline: true, editable: true },
+        ],
+    },
+];
+
+/** What an asset or a group shows in a library without definitions of its own, by its kind. */
+export const assetProperties = (entry: FileEntry, section: MediaSection) =>
+    entry.kind === "folder" ? groupProperties : (section.readOnly ? BY_KIND : NAMED_BY_KIND)[section.kind];
+
+/** What Videos' assets and groups show, as that library defines its own. */
+export const videoEntryProperties = (entry: FileEntry) =>
+    entry.kind === "folder" ? groupProperties : videoProperties;

@@ -68,13 +68,16 @@ const durationSx: SxProps<Theme> = {
  * its name, its type, size and dimensions, or in their place why it can't be chosen now, with a bar
  * while it's processed, and its length. Its look only: what makes it an asset to select, its Open
  * button and its check stay the media manager's, beside it, so it's only drawn inside `renderAsset`.
+ * A group, an entry of `kind: "folder"`, is drawn as one: its picture or a folder's icon, and how many
+ * it holds under its name.
  */
 const MediaRow = ({ asset, kind, thumbnail, hold, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
     const { describeType, formatDuration, formatNumber, formatSize, text } = useLocale();
-    const duration = badge === undefined ? asset.media?.duration : undefined;
+    const group = asset.kind === "folder";
+    const duration = !group && badge === undefined ? asset.media?.duration : undefined;
     const { width, height } = asset.media ?? {};
     const facts = [describeType(asset), ...(asset.size !== undefined ? [formatSize(asset.size)] : [])];
-    const measured = detail === undefined && width !== undefined && height !== undefined;
+    const measured = !group && detail === undefined && width !== undefined && height !== undefined;
 
     useAssetLook();
 
@@ -85,6 +88,8 @@ const MediaRow = ({ asset, kind, thumbnail, hold, title, detail, badge, picture,
                     picture
                 ) : thumbnail ? (
                     <img src={thumbnail} alt="" draggable={false} />
+                ) : group ? (
+                    <Icon name="folder" />
                 ) : kind === "audio" ? (
                     <Icon name={KIND_ICONS.audio} />
                 ) : (
@@ -106,6 +111,12 @@ const MediaRow = ({ asset, kind, thumbnail, hold, title, detail, badge, picture,
                             <bdi>{detail}</bdi>
                         </Typography>
                     )
+                ) : group ? (
+                    asset.childCount !== undefined && (
+                        <Typography variant="caption" noWrap sx={detailSx}>
+                            <bdi>{text.itemCount(asset.childCount)}</bdi>
+                        </Typography>
+                    )
                 ) : measured ? (
                     <>
                         <Typography variant="caption" noWrap sx={detailSx} aria-hidden>
@@ -121,6 +132,11 @@ const MediaRow = ({ asset, kind, thumbnail, hold, title, detail, badge, picture,
                     </Typography>
                 )}
             </Box>
+            {group && (
+                <Box component="span" sx={visuallyHiddenSx}>
+                    {text.mediaGroup}
+                </Box>
+            )}
             {badge !== undefined && badge !== null && (
                 <Box component="span" sx={durationSx}>
                     <bdi>{badge}</bdi>

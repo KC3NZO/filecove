@@ -28,6 +28,8 @@ interface UsePropertiesOptions {
      */
     changes: number;
     showHidden: boolean;
+    /** Whether what's in folders is wanted, which a host showing no totals doesn't ask the backend for. */
+    measures?: boolean;
 }
 
 /**
@@ -37,7 +39,7 @@ interface UsePropertiesOptions {
  */
 export const useProperties = (
     items: readonly PropertiesItem[],
-    { cache, changes, showHidden }: UsePropertiesOptions,
+    { cache, changes, showHidden, measures = true }: UsePropertiesOptions,
 ) => {
     useSyncExternalStore(cache.subscribe, cache.version);
 
@@ -60,7 +62,7 @@ export const useProperties = (
                 .map((item) => ({ entry: item.entry, adapter: item.adapter })),
         [items],
     );
-    const measurable = targets.length > 0 && targets.every((target) => !!target.adapter.measure);
+    const measurable = measures && targets.length > 0 && targets.every((target) => !!target.adapter.measure);
     // The same folders, by their ids and adapters, make the same key, however often the items are
     // made anew and the folders listed anew, so a count under way carries on.
     const countKey = measurable

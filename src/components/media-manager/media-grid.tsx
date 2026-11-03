@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent, MouseEvent } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -28,7 +28,7 @@ import type {
 } from "../../types";
 
 interface MediaGridProps {
-    /** The library's assets the search leaves, in the order shown. */
+    /** The open level's assets and groups the search leaves, in the order shown. */
     entries: readonly FileEntry[];
     /** Files being uploaded into the library, shown before its assets until they're listed. */
     uploads: readonly FileUploadItem[];
@@ -39,7 +39,13 @@ interface MediaGridProps {
     adapter: FileAdapter;
     /** What the app draws the assets with, the library's `renderAsset` or the media manager's. */
     drawAsset: MediaAssetDraw | undefined;
-    /** The library's name, which the grid is named by for screen readers. */
+    /** What the app draws the groups with, the library's `renderGroup` or the media manager's. */
+    drawGroup: MediaAssetDraw | undefined;
+    /** Whether a group has details to open, which puts the Open button on it. */
+    opensGroups: boolean;
+    /** What the app draws above an open group's contents. */
+    header: ReactNode;
+    /** The name of the library or group open, which the grid is named by for screen readers. */
     label: string;
     selectedIds: ReadonlySet<string>;
     /** Why assets can't be chosen now, by their ids, which their tiles show. */
@@ -50,7 +56,7 @@ interface MediaGridProps {
     full: boolean;
     multiple: boolean;
     status: "loading" | "ready" | "error";
-    /** Whether the library has assets at all, whatever the search leaves. */
+    /** Whether the open level has anything at all, whatever the search leaves. */
     hasMedia: boolean;
     /** Whether more of the library is still coming, page by page, or it's listed again. */
     busy: boolean;
@@ -59,19 +65,33 @@ interface MediaGridProps {
     onRetry: () => void;
     /** A click on a tile, or Space on it, with the keys held, by its index in `entries`. */
     onPress: (index: number, keys: { toggle: boolean; range: boolean }) => void;
-    /** Choosing a tile on its own: a double click, or Enter. */
+    /** Choosing a tile on its own: a double click, or Enter, which goes into a group. */
     onActivate: (index: number) => void;
+    /** Going into a group, from a click on it. */
+    onEnterGroup: (index: number) => void;
+    /** Going up a level, by Alt+Up; missing at the library's root. */
+    onLevelUp: (() => void) | undefined;
     /** Opening an asset in the library's place: its button, or Alt+Enter. */
     onOpen: (index: number) => void;
     onSelectAll: () => void;
 }
 
+// A column, so a state fills what a group's header leaves it.
 const rootSx: SxProps<Theme> = {
     position: "relative",
+    display: "flex",
+    flexDirection: "column",
     flex: 1,
     minHeight: 0,
     overflowY: "auto",
+    "& > *": { flexShrink: 0 },
 };
+
+/**
+ * How long a level is only looked at once it's shown, in ms: the second click of a double click on a
+ * group, which went in on the first, would otherwise land on whatever came under the pointer.
+ */
+const SETTLING = 400;
 
 // The uploads under way are laid out as the assets are, before them, with no more room between the
 // two than the grid's gap.
@@ -117,7 +137,7 @@ const stateSx: SxProps<Theme> = {
     alignItems: "center",
     justifyContent: "center",
     gap: 1.5,
-    height: "100%",
+    flexGrow: 1,
     p: 3,
     color: "text.secondary",
     textAlign: "center",
@@ -143,9 +163,9 @@ const stepOf = (event: KeyboardEvent<HTMLElement>, columns: number) => {
 };
 
 /**
- * The library's assets as a grid of tiles, or a list of rows, a `listbox` of `option`s with one Tab stop, which the
- * arrow keys, Home and End move. Space selects, Enter chooses, Alt+Enter opens one in the
- * library's place, Ctrl+A selects them all.
+ * The open level's assets and groups as a grid of tiles, or a list of rows, a `listbox` of `option`s with one Tab
+ * stop, which the arrow keys, Home and End move. Space selects, Enter chooses, Alt+Enter opens one in the
+ * library's place, Ctrl+A selects them all. A click or Enter goes into a group, and Alt+Up back out.
  */
 const MediaGrid = ({
     entries,
@@ -154,6 +174,9 @@ const MediaGrid = ({
     layout,
     adapter,
     drawAsset,
+    drawGroup,
+    opensGroups,
+    header,
     label,
     selectedIds,
     holds,
@@ -167,6 +190,8 @@ const MediaGrid = ({
     onRetry,
     onPress,
     onActivate,
+    onEnterGroup,
+    onLevelUp,
     onOpen,
     onSelectAll,
 }: MediaGridProps) => {
@@ -177,6 +202,7 @@ const MediaGrid = ({
     // Set as a key moves the focus, so the tile it went to takes it once it renders as the Tab stop.
     const movedRef = useRef(false);
     const tabStop = Math.min(focusIndex, Math.max(entries.length - 1, 0));
+    const [shownAt] = useState(() => performance.now());
 
     useLayoutEffect(() => {
         if (!movedRef.current) {
@@ -194,16 +220,42 @@ const MediaGrid = ({
 
     const handlePress = useCallback(
         (index: number, event: MouseEvent) => {
+            if (performance.now() - shownAt < SETTLING) {
+                return;
+            }
+
             setFocusIndex(index);
-            onPress(index, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey });
+
+            if (entries[index]?.kind === "folder") {
+                onEnterGroup(index);
+            } else {
+                onPress(index, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey });
+            }
         },
-        [onPress],
+        [shownAt, entries, onEnterGroup, onPress],
+    );
+
+    const handleDoubleClick = useCallback(
+        (index: number) => {
+            if (performance.now() - shownAt >= SETTLING) {
+                onActivate(index);
+            }
+        },
+        [shownAt, onActivate],
     );
 
     const handleKeyDown = useCallback(
         (event: KeyboardEvent<HTMLElement>) => {
             const index = Number(event.currentTarget.dataset.index);
             const last = entries.length - 1;
+
+            if (event.altKey && event.key === "ArrowUp") {
+                event.preventDefault();
+                onLevelUp?.();
+
+                return;
+            }
+
             const step = gridRef.current ? stepOf(event, gridColumns(gridRef.current)) : 0;
 
             if (step !== 0) {
@@ -231,6 +283,12 @@ const MediaGrid = ({
 
             if (event.key === " ") {
                 event.preventDefault();
+
+                // A group isn't one to select.
+                if (entries[index]?.kind === "folder") {
+                    return;
+                }
+
                 onPress(index, { toggle: multiple || event.ctrlKey || event.metaKey, range: event.shiftKey });
 
                 return;
@@ -253,12 +311,13 @@ const MediaGrid = ({
                 onSelectAll();
             }
         },
-        [entries.length, multiple, moveTo, onPress, onActivate, onOpen, onSelectAll],
+        [entries, multiple, moveTo, onPress, onActivate, onLevelUp, onOpen, onSelectAll],
     );
 
     if (status === "error") {
         return (
             <Box sx={rootSx}>
+                {header}
                 <Box role="alert" sx={stateSx}>
                     <Icon name={KIND_ICONS[kind]} />
                     <Typography variant="body1">{error ?? text.mediaLoadFailed}</Typography>
@@ -273,6 +332,7 @@ const MediaGrid = ({
     if (status === "loading" && entries.length === 0 && uploads.length === 0) {
         return (
             <Box sx={rootSx}>
+                {header}
                 <Box sx={stateSx}>
                     <CircularProgress aria-label={text.loading} />
                 </Box>
@@ -283,6 +343,7 @@ const MediaGrid = ({
     if (entries.length === 0 && uploads.length === 0) {
         return (
             <Box sx={rootSx}>
+                {header}
                 <Box role="status" sx={stateSx}>
                     <Icon name={hasMedia ? "search" : KIND_ICONS[kind]} />
                     <Typography variant="body1">{hasMedia ? text.mediaNoMatches : text.mediaEmpty}</Typography>
@@ -294,6 +355,7 @@ const MediaGrid = ({
     return (
         <Box sx={rootSx}>
             {busy && <LinearProgress sx={barSx} aria-label={text.loading} />}
+            {header}
             {uploads.length > 0 && (
                 <Box component="ul" aria-label={text.mediaUploading} data-part="uploads" sx={shownSx}>
                     {uploads.map((item) => (
@@ -322,11 +384,13 @@ const MediaGrid = ({
                         selected={selectedIds.has(entry.id)}
                         hold={holds.get(entry.id)}
                         work={works.get(entry.id)}
-                        limited={full && !selectedIds.has(entry.id)}
+                        limited={full && !selectedIds.has(entry.id) && entry.kind !== "folder"}
                         focused={index === tabStop}
                         draw={drawAsset}
+                        drawGroup={drawGroup}
+                        opensGroups={opensGroups}
                         onPress={handlePress}
-                        onActivate={onActivate}
+                        onActivate={handleDoubleClick}
                         onOpen={onOpen}
                         onFocus={setFocusIndex}
                         onKeyDown={handleKeyDown}

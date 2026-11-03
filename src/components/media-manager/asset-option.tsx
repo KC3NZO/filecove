@@ -41,6 +41,10 @@ interface AssetOptionProps {
     focused: boolean;
     /** What the app draws it with, the library's `renderAsset` or the media manager's. */
     draw: MediaAssetDraw | undefined;
+    /** What the app draws it with when it's a group, the library's `renderGroup` or the media manager's. */
+    drawGroup: MediaAssetDraw | undefined;
+    /** Whether a group has details to open, which puts the Open button on it. */
+    opensGroups: boolean;
     onPress: (index: number, event: MouseEvent) => void;
     /** A double click, which chooses it, or opens it while nothing is chosen. */
     onActivate: (index: number) => void;
@@ -187,8 +191,8 @@ const rowOpenSx: SxProps<Theme> = {
 const AssetBody = memo(({ draw, params }: AssetBodyProps): ReactNode => draw(params));
 
 /**
- * One asset in the grid, as a tile or a row: what makes it an asset to select, whoever
- * draws it. The `option` with its keys, clicks and marks, the check and the Open button. Inside it,
+ * One asset in the grid, or a group, as a tile or a row: what makes it one to select or to go into,
+ * whoever draws it. The `option` with its keys, clicks and marks, the check and the Open button. Inside it,
  * the media manager's own look (`MediaTile`, `MediaRow`), or what the app's `renderAsset` returns.
  * An app may use the same looks there. When it has drawn something else entirely, this says why the
  * asset can't be chosen under it, fades it as those do, and names it, what the app drew being read
@@ -207,6 +211,8 @@ const AssetOption = memo(
         limited,
         focused,
         draw,
+        drawGroup,
+        opensGroups,
         onPress,
         onActivate,
         onOpen,
@@ -214,11 +220,14 @@ const AssetOption = memo(
         onKeyDown,
     }: AssetOptionProps) => {
         const row = layout === "list";
+        const group = entry.kind === "folder";
+        const drawn = group ? drawGroup : draw;
         const thumbnail = useThumbnail(
             entry,
             adapter,
             layout,
             row ? ROW_PICTURE : TILE_LAYOUTS[kind].thumbnail,
+            true,
         );
         const standing = hold ?? work;
         const contentId = useId();
@@ -231,7 +240,7 @@ const AssetOption = memo(
             return () => setLooks((count) => count - 1);
         }, []);
         // Whether the app has drawn this entirely itself.
-        const own = !!draw && looks === 0;
+        const own = !!drawn && looks === 0;
         const params = useMemo(
             () => ({ asset: entry, kind, layout, adapter, thumbnail, selected, hold: standing }),
             [entry, kind, layout, adapter, thumbnail, selected, standing],
@@ -241,7 +250,8 @@ const AssetOption = memo(
         return (
             <Box
                 role="option"
-                aria-selected={selected}
+                // A group isn't one to select, which an `option` says by having none of this.
+                aria-selected={group ? undefined : selected}
                 // One selected before it was held, as an upload still processed is, can be taken out.
                 aria-disabled={(hold && !selected) || limited ? true : undefined}
                 aria-label={own ? entry.name : undefined}
@@ -257,11 +267,11 @@ const AssetOption = memo(
                 onFocus={() => onFocus(index)}
                 onKeyDown={onKeyDown}
             >
-                {draw ? (
+                {drawn ? (
                     <Box id={contentId} sx={contentSx}>
                         <Box data-own={own} sx={drawnSx}>
                             <AssetLookContext value={claim}>
-                                <AssetBody draw={draw} params={params} />
+                                <AssetBody draw={drawn} params={params} />
                             </AssetLookContext>
                         </Box>
                         {own && standing && (
@@ -274,7 +284,15 @@ const AssetOption = memo(
                 ) : (
                     <Look asset={entry} kind={kind} thumbnail={thumbnail} hold={standing} />
                 )}
-                <OpenButton name={entry.name} index={index} onOpen={onOpen} sx={row ? rowOpenSx : tileOpenSx} />
+                {(!group || opensGroups) && (
+                    <OpenButton
+                        name={entry.name}
+                        group={group}
+                        index={index}
+                        onOpen={onOpen}
+                        sx={row ? rowOpenSx : tileOpenSx}
+                    />
+                )}
                 <Box component="span" sx={row ? rowCheckSx : tileCheckSx} aria-hidden>
                     <Icon name="check" />
                 </Box>

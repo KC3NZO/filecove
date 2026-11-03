@@ -88,8 +88,8 @@ interface BaseProps<V> extends RootAttributes {
      */
     pickForm?: (asset: FileEntry, section: MediaSection) => MediaPickForm<V> | null;
     /**
-     * What an asset shows as it's opened, by the asset and its library, for the libraries without
-     * `properties` of their own: the app's definitions of the values the adapter's `properties`
+     * What an asset or a group shows as it's opened, by the entry and its library (a group is an entry
+     * of `kind: "folder"`), for the libraries without `properties` of their own: the app's definitions of the values the adapter's `properties`
      * hands over (`values`), each shown as its type, its kind and its functions say, editable where
      * it's marked so and the library isn't `readOnly`. Without either, the adapter's own groups
      * show. The media manager adds nothing of its own.
@@ -107,6 +107,16 @@ interface BaseProps<V> extends RootAttributes {
      * `MediaSection.renderAsset`. Keep it outside the component, or memoized.
      */
     renderAsset?: (params: MediaAssetParams) => ReactNode;
+    /**
+     * Draws the groups of the libraries without a `renderGroup` of their own, in place of the media
+     * manager's look. See `MediaSection.renderGroup`. Keep it outside the component, or memoized.
+     */
+    renderGroup?: (params: MediaAssetParams) => ReactNode;
+    /**
+     * Draws what's above a group's contents while it's open, for the libraries without a `groupHeader`
+     * of their own. See `MediaSection.groupHeader`.
+     */
+    groupHeader?: (group: FileEntry, section: MediaSection) => ReactNode;
     /**
      * The layout each library is shown in, of those it offers (`MediaSection.layouts`), by its `id`, for
      * an app keeping what the user switched to across visits. Change it in `onLayoutChange`; leave it
@@ -166,8 +176,9 @@ interface BaseProps<V> extends RootAttributes {
 
 interface MultiSectionProps<V> extends BaseProps<V> {
     /**
-     * The libraries, in groups. Each holds one kind of asset, and is an independent root, listed
-     * flat, folders left out.
+     * The libraries, in groups. Each holds one kind of asset, and is an independent root. What it
+     * lists as entries of `kind: "folder"` are groups of it (collections, albums, seasons, to any
+     * depth), which are gone into a level at a time, each listed through `list`.
      */
     sections: MediaSectionGroup[];
     section?: never;
@@ -223,6 +234,8 @@ const MediaManager = <V,>({
     properties,
     previewers,
     renderAsset,
+    renderGroup,
+    groupHeader,
     layout,
     defaultLayout,
     onLayoutChange,
@@ -271,6 +284,8 @@ const MediaManager = <V,>({
                             properties={properties}
                             previewers={previewers}
                             renderAsset={renderAsset}
+                            renderGroup={renderGroup}
+                            groupHeader={groupHeader}
                             layout={layout}
                             defaultLayout={defaultLayout}
                             onLayoutChange={onLayoutChange}

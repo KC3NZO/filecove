@@ -854,6 +854,16 @@ export interface MediaManagerLocaleText
     mediaNoMatches: string;
     /** In place of the library when it couldn't be listed, when the adapter didn't say why. */
     mediaLoadFailed: string;
+    /** In place of a group when it couldn't be listed, when the adapter didn't say why. */
+    mediaGroupLoadFailed: string;
+    /** What a group is, read after its name by screen readers. */
+    mediaGroup: string;
+    /** What the path from the library to the group open is named, for screen readers. */
+    mediaGroupPath: string;
+    /** Said as a group, or the library again, is gone to; `name` comes isolated. */
+    mediaInGroup: (name: string) => string;
+    /** A group's button, and Alt+Enter on it, opening its details; `name` comes isolated. */
+    mediaGroupDetails: (name: string) => string;
     /** How many are selected, in every library: the selected column's count, and its button where it doesn't dock. */
     mediaSelected: (count: number) => string;
     /** The selected column's title, and its list's name for screen readers. */
@@ -899,7 +909,7 @@ export interface MediaManagerLocaleText
     mediaDimensions: (width: string, height: string) => string;
     /** A tile's button, and Alt+Enter, opening the asset in the library's place; `name` comes isolated. */
     mediaOpenAsset: (name: string) => string;
-    /** The asset view's button going back to the library it's in; `library` is its label. */
+    /** The buttons going back to the library or the group something's in; `library` is its name. */
     mediaBackToLibrary: (library: string) => string;
     /** The asset view's buttons going to the asset before or after it in the library. */
     mediaPreviousAsset: string;

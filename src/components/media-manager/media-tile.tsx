@@ -99,6 +99,11 @@ const nameSx: SxProps<Theme> = {
     fontSize: "0.8125rem",
 };
 
+const groupIconSx: SxProps<Theme> = {
+    fontSize: "3rem",
+    color: "text.secondary",
+};
+
 const detailSx: SxProps<Theme> = {
     color: "text.secondary",
     fontSize: "0.75rem",
@@ -110,13 +115,20 @@ const detailSx: SxProps<Theme> = {
  * kind's shape, with a video's or a piece of audio's length over it, and its name, with a picture's
  * or a video's dimensions, or a document's or a piece of audio's size, under it, or in their place why it can't be chosen now, with a bar on the picture
  * while it's processed. Its look only: what makes it an asset to select, its check and its Open
- * button stay the media manager's, around it, so it's only drawn inside `renderAsset`.
+ * button stay the media manager's, around it, so it's only drawn inside `renderAsset`. A group, an
+ * entry of `kind: "folder"`, is drawn as one: its picture, marked as a group, or a folder's icon, and
+ * how many it holds under its name.
  */
 const MediaTile = ({ asset, kind, thumbnail, hold, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
     const { formatDuration, formatNumber, formatSize, text } = useLocale();
-    const duration = badge === undefined && (kind === "video" || kind === "audio") ? asset.media?.duration : undefined;
+    const group = asset.kind === "folder";
+    const duration =
+        !group && badge === undefined && (kind === "video" || kind === "audio") ? asset.media?.duration : undefined;
     const { width, height } = asset.media ?? {};
-    const measured = detail === undefined && kind !== "document" && width !== undefined && height !== undefined;
+    const measured =
+        !group && detail === undefined && kind !== "document" && width !== undefined && height !== undefined;
+    // Over a picture, a group is told from an asset by this; its icon says so without one.
+    const shownBadge = badge === undefined && group && thumbnail ? <Icon name="folder" /> : badge;
 
     useAssetLook();
 
@@ -128,13 +140,15 @@ const MediaTile = ({ asset, kind, thumbnail, hold, title, detail, badge, picture
                         picture
                     ) : thumbnail ? (
                         <Box component="img" src={thumbnail} alt="" draggable={false} sx={pictureSx} />
+                    ) : group ? (
+                        <Icon name="folder" sx={groupIconSx} />
                     ) : (
                         <FileTypeIcon fileName={asset.name} size={kind === "video" ? "30%" : "42%"} />
                     )}
                 </Box>
-                {badge !== undefined && badge !== null && (
+                {shownBadge !== undefined && shownBadge !== null && (
                     <Box component="span" sx={badgeSx}>
-                        {badge}
+                        {shownBadge}
                     </Box>
                 )}
                 {duration !== undefined && (
@@ -157,6 +171,12 @@ const MediaTile = ({ asset, kind, thumbnail, hold, title, detail, badge, picture
                             <bdi>{detail}</bdi>
                         </Typography>
                     )
+                ) : group ? (
+                    asset.childCount !== undefined && (
+                        <Typography variant="caption" noWrap sx={detailSx}>
+                            <bdi>{text.itemCount(asset.childCount)}</bdi>
+                        </Typography>
+                    )
                 ) : measured ? (
                     <Typography variant="caption" noWrap sx={detailSx} aria-hidden>
                         <bdi>{`${formatNumber(width)} × ${formatNumber(height)}`}</bdi>
@@ -170,6 +190,11 @@ const MediaTile = ({ asset, kind, thumbnail, hold, title, detail, badge, picture
                     )
                 )}
             </Box>
+            {group && (
+                <Box component="span" sx={visuallyHiddenSx}>
+                    {text.mediaGroup}
+                </Box>
+            )}
             {measured && (
                 <Box component="span" sx={visuallyHiddenSx}>
                     {text.mediaDimensions(formatNumber(width), formatNumber(height))}

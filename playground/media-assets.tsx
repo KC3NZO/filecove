@@ -4,7 +4,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { MediaRow, MediaTile } from "../src";
 
-import type { MediaAssetParams } from "../src";
+import type { FileEntry, MediaAssetParams } from "../src";
 
 // How the playground draws assets of two libraries itself, as an app would, one each way: a little
 // changed, from the media manager's own look, and entirely its own.
@@ -44,6 +44,33 @@ export const renderAudio = (params: MediaAssetParams) => {
         />
     );
 };
+
+/** A group as the media manager draws it, saying what it is by this backend's own word for it. */
+export const renderGroup = (params: MediaAssetParams) => {
+    const Look = params.layout === "list" ? MediaRow : MediaTile;
+    const { type } = params.asset.meta ?? {};
+    const { childCount } = params.asset;
+
+    return (
+        <Look
+            {...params}
+            detail={typeof type === "string" ? `${type}${childCount === undefined ? "" : ` · ${childCount}`}` : undefined}
+        />
+    );
+};
+
+const groupHeaderSx: SxProps<Theme> = {
+    px: 2.5,
+    pt: 2,
+    color: "text.secondary",
+    fontSize: "0.875rem",
+};
+
+/** What's written about a group, above what it holds, for those that have something. */
+export const renderGroupHeader = (group: FileEntry) =>
+    typeof group.meta?.description === "string" && group.meta.description ? (
+        <Typography sx={groupHeaderSx}>{group.meta.description}</Typography>
+    ) : null;
 
 /**
  * Stock photos drawn entirely by the playground, wider, with whom they're from. The check, the Open

@@ -49,6 +49,8 @@ interface MediaAssetProps {
     layout: MediaLayout;
     /** The library's adapter, its own or the media manager's. */
     adapter: FileAdapter;
+    /** The name of the library or group it's in, which its back button goes to. */
+    backTo: string;
     /** Whether something can be chosen, which shows the Select toggle. */
     choosing: boolean;
     selected: boolean;
@@ -203,6 +205,8 @@ const detailsSx: SxProps<Theme> = {
         pt: 1.5,
         borderInlineStart: 1,
         borderColor: "divider",
+        // A group with no stage: its fields have the view, as wide as fields read well.
+        '&[data-alone="true"]': { flex: 1, width: "auto", maxWidth: "40rem", borderInlineStart: 0 },
     },
 };
 
@@ -222,6 +226,10 @@ interface BoundaryProps {
     children: ReactNode;
     onError: (error: unknown) => void;
 }
+
+/** The first previewer that accepts an entry, of those that can get what they read. */
+const previewerOf = (previewers: readonly FilePreviewer[], entry: FileEntry, adapter: FileAdapter) =>
+    previewers.find((each) => ((each.reads ?? "content") === "none" || !!adapter.content) && each.accepts(entry));
 
 // An asset without its backend's work on it, or with only whether there's any and how it ended.
 const withoutWork = (entry: FileEntry): FileEntry => ({ ...entry, processing: undefined });
@@ -421,9 +429,7 @@ const Stage = ({
     /** The asset as it is now, for its picture, asked for again only as its work ends. */
     listed: FileEntry;
 }) => {
-    const previewer = previewers.find(
-        (each) => ((each.reads ?? "content") === "none" || !!adapter.content) && each.accepts(entry),
-    );
+    const previewer = previewerOf(previewers, entry, adapter);
 
     return (
         <Box sx={stageSx} data-previewer={!!previewer}>
@@ -439,13 +445,15 @@ const Stage = ({
 /**
  * One asset in the library's place: shown by the app's previewers, or its picture, with the
  * properties its adapter hands over, editable where the library is, a way back to the library, to
- * the assets before and after it, and, while the app takes a choice, a toggle selecting it.
+ * the assets before and after it, and, while the app takes a choice, a toggle selecting it. A group
+ * opens here for its fields, with what the app's previewers show of it and nothing of an asset's.
  */
 const MediaAsset = ({
     entry,
     section,
     layout,
     adapter,
+    backTo,
     choosing,
     selected,
     hold,
@@ -475,10 +483,12 @@ const MediaAsset = ({
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [confirmingFor, setConfirmingFor] = useState(entry.id);
     const standing = hold ?? work;
+    const group = entry.kind === "folder";
     // What plays stays as it is while the asset's work goes on, and its details are asked for again
     // only as that starts and ends, which is when there's more of them to show.
     const staged = useSteadyEntry(entry, withoutWork);
     const detailed = useSteadyEntry(entry, withWorkStatus);
+    const alone = group && !previewerOf(previewers, staged, adapter);
 
     // Asking about one asset says nothing of the next one gone to.
     if (confirmingFor !== entry.id) {
@@ -550,18 +560,22 @@ const MediaAsset = ({
             }}
         >
             <Box sx={headerSx}>
-                <TooltipIconButton label={text.mediaBackToLibrary(section.label)} onClick={onBack}>
+                <TooltipIconButton label={text.mediaBackToLibrary(backTo)} onClick={onBack}>
                     <Icon name="arrowBack" fontSize="small" />
                 </TooltipIconButton>
                 <Typography id={nameId} component="h2" noWrap sx={titleSx}>
                     <bdi>{entry.name}</bdi>
                 </Typography>
-                <TooltipIconButton label={text.mediaPreviousAsset} disabled={!onPrevious} onClick={onPrevious}>
-                    <Icon name="chevronLeft" fontSize="small" />
-                </TooltipIconButton>
-                <TooltipIconButton label={text.mediaNextAsset} disabled={!onNext} onClick={onNext}>
-                    <Icon name="chevronRight" fontSize="small" />
-                </TooltipIconButton>
+                {!group && (
+                    <>
+                        <TooltipIconButton label={text.mediaPreviousAsset} disabled={!onPrevious} onClick={onPrevious}>
+                            <Icon name="chevronLeft" fontSize="small" />
+                        </TooltipIconButton>
+                        <TooltipIconButton label={text.mediaNextAsset} disabled={!onNext} onClick={onNext}>
+                            <Icon name="chevronRight" fontSize="small" />
+                        </TooltipIconButton>
+                    </>
+                )}
                 {deletable && (
                     <TooltipIconButton
                         ref={deleteRef}
@@ -577,7 +591,7 @@ const MediaAsset = ({
                         {text.mediaProcess}
                     </Button>
                 )}
-                {choosing && (
+                {choosing && !group && (
                     <Button
                         variant={selected ? "contained" : "outlined"}
                         color={selected ? "primary" : "inherit"}
@@ -617,16 +631,18 @@ const MediaAsset = ({
                 </Box>
             )}
             <Box sx={bodySx}>
-                <Stage
-                    key={entry.id}
-                    entry={staged}
-                    listed={entry}
-                    section={section}
-                    layout={layout}
-                    adapter={adapter}
-                    previewers={previewers}
-                />
-                <Box sx={detailsSx}>
+                {!alone && (
+                    <Stage
+                        key={entry.id}
+                        entry={staged}
+                        listed={entry}
+                        section={section}
+                        layout={layout}
+                        adapter={adapter}
+                        previewers={previewers}
+                    />
+                )}
+                <Box sx={detailsSx} data-alone={alone}>
                     <PropertiesPanel
                         items={items}
                         changes={0}

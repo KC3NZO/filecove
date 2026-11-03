@@ -10,18 +10,19 @@ const unsubscribed = () => undefined;
 
 /**
  * The URL of a file's thumbnail for a view, `rem` square, once the adapter has given one and it
- * has loaded; null until then, and for folders, files with none, or an adapter without
- * `thumbnail`. It's asked for while the component is mounted, so only the entries rendered, those
- * in or near view, ask for theirs.
+ * has loaded; null until then, and for folders, unless they're asked for too (`folders`, the media
+ * manager's groups), files with none, or an adapter without `thumbnail`. It's asked for while the
+ * component is mounted, so only the entries rendered, those in or near view, ask for theirs.
  */
 export const useThumbnail = (
     entry: FileEntry,
     adapter: FileAdapter | undefined,
     view: ViewMode | undefined,
     rem: number,
+    folders = false,
 ) => {
     const thumbnails = useContext(DataContext)?.thumbnails;
-    const source = thumbnails && adapter?.thumbnail && view && entry.kind === "file" ? adapter : undefined;
+    const source = thumbnails && adapter?.thumbnail && view && (folders || entry.kind === "file") ? adapter : undefined;
     const { id } = entry;
 
     const subscribe = useCallback(
