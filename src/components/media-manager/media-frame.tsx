@@ -30,6 +30,7 @@ import {
 import { allows } from "../../utils/permissions";
 import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
+import { pressesKey } from "../../utils/shortcut";
 import Icon from "../icons/icon";
 import UploadPanel from "../uploads/upload-panel";
 import { choiceKey } from "./choice-list";
@@ -367,6 +368,13 @@ const MediaFrame = ({
     const { announcement, announce } = useAnnouncer();
 
     const [query, setQuery] = useState("");
+    const [searching, setSearching] = useState(false);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    const searchButtonRef = useRef<HTMLButtonElement>(null);
+    // What had the focus as the search opened, to give it back to as it closes.
+    const searchOpenerRef = useRef<HTMLElement | null>(null);
+    // Asks the field to take the focus once it's there, as it's only drawn by the render that follows.
+    const focusSearchAsked = useRef(false);
     const [picks, setPicks] = useState<Picks>(() => picksFrom(defaultValue));
     const [viewing, setViewing] = useState<Viewing | null>(null);
     // The order the app was last handed the picks in, at Choose, by their keys, which the keys of
@@ -1125,6 +1133,7 @@ const MediaFrame = ({
         (id: string) => {
             setOpenId(id);
             setQuery("");
+            setSearching(false);
             setViewing(null);
             setUploadStep(null);
             setProcessStep(null);
@@ -1145,6 +1154,7 @@ const MediaFrame = ({
     const showInLibrary = useCallback((choice: MediaChoice) => {
         setOpenId(choice.section.id);
         setQuery("");
+        setSearching(false);
         setViewing({ sectionId: choice.section.id, entry: choice.asset });
         setUploadStep(null);
         setProcessStep(null);
@@ -1152,6 +1162,61 @@ const MediaFrame = ({
     }, []);
 
     const reloadLibrary = useCallback(() => reload(), [reload]);
+
+    useLayoutEffect(() => {
+        if (focusSearchAsked.current) {
+            focusSearchAsked.current = false;
+            searchInputRef.current?.focus();
+            searchInputRef.current?.select();
+        }
+    });
+
+    // Opens the search field and focuses it, or, open already, focuses it with what's typed selected.
+    const openSearch = () => {
+        if (!searching) {
+            searchOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }
+
+        focusSearchAsked.current = true;
+        setSearching(true);
+
+        const input = searchInputRef.current;
+
+        if (input) {
+            focusSearchAsked.current = false;
+            input.focus();
+            input.select();
+        }
+    };
+
+    const stopSearching = () => {
+        setSearching(false);
+        setQuery("");
+        searchOpenerRef.current = null;
+    };
+
+    // Closing with the focus in the field gives it back to what had it before the search opened, or
+    // else to the search button, as when that was an asset the search has left out since.
+    const closeSearch = () => {
+        const opener = searchOpenerRef.current;
+
+        if (searchInputRef.current?.closest('[role="search"]')?.contains(document.activeElement)) {
+            if (opener && opener !== document.body) {
+                opener.focus();
+            }
+
+            if (document.activeElement !== opener) {
+                searchButtonRef.current?.focus();
+            }
+        }
+
+        stopSearching();
+    };
+
+    // Down or Enter in the field goes on to the assets shown, staying in the field with none.
+    const focusAssets = () => {
+        panelRef.current?.querySelector<HTMLElement>('[role="listbox"] [role="option"][tabindex="0"]')?.focus();
+    };
 
     // Sends files into a library, each its own upload, kept both with what's there of its name, as a
     // library is listed flat, with what its upload form held.
@@ -1202,6 +1267,9 @@ const MediaFrame = ({
     }, []);
 
     const shownStep = uploadStep && uploadStep.sectionId === sectionId ? uploadStep : null;
+    // Nothing to search while an asset or a step is shown in the library's place; a search under way
+    // comes back with the library.
+    const searchable = !!section && !viewed && !shownStep;
 
     // Files dragged over the library are taken there while it's shown and takes them, of the types
     // it takes as far as a drag tells; otherwise the frame refuses them.
@@ -1556,6 +1624,26 @@ const MediaFrame = ({
             sx={frameSx}
             data-libraries={several}
             data-choosing={choosing}
+            onKeyDown={(event) => {
+                // Ctrl+F or ⌘F opens the search, in place of the browser's find while the focus is in
+                // here, as in the file manager, but for what's over the header or hides the library.
+                if (
+                    pressesKey(event, "f") &&
+                    (event.ctrlKey || event.metaKey) &&
+                    !event.shiftKey &&
+                    !event.altKey &&
+                    !event.defaultPrevented &&
+                    // Not from an app's dialog, which portals out but whose presses still bubble here.
+                    event.target instanceof Node &&
+                    event.currentTarget.contains(event.target) &&
+                    searchable &&
+                    !librariesOpen &&
+                    !chosenOverlay
+                ) {
+                    event.preventDefault();
+                    openSearch();
+                }
+            }}
             // Files dropped anywhere the library doesn't take them are refused, or the browser would
             // open them in place of the page.
             onDragOver={(event) => {
@@ -1590,8 +1678,16 @@ const MediaFrame = ({
                     librariesOpen={librariesOpen}
                     librariesOpenerRef={librariesOpenerRef}
                     onOpenLibraries={() => setLibrariesOpen(true)}
+                    searchable={searchable}
+                    searching={searching && searchable}
                     query={query}
+                    searchInputRef={searchInputRef}
+                    searchButtonRef={searchButtonRef}
                     onQueryChange={setQuery}
+                    onToggleSearch={() => (searching ? closeSearch() : openSearch())}
+                    onCloseSearch={closeSearch}
+                    onDismissSearch={stopSearching}
+                    onFocusAssets={focusAssets}
                     // Nothing to switch while an asset or a step is shown in the library's place.
                     otherLayout={viewed || shownStep ? undefined : otherLayout}
                     onSwitchLayout={switchLayout}

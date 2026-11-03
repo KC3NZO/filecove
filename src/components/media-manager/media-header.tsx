@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import type { FocusEvent, KeyboardEvent, Ref, RefObject } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -11,6 +11,8 @@ import { startIconSx } from "../../styles/direction";
 import { headerFieldSx, headerInputSx } from "../../styles/header-field";
 import { HEADER_HEIGHT } from "../../styles/layout";
 import { mediaMedium } from "../../styles/media-layout";
+import { forcedColors, forcedPressed } from "../../styles/mixins";
+import { isolate } from "../../utils/bidi";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import Icon from "../icons/icon";
 
@@ -24,8 +26,22 @@ interface MediaHeaderProps {
     librariesOpen: boolean;
     librariesOpenerRef: Ref<HTMLButtonElement>;
     onOpenLibraries: () => void;
+    /** Whether the search can be used, which it can't while something else is in the library's place. */
+    searchable: boolean;
+    /** Whether the search field is open, in place of the library's name. */
+    searching: boolean;
     query: string;
+    searchInputRef: RefObject<HTMLInputElement | null>;
+    searchButtonRef: Ref<HTMLButtonElement>;
     onQueryChange: (query: string) => void;
+    /** The search button: opens the field, or closes it when it's open. */
+    onToggleSearch: () => void;
+    /** Escape, or ✕ with nothing typed, which give the focus back. */
+    onCloseSearch: () => void;
+    /** The focus going elsewhere with nothing typed, where it stays. */
+    onDismissSearch: () => void;
+    /** Down or Enter in the field, on to the assets. */
+    onFocusAssets: () => void;
     /** The layout its button switches to, while the library offers another. */
     otherLayout: MediaLayout | undefined;
     onSwitchLayout: () => void;
@@ -52,7 +68,6 @@ const barSx: SxProps<Theme> = {
 const titleSx: SxProps<Theme> = {
     flexShrink: 1,
     minWidth: 0,
-    maxWidth: "40%",
     px: 1,
     fontSize: "0.9375rem",
     fontWeight: 700,
@@ -63,10 +78,17 @@ const librariesButtonSx: SxProps<Theme> = {
     [mediaMedium]: { display: "none" },
 };
 
-const searchSx: SxProps<Theme> = {
-    ...headerFieldSx,
-    maxWidth: "32rem",
-    marginInlineStart: "auto",
+// The name, or the search field in its place, filling the room up to the buttons, so they never move.
+const nameSlotSx: SxProps<Theme> = {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    minWidth: 0,
+};
+
+const searchButtonSx: SxProps<Theme> = {
+    '&[aria-pressed="true"]': { color: "primary.main" },
+    [forcedColors]: forcedPressed,
 };
 
 const uploadSx: SxProps<Theme> = {
@@ -75,8 +97,9 @@ const uploadSx: SxProps<Theme> = {
 };
 
 /**
- * Above the library: the button opening the libraries where they don't dock, its name, the search,
- * the button switching its layout, while it offers another, and Upload, while it takes files.
+ * Above the library: the button opening the libraries where they don't dock, its name, or the search
+ * field in its place while searching, the button opening that, the button switching its layout, while
+ * it offers another, and Upload, while it takes files.
  */
 const MediaHeader = ({
     section,
@@ -84,14 +107,55 @@ const MediaHeader = ({
     librariesOpen,
     librariesOpenerRef,
     onOpenLibraries,
+    searchable,
+    searching,
     query,
+    searchInputRef,
+    searchButtonRef,
     onQueryChange,
+    onToggleSearch,
+    onCloseSearch,
+    onDismissSearch,
+    onFocusAssets,
     otherLayout,
     onSwitchLayout,
     onUpload,
     uploadRef,
 }: MediaHeaderProps) => {
     const { text } = useLocale();
+
+    const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+        const plain = !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
+
+        if (plain && !event.nativeEvent.isComposing && (event.key === "ArrowDown" || event.key === "Enter")) {
+            event.preventDefault();
+            onFocusAssets();
+        }
+    };
+
+    // Stopped here, so an app's dialog around the media manager doesn't close with it.
+    const handleFieldKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Escape" && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            event.stopPropagation();
+            onCloseSearch();
+        }
+    };
+
+    // Left with nothing typed, the field gives the name back. It's checked once the focus has gone,
+    // so the window losing it, which leaves it where it was, doesn't count, nor does the focus moving
+    // between the field's own parts.
+    const handleFieldBlur = (event: FocusEvent<HTMLDivElement>) => {
+        const field = event.currentTarget;
+
+        if (!query) {
+            setTimeout(() => {
+                if (field.isConnected && !searchInputRef.current?.value && !field.contains(document.activeElement)) {
+                    onDismissSearch();
+                }
+            });
+        }
+    };
 
     return (
         <Box component="header" sx={headerSx}>
@@ -107,31 +171,61 @@ const MediaHeader = ({
                         <Icon name="menu" fontSize="small" />
                     </TooltipIconButton>
                 )}
-                <Typography component="h2" noWrap sx={titleSx}>
-                    {section?.label}
-                </Typography>
-                <Box role="search" sx={searchSx}>
-                    <Icon name="search" fontSize="small" />
-                    <InputBase
-                        type="search"
-                        value={query}
-                        placeholder={text.mediaSearch}
-                        slotProps={{ input: { "aria-label": text.mediaSearch } }}
-                        sx={headerInputSx}
-                        onChange={(event) => onQueryChange(event.target.value)}
-                        onKeyDown={(event) => {
-                            if (event.key === "Escape" && query) {
-                                event.stopPropagation();
-                                onQueryChange("");
-                            }
-                        }}
-                    />
-                    {query && (
-                        <TooltipIconButton size="small" label={text.mediaClearSearch} onClick={() => onQueryChange("")}>
-                            <Icon name="close" fontSize="small" />
-                        </TooltipIconButton>
+                <Box sx={nameSlotSx}>
+                    {searching && section ? (
+                        <Box role="search" sx={headerFieldSx} onKeyDown={handleFieldKeyDown} onBlur={handleFieldBlur}>
+                            <Icon name="search" fontSize="small" />
+                            <InputBase
+                                inputRef={searchInputRef}
+                                type="search"
+                                value={query}
+                                placeholder={text.searchIn(isolate(section.label))}
+                                autoComplete="off"
+                                spellCheck={false}
+                                slotProps={{ input: { "aria-label": text.search } }}
+                                sx={headerInputSx}
+                                onChange={(event) => onQueryChange(event.target.value)}
+                                onKeyDown={handleInputKeyDown}
+                            />
+                            {/* Keeps the focus in the field as it's pressed, so it clears what's typed
+                                without losing it, or closes the search with the field as the place to go
+                                back from. */}
+                            <TooltipIconButton
+                                size="small"
+                                label={query ? text.clearSearch : text.closeSearch}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => {
+                                    if (query) {
+                                        onQueryChange("");
+                                        searchInputRef.current?.focus();
+                                    } else {
+                                        onCloseSearch();
+                                    }
+                                }}
+                            >
+                                <Icon name="close" fontSize="small" />
+                            </TooltipIconButton>
+                        </Box>
+                    ) : (
+                        <Typography component="h2" noWrap sx={titleSx}>
+                            {section?.label}
+                        </Typography>
                     )}
                 </Box>
+                {/* Keeps the focus in an open search's field as it's pressed, which closes it. */}
+                {searchable && (
+                    <TooltipIconButton
+                        ref={searchButtonRef}
+                        label={text.search}
+                        aria-pressed={searching}
+                        aria-keyshortcuts="Control+F Meta+F"
+                        sx={searchButtonSx}
+                        onMouseDown={(event) => searching && event.preventDefault()}
+                        onClick={onToggleSearch}
+                    >
+                        <Icon name="search" fontSize="small" />
+                    </TooltipIconButton>
+                )}
                 {otherLayout && (
                     <TooltipIconButton
                         label={otherLayout === "grid" ? text.gridView : text.listView}

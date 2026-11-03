@@ -816,6 +816,10 @@ export interface MediaManagerLocaleText
             | "cancel"
             | "close"
             | "tryAgain"
+            | "search"
+            | "searchIn"
+            | "clearSearch"
+            | "closeSearch"
             | "gridView"
             | "listView"
             | "upload"
@@ -844,9 +848,6 @@ export interface MediaManagerLocaleText
     mediaCloseLibraries: string;
     /** In place of the library while there are no sections to show. */
     mediaNoLibraries: string;
-    /** The search field's placeholder and its name for screen readers. */
-    mediaSearch: string;
-    mediaClearSearch: string;
     /** In place of the library while it has nothing of the kinds it shows. */
     mediaEmpty: string;
     /** In place of the library while nothing matches the search or the filter. */

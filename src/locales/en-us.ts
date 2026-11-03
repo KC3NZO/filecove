@@ -523,8 +523,6 @@ export const enUS: LocaleText = {
     mediaChooseLibrary: "Show libraries",
     mediaCloseLibraries: "Close",
     mediaNoLibraries: "No libraries to show",
-    mediaSearch: "Search media",
-    mediaClearSearch: "Clear search",
     mediaEmpty: "Nothing here yet",
     mediaNoMatches: "No media matches",
     mediaLoadFailed: "Couldn't load this library.",
