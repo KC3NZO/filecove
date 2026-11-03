@@ -942,6 +942,14 @@ export interface MediaManagerLocaleText
     mediaChoicesProcessing: (count: number) => string;
     /** Beside Choose while selected assets can't be chosen at all, which have to be taken out. */
     mediaChoicesUnavailable: (count: number) => string;
+    /** How many are selected of how many may be (`maxChoices`), both written in the locale: its button where the column doesn't dock, and for screen readers. */
+    mediaSelectedOf: (count: string, max: string) => string;
+    /** The selected column's count with `maxChoices`, both written in the locale. */
+    mediaCountOf: (count: string, max: string) => string;
+    /** Said once as many as may be are selected (`maxChoices`): in the column, beside Choose, in an asset's view and to screen readers. */
+    mediaChoicesFull: string;
+    /** A pick's row, past as many as may be selected (`maxChoices`), such as one given with `defaultValue`. */
+    mediaOverLimit: (max: string) => string;
 }
 
 /** Every text of both components, as `enUS` holds them and `Locale` hands them on (internal). */

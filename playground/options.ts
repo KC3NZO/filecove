@@ -95,6 +95,14 @@ export const media = params.has("media");
 /** `?media&multiple`: several files can be chosen at once. */
 export const multiple = params.has("multiple");
 
+/** `?media&multiple&max=5`: the media manager's `maxChoices`, as many as can be selected at once. */
+const maxParam = params.get("max");
+
+export const maxChoices = maxParam !== null && !Number.isNaN(Number(maxParam)) ? Number(maxParam) : undefined;
+
+/** `?media&multiple&oneVideo`: the media manager's `canSelect`, with one video at most among the picks. */
+export const oneVideo = params.has("oneVideo");
+
 /** `?media&browse`: no `onChoose`, so the media manager is a library to look through, without Choose. */
 export const browse = params.has("browse");
 

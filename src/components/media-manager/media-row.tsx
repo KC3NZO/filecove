@@ -36,6 +36,8 @@ interface MediaRowProps {
     hold: AssetHold | undefined;
     /** The backend's work on it while it can be chosen all the same, shown the same way, unfaded. */
     work: AssetHold | undefined;
+    /** Whether there's no room for it among those selected (`maxChoices`): dimmed, with nothing said on it. */
+    limited: boolean;
     /** Whether the row has the list's Tab stop. */
     focused: boolean;
     onPress: (index: number, event: MouseEvent) => void;
@@ -83,6 +85,8 @@ const coverSx: SxProps<Theme> = {
     "& > img": { width: "100%", height: "100%", objectFit: "cover" },
     // A piece of audio that can't be chosen now is faded, as a file being uploaded is.
     "[data-held='true'] > & > *": { opacity: 0.55 },
+    // One there's no room for is only dimmed, as taking another out makes room.
+    "[data-limited='true'] > & > *": { opacity: 0.7 },
 };
 
 const textSx: SxProps<Theme> = {
@@ -141,6 +145,7 @@ const MediaRow = memo(
         selected,
         hold,
         work,
+        limited,
         focused,
         onPress,
         onActivate,
@@ -159,10 +164,11 @@ const MediaRow = memo(
                 role="option"
                 aria-selected={selected}
                 // One selected before it was held, as an upload still processed is, can be taken out.
-                aria-disabled={hold && !selected ? true : undefined}
+                aria-disabled={(hold && !selected) || limited ? true : undefined}
                 tabIndex={focused ? 0 : -1}
                 data-index={index}
                 data-held={!!hold}
+                data-limited={limited}
                 sx={rowSx}
                 onClick={(event) => onPress(index, event)}
                 onDoubleClick={() => onActivate(index)}

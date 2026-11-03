@@ -46,6 +46,26 @@ interface BaseProps<V> extends RootAttributes {
      */
     multiple?: boolean;
     /**
+     * How many assets can be selected at once with `multiple`, across the libraries. The selected
+     * column says how many of them are, and once they all are, nothing more is added until one is
+     * taken out: a Shift range or Select all adds what fits, and an upload is selected while there's
+     * room. More than this given with `defaultValue`, or left by lowering it, stay selected, those
+     * past it holding Choose back until they're taken out. The app's backend still has the last word
+     * when it saves the picks. No limit when omitted.
+     */
+    maxChoices?: number;
+    /**
+     * Whether an asset can be added, for this use of the media manager, beside what's picked already,
+     * such as one video at most for a product's carousel: `true`, or `false`, or why not, in the app's
+     * language, which its tile shows in place of its size. `choices` are those before it, without it,
+     * in the order set, and none one at a time, as it would replace them. Asked for every asset shown
+     * as the picks change, so keep it quick, and outside the component or memoized. A pick that breaks
+     * it, as given with `defaultValue`, is told apart by the ones before it: its row says why, and it
+     * holds Choose back until it's taken out. A library's own `selectable` is for what depends on the
+     * backend, such as an expired licence, and an asset has to pass both.
+     */
+    canSelect?: (asset: FileEntry, section: MediaSection, choices: readonly MediaChoice<V>[]) => boolean | string;
+    /**
      * Takes what's chosen, with the Choose button, a double click or Enter on an asset: each as it
      * was listed, `meta` and all, with the library it's from, whose `kind` says what it is, and what
      * the app's form holds for it (`values`), in the order set in the selected column. Pass only
@@ -178,6 +198,8 @@ const MediaManager = <V,>({
     sections: groupsProp,
     section: singleSection,
     multiple = false,
+    maxChoices,
+    canSelect,
     onChoose,
     pickForm,
     properties,
@@ -219,6 +241,8 @@ const MediaManager = <V,>({
                             groups={groups}
                             adapter={adapter}
                             multiple={multiple}
+                            maxChoices={maxChoices}
+                            canSelect={canSelect as MediaFrameProps["canSelect"]}
                             // The frame keeps the app's values by their keys, not knowing their shape.
                             onChoose={onChoose as ((choices: MediaChoice[]) => void) | undefined}
                             pickForm={pickForm as MediaFrameProps["pickForm"]}

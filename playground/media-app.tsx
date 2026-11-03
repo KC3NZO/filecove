@@ -12,9 +12,16 @@ import { assetProperties, videoProperties } from "./media-properties";
 import { audioUploadForm, imageUploadForm, videoUploadForm } from "./media-uploads";
 import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
 import { savePicks } from "./mocks/mock-save";
-import { browse, locale, multiple, single } from "./options";
+import { browse, locale, maxChoices, multiple, oneVideo, single } from "./options";
 
-import type { FieldErrors, FileEntry, MediaChoice, MediaSectionGroup, PropertyErrorKeyParams } from "../src";
+import type {
+    FieldErrors,
+    FileEntry,
+    MediaChoice,
+    MediaSection,
+    MediaSectionGroup,
+    PropertyErrorKeyParams,
+} from "../src";
 
 // The media manager's page (`?media`), full-viewport with a footer saying what was last chosen, as
 // an editor inserting it would, each pick with what the playground's fields hold for it. Choose
@@ -27,6 +34,12 @@ import type { FieldErrors, FileEntry, MediaChoice, MediaSectionGroup, PropertyEr
  * numbered 06, 12 and 18, which its backend refuses as well when the picks are saved.
  */
 const stockSelectable = (entry: FileEntry) => !/-(?:06|12|18)\./.test(entry.name) || "Licence expired";
+
+/** The rule of a carousel taking one video at most, for this use of the media manager (`?oneVideo`). */
+const oneVideoAtMost = (_asset: FileEntry, section: MediaSection, choices: readonly MediaChoice[]) =>
+    section.kind !== "video" ||
+    !choices.some((choice) => choice.section.kind === "video") ||
+    "Only one video can be used";
 
 /**
  * The playground's libraries, on two backends: this site's, a root a kind, whose videos are
@@ -193,6 +206,8 @@ const MediaApp = () => {
     const shared = {
         adapter: siteMediaAdapter,
         multiple,
+        maxChoices,
+        canSelect: oneVideo ? oneVideoAtMost : undefined,
         locale,
         onChoose: browse ? undefined : choose,
         pickForm,

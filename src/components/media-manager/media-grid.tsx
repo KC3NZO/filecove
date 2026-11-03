@@ -35,6 +35,8 @@ interface MediaGridProps {
     holds: ReadonlyMap<string, AssetHold>;
     /** The backend's work on assets that can be chosen all the same, by their ids. */
     works: ReadonlyMap<string, AssetHold>;
+    /** Whether as many as may be are selected (`maxChoices`), so there's no room for the others. */
+    full: boolean;
     multiple: boolean;
     status: "loading" | "ready" | "error";
     /** Whether the library has assets at all, whatever the search leaves. */
@@ -141,6 +143,7 @@ const MediaGrid = ({
     selectedIds,
     holds,
     works,
+    full,
     multiple,
     status,
     hasMedia,
@@ -302,6 +305,7 @@ const MediaGrid = ({
                             selected={selectedIds.has(entry.id)}
                             hold={holds.get(entry.id)}
                             work={works.get(entry.id)}
+                            limited={full && !selectedIds.has(entry.id)}
                             focused={index === tabStop}
                             onPress={handlePress}
                             onActivate={onActivate}
@@ -319,6 +323,7 @@ const MediaGrid = ({
                             selected={selectedIds.has(entry.id)}
                             hold={holds.get(entry.id)}
                             work={works.get(entry.id)}
+                            limited={full && !selectedIds.has(entry.id)}
                             focused={index === tabStop}
                             onPress={handlePress}
                             onActivate={onActivate}

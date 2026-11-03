@@ -13,6 +13,10 @@ import Icon from "../icons/icon";
 interface ChooseBarProps {
     /** How many are selected, in every library. */
     count: number;
+    /** How many are selected, in words, for its button; "Selected" with none and no limit to say. */
+    selectedText: string | undefined;
+    /** That as many as may be are selected, said beside Choose while nothing holds it back. */
+    note: string | undefined;
     /** What holds Choose back, said beside it, while picks can't be chosen; nothing otherwise. */
     held: string | undefined;
     /** Whether the selected column is open over the library. */
@@ -52,9 +56,20 @@ const heldSx: SxProps<Theme> = {
  * Under the library, where there's no room to dock the selected column: a button opening it over
  * the library, with how many are selected, and Choose.
  */
-const ChooseBar = ({ count, held, chosenOpen, showOpener, openerRef, onOpenChosen, onChoose }: ChooseBarProps) => {
+const ChooseBar = ({
+    count,
+    selectedText,
+    note,
+    held,
+    chosenOpen,
+    showOpener,
+    openerRef,
+    onOpenChosen,
+    onChoose,
+}: ChooseBarProps) => {
     const { text } = useLocale();
     const heldId = useId();
+    const said = held ?? note;
 
     return (
         <Box sx={barSx}>
@@ -67,14 +82,14 @@ const ChooseBar = ({ count, held, chosenOpen, showOpener, openerRef, onOpenChose
                     sx={openSx}
                     onClick={onOpenChosen}
                 >
-                    {count > 0 ? text.mediaSelected(count) : text.mediaChosen}
+                    {selectedText ?? text.mediaChosen}
                 </Button>
             ) : (
                 <Box sx={openSx} />
             )}
-            {held && (
-                <Typography id={heldId} variant="body2" noWrap title={held} sx={heldSx}>
-                    {held}
+            {said && (
+                <Typography id={heldId} variant="body2" noWrap title={said} sx={heldSx}>
+                    {said}
                 </Typography>
             )}
             <Button

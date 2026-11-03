@@ -573,4 +573,8 @@ export const enUS: LocaleText = {
         count === 1 ? "Waiting for 1 to finish processing" : `Waiting for ${count} to finish processing`,
     mediaChoicesUnavailable: (count) =>
         count === 1 ? "Take out the 1 that can't be chosen" : `Take out the ${count} that can't be chosen`,
+    mediaSelectedOf: (count, max) => `${count} of ${max} selected`,
+    mediaCountOf: (count, max) => `${count} of ${max}`,
+    mediaChoicesFull: "Limit reached. Take one out to add another.",
+    mediaOverLimit: (max) => `Over the limit of ${max}`,
 };

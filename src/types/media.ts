@@ -197,8 +197,9 @@ export type AssetStates = ReadonlyMap<FileAdapter, ReadonlyMap<string, AssetStat
 
 /**
  * Why an asset can't be chosen now (internal): its backend's work on it under way or failed
- * (`FileEntry.processing`), its library refusing it (`MediaSection.selectable`), or, once it's picked,
- * its form not ready (`MediaForm.ready`), as its tile, its row among those selected and its view show
+ * (`FileEntry.processing`), its library refusing it (`MediaSection.selectable`), the app refusing it
+ * for this use (`canSelect`) or there being no room for it (`maxChoices`), or, once it's picked, its
+ * form not ready (`MediaForm.ready`), as its tile, its row among those selected and its view show
  * it, in one line, with a bar while it's processed.
  */
 export interface AssetHold {

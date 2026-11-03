@@ -40,6 +40,8 @@ interface MediaTileProps {
     hold: AssetHold | undefined;
     /** The backend's work on it while it can be chosen all the same, shown the same way, unfaded. */
     work: AssetHold | undefined;
+    /** Whether there's no room for it among those selected (`maxChoices`): dimmed, with nothing said on it. */
+    limited: boolean;
     /** Whether the tile has the grid's Tab stop. */
     focused: boolean;
     onPress: (index: number, event: MouseEvent) => void;
@@ -89,6 +91,8 @@ const frameSx = (ratio: string): SxProps<Theme> => ({
     },
     // An asset that can't be chosen now is faded, as a file being uploaded is.
     "[data-held='true'] > & > img, [data-held='true'] > & > svg": { opacity: 0.55 },
+    // One there's no room for is only dimmed, as taking another out makes room.
+    "[data-limited='true'] > & > img, [data-limited='true'] > & > svg": { opacity: 0.7 },
     [forcedColors]: { "[aria-selected='true'] > &": { outlineColor: "HighlightText" } },
 });
 
@@ -196,6 +200,7 @@ const MediaTile = memo(
         selected,
         hold,
         work,
+        limited,
         focused,
         onPress,
         onActivate,
@@ -215,11 +220,12 @@ const MediaTile = memo(
                 role="option"
                 aria-selected={selected}
                 // One selected before it was held, as an upload still processed is, can be taken out.
-                aria-disabled={hold && !selected ? true : undefined}
+                aria-disabled={(hold && !selected) || limited ? true : undefined}
                 tabIndex={focused ? 0 : -1}
                 data-index={index}
                 data-kind={kind}
                 data-held={!!hold}
+                data-limited={limited}
                 sx={tileSx}
                 onClick={(event) => onPress(index, event)}
                 onDoubleClick={() => onActivate(index)}

@@ -42,6 +42,12 @@ interface ChoicesPaneProps {
     holdOf: (choice: MediaChoice) => AssetHold | undefined;
     /** What holds Choose back, said beside it, while picks can't be chosen; nothing otherwise. */
     held: string | undefined;
+    /** What the count beside its title shows; nothing one at a time, or with none and no limit. */
+    badge: string | undefined;
+    /** How many are selected, in words, for screen readers. */
+    selectedText: string | undefined;
+    /** That as many as may be are selected, said under its header. */
+    note: string | undefined;
     onRemove: (choice: MediaChoice) => void;
     onMove: (from: number, to: number) => void;
     onClear: () => void;
@@ -106,6 +112,14 @@ const countSx: SxProps<Theme> = {
 // Only where the column is an overlay; docked, it's always there.
 const closeSx: SxProps<Theme> = {
     [mediaWide]: { display: "none" },
+};
+
+const noteSx: SxProps<Theme> = {
+    flexShrink: 0,
+    px: 2,
+    pb: 1,
+    color: "text.secondary",
+    fontSize: "0.8125rem",
 };
 
 const emptySx: SxProps<Theme> = {
@@ -249,6 +263,9 @@ const ChoicesPane = ({
     problemsOf,
     holdOf,
     held,
+    badge,
+    selectedText,
+    note,
     onRemove,
     onMove,
     onClear,
@@ -256,7 +273,7 @@ const ChoicesPane = ({
     onShowInLibrary,
     onClose,
 }: ChoicesPaneProps) => {
-    const { text, formatNumber } = useLocale();
+    const { text } = useLocale();
     const titleId = useId();
     const heldId = useId();
     const paneRef = useRef<HTMLElement>(null);
@@ -350,9 +367,9 @@ const ChoicesPane = ({
                     <Box sx={headerSx}>
                         <Typography id={titleId} component="h2" noWrap sx={titleSx}>
                             {text.mediaChosen}
-                            {multiple && count > 0 && (
+                            {badge && (
                                 <Box component="span" sx={countSx} aria-hidden>
-                                    {formatNumber(count)}
+                                    {badge}
                                 </Box>
                             )}
                         </Typography>
@@ -365,6 +382,11 @@ const ChoicesPane = ({
                             <Icon name="close" fontSize="small" />
                         </TooltipIconButton>
                     </Box>
+                    {note && (
+                        <Typography component="p" sx={noteSx}>
+                            {note}
+                        </Typography>
+                    )}
                     {only ? (
                         <ChoiceDetails
                             key={choiceKey(only)}
@@ -412,7 +434,7 @@ const ChoicesPane = ({
                 </Button>
             </Box>
             <Box role="status" sx={visuallyHiddenSx}>
-                {count > 0 ? text.mediaSelected(count) : ""}
+                {count > 0 ? selectedText : ""}
             </Box>
         </Box>
     );

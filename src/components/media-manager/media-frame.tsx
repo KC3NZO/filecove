@@ -6,17 +6,19 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useAnnouncer } from "../../hooks/use-announcer";
 import { useAssetStates } from "../../hooks/use-asset-states";
 import { useData, useFolder } from "../../hooks/use-folder";
 import { useLocale } from "../../hooks/use-locale";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { CHOICES_WIDTH, mediaMedium, mediaWide } from "../../styles/media-layout";
-import { focusOutline, selectedBackground } from "../../styles/mixins";
+import { focusOutline, selectedBackground, visuallyHiddenSx } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
 import { focusLost } from "../../utils/dom";
 import { NO_ERRORS, choiceMessages, countErrorsAt } from "../../utils/field-errors";
 import { carriesFiles, filesIn, mayAccept, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
+import { countLimit } from "../../utils/limits";
 import {
     checkMediaUpload,
     holdOf,
@@ -65,6 +67,10 @@ export interface MediaFrameProps {
     groups: readonly MediaSectionGroup[];
     adapter: FileAdapter;
     multiple: boolean;
+    /** How many can be selected at once with `multiple`. */
+    maxChoices: number | undefined;
+    /** Whether an asset can be added beside those already picked, for this use. */
+    canSelect: ((asset: FileEntry, section: MediaSection, choices: readonly MediaChoice[]) => boolean | string) | undefined;
     onChoose: ((choices: MediaChoice[]) => void) | undefined;
     pickForm: ((asset: FileEntry, section: MediaSection) => MediaPickForm | null) | undefined;
     /** What an asset shows as it's opened, where its library has no `properties` of its own. */
@@ -147,6 +153,7 @@ const NO_ARRIVALS: readonly Arrival[] = [];
 const NO_UPLOADS: readonly FileUploadItem[] = [];
 const NO_LIBRARIES: ReadonlyMap<number, string> = new Map();
 const NO_HOLDS: ReadonlyMap<string, AssetHold> = new Map();
+const NO_CHOICES: readonly MediaChoice[] = [];
 
 /** How long a file just uploaded is waited for in its library's listing, in ms. */
 const ARRIVAL_WAIT = 10_000;
@@ -314,6 +321,8 @@ const MediaFrame = ({
     groups,
     adapter,
     multiple,
+    maxChoices,
+    canSelect,
     onChoose,
     pickForm,
     properties,
@@ -323,7 +332,7 @@ const MediaFrame = ({
     choiceErrorKey,
     propertiesCache,
 }: MediaFrameProps) => {
-    const { text, foldLetters, compareNames, formatPercent } = useLocale();
+    const { text, foldLetters, compareNames, formatNumber, formatPercent } = useLocale();
     const sections = useMemo(() => groups.flatMap((group) => group.sections), [groups]);
     const sectionsById = useMemo(() => new Map(sections.map((item) => [item.id, item])), [sections]);
     const [openId, setOpenId] = useState<string>();
@@ -332,6 +341,10 @@ const MediaFrame = ({
     const several = sections.length > 1;
     const { state, reload } = useFolder(section ?? NO_SECTION, section?.rootId ?? "", !!section, true);
     const choosing = !!onChoose;
+    // Limits are on what's chosen, so they're nothing while the media manager is only looked through.
+    const limit = choosing && multiple ? (countLimit(maxChoices, 1) ?? Infinity) : Infinity;
+    const rule = choosing ? canSelect : undefined;
+    const { announcement, announce } = useAnnouncer();
 
     const [query, setQuery] = useState("");
     const [picks, setPicks] = useState<Picks>(() => picksFrom(defaultValue));
@@ -550,7 +563,7 @@ const MediaFrame = ({
 
     // Why assets shown can't be chosen now, by their ids: being processed, failed, or refused by
     // their library. They're shown and opened, but not selected.
-    const holds = useMemo(() => {
+    const assetHolds = useMemo(() => {
         if (!section) {
             return NO_HOLDS;
         }
@@ -692,6 +705,52 @@ const MediaFrame = ({
         [pickForm, pickState, text],
     );
 
+    // Why the app's `canSelect` refuses an asset beside those picked; nothing when it allows it.
+    const refusalOf = useCallback(
+        (asset: FileEntry, from: MediaSection, picked: readonly MediaChoice[]): AssetHold | undefined => {
+            const allowed = rule?.(asset, from, picked) ?? true;
+
+            return allowed === true
+                ? undefined
+                : { status: "refused", text: typeof allowed === "string" && allowed ? allowed : text.mediaUnavailable };
+        },
+        [rule, text],
+    );
+
+    const full = choices.length >= limit;
+    const sayFull = useCallback(() => announce(text.mediaChoicesFull), [announce, text]);
+
+    // Those of `assets` that can join `picked`, in their order, each asked with those before it, and
+    // whether the limit left some out, which is said, as no tile says it.
+    const fitting = useCallback(
+        (assets: readonly FileEntry[], from: MediaSection, picked: readonly MediaChoice[]) => {
+            const growing = [...picked];
+            const fit: FileEntry[] = [];
+
+            for (const asset of assets) {
+                if (growing.length >= limit) {
+                    return { fit, cut: true };
+                }
+
+                if (!refusalOf(asset, from, growing)) {
+                    fit.push(asset);
+                    growing.push({ asset, section: from, values: defaultsOf(asset, from) });
+                }
+            }
+
+            return { fit, cut: false };
+        },
+        [limit, refusalOf, defaultsOf],
+    );
+
+    // Why an asset that isn't selected can't be added now, for its view: the app's rule, or no room.
+    const refusedNow = useCallback(
+        (asset: FileEntry, from: MediaSection): AssetHold | undefined =>
+            refusalOf(asset, from, multiple ? choices : NO_CHOICES) ??
+            (full ? { status: "refused", text: text.mediaChoicesFull } : undefined),
+        [refusalOf, multiple, choices, full, text],
+    );
+
     // One at a time with nothing selected, the column has nothing to show, so it's left out.
     const chosenEmpty = !multiple && choices.length === 0;
 
@@ -708,14 +767,42 @@ const MediaFrame = ({
         [choices, inOpen],
     );
 
+    // Why assets shown can't be added now: as above, or refused by the app's rule beside those picked,
+    // one at a time none, as it would replace them. Those selected already stay as they are, as they
+    // can be taken out, and their rows say it.
+    const holds = useMemo(() => {
+        if (!section || !rule) {
+            return assetHolds;
+        }
+
+        const held = new Map(assetHolds);
+
+        shownEntries.forEach((entry) => {
+            if (!held.has(entry.id) && !selectedIds.has(entry.id)) {
+                const refusal = refusalOf(entry, section, multiple ? choices : NO_CHOICES);
+
+                if (refusal) {
+                    held.set(entry.id, refusal);
+                }
+            }
+        });
+
+        return held.size > 0 ? held : NO_HOLDS;
+    }, [section, rule, assetHolds, shownEntries, selectedIds, refusalOf, multiple, choices]);
+
     // Why picks can't be chosen now, by their keys, which holds Choose back until they can, or are
-    // taken out: still being processed, failed, refused by their library, or their form not ready.
+    // taken out: past the limit, still being processed, failed, refused by their library or the app's
+    // rule beside those before them, or their form not ready.
     const choiceHolds = useMemo(() => {
         const held = new Map<string, AssetHold>();
 
         choices.forEach((choice, index) => {
-            const hold =
-                holdOf(choice.asset, choice.section, { text, formatPercent }) ?? unfilledOf(choice, index, choices);
+            const hold: AssetHold | undefined =
+                index >= limit
+                    ? { status: "refused", text: text.mediaOverLimit(formatNumber(limit)) }
+                    : (holdOf(choice.asset, choice.section, { text, formatPercent }) ??
+                      refusalOf(choice.asset, choice.section, choices.slice(0, index)) ??
+                      unfilledOf(choice, index, choices));
 
             if (hold) {
                 held.set(choiceKey(choice), hold);
@@ -723,7 +810,7 @@ const MediaFrame = ({
         });
 
         return held.size > 0 ? held : NO_HOLDS;
-    }, [choices, text, formatPercent, unfilledOf]);
+    }, [choices, limit, text, formatNumber, formatPercent, refusalOf, unfilledOf]);
 
     const holdOfChoice = useCallback((choice: MediaChoice) => choiceHolds.get(choiceKey(choice)), [choiceHolds]);
 
@@ -772,22 +859,31 @@ const MediaFrame = ({
     }, [viewing, sectionId, section, library, shownEntries]);
 
     // The picks with the open library's share made `ids`: those of other libraries stay when several
-    // can be chosen, in their place, and those `ids` adds go at the end, in the order shown.
+    // can be chosen, in their place, and those `ids` adds go at the end, in the order shown, as many
+    // as the limit and the app's rule let in.
     const picksWith = useCallback(
         (ids: ReadonlySet<string>, anchor: string | null): Picks => {
-            if (sectionId === undefined) {
+            if (sectionId === undefined || !section) {
                 return NO_PICKS;
             }
 
             const kept = choices.filter((choice) => (inOpen(choice) ? ids.has(choice.asset.id) : multiple));
-            const added = shownEntries.filter((entry) => ids.has(entry.id) && !selectedIds.has(entry.id));
+            const { fit, cut } = fitting(
+                shownEntries.filter((entry) => ids.has(entry.id) && !selectedIds.has(entry.id)),
+                section,
+                kept,
+            );
+
+            if (cut) {
+                sayFull();
+            }
 
             return {
-                items: [...kept.map(pickOf), ...added.map((asset) => ({ sectionId, asset, values: NO_VALUES }))],
+                items: [...kept.map(pickOf), ...fit.map((asset) => ({ sectionId, asset, values: NO_VALUES }))],
                 anchor: anchor === null ? null : { sectionId, id: anchor },
             };
         },
-        [sectionId, choices, inOpen, multiple, shownEntries, selectedIds],
+        [sectionId, section, choices, inOpen, multiple, shownEntries, selectedIds, fitting, sayFull],
     );
 
     // The open library's share as `ids` would make it, without those it adds that can't be chosen
@@ -810,6 +906,13 @@ const MediaFrame = ({
                 return;
             }
 
+            // With no room for it, nothing changes, and it's said, as its tile says nothing.
+            if (full && !selectedIds.has(id) && !keys.range) {
+                sayFull();
+
+                return;
+            }
+
             const base: EntrySelection = {
                 ids: selectedIds,
                 anchor: picks.anchor?.sectionId === sectionId ? picks.anchor.id : null,
@@ -820,7 +923,7 @@ const MediaFrame = ({
 
             setPicks(picksWith(selectable(next.ids), next.anchor));
         },
-        [order, holds, selectedIds, picks.anchor, sectionId, multiple, picksWith, selectable],
+        [order, holds, selectedIds, full, sayFull, picks.anchor, sectionId, multiple, picksWith, selectable],
     );
 
     const selectAll = useCallback(() => {
@@ -880,13 +983,13 @@ const MediaFrame = ({
 
         if (selectedIds.has(viewed.entry.id)) {
             removeChoice(choice);
-        } else if (!holdOf(viewed.entry, section, { text, formatPercent })) {
+        } else if (!holdOf(viewed.entry, section, { text, formatPercent }) && !refusedNow(viewed.entry, section)) {
             setPicks((previous) => ({
                 items: multiple ? [...previous.items, pickOf(choice)] : [pickOf(choice)],
                 anchor: { sectionId: section.id, id: viewed.entry.id },
             }));
         }
-    }, [viewed, section, selectedIds, removeChoice, multiple, text, formatPercent]);
+    }, [viewed, section, selectedIds, removeChoice, multiple, text, formatPercent, refusedNow]);
 
     const openAsset = useCallback(
         (index: number) => {
@@ -951,6 +1054,14 @@ const MediaFrame = ({
             }
 
             const picked = choices.find((choice) => inOpen(choice) && choice.asset.id === entry.id);
+
+            // With no room for it, it opens too, as there's nothing to add it to.
+            if (!picked && full) {
+                openAsset(index);
+
+                return;
+            }
+
             const chosen = picked ?? { asset: entry, section, values: defaultsOf(entry, section) };
             const handed = multiple ? [...choices.filter((choice) => choice !== chosen), chosen] : [chosen];
 
@@ -980,6 +1091,7 @@ const MediaFrame = ({
             defaultsOf,
             unfilledOf,
             press,
+            full,
         ],
     );
 
@@ -1143,7 +1255,8 @@ const MediaFrame = ({
     // the app takes a choice, it's selected, as a media picker does: added to what's selected, or
     // one at a time, the last to arrive in place of it. One still being processed is selected too,
     // holding Choose back until it's done, as it was uploaded to be chosen; one whose processing
-    // failed, or its library refuses, isn't.
+    // failed, or its library or the app's rule refuses, isn't, nor any there's no room for, which only
+    // show.
     useEffect(() => {
         if (!section || state?.status !== "ready") {
             return;
@@ -1163,12 +1276,24 @@ const MediaFrame = ({
             .flatMap((waiting) => listedById.get(waiting.entryId) ?? [])
             .filter(({ processing }) => processing?.status !== "failed" || processing.usable)
             .filter((asset) => (section.selectable?.(asset) ?? true) === true);
-        const last = assets[assets.length - 1];
+        const last = (multiple ? assets : assets.filter((asset) => !refusalOf(asset, section, NO_CHOICES))).at(-1);
 
         setArrivals((previous) => previous.filter((waiting) => !keys.has(waiting.key)));
 
         if (!onChoose || !last) {
             return;
+        }
+
+        const { fit, cut } = multiple
+            ? fitting(
+                  assets.filter((asset) => !choices.some((choice) => inOpen(choice) && choice.asset.id === asset.id)),
+                  section,
+                  choices,
+              )
+            : { fit: assets, cut: false };
+
+        if (cut) {
+            sayFull();
         }
 
         setPicks((previous) => {
@@ -1179,7 +1304,7 @@ const MediaFrame = ({
                 };
             }
 
-            const added = assets.filter(
+            const added = fit.filter(
                 (asset) => !previous.items.some((item) => samePick(item, { asset, section, values: NO_VALUES })),
             );
 
@@ -1193,7 +1318,7 @@ const MediaFrame = ({
                       ],
                   };
         });
-    }, [section, state?.status, library, arrivals, onChoose, multiple, samePick]);
+    }, [section, state?.status, library, arrivals, onChoose, multiple, samePick, refusalOf, fitting, choices, inOpen, sayFull]);
 
     // The open library's uploads, before its assets: those waiting or being sent, and those done
     // until they're listed.
@@ -1294,8 +1419,12 @@ const MediaFrame = ({
 
     // Why the asset shown can't be chosen now, which its view shows, with Select held.
     const viewedHold = useMemo(
-        () => (viewedEntry && section ? holdOf(viewedEntry, section, { text, formatPercent }) : undefined),
-        [viewedEntry, section, text, formatPercent],
+        () =>
+            viewedEntry && section
+                ? (holdOf(viewedEntry, section, { text, formatPercent }) ??
+                  (selectedIds.has(viewedEntry.id) ? undefined : refusedNow(viewedEntry, section)))
+                : undefined,
+        [viewedEntry, section, text, formatPercent, selectedIds, refusedNow],
     );
 
     // The backend's work on it while it can be chosen all the same, which its view shows.
@@ -1333,6 +1462,22 @@ const MediaFrame = ({
         },
         [forgetStates, sectionAdapter, relistAll],
     );
+
+    // How many are selected, of how many may be, and that there's no room left, once there's exactly
+    // none: past it, what holds Choose back says more.
+    const count = choices.length;
+    const limited = limit !== Infinity;
+    const selectedText = limited
+        ? text.mediaSelectedOf(formatNumber(count), formatNumber(limit))
+        : count > 0
+          ? text.mediaSelected(count)
+          : undefined;
+    const badge = limited
+        ? text.mediaCountOf(formatNumber(count), formatNumber(limit))
+        : multiple && count > 0
+          ? formatNumber(count)
+          : undefined;
+    const limitNote = count === limit ? text.mediaChoicesFull : undefined;
 
     const errorMessage =
         state?.status === "error" && state.error instanceof Error && state.error.message
@@ -1419,6 +1564,7 @@ const MediaFrame = ({
                                 selectedIds={selectedIds}
                                 holds={holds}
                                 works={works}
+                                full={full}
                                 multiple={multiple}
                                 status={state?.status ?? "loading"}
                                 hasMedia={library.length > 0}
@@ -1516,7 +1662,9 @@ const MediaFrame = ({
                 )}
                 {onChoose && (
                     <ChooseBar
-                        count={choices.length}
+                        count={count}
+                        selectedText={selectedText}
+                        note={limitNote}
                         held={chooseHeld}
                         chosenOpen={chosenOverlay}
                         showOpener={!chosenEmpty}
@@ -1549,6 +1697,9 @@ const MediaFrame = ({
                             problemsOf={problemsOf}
                             holdOf={holdOfChoice}
                             held={chooseHeld}
+                            badge={badge}
+                            selectedText={selectedText}
+                            note={limitNote}
                             onRemove={removeChoice}
                             onMove={moveChoice}
                             onClear={clearSelection}
@@ -1559,6 +1710,10 @@ const MediaFrame = ({
                     </Box>
                 </>
             )}
+            <Box role="status" sx={visuallyHiddenSx}>
+                {/* A space every other time, so the same message said again is heard again. */}
+                {announcement && `${announcement.message}${announcement.id % 2 === 0 ? "\u00A0" : ""}`}
+            </Box>
         </Box>
     );
 };
