@@ -2339,7 +2339,8 @@ const MediaFrame = ({
                     <Box sx={gridSx} data-covered={!!viewed || !!shownStep}>
                         {creatingGroup && (
                             <GroupCreate
-                                key={levelKey}
+                                // Beside the grid, so it can't have the same key, which would leave it behind.
+                                key={`new/${levelKey}`}
                                 adapter={sectionAdapter}
                                 parentId={folderId}
                                 onCancel={closeNewGroup}
