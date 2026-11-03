@@ -14,11 +14,10 @@ import { forcedBarSx } from "../../styles/mixins";
 import { gridColumns, isRtl } from "../../utils/dom";
 import { KIND_ICONS } from "../../utils/media";
 import Icon from "../icons/icon";
-import MediaRow from "./media-row";
-import MediaTile from "./media-tile";
+import AssetOption from "./asset-option";
 import UploadTile from "./upload-tile";
 
-import type { AssetHold, FileAdapter, FileEntry, FileUploadItem, MediaKind } from "../../types";
+import type { AssetHold, FileAdapter, FileEntry, FileUploadItem, MediaAssetDraw, MediaKind } from "../../types";
 
 interface MediaGridProps {
     /** The library's assets the search leaves, in the order shown. */
@@ -28,6 +27,8 @@ interface MediaGridProps {
     /** The library's kind, which shows them as tiles of its shape, or audio as rows. */
     kind: MediaKind;
     adapter: FileAdapter;
+    /** What the app draws the assets with, the library's `renderAsset` or the media manager's. */
+    drawAsset: MediaAssetDraw | undefined;
     /** The library's name, which the grid is named by for screen readers. */
     label: string;
     selectedIds: ReadonlySet<string>;
@@ -139,6 +140,7 @@ const MediaGrid = ({
     uploads,
     kind,
     adapter,
+    drawAsset,
     label,
     selectedIds,
     holds,
@@ -295,44 +297,26 @@ const MediaGrid = ({
                 data-after-uploads={uploads.length > 0}
                 sx={GRID_SX[kind]}
             >
-                {entries.map((entry, index) =>
-                    kind === "audio" ? (
-                        <MediaRow
-                            key={entry.id}
-                            entry={entry}
-                            adapter={adapter}
-                            index={index}
-                            selected={selectedIds.has(entry.id)}
-                            hold={holds.get(entry.id)}
-                            work={works.get(entry.id)}
-                            limited={full && !selectedIds.has(entry.id)}
-                            focused={index === tabStop}
-                            onPress={handlePress}
-                            onActivate={onActivate}
-                            onOpen={onOpen}
-                            onFocus={setFocusIndex}
-                            onKeyDown={handleKeyDown}
-                        />
-                    ) : (
-                        <MediaTile
-                            key={entry.id}
-                            entry={entry}
-                            kind={kind}
-                            adapter={adapter}
-                            index={index}
-                            selected={selectedIds.has(entry.id)}
-                            hold={holds.get(entry.id)}
-                            work={works.get(entry.id)}
-                            limited={full && !selectedIds.has(entry.id)}
-                            focused={index === tabStop}
-                            onPress={handlePress}
-                            onActivate={onActivate}
-                            onOpen={onOpen}
-                            onFocus={setFocusIndex}
-                            onKeyDown={handleKeyDown}
-                        />
-                    ),
-                )}
+                {entries.map((entry, index) => (
+                    <AssetOption
+                        key={entry.id}
+                        entry={entry}
+                        kind={kind}
+                        adapter={adapter}
+                        index={index}
+                        selected={selectedIds.has(entry.id)}
+                        hold={holds.get(entry.id)}
+                        work={works.get(entry.id)}
+                        limited={full && !selectedIds.has(entry.id)}
+                        focused={index === tabStop}
+                        draw={drawAsset}
+                        onPress={handlePress}
+                        onActivate={onActivate}
+                        onOpen={onOpen}
+                        onFocus={setFocusIndex}
+                        onKeyDown={handleKeyDown}
+                    />
+                ))}
             </Box>
         </Box>
     );

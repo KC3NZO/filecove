@@ -1,110 +1,64 @@
-import { memo } from "react";
-import type { KeyboardEvent, MouseEvent } from "react";
-
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useAssetLook } from "../../hooks/use-asset-look";
 import { useLocale } from "../../hooks/use-locale";
-import { useThumbnail } from "../../hooks/use-thumbnail";
 import { TILE_LAYOUTS } from "../../styles/media-layout";
-import {
-    focusOutline,
-    forcedColors,
-    hoverBackground,
-    selectedBackground,
-    selectedHoverBackground,
-    visuallyHiddenSx,
-} from "../../styles/mixins";
+import { forcedColors, visuallyHiddenSx } from "../../styles/mixins";
+import { withSx } from "../../styles/sx";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 import { HoldBar, HoldLine } from "./asset-hold";
-import OpenButton from "./open-button";
 
-import type { AssetHold, FileAdapter, FileEntry } from "../../types";
+import type { MediaAssetLookProps, MediaKind } from "../../types";
 
-/** The kinds a library shows as tiles; audio has rows (`MediaRow`). */
-export type TileKind = keyof typeof TILE_LAYOUTS;
-
-interface MediaTileProps {
-    entry: FileEntry;
-    kind: TileKind;
-    adapter: FileAdapter;
-    /** Where the entry is shown, from 0. */
-    index: number;
-    selected: boolean;
-    /**
-     * Why it can't be chosen now, shown in place of its size, with a bar while it's processed: it
-     * isn't selected then, but is opened.
-     */
-    hold: AssetHold | undefined;
-    /** The backend's work on it while it can be chosen all the same, shown the same way, unfaded. */
-    work: AssetHold | undefined;
-    /** Whether there's no room for it among those selected (`maxChoices`): dimmed, with nothing said on it. */
-    limited: boolean;
-    /** Whether the tile has the grid's Tab stop. */
-    focused: boolean;
-    onPress: (index: number, event: MouseEvent) => void;
-    /** A double click, which chooses it, or opens it while nothing is chosen. */
-    onActivate: (index: number) => void;
-    /** Its button opening it in the library's place. */
-    onOpen: (index: number) => void;
-    onFocus: (index: number) => void;
-    onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
-}
-
-const tileSx: SxProps<Theme> = (theme) => ({
+const rootSx = {
     display: "flex",
     flexDirection: "column",
+    flex: 1,
     gap: 0.75,
     minWidth: 0,
-    p: 0.75,
-    borderRadius: 3,
-    cursor: "pointer",
-    userSelect: "none",
-    outline: "none",
-    WebkitTapHighlightColor: "transparent",
-    "&:hover": { bgcolor: hoverBackground(theme) },
-    '&[aria-selected="true"]': { bgcolor: selectedBackground(theme) },
-    '&[aria-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
-    "&:focus-visible": focusOutline,
-    '&[aria-disabled="true"]': { cursor: "default" },
-    [forcedColors]: { '&[aria-selected="true"]': { bgcolor: "Highlight", color: "HighlightText" } },
-});
+} as const;
 
 // The picture, or the file's icon, in a box the tile's width and the kind's shape, its own corners
 // rounded within the tile's. A selected tile rings it in `primary`, so a picture filling it still
 // shows the selection.
 const frameSx = (ratio: string): SxProps<Theme> => ({
     position: "relative",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
     aspectRatio: ratio,
     borderRadius: 2,
     overflow: "hidden",
     bgcolor: "action.hover",
-    "[aria-selected='true'] > &": {
+    "[role='option'][aria-selected='true'] &": {
         outline: "3px solid",
         outlineColor: "primary.main",
         outlineOffset: "-3px",
     },
     // An asset that can't be chosen now is faded, as a file being uploaded is.
-    "[data-held='true'] > & > img, [data-held='true'] > & > svg": { opacity: 0.55 },
+    "[data-held='true'] & > [data-part='picture']": { opacity: 0.55 },
     // One there's no room for is only dimmed, as taking another out makes room.
-    "[data-limited='true'] > & > img, [data-limited='true'] > & > svg": { opacity: 0.7 },
-    [forcedColors]: { "[aria-selected='true'] > &": { outlineColor: "HighlightText" } },
+    "[data-limited='true'] & > [data-part='picture']": { opacity: 0.7 },
+    [forcedColors]: { "[role='option'][aria-selected='true'] &": { outlineColor: "HighlightText" } },
 });
 
-const FRAME_SX: Record<TileKind, SxProps<Theme>> = {
+// Audio has rows, but a tile of it, drawn by an app, is as square as a cover.
+const FRAME_SX: Record<MediaKind, SxProps<Theme>> = {
     image: frameSx(TILE_LAYOUTS.image.ratio),
     video: frameSx(TILE_LAYOUTS.video.ratio),
     document: frameSx(TILE_LAYOUTS.document.ratio),
+    audio: frameSx("1"),
+};
+
+const pictureBoxSx: SxProps<Theme> = {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
 };
 
 const pictureSx: SxProps<Theme> = {
-    position: "absolute",
-    inset: 0,
     width: "100%",
     height: "100%",
     objectFit: "cover",
@@ -112,45 +66,8 @@ const pictureSx: SxProps<Theme> = {
     '[data-kind="document"] &': { objectPosition: "top" },
 };
 
-// The check at the frame's top end corner, shown on a selected tile.
-const checkSx: SxProps<Theme> = {
-    position: "absolute",
-    top: 6,
-    insetInlineEnd: 6,
-    display: "none",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 22,
-    height: 22,
-    borderRadius: "50%",
-    bgcolor: "primary.main",
-    color: "primary.contrastText",
-    boxShadow: 1,
-    "& > svg": { fontSize: 16 },
-    "[aria-selected='true'] > * > &": { display: "flex" },
-    [forcedColors]: { bgcolor: "Highlight", color: "HighlightText", outline: "1px solid HighlightText" },
-};
-
-// The button opening the asset, at the frame's top start corner, on the panel's own surface, shown
-// as the pointer is over the tile or the focus is on it, and always on a touch screen.
-const openSx: SxProps<Theme> = {
-    position: "absolute",
-    top: 4,
-    insetInlineStart: 4,
-    width: 28,
-    height: 28,
-    bgcolor: "background.paper",
-    boxShadow: 1,
-    opacity: 0,
-    "& svg": { fontSize: 18 },
-    "&:hover": { bgcolor: "background.paper" },
-    "[role='option']:hover &, [role='option']:focus-visible &": { opacity: 1 },
-    "@media (hover: none)": { opacity: 1 },
-    [forcedColors]: { opacity: 1, outline: "1px solid CanvasText" },
-};
-
-// A video's length, when the listing says it, at the frame's bottom start corner, on the panel's
-// own surface, so it reads over any picture.
+// A video's length, when the listing says it, or the app's own badge, at the frame's bottom start
+// corner, on the panel's own surface, so it reads over any picture.
 const badgeSx: SxProps<Theme> = {
     position: "absolute",
     bottom: 6,
@@ -188,100 +105,83 @@ const detailSx: SxProps<Theme> = {
 };
 
 /**
- * One asset of a library shown as tiles: its picture or icon in the kind's shape, with a video's
- * length over it, and its name, with a picture's or a video's size, or a document's, under it.
+ * How the media manager draws an asset of a library of tiles, for an app's `renderAsset` to change a
+ * little: `<MediaTile {...params} detail={params.asset.meta?.show} />`. Its picture or icon in the
+ * kind's shape, with a video's length over it, and its name, with a picture's or a video's size, or
+ * a document's, under it, or in their place why it can't be chosen now, with a bar on the picture
+ * while it's processed. Its look only: what makes it an asset to select, its check and its Open
+ * button stay the media manager's, around it, so it's only drawn inside `renderAsset`.
  */
-const MediaTile = memo(
-    ({
-        entry,
-        kind,
-        adapter,
-        index,
-        selected,
-        hold,
-        work,
-        limited,
-        focused,
-        onPress,
-        onActivate,
-        onOpen,
-        onFocus,
-        onKeyDown,
-    }: MediaTileProps) => {
-        const { formatDuration, formatNumber, formatSize, text } = useLocale();
-        const thumbnail = useThumbnail(entry, adapter, "grid", TILE_LAYOUTS[kind].thumbnail);
-        const duration = kind === "video" ? entry.media?.duration : undefined;
-        const { width, height } = entry.media ?? {};
-        const measured = kind !== "document" && width !== undefined && height !== undefined;
-        const standing = hold ?? work;
+const MediaTile = ({ asset, kind, thumbnail, hold, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
+    const { formatDuration, formatNumber, formatSize, text } = useLocale();
+    const duration = badge === undefined && kind === "video" ? asset.media?.duration : undefined;
+    const { width, height } = asset.media ?? {};
+    const measured = detail === undefined && kind !== "document" && width !== undefined && height !== undefined;
 
-        return (
-            <Box
-                role="option"
-                aria-selected={selected}
-                // One selected before it was held, as an upload still processed is, can be taken out.
-                aria-disabled={(hold && !selected) || limited ? true : undefined}
-                tabIndex={focused ? 0 : -1}
-                data-index={index}
-                data-kind={kind}
-                data-held={!!hold}
-                data-limited={limited}
-                sx={tileSx}
-                onClick={(event) => onPress(index, event)}
-                onDoubleClick={() => onActivate(index)}
-                onFocus={() => onFocus(index)}
-                onKeyDown={onKeyDown}
-            >
-                <Box sx={FRAME_SX[kind]}>
-                    {thumbnail ? (
+    useAssetLook();
+
+    return (
+        <Box data-kind={kind} sx={withSx(rootSx, sx)}>
+            <Box sx={FRAME_SX[kind]}>
+                <Box data-part="picture" sx={pictureBoxSx}>
+                    {picture !== undefined ? (
+                        picture
+                    ) : thumbnail ? (
                         <Box component="img" src={thumbnail} alt="" draggable={false} sx={pictureSx} />
                     ) : (
-                        <FileTypeIcon fileName={entry.name} size={kind === "video" ? "30%" : "42%"} />
-                    )}
-                    {duration !== undefined && (
-                        <Box component="span" sx={badgeSx} aria-hidden>
-                            <Icon name="videos" />
-                            <bdi>{formatDuration(duration)}</bdi>
-                        </Box>
-                    )}
-                    <Box component="span" sx={checkSx} aria-hidden>
-                        <Icon name="check" />
-                    </Box>
-                    <OpenButton name={entry.name} index={index} onOpen={onOpen} sx={openSx} />
-                    {standing && <HoldBar hold={standing} place="frame" />}
-                </Box>
-                <Box sx={textSx}>
-                    <Typography variant="body2" noWrap sx={nameSx}>
-                        {entry.name}
-                    </Typography>
-                    {standing ? (
-                        <HoldLine hold={standing} />
-                    ) : measured ? (
-                        <Typography variant="caption" noWrap sx={detailSx} aria-hidden>
-                            <bdi>{`${formatNumber(width)} × ${formatNumber(height)}`}</bdi>
-                        </Typography>
-                    ) : (
-                        kind === "document" &&
-                        entry.size !== undefined && (
-                            <Typography variant="caption" noWrap sx={detailSx}>
-                                <bdi>{formatSize(entry.size)}</bdi>
-                            </Typography>
-                        )
+                        <FileTypeIcon fileName={asset.name} size={kind === "video" ? "30%" : "42%"} />
                     )}
                 </Box>
-                {measured && (
-                    <Box component="span" sx={visuallyHiddenSx}>
-                        {text.mediaDimensions(formatNumber(width), formatNumber(height))}
+                {badge !== undefined && badge !== null && (
+                    <Box component="span" sx={badgeSx}>
+                        {badge}
                     </Box>
                 )}
                 {duration !== undefined && (
-                    <Box component="span" sx={visuallyHiddenSx}>
-                        {text.mediaDuration(formatDuration(duration))}
+                    <Box component="span" sx={badgeSx} aria-hidden>
+                        <Icon name="videos" />
+                        <bdi>{formatDuration(duration)}</bdi>
                     </Box>
                 )}
+                {hold && <HoldBar hold={hold} place="frame" />}
             </Box>
-        );
-    },
-);
+            <Box sx={textSx}>
+                <Typography variant="body2" noWrap sx={nameSx}>
+                    {title ?? asset.name}
+                </Typography>
+                {hold ? (
+                    <HoldLine hold={hold} />
+                ) : detail !== undefined ? (
+                    detail !== null && (
+                        <Typography variant="caption" noWrap sx={detailSx}>
+                            <bdi>{detail}</bdi>
+                        </Typography>
+                    )
+                ) : measured ? (
+                    <Typography variant="caption" noWrap sx={detailSx} aria-hidden>
+                        <bdi>{`${formatNumber(width)} × ${formatNumber(height)}`}</bdi>
+                    </Typography>
+                ) : (
+                    kind === "document" &&
+                    asset.size !== undefined && (
+                        <Typography variant="caption" noWrap sx={detailSx}>
+                            <bdi>{formatSize(asset.size)}</bdi>
+                        </Typography>
+                    )
+                )}
+            </Box>
+            {measured && (
+                <Box component="span" sx={visuallyHiddenSx}>
+                    {text.mediaDimensions(formatNumber(width), formatNumber(height))}
+                </Box>
+            )}
+            {duration !== undefined && (
+                <Box component="span" sx={visuallyHiddenSx}>
+                    {text.mediaDuration(formatDuration(duration))}
+                </Box>
+            )}
+        </Box>
+    );
+};
 
 export default MediaTile;

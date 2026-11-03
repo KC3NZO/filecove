@@ -5,6 +5,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { MediaManager } from "../src";
+import { renderAudio, renderStock } from "./media-assets";
 import { pickForm } from "./media-fields";
 import { audioPreviewer, hlsPreviewer } from "./media-previewers";
 import { audioProcessForm, imageProcessForm, videoProcessForm } from "./media-processing";
@@ -78,6 +79,7 @@ const libraries: MediaSectionGroup[] = [
                 label: "Audio",
                 kind: "audio",
                 rootId: "/audio",
+                renderAsset: renderAudio,
                 acceptUploads: "audio/*",
                 uploadForm: audioUploadForm,
                 processForm: audioProcessForm,
@@ -102,6 +104,7 @@ const libraries: MediaSectionGroup[] = [
                 icon: "star",
                 rootId: "/",
                 adapter: stockMediaAdapter,
+                renderAsset: renderStock,
                 readOnly: true,
                 selectable: stockSelectable,
             },

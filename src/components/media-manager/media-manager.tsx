@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentPropsWithoutRef, Ref } from "react";
+import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
 
 import Box from "@mui/material/Box";
 import type { SxProps, Theme } from "@mui/material/styles";
@@ -24,6 +24,7 @@ import type {
     FileAdapter,
     FileEntry,
     FilePreviewer,
+    MediaAssetParams,
     MediaChoice,
     MediaManagerLocaleText,
     MediaPickForm,
@@ -99,6 +100,12 @@ interface BaseProps<V> extends RootAttributes {
      * thumbnail when none accepts it, as the media manager plays and renders nothing itself.
      */
     previewers?: FilePreviewer[];
+    /**
+     * Draws the assets of the libraries without a `renderAsset` of their own, in place of the media
+     * manager's look: `MediaTile` or `MediaRow` with what to change, or anything else. See
+     * `MediaSection.renderAsset`. Keep it outside the component, or memoized.
+     */
+    renderAsset?: (params: MediaAssetParams) => ReactNode;
     /**
      * What's selected as it mounts, with what the app's form held for each, such as a product's
      * carousel being edited, in its order. Each is matched to its library by `section.id`.
@@ -204,6 +211,7 @@ const MediaManager = <V,>({
     pickForm,
     properties,
     previewers,
+    renderAsset,
     defaultValue,
     errors = NO_ERRORS,
     choiceErrorKey,
@@ -248,6 +256,7 @@ const MediaManager = <V,>({
                             pickForm={pickForm as MediaFrameProps["pickForm"]}
                             properties={properties}
                             previewers={previewers}
+                            renderAsset={renderAsset}
                             defaultValue={defaultValue as readonly MediaChoice[] | undefined}
                             errors={errors}
                             choiceErrorKey={choiceErrorKey}

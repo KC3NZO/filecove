@@ -6,6 +6,7 @@ import Chip from "@mui/material/Chip";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { PropertyDisplay } from "../src";
 import { pollRenditions } from "./mocks/mock-media";
 
 import type {
@@ -21,6 +22,12 @@ import type { PosterChoice, RenditionJob, Track } from "./mocks/mock-media";
 // What the playground's assets show as one is opened, as an app would define it: the values its
 // backend hands over, each shown as a type of the media manager's, a little changed by a formatter,
 // or drawn entirely the playground's own way. The media manager only lays them out.
+
+const formatSx: SxProps<Theme> = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 1,
+};
 
 const listSx: SxProps<Theme> = {
     display: "flex",
@@ -234,7 +241,18 @@ const length: PropertyDefinition = {
     valueGetter: (_, asset) => asset.media?.duration,
 };
 
-const format: PropertyDefinition = { field: "format", label: "Format", type: "string" };
+// Shown as any text is, with a mark of the app's own beside those browsers show as they are.
+const format: PropertyDefinition = {
+    field: "format",
+    label: "Format",
+    type: "string",
+    render: (params) => (
+        <Box component="span" sx={formatSx}>
+            <PropertyDisplay {...params} />
+            {/\b(?:webp|avif|mp4|webm)\b/i.test(params.formattedValue) && <Chip size="small" label="Web-ready" />}
+        </Box>
+    ),
+};
 
 const size: PropertyDefinition = {
     field: "size",

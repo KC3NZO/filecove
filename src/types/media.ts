@@ -1,5 +1,7 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
+import type { SxProps, Theme } from "@mui/material/styles";
+
 import type { AssetState, FileAdapter, FileEntry } from "./adapter";
 import type { FilePreviewer } from "./previewer";
 import type { FieldErrors, PropertyDefinitionGroup } from "./property-definition";
@@ -131,6 +133,54 @@ export interface MediaFormRefusal extends Error {
 }
 
 /**
+ * What an app's `renderAsset` is handed for an asset in its library, each time it changes. Spread
+ * onto `MediaTile` or `MediaRow`, it draws the asset as the media manager does.
+ */
+export interface MediaAssetParams {
+    asset: FileEntry;
+    /** Its library's kind, which it's drawn as: a tile in the kind's shape, or a row for audio. */
+    kind: MediaKind;
+    section: MediaSection;
+    /** Its library's adapter, its own or the media manager's. */
+    adapter: FileAdapter;
+    /**
+     * The URL of its picture, as the adapter's `thumbnail` gave it for the kind's size, once it has
+     * loaded; null until then, and for an asset with none. Cached and asked for a few at a time, so
+     * use this rather than asking the adapter.
+     */
+    thumbnail: string | null;
+    selected: boolean;
+    /**
+     * Why it can't be chosen now, or the backend's work on it while it can. `MediaTile` and `MediaRow`
+     * show it; under anything else, the media manager does.
+     */
+    hold: AssetHold | undefined;
+}
+
+/**
+ * The media manager's own look of an asset, `MediaTile` or `MediaRow`: what `renderAsset` hands over,
+ * spread onto it, and what to change. Each part left out stays as it is, and `null` takes it away.
+ */
+export interface MediaAssetLookProps extends Pick<MediaAssetParams, "asset" | "kind" | "thumbnail" | "hold"> {
+    /** In place of its name. */
+    title?: ReactNode;
+    /**
+     * The line under its name, in place of its size or its type and size. While it can't be chosen
+     * or is being processed, why is said there instead (`hold`).
+     */
+    detail?: ReactNode;
+    /** Over a tile's picture, or at a row's end, in place of its length. */
+    badge?: ReactNode;
+    /** In place of its thumbnail or icon, in the same box. */
+    picture?: ReactNode;
+    /** Over the look's root. */
+    sx?: SxProps<Theme>;
+}
+
+/** `renderAsset` as a library's assets draw with it, its section already in hand (internal). */
+export type MediaAssetDraw = (params: Omit<MediaAssetParams, "section">) => ReactNode;
+
+/**
  * A media manager's library: a section holding assets of one kind, as its adapter lists them under
  * `rootId`, its own adapter or the media manager's. Each is an independent root, with its own
  * backend's way of delivering what it holds, so how its assets are previewed is its own too
@@ -153,6 +203,16 @@ export interface MediaSection
      * `properties`; without either, the adapter's own groups show.
      */
     properties?: PropertyDefinitionGroup[];
+    /**
+     * Draws this library's assets, in place of the media manager's `renderAsset` and its own look.
+     * Return `MediaTile` or `MediaRow` with what to change, for a small change, or anything else. It
+     * only draws: selecting, the keys, the check and the Open button at a tile's top corners or a
+     * row's end stay the media manager's, as does why an asset can't be chosen, under what it draws,
+     * so it's for showing, with no buttons or links of its own. May use hooks. Every asset of a
+     * library is drawn the same height. Keep it outside the component, or memoized, as a new function
+     * draws every asset again.
+     */
+    renderAsset?: (params: MediaAssetParams) => ReactNode;
     /**
      * What's asked of files uploaded into this library, before they're sent: the processing its
      * backend offers, such as whether a video is streamed as HLS, or a picture made smaller or turned
@@ -196,7 +256,7 @@ export interface FollowedAssets {
 export type AssetStates = ReadonlyMap<FileAdapter, ReadonlyMap<string, AssetState>>;
 
 /**
- * Why an asset can't be chosen now (internal): its backend's work on it under way or failed
+ * Why an asset can't be chosen now: its backend's work on it under way or failed
  * (`FileEntry.processing`), its library refusing it (`MediaSection.selectable`), the app refusing it
  * for this use (`canSelect`) or there being no room for it (`maxChoices`), or, once it's picked, its
  * form not ready (`MediaForm.ready`), as its tile, its row among those selected and its view show

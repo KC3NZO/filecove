@@ -1,75 +1,28 @@
-import { memo } from "react";
-import type { KeyboardEvent, MouseEvent } from "react";
-
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useAssetLook } from "../../hooks/use-asset-look";
 import { useLocale } from "../../hooks/use-locale";
-import { useThumbnail } from "../../hooks/use-thumbnail";
 import { AUDIO_ROW } from "../../styles/media-layout";
-import {
-    focusOutline,
-    forcedColors,
-    hoverBackground,
-    selectedBackground,
-    selectedHoverBackground,
-    visuallyHiddenSx,
-} from "../../styles/mixins";
+import { visuallyHiddenSx } from "../../styles/mixins";
+import { withSx } from "../../styles/sx";
 import { joinIsolated } from "../../utils/bidi";
+import { KIND_ICONS } from "../../utils/media";
 import Icon from "../icons/icon";
 import { HoldBar, HoldLine } from "./asset-hold";
-import OpenButton from "./open-button";
 
-import type { AssetHold, FileAdapter, FileEntry } from "../../types";
+import type { MediaAssetLookProps } from "../../types";
 
-interface MediaRowProps {
-    entry: FileEntry;
-    adapter: FileAdapter;
-    /** Where the entry is shown, from 0. */
-    index: number;
-    selected: boolean;
-    /**
-     * Why it can't be chosen now, shown in place of its type and size, with a bar while it's
-     * processed: it isn't selected then, but is opened.
-     */
-    hold: AssetHold | undefined;
-    /** The backend's work on it while it can be chosen all the same, shown the same way, unfaded. */
-    work: AssetHold | undefined;
-    /** Whether there's no room for it among those selected (`maxChoices`): dimmed, with nothing said on it. */
-    limited: boolean;
-    /** Whether the row has the list's Tab stop. */
-    focused: boolean;
-    onPress: (index: number, event: MouseEvent) => void;
-    /** A double click, which chooses it, or opens it while nothing is chosen. */
-    onActivate: (index: number) => void;
-    /** Its button opening it in the library's place. */
-    onOpen: (index: number) => void;
-    onFocus: (index: number) => void;
-    onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
-}
-
-const rowSx: SxProps<Theme> = (theme) => ({
+const rootSx = {
     display: "flex",
     alignItems: "center",
+    flex: 1,
     gap: 1.5,
     minWidth: 0,
-    px: 1,
-    py: 0.75,
-    borderRadius: 2,
-    cursor: "pointer",
-    userSelect: "none",
-    outline: "none",
-    WebkitTapHighlightColor: "transparent",
-    "&:hover": { bgcolor: hoverBackground(theme) },
-    '&[aria-selected="true"]': { bgcolor: selectedBackground(theme) },
-    '&[aria-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
-    "&:focus-visible": focusOutline,
-    '&[aria-disabled="true"]': { cursor: "default" },
-    [forcedColors]: { '&[aria-selected="true"]': { bgcolor: "Highlight", color: "HighlightText" } },
-});
+} as const;
 
-// Its cover, when the adapter has a thumbnail for it, or the music icon, in a rounded square.
+// Its cover, when the adapter has a thumbnail for it, or its kind's icon, in a rounded square.
 const coverSx: SxProps<Theme> = {
     position: "relative",
     display: "flex",
@@ -84,9 +37,9 @@ const coverSx: SxProps<Theme> = {
     color: "text.secondary",
     "& > img": { width: "100%", height: "100%", objectFit: "cover" },
     // A piece of audio that can't be chosen now is faded, as a file being uploaded is.
-    "[data-held='true'] > & > *": { opacity: 0.55 },
+    "[data-held='true'] & > *": { opacity: 0.55 },
     // One there's no room for is only dimmed, as taking another out makes room.
-    "[data-limited='true'] > & > *": { opacity: 0.7 },
+    "[data-limited='true'] & > *": { opacity: 0.7 },
 };
 
 const textSx: SxProps<Theme> = {
@@ -108,108 +61,71 @@ const durationSx: SxProps<Theme> = {
     fontVariantNumeric: "tabular-nums",
 };
 
-// The button opening it, before the check, shown as the pointer is over the row or the focus is on
-// it, and always on a touch screen.
-const openSx: SxProps<Theme> = {
-    flexShrink: 0,
-    opacity: 0,
-    "& svg": { fontSize: 18 },
-    "[role='option']:hover > &, [role='option']:focus-visible > &": { opacity: 1 },
-    "@media (hover: none)": { opacity: 1 },
-    [forcedColors]: { opacity: 1 },
-};
+/**
+ * How the media manager draws a piece of audio, for an app's `renderAsset` to change a little:
+ * `<MediaRow {...params} title={params.asset.meta?.title} />`. Its cover or icon, its name, its type
+ * and size, or in their place why it can't be chosen now, with a bar while it's processed, and its
+ * length. Its look only: what makes it an asset to select, its Open button and its check stay the
+ * media manager's, beside it, so it's only drawn inside `renderAsset`.
+ */
+const MediaRow = ({ asset, kind, thumbnail, hold, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
+    const { describeType, formatDuration, formatSize, text } = useLocale();
+    const duration = badge === undefined ? asset.media?.duration : undefined;
 
-// The check at the row's end, shown while it's selected.
-const checkSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    width: 22,
-    height: 22,
-    borderRadius: "50%",
-    bgcolor: "primary.main",
-    color: "primary.contrastText",
-    visibility: "hidden",
-    "& > svg": { fontSize: 16 },
-    "[aria-selected='true'] > &": { visibility: "visible" },
-    [forcedColors]: { bgcolor: "Highlight", color: "HighlightText", outline: "1px solid HighlightText" },
-};
+    useAssetLook();
 
-/** One piece of audio of a library: its cover or icon, its name, its type and size, and its length. */
-const MediaRow = memo(
-    ({
-        entry,
-        adapter,
-        index,
-        selected,
-        hold,
-        work,
-        limited,
-        focused,
-        onPress,
-        onActivate,
-        onOpen,
-        onFocus,
-        onKeyDown,
-    }: MediaRowProps) => {
-        const { describeType, formatDuration, formatSize, text } = useLocale();
-        const cover = useThumbnail(entry, adapter, "list", AUDIO_ROW);
-        const duration = entry.media?.duration;
-        const detail = [describeType(entry), ...(entry.size !== undefined ? [formatSize(entry.size)] : [])];
-        const standing = hold ?? work;
-
-        return (
-            <Box
-                role="option"
-                aria-selected={selected}
-                // One selected before it was held, as an upload still processed is, can be taken out.
-                aria-disabled={(hold && !selected) || limited ? true : undefined}
-                tabIndex={focused ? 0 : -1}
-                data-index={index}
-                data-held={!!hold}
-                data-limited={limited}
-                sx={rowSx}
-                onClick={(event) => onPress(index, event)}
-                onDoubleClick={() => onActivate(index)}
-                onFocus={() => onFocus(index)}
-                onKeyDown={onKeyDown}
-            >
-                <Box sx={coverSx}>
-                    {cover ? <img src={cover} alt="" draggable={false} /> : <Icon name="music" />}
-                </Box>
-                <Box sx={textSx}>
-                    <Typography variant="body2" noWrap>
-                        {entry.name}
-                    </Typography>
-                    {standing ? (
-                        <>
-                            <HoldLine hold={standing} />
-                            <HoldBar hold={standing} place="row" />
-                        </>
-                    ) : (
-                        <Typography variant="caption" noWrap sx={detailSx}>
-                            {joinIsolated(detail)}
-                        </Typography>
-                    )}
-                </Box>
-                {duration !== undefined && (
-                    <>
-                        <Box component="span" sx={durationSx} aria-hidden>
-                            <bdi>{formatDuration(duration)}</bdi>
-                        </Box>
-                        <Box component="span" sx={visuallyHiddenSx}>
-                            {text.mediaDuration(formatDuration(duration))}
-                        </Box>
-                    </>
+    return (
+        <Box sx={withSx(rootSx, sx)}>
+            <Box sx={coverSx}>
+                {picture !== undefined ? (
+                    picture
+                ) : thumbnail ? (
+                    <img src={thumbnail} alt="" draggable={false} />
+                ) : (
+                    <Icon name={KIND_ICONS[kind]} />
                 )}
-                <OpenButton name={entry.name} index={index} onOpen={onOpen} sx={openSx} />
-                <Box component="span" sx={checkSx} aria-hidden>
-                    <Icon name="check" />
-                </Box>
             </Box>
-        );
-    },
-);
+            <Box sx={textSx}>
+                <Typography variant="body2" noWrap>
+                    {title ?? asset.name}
+                </Typography>
+                {hold ? (
+                    <>
+                        <HoldLine hold={hold} />
+                        <HoldBar hold={hold} place="row" />
+                    </>
+                ) : (
+                    detail !== null && (
+                        <Typography variant="caption" noWrap sx={detailSx}>
+                            {detail !== undefined ? (
+                                <bdi>{detail}</bdi>
+                            ) : (
+                                joinIsolated([
+                                    describeType(asset),
+                                    ...(asset.size !== undefined ? [formatSize(asset.size)] : []),
+                                ])
+                            )}
+                        </Typography>
+                    )
+                )}
+            </Box>
+            {badge !== undefined && badge !== null && (
+                <Box component="span" sx={durationSx}>
+                    <bdi>{badge}</bdi>
+                </Box>
+            )}
+            {duration !== undefined && (
+                <>
+                    <Box component="span" sx={durationSx} aria-hidden>
+                        <bdi>{formatDuration(duration)}</bdi>
+                    </Box>
+                    <Box component="span" sx={visuallyHiddenSx}>
+                        {text.mediaDuration(formatDuration(duration))}
+                    </Box>
+                </>
+            )}
+        </Box>
+    );
+};
 
 export default MediaRow;

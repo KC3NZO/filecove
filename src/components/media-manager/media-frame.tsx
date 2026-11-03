@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ClipboardEvent, DragEvent, SetStateAction } from "react";
+import type { ClipboardEvent, DragEvent, ReactNode, SetStateAction } from "react";
 
 import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
@@ -52,6 +52,8 @@ import type {
     FileUploadItem,
     FieldErrors,
     FollowedAssets,
+    MediaAssetDraw,
+    MediaAssetParams,
     MediaChoice,
     MediaPickForm,
     MediaProcessForm,
@@ -77,6 +79,8 @@ export interface MediaFrameProps {
     properties: ((asset: FileEntry, section: MediaSection) => PropertyDefinitionGroup[]) | undefined;
     /** The media manager's own previewers, asked after a library's. */
     previewers: readonly FilePreviewer[] | undefined;
+    /** Draws the assets of the libraries with no `renderAsset` of their own. */
+    renderAsset: ((params: MediaAssetParams) => ReactNode) | undefined;
     /** What's selected as it mounts. */
     defaultValue: readonly MediaChoice[] | undefined;
     /** The app's backend's errors, for the picks and their forms, as the app passed them. */
@@ -327,6 +331,7 @@ const MediaFrame = ({
     pickForm,
     properties,
     previewers = NO_PREVIEWERS,
+    renderAsset,
     defaultValue,
     errors,
     choiceErrorKey,
@@ -1404,6 +1409,13 @@ const MediaFrame = ({
 
     // A library's own previewers first, as its backend delivers what it holds, then the media
     // manager's.
+    // Only a library drawn by the app has its assets depend on the section's object, which an app may
+    // make afresh each render, so the media manager's own tiles don't all draw again as it does.
+    const sectionRenderAsset = section?.renderAsset ?? renderAsset;
+    const drawAsset = useMemo<MediaAssetDraw | undefined>(
+        () => (section && sectionRenderAsset ? (params) => sectionRenderAsset({ ...params, section }) : undefined),
+        [section, sectionRenderAsset],
+    );
     const sectionPreviewers = useMemo(
         () => (section?.previewers ? [...section.previewers, ...previewers] : previewers),
         [section?.previewers, previewers],
@@ -1556,10 +1568,14 @@ const MediaFrame = ({
                     <Box sx={gridSx} data-covered={!!viewed || !!shownStep}>
                         {section ? (
                             <MediaGrid
+                                // Each library's own, as another's `renderAsset`, with hooks of its
+                                // own, may draw an asset of the same id.
+                                key={section.id}
                                 entries={shownEntries}
                                 uploads={shownUploads}
                                 kind={section.kind}
                                 adapter={sectionAdapter}
+                                drawAsset={drawAsset}
                                 label={section.label}
                                 selectedIds={selectedIds}
                                 holds={holds}

@@ -280,16 +280,24 @@ const transcriptOf = (entry: FileEntry) => {
         : job?.before;
 };
 
+// A podcast's episode, which has a title, a show and the show's cover as its thumbnail.
+const EPISODE = /^podcast-episode-(\d+)\./;
+
 /**
  * What this backend delivers a video by, which the media manager carries in `meta` without reading
  * it, for the playground's own player and for the app once it's chosen: an HLS manifest, as a
  * transcoding backend hands over, once it's made, and the poster in use. `sample` is the playground's
  * alone, the MDN clip its stand-in player plays, as there's no HLS server behind the mock. A piece of
- * audio says it has a transcript.
+ * audio says it has a transcript, and a podcast's episode its title and show.
  */
 const metaOf = (entry: FileEntry): FileEntry["meta"] => {
     if (isAudio(entry)) {
-        return transcriptOf(entry) ? { transcript: true } : undefined;
+        const episode = EPISODE.exec(entry.name)?.[1];
+
+        return {
+            ...(transcriptOf(entry) ? { transcript: true } : {}),
+            ...(episode ? { title: `Episode ${episode}`, show: "The Harbour Hour" } : {}),
+        };
     }
 
     return isVideo(entry)
@@ -696,7 +704,11 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
                       ),
                   )
                   .then((blob) => blob && { blob })
-            : (adapter.thumbnail?.(entry, options) ?? Promise.resolve(null)),
+            : EPISODE.test(entry.name)
+              ? wait(200, options.signal)
+                    .then(() => shrink(thumbnailSource("the-harbour-hour.jpg") as Blob, options.size))
+                    .then((blob) => blob && { blob })
+              : (adapter.thumbnail?.(entry, options) ?? Promise.resolve(null)),
     properties: (entry, { signal }) =>
         wait(250 + (hashOf(entry.name) % 500), signal).then(() =>
             propertiesOf(entry, `${readOnly}:${entry.id}`, readOnly),

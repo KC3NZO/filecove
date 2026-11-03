@@ -8,7 +8,7 @@ import { formatItem, safeHref } from "../../utils/property-value";
 
 import type { PropertyDefinition } from "../../types";
 
-interface PropertyDisplayProps {
+export interface PropertyDisplayProps {
     definition: PropertyDefinition;
     value: unknown;
     /** Its text, as `formatValue` writes it. */
@@ -48,7 +48,9 @@ const Url = ({ value, label }: UrlProps) => {
 
 /**
  * A property of the app's definition shown as its type has it: its text, a list as chips, an
- * address as a link. One with a `valueFormatter` is its text, as the app wrote it.
+ * address as a link. One with a `valueFormatter` is its text, as the app wrote it. Public, so a
+ * property's `render` adding a little to how it's shown needn't draw it again:
+ * `<PropertyDisplay {...params} />`.
  */
 const PropertyDisplay = ({ definition, value, formattedValue }: PropertyDisplayProps) => {
     const locale = useLocale();
