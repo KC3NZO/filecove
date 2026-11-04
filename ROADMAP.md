@@ -5,7 +5,7 @@ What's left in the two components, `FileManager` and `MediaManager`, what they s
 ## Order
 
 1. ~~Re-listing folders in the background, tooltips, high contrast and announcements, properties, folder upload.~~ Done 2026-10-23 to 2026-10-24.
-2. The media manager's necessary gaps and features, in the order listed below: the contract's open points first (`pickForm` on the section, `value` / `onChange`), then groups in a library, then virtualizing the grid, which then has group tiles and levels to cover too (uploading and processing done 2026-10-31).
+2. The media manager's necessary gaps and features, in the order listed below: the contract's open points first (`pickForm` on the section; `value` / `onChange` done 2026-11-03), then what's left of groups in a library, then virtualizing the grid, which then has group tiles and levels to cover too (uploading and processing done 2026-10-31).
 3. Packaging, in one pass before a release, as the last step.
 
 Everything optional waits until then, unless an app needs it.
@@ -156,7 +156,7 @@ Tests, moving entries to another adapter's trash (each backend's trash holds its
 #### Necessary
 - [ ] **The contract's open points**, settled in talk on 2026-10-31 but not built:
   - `pickForm` on `MediaSection`, beside its `properties`, with the component's `pickForm(asset, section)` kept as the fallback, as `properties` has it (the user's idea, agreed).
-  - A controlled selection, `value` / `onChange` called on every change, the pick's fields included (`defaultValue` done). Proposed with it: picking turned on by any of `value`, `defaultValue`, `onChange` or `onChoose`, and the Choose button, a double click or Enter finishing, only with `onChoose`, as MUI X's pickers have `onChange` and `onAccept`. Not yet agreed.
+  - [x] A controlled selection, `value` / `onChange` called on every change, the pick's fields included. *Done 2026-11-03, on `MediaManager` and `MediaPicker`, through `usePicks`. Picking is turned on by any of `value`, `defaultValue`, `onChange` or `onChoose`, and the Choose button and finishing only with `onChoose`, as MUI X's pickers have `onChange` and `onAccept` (the user agreed); without it a double click or Enter opens the asset. Tried by `?media&live`. Not type-checked or run yet.*
 - [ ] **Virtualizing the grid**, which renders every tile for now, so a library of thousands is slow (the file manager's lines, see `virtualization.md`).
 - [ ] **The rest of the props checklist** (`props.md`): the open library, the search and the asset open controlled, an `apiRef` (focus, refresh, open a library, open an asset, select, choose), `limits`, `relistAfter`, and announcements, such as the number of matches.
 
