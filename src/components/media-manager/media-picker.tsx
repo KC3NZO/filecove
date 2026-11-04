@@ -35,8 +35,8 @@ export interface MediaPickerProps<V = Record<string, unknown>> extends RootAttri
     adapter: FileAdapter;
     /**
      * The one library to pick from, the same object a `MediaManager` takes. Its `layouts`,
-     * `renderAsset`, `renderGroup`, `groupHeader`, `selectable`, `acceptUploads` and `uploadForm` count
-     * here too; what's for managing it, such as `createGroups`, `groupForm` and `processForm`, has no
+     * `renderAsset`, `renderGroup`, `groupHeader`, `selectable`, `acceptUploads`, `uploadForm` and
+     * `pickForm` count here too; what's for managing it, such as `createGroups`, `groupForm` and `processForm`, has no
      * place here and is left unread. Changing it, or its adapter, starts the picker afresh.
      */
     section: MediaSection;
@@ -53,7 +53,8 @@ export interface MediaPickerProps<V = Record<string, unknown>> extends RootAttri
      * library, or over it where there's no room: what's selected, put in order with `multiple`, and each
      * one's form. Its `defaults` count from the moment it's picked and its `ready` holds Choose back;
      * the backend's `errors` have no place here, as what's picked is saved by the app's form around the
-     * picker. Without it there's no column. Keep it outside the component, or memoized.
+     * picker. A library's own `pickForm` comes first. Without either there's no column. Keep it outside
+     * the component, or memoized.
      */
     pickForm?: (asset: FileEntry, section: MediaSection) => MediaPickForm<V> | null;
     /** Puts a Cancel button beside Choose, for a picker in the app's own dialog. */

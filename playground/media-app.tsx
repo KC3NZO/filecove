@@ -6,7 +6,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { MediaManager } from "../src";
 import { renderAudio, renderGroup, renderGroupHeader, renderStock } from "./media-assets";
-import { pickForm } from "./media-fields";
+import { pickForm, stockPickForm } from "./media-fields";
 import { groupForm } from "./media-groups";
 import { audioPreviewer, hlsPreviewer } from "./media-previewers";
 import { audioProcessForm, imageProcessForm, videoProcessForm } from "./media-processing";
@@ -122,6 +122,7 @@ const libraries: MediaSectionGroup[] = [
                 renderAsset: renderStock,
                 readOnly: true,
                 selectable: stockSelectable,
+                pickForm: stockPickForm,
             },
             // A library whose root refuses to be listed, to see the error.
             { id: "archive", label: "Old archive", kind: "image", icon: "drive", rootId: "/old/archive" },

@@ -33,6 +33,7 @@ import {
     groupRule,
     holdOf,
     layoutsOf,
+    pickFormOf,
     withState,
     workOf,
 } from "../../utils/media";
@@ -749,10 +750,17 @@ const MediaFrame = ({
     // Its form is a step in the library's place; a name alone is asked above it.
     const formingGroup = creatingGroup && !!newGroupForm;
 
+    // The app's form for a pick, its library's or else the media manager's, and whether there can be any.
+    const formOf = useCallback(
+        (asset: FileEntry, from: MediaSection) => pickFormOf(asset, from, pickForm),
+        [pickForm],
+    );
+    const asksPicks = !!pickForm || sections.some((item) => item.pickForm);
+
     // What the app's form holds for a pick until it's changed.
     const defaultsOf = useCallback(
-        (asset: FileEntry, from: MediaSection) => (pickForm?.(asset, from)?.defaults as Record<string, unknown>) ?? NO_VALUES,
-        [pickForm],
+        (asset: FileEntry, from: MediaSection) => (formOf(asset, from)?.defaults as Record<string, unknown>) ?? NO_VALUES,
+        [formOf],
     );
 
     // What picks are, as they are now: in a library that's gone, one goes; picked at the open level of the
@@ -874,13 +882,13 @@ const MediaFrame = ({
     // Why a pick's form isn't ready, by its `ready`; nothing once it is.
     const unfilledOf = useCallback(
         (choice: MediaChoice, index: number, all: readonly MediaChoice[]): AssetHold | undefined => {
-            const answer = pickForm?.(choice.asset, choice.section)?.ready?.(pickState(choice, index, all)) ?? true;
+            const answer = formOf(choice.asset, choice.section)?.ready?.(pickState(choice, index, all)) ?? true;
 
             return answer === true
                 ? undefined
                 : { status: "unfilled", text: typeof answer === "string" && answer ? answer : text.mediaChoiceUnfilled };
         },
-        [pickForm, pickState, text],
+        [formOf, pickState, text],
     );
 
     // Why the app's `canSelect` refuses an asset beside those picked; nothing when it allows it.
@@ -1716,37 +1724,38 @@ const MediaFrame = ({
     // what can read and change the others.
     const renderDetails = useMemo(
         () =>
-            (pickForm || choiceErrorKey) &&
-            ((choice: MediaChoice, index: number) => {
-                const state = pickState(choice, index, choices);
-                const form = pickForm?.(choice.asset, choice.section);
+            asksPicks || choiceErrorKey
+                ? (choice: MediaChoice, index: number) => {
+                      const state = pickState(choice, index, choices);
+                      const form = formOf(choice.asset, choice.section);
 
-                return (
-                    <>
-                        <ChoiceMessages
-                            messages={choiceMessages(choiceErrorKey, state.errors, state.index, choice.asset)}
-                        />
-                        {form && (
-                            <MediaFormBody
-                                form={form}
-                                params={{
-                                    ...state,
-                                    setValues: (next) => setChoiceValues(choice, next),
-                                    setChoiceValues,
-                                }}
-                            />
-                        )}
-                    </>
-                );
-            }),
-        [pickForm, choiceErrorKey, pickState, choices, setChoiceValues],
+                      return (
+                          <>
+                              <ChoiceMessages
+                                  messages={choiceMessages(choiceErrorKey, state.errors, state.index, choice.asset)}
+                              />
+                              {form && (
+                                  <MediaFormBody
+                                      form={form}
+                                      params={{
+                                          ...state,
+                                          setValues: (next) => setChoiceValues(choice, next),
+                                          setChoiceValues,
+                                      }}
+                                  />
+                              )}
+                          </>
+                      );
+                  }
+                : undefined,
+        [asksPicks, formOf, choiceErrorKey, pickState, choices, setChoiceValues],
     );
 
     // How much of a pick there is to fix, for its row in the list, whose form isn't open: each field
     // its form has now with an error, and its own errors as one more.
     const problemsOf = useMemo(
         () =>
-            (pickForm || choiceErrorKey) && errors !== NO_ERRORS
+            (asksPicks || choiceErrorKey) && errors !== NO_ERRORS
                 ? (choice: MediaChoice) => {
                       const place = errorPlaces.get(choiceKey(choice));
 
@@ -1755,7 +1764,7 @@ const MediaFrame = ({
                       }
 
                       const own = choiceMessages(choiceErrorKey, errors, place, choice.asset).length > 0 ? 1 : 0;
-                      const form = pickForm?.(choice.asset, choice.section);
+                      const form = formOf(choice.asset, choice.section);
 
                       return (
                           own +
@@ -1763,7 +1772,7 @@ const MediaFrame = ({
                       );
                   }
                 : undefined,
-        [pickForm, choiceErrorKey, errors, errorPlaces, pickState, choices],
+        [asksPicks, formOf, choiceErrorKey, errors, errorPlaces, pickState, choices],
     );
 
     // A library's own previewers first, as its backend delivers what it holds, then the media

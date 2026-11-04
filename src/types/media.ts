@@ -261,6 +261,15 @@ export interface MediaSection
      */
     properties?: PropertyDefinitionGroup[] | ((entry: FileEntry) => PropertyDefinitionGroup[]);
     /**
+     * What's asked of each pick from this library, or `null` for nothing, for what comes with its
+     * backend wherever it's picked: a stock photo's credit, say. Used in place of the media manager's
+     * or the picker's `pickForm`, even when it returns `null`, so a library can ask nothing of its
+     * picks; what's about one use belongs on that component's. Keep it outside the component, or
+     * memoized.
+     */
+    // `any`, so a form of values of the app's own shape fits, as a library doesn't know their shape.
+    pickForm?(asset: FileEntry): MediaPickForm<any> | null;
+    /**
      * Draws this library's assets, in place of the media manager's `renderAsset` and its own look.
      * Return `MediaTile` or `MediaRow` with what to change, for a small change, or anything else, going
      * by `layout` if the library offers both. It

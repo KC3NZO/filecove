@@ -336,5 +336,26 @@ const FORMS: Record<MediaKind, MediaPickForm> = {
     },
 };
 
-/** What the carousel asks of each pick, by its kind. */
+const creditGroups: PropertyDefinitionGroup[] = [
+    { id: "licence", title: "Licence", properties: [{ field: "credit", label: "Credit", type: "string" }] },
+];
+
+/**
+ * The Stock photos library's own form, which goes with it wherever it's picked: what any picture is
+ * asked, and the credit its licence wants, which holds Choose back until it's written.
+ */
+const STOCK_FORM: MediaPickForm = {
+    ...FORMS.image,
+    render: (form) => (
+        <>
+            <PictureFields {...form} />
+            <MediaFields {...form} groups={creditGroups} />
+        </>
+    ),
+    ready: ({ values }) => !!values.credit || "Write the stock photo's credit.",
+};
+
+export const stockPickForm = () => STOCK_FORM;
+
+/** What the carousel asks of each pick, by its kind, for the libraries without a form of their own. */
 export const pickForm = (_asset: FileEntry, section: MediaSection) => FORMS[section.kind];

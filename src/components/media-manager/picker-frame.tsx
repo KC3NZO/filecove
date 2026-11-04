@@ -24,7 +24,7 @@ import { NO_ERRORS } from "../../utils/field-errors";
 import { carriesFiles, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
 import { countLimit } from "../../utils/limits";
-import { byDate, checkMediaUpload, chooseHeldBy, holdOf, layoutsOf, withState, workOf } from "../../utils/media";
+import { byDate, checkMediaUpload, chooseHeldBy, holdOf, layoutsOf, pickFormOf, withState, workOf } from "../../utils/media";
 import { allows } from "../../utils/permissions";
 import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
@@ -285,8 +285,11 @@ const PickerFrame = ({
     const panelRef = useRef<HTMLDivElement>(null);
     const levelFocusRef = useRef<LevelFocus | null>(null);
     const noteId = useId();
+    // The app's form for a pick, the library's or else the picker's, either of which turns the column on.
+    const asksPicks = !!pickForm || !!section.pickForm;
+    const formOf = useCallback((asset: FileEntry) => pickFormOf(asset, section, pickForm), [section, pickForm]);
     const { chosenOverlay, setChosenOverlay, docked, frameRef, chosenRef, openerRef, closeChosen } =
-        useChosenColumn(!!pickForm);
+        useChosenColumn(asksPicks);
 
     const [uploadStep, setUploadStep] = useState<UploadStep | null>(null);
     const uploadStepCount = useRef(0);
@@ -376,8 +379,8 @@ const PickerFrame = ({
 
     // What the app's form holds for a pick until it's changed.
     const defaultsOf = useCallback(
-        (asset: FileEntry) => (pickForm?.(asset, section)?.defaults as Record<string, unknown>) ?? NO_VALUES,
-        [pickForm, section],
+        (asset: FileEntry) => (formOf(asset)?.defaults as Record<string, unknown>) ?? NO_VALUES,
+        [formOf],
     );
 
     // What picks are, as they are now: as the open level lists one when it does; picked at this level
@@ -479,13 +482,13 @@ const PickerFrame = ({
     // Why a pick's form isn't ready, by its `ready`; nothing once it is.
     const unfilledOf = useCallback(
         (choice: MediaChoice, index: number, all: readonly MediaChoice[]): AssetHold | undefined => {
-            const answer = pickForm?.(choice.asset, section)?.ready?.(pickState(choice, index, all)) ?? true;
+            const answer = formOf(choice.asset)?.ready?.(pickState(choice, index, all)) ?? true;
 
             return answer === true
                 ? undefined
                 : { status: "unfilled", text: typeof answer === "string" && answer ? answer : text.mediaChoiceUnfilled };
         },
-        [pickForm, section, pickState, text],
+        [formOf, pickState, text],
     );
 
     // Why picks can't be chosen now, by their keys, which holds Choose back until they can, or are taken
@@ -617,25 +620,26 @@ const PickerFrame = ({
     // One pick's form, drawn with what it holds, and what can read and change the others.
     const renderDetails = useMemo(
         () =>
-            pickForm &&
-            ((choice: MediaChoice, index: number) => {
-                const form = pickForm(choice.asset, section);
+            asksPicks
+                ? (choice: MediaChoice, index: number) => {
+                      const form = formOf(choice.asset);
 
-                return (
-                    form && (
-                        <MediaFormBody
-                            form={form}
-                            params={{
-                                ...pickState(choice, index, choices),
-                                setValues: (next: SetStateAction<Record<string, unknown>>) =>
-                                    setChoiceValues(choice, next),
-                                setChoiceValues,
-                            }}
-                        />
-                    )
-                );
-            }),
-        [pickForm, section, pickState, choices, setChoiceValues],
+                      return (
+                          form && (
+                              <MediaFormBody
+                                  form={form}
+                                  params={{
+                                      ...pickState(choice, index, choices),
+                                      setValues: (next: SetStateAction<Record<string, unknown>>) =>
+                                          setChoiceValues(choice, next),
+                                      setChoiceValues,
+                                  }}
+                              />
+                          )
+                      );
+                  }
+                : undefined,
+        [asksPicks, formOf, pickState, choices, setChoiceValues],
     );
 
     // Hands the picks to the app, each with its values to itself.
@@ -1023,7 +1027,7 @@ const PickerFrame = ({
         <Box
             ref={frameRef}
             sx={frameSx}
-            data-column={!!pickForm}
+            data-column={asksPicks}
             onKeyDown={(event) => {
                 // Ctrl+F or ⌘F opens the search, in place of the browser's find, as the media manager's does.
                 if (
@@ -1188,7 +1192,7 @@ const PickerFrame = ({
                         </Box>
                     )}
                 </Box>
-                {pickForm && (
+                {asksPicks && (
                     <>
                         <Backdrop
                             open={chosenOverlay && !docked && !chosenEmpty}
@@ -1232,7 +1236,7 @@ const PickerFrame = ({
                 )}
             </Box>
             <Box sx={footSx}>
-                {pickForm ? (
+                {asksPicks ? (
                     !chosenEmpty && (
                         <Button
                             ref={openerRef}

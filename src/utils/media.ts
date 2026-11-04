@@ -12,6 +12,7 @@ import type {
     Locale,
     MediaKind,
     MediaLayout,
+    MediaPickForm,
     MediaSection,
     MediaUploadCheck,
     RefusedName,
@@ -32,6 +33,16 @@ export const byDate = (compareNames: (a: string, b: string) => number) => (a: Fi
 /** The layouts a library offers, the first as it starts: its own, or its kind's only one. */
 export const layoutsOf = (section: MediaSection): readonly MediaLayout[] =>
     section.layouts?.length ? section.layouts : [section.kind === "audio" ? "list" : "grid"];
+
+/**
+ * What's asked of a pick: its library's own form when it has one, even if that asks nothing, or else
+ * the component's.
+ */
+export const pickFormOf = (
+    asset: FileEntry,
+    section: MediaSection,
+    pickForm: ((asset: FileEntry, section: MediaSection) => MediaPickForm | null) | undefined,
+): MediaPickForm | null | undefined => (section.pickForm ? section.pickForm(asset) : pickForm?.(asset, section));
 
 /** What a library says of groups going into a level, the group open or `null` at its root; nothing unsaid. */
 export const groupRule = (section: MediaSection, parent: FileEntry | null) =>

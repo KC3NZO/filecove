@@ -83,8 +83,8 @@ interface BaseProps<V> extends RootAttributes {
      * column as a pick's details are opened, with what the media manager keeps with the pick, as it's
      * moved and as other libraries are shown, and hands back with `onChoose` (`values`): its `defaults`
      * from the moment it's picked. Its `ready` holds Choose back, and its `errorKeys` count on the pick's
-     * row what there is to fix. Without it, picks have no details. Keep it outside the component, or
-     * memoized.
+     * row what there is to fix. A library's own `pickForm`, for what comes with its backend, is used in
+     * place of it. Without either, picks have no details. Keep it outside the component, or memoized.
      */
     pickForm?: (asset: FileEntry, section: MediaSection) => MediaPickForm<V> | null;
     /**
