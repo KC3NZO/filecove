@@ -8,10 +8,12 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { MediaFields, MediaPicker, MediaPicture } from "../src";
 import { imageUploadForm, videoUploadForm } from "./media-uploads";
+import { oneGroup, selectGroups } from "./options";
 
 import type {
     FileAdapter,
     FileEntry,
+    MediaChoice,
     MediaPickerValue,
     MediaPickForm,
     MediaSection,
@@ -27,6 +29,10 @@ import type {
 // nothing can be deleted or moved from it, the second shows it. What's asked of an upload is the library's `uploadForm`, and what's
 // about this use of the asset is the picker's `pickForm`, as a gallery's caption for each picture. A gallery holds several, by the
 // picker's `multiple`, kept as the picks are, each picture with what its form holds.
+
+/** A gallery's rule, for this use of the picker (`?oneGroup`): one group at most among its pictures. */
+const oneGroupAtMost = (entry: FileEntry, _section: MediaSection, choices: readonly MediaChoice[]) =>
+    entry.kind !== "folder" || !choices.some(({ asset }) => asset.kind === "folder") || "One group at most";
 
 // The same libraries as the page's, without what's for managing them, which a picker doesn't read.
 const VIDEOS: MediaSection = {
@@ -122,6 +128,7 @@ const RelationField = ({ section, value, onChange, adapter, labelId, disabled }:
                 onClose={() => setOpen(false)}
             >
                 <MediaPicker
+                    selectGroups={selectGroups}
                     adapter={adapter}
                     section={section}
                     allowUpload
@@ -190,6 +197,8 @@ const RelationsField = ({ section, maxChoices, value, onChange, adapter, labelId
                 onClose={() => setOpen(false)}
             >
                 <MediaPicker
+                    selectGroups={selectGroups}
+                    canSelect={oneGroup ? oneGroupAtMost : undefined}
                     adapter={adapter}
                     section={section}
                     multiple

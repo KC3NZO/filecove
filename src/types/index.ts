@@ -56,6 +56,7 @@ export type { FileManagerLimits } from "./limits";
 export type { MainMenuGroup, MainMenuItem } from "./main-menu";
 export type {
     AssetHold,
+    GroupPicks,
     AssetStates,
     FollowedAssets,
     MediaAssetDraw,

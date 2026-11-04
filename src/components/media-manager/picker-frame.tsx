@@ -28,7 +28,9 @@ import { countLimit } from "../../utils/limits";
 import {
     byDate,
     checkMediaUpload,
+    NO_GROUP_PICKS,
     chooseHeldBy,
+    groupPicksOf,
     groupsOfTrail,
     holdOf,
     layoutsOf,
@@ -75,6 +77,10 @@ export interface PickerFrameProps {
     onCancel: (() => void) | undefined;
     multiple: boolean;
     maxChoices: number | undefined;
+    /** Whether an asset or group can be added beside those already picked, for this use. */
+    canSelect: ((asset: FileEntry, section: MediaSection, choices: readonly MediaChoice[]) => boolean | string) | undefined;
+    /** Whether groups can be selected as well as assets. */
+    selectGroups: boolean;
     allowUpload: boolean;
     value: readonly MediaPickerValue[] | undefined;
     defaultValue: readonly MediaPickerValue[] | undefined;
@@ -120,6 +126,7 @@ interface GroupHeaderProps {
     section: MediaSection;
 }
 
+const NO_CHOICES: readonly MediaChoice[] = [];
 const NO_ENTRIES: FileEntry[] = [];
 const NO_TRAIL: readonly FileEntry[] = [];
 const NO_PICKS = { items: [] as readonly PickerPick[], anchor: null };
@@ -259,6 +266,8 @@ const PickerFrame = ({
     onCancel,
     multiple,
     maxChoices,
+    canSelect,
+    selectGroups,
     allowUpload,
     value,
     defaultValue,
@@ -393,7 +402,7 @@ const PickerFrame = ({
     // A pick keeps its entry as last listed, so what's handed over from another level has what's been
     // made of it since.
     useEffect(() => {
-        const byId = new Map([...found, ...listed].map((entry) => [entry.id, entry]));
+        const byId = new Map([...found, ...level].map((entry) => [entry.id, entry]));
 
         setPicks((previous) => {
             let changed = false;
@@ -411,7 +420,7 @@ const PickerFrame = ({
 
             return changed ? { ...previous, items } : previous;
         });
-    }, [listed, found, setPicks]);
+    }, [level, found, setPicks]);
 
     // What the app's form holds for a pick until it's changed.
     const defaultsOf = useCallback(
@@ -423,7 +432,8 @@ const PickerFrame = ({
     // and listed without it, gone; or else as it was picked.
     const choicesOf = useCallback(
         (items: readonly PickerPick[]) => {
-            const byId = state?.status === "ready" ? new Map(library.map((entry) => [entry.id, entry])) : undefined;
+            // Groups too, as one may be picked.
+            const byId = state?.status === "ready" ? new Map(leveled.map((entry) => [entry.id, entry])) : undefined;
 
             return items.flatMap(({ asset, folderId: pickedAt, values }) => {
                 const now =
@@ -442,7 +452,7 @@ const PickerFrame = ({
                 return [choice];
             });
         },
-        [state?.status, library, folderId, said, section, defaultsOf],
+        [state?.status, leveled, folderId, said, section, defaultsOf],
     );
 
     const choices = useMemo(() => choicesOf(picks), [choicesOf, picks]);
@@ -463,6 +473,41 @@ const PickerFrame = ({
     const full = choices.length >= limit;
     const sayFull = useCallback(() => announce(text.mediaChoicesFull), [announce, text]);
 
+    // Why the app's `canSelect` refuses an asset beside those picked; nothing when it allows it.
+    const refusalOf = useCallback(
+        (asset: FileEntry, picked: readonly MediaChoice[]): AssetHold | undefined => {
+            const allowed = canSelect?.(asset, section, picked) ?? true;
+
+            return allowed === true
+                ? undefined
+                : { status: "refused", text: typeof allowed === "string" && allowed ? allowed : text.mediaUnavailable };
+        },
+        [canSelect, section, text],
+    );
+
+    // Those of `assets` that can join `picked`, in their order, each asked with those before it, and
+    // whether the limit left some out, which is said, as no tile says it.
+    const fitting = useCallback(
+        (assets: readonly FileEntry[], picked: readonly MediaChoice[]) => {
+            const growing = [...picked];
+            const fit: FileEntry[] = [];
+
+            for (const asset of assets) {
+                if (growing.length >= limit) {
+                    return { fit, cut: true };
+                }
+
+                if (!refusalOf(asset, growing)) {
+                    fit.push(asset);
+                    growing.push({ asset, section, values: defaultsOf(asset) });
+                }
+            }
+
+            return { fit, cut: false };
+        },
+        [limit, refusalOf, section, defaultsOf],
+    );
+
     const terms = useMemo(() => searchTerms(query, foldLetters), [query, foldLetters]);
     // What the adapter's search found, or without one, the open level filtered by name.
     const shownEntries = useMemo(() => {
@@ -476,11 +521,30 @@ const PickerFrame = ({
     const shownGroupIds = useMemo(() => new Set(shownEntries.filter(isGroup).map(({ id }) => id)), [shownEntries]);
     const order = useMemo(() => shownEntries.map(({ id }) => id), [shownEntries]);
 
+    // The groups shown that can be selected, where the app takes them.
+    const groupPicks = useMemo(
+        () =>
+            selectGroups
+                ? groupPicksOf(
+                      shownEntries.filter(isGroup),
+                      section,
+                      selectedIds,
+                      canSelect && ((group) => canSelect(group, section, multiple ? choices : NO_CHOICES)),
+                  )
+                : NO_GROUP_PICKS,
+        [selectGroups, shownEntries, section, selectedIds, canSelect, multiple, choices],
+    );
+
+    // Why those shown can't be added now: being processed, failed, refused by their library, or by the
+    // app's rule beside those picked, one at a time none, as it would replace them. Those selected
+    // already stay as they are, as they can be taken out, and their rows say it.
     const holds = useMemo(() => {
-        const held = new Map<string, AssetHold>();
+        const held = new Map<string, AssetHold>(groupPicks.refusals);
 
         shownAssets.forEach((entry) => {
-            const hold = holdOf(entry, section, { text, formatPercent });
+            const hold =
+                holdOf(entry, section, { text, formatPercent }) ??
+                (selectedIds.has(entry.id) ? undefined : refusalOf(entry, multiple ? choices : NO_CHOICES));
 
             if (hold) {
                 held.set(entry.id, hold);
@@ -488,7 +552,7 @@ const PickerFrame = ({
         });
 
         return held.size > 0 ? held : NO_HOLDS;
-    }, [shownAssets, section, text, formatPercent]);
+    }, [groupPicks, shownAssets, section, text, formatPercent, selectedIds, refusalOf, multiple, choices]);
 
     const works = useMemo(() => {
         const working = new Map<string, AssetHold>();
@@ -532,7 +596,8 @@ const PickerFrame = ({
     );
 
     // Why picks can't be chosen now, by their keys, which holds Choose back until they can, or are taken
-    // out: past the limit, still being processed, failed, refused by their library, or their form not ready.
+    // out: past the limit, still being processed, failed, refused by their library or the app's rule beside
+    // those before them, or their form not ready.
     const choiceHolds = useMemo(() => {
         const held = new Map<string, AssetHold>();
 
@@ -540,7 +605,9 @@ const PickerFrame = ({
             const hold: AssetHold | undefined =
                 index >= limit
                     ? { status: "refused", text: text.mediaOverLimit(formatNumber(limit)) }
-                    : (holdOf(choice.asset, section, { text, formatPercent }) ?? unfilledOf(choice, index, choices));
+                    : (holdOf(choice.asset, section, { text, formatPercent }) ??
+                      refusalOf(choice.asset, choices.slice(0, index)) ??
+                      unfilledOf(choice, index, choices));
 
             if (hold) {
                 held.set(choiceKey(choice), hold);
@@ -548,38 +615,41 @@ const PickerFrame = ({
         });
 
         return held.size > 0 ? held : NO_HOLDS;
-    }, [choices, limit, section, text, formatNumber, formatPercent, unfilledOf]);
+    }, [choices, limit, section, text, formatNumber, formatPercent, refusalOf, unfilledOf]);
 
     const holdOfChoice = useCallback((choice: MediaChoice) => choiceHolds.get(choiceKey(choice)), [choiceHolds]);
     const chooseHeld = useMemo(() => chooseHeldBy([...choiceHolds.values()], text), [choiceHolds, text]);
 
     // What's selected made `ids`: those there stay in their place, and those added go at the end, in the
-    // order shown, as many as the limit lets in.
+    // order shown, as many as the limit and the app's rule let in.
     const selectIds = useCallback(
         (ids: ReadonlySet<string>, nextAnchor: string | null) => {
             const kept = picks.filter(({ asset }) => ids.has(asset.id) && selectedIds.has(asset.id));
-            const room = limit === Infinity ? Infinity : Math.max(limit - kept.length, 0);
-            const adding = shownAssets.filter(
-                (entry) => ids.has(entry.id) && !selectedIds.has(entry.id) && !holds.has(entry.id),
+            const { fit, cut } = fitting(
+                shownEntries.filter(
+                    (entry) => ids.has(entry.id) && !selectedIds.has(entry.id) && !holds.has(entry.id),
+                ),
+                choices.filter(({ asset }) => ids.has(asset.id)),
             );
 
-            if (adding.length > room) {
+            if (cut) {
                 sayFull();
             }
 
             setPicks({
                 items: [
                     ...kept,
-                    ...adding.slice(0, room).map((asset) => ({ asset, folderId: pickedAtOf(asset.id), values: NO_VALUES })),
+                    ...fit.map((asset) => ({ asset, folderId: pickedAtOf(asset.id), values: NO_VALUES })),
                 ],
                 anchor: nextAnchor,
             });
         },
-        [picks, selectedIds, limit, shownAssets, holds, sayFull, pickedAtOf, setPicks],
+        [picks, selectedIds, choices, fitting, shownEntries, holds, sayFull, pickedAtOf, setPicks],
     );
 
     // Several at once, a click adds or takes away the asset, and Shift adds those from the last one
-    // clicked; one at a time, it selects the asset alone. A group isn't selected, nor one held.
+    // clicked; one at a time, it selects the asset alone. One held isn't selected, and a group only by
+    // its check.
     const press = useCallback(
         (index: number, keys: { toggle: boolean; range: boolean }) => {
             const id = order[index];
@@ -588,7 +658,7 @@ const PickerFrame = ({
                 return;
             }
 
-            if (shownGroupIds.has(id) && !(multiple && keys.range)) {
+            if (shownGroupIds.has(id) && !groupPicks.checks.has(id) && !(multiple && keys.range)) {
                 return;
             }
 
@@ -599,18 +669,23 @@ const PickerFrame = ({
             }
 
             const base = { ids: selectedIds, anchor };
-            const next = multiple
-                ? nextSelection(base, id, { toggle: true, range: keys.range }, order)
-                : nextSelection(base, id, NO_MODIFIERS, order);
+            // A group's check takes it out again, one at a time too, as nothing else on it could.
+            const next =
+                multiple || (shownGroupIds.has(id) && selectedIds.has(id))
+                    ? nextSelection(base, id, { toggle: true, range: multiple && keys.range }, order)
+                    : nextSelection(base, id, NO_MODIFIERS, order);
 
-            selectIds(new Set([...next.ids].filter((each) => !shownGroupIds.has(each))), next.anchor);
+            selectIds(
+                new Set([...next.ids].filter((each) => !shownGroupIds.has(each) || groupPicks.checks.has(each))),
+                next.anchor,
+            );
         },
-        [order, holds, selectedIds, shownGroupIds, multiple, full, sayFull, anchor, selectIds],
+        [order, holds, selectedIds, shownGroupIds, groupPicks, multiple, full, sayFull, anchor, selectIds],
     );
 
     const selectAll = useCallback(() => {
-        selectIds(new Set([...selectedIds, ...shownAssets.map(({ id }) => id)]), order[0] ?? null);
-    }, [selectIds, selectedIds, shownAssets, order]);
+        selectIds(new Set([...selectedIds, ...shownAssets.map(({ id }) => id), ...groupPicks.checks]), order[0] ?? null);
+    }, [selectIds, selectedIds, shownAssets, groupPicks, order]);
 
     const clearSelection = () => {
         setPicks(NO_PICKS);
@@ -931,7 +1006,8 @@ const PickerFrame = ({
 
     // Once the open level lists what arrived, it's selected, as it was uploaded to be chosen: added to
     // what's selected while there's room, or one at a time, the last to arrive in place of it. One still
-    // being processed is selected too, holding Choose back until it's done; one failed or refused isn't.
+    // being processed is selected too, holding Choose back until it's done; one failed, or refused by its
+    // library or the app's rule, isn't, nor any there's no room for.
     useEffect(() => {
         if (state?.status !== "ready") {
             return;
@@ -952,7 +1028,7 @@ const PickerFrame = ({
 
         setArrivals((previous) => previous.filter((waiting) => !keys.has(waiting.key)));
 
-        const last = assets.at(-1);
+        const last = (multiple ? assets : assets.filter((asset) => !refusalOf(asset, NO_CHOICES))).at(-1);
 
         if (!last) {
             return;
@@ -964,18 +1040,20 @@ const PickerFrame = ({
             return;
         }
 
-        const adding = assets.filter(({ id }) => !selectedIds.has(id));
-        const room = limit === Infinity ? Infinity : Math.max(limit - choices.length, 0);
+        const { fit, cut } = fitting(
+            assets.filter(({ id }) => !selectedIds.has(id)),
+            choices,
+        );
 
-        if (adding.length > room) {
+        if (cut) {
             sayFull();
         }
 
         setPicks((previous) => ({
             ...previous,
-            items: [...previous.items, ...adding.slice(0, room).map((asset) => ({ asset, folderId, values: NO_VALUES }))],
+            items: [...previous.items, ...fit.map((asset) => ({ asset, folderId, values: NO_VALUES }))],
         }));
-    }, [state?.status, library, arrivals, folderId, section, multiple, selectedIds, limit, choices.length, sayFull]);
+    }, [state?.status, library, arrivals, folderId, section, multiple, selectedIds, refusalOf, fitting, choices, sayFull]);
 
     // The open level's uploads, before what it holds: those waiting or being sent, and those done until
     // they're listed.
@@ -1195,6 +1273,7 @@ const PickerFrame = ({
                                 selectedIds={selectedIds}
                                 holds={holds}
                                 works={works}
+                                groupChecks={groupPicks.checks}
                                 full={full}
                                 multiple={multiple}
                                 status={search.on ? search.status : (state?.status ?? "loading")}

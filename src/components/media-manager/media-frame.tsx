@@ -31,6 +31,8 @@ import {
     byDate,
     checkMediaUpload,
     chooseHeldBy,
+    NO_GROUP_PICKS,
+    groupPicksOf,
     groupRule,
     groupsOfTrail,
     holdOf,
@@ -98,6 +100,8 @@ export interface MediaFrameProps {
     maxChoices: number | undefined;
     /** Whether an asset can be added beside those already picked, for this use. */
     canSelect: ((asset: FileEntry, section: MediaSection, choices: readonly MediaChoice[]) => boolean | string) | undefined;
+    /** Whether groups can be selected as well as assets, while the app takes a pick. */
+    selectGroups: boolean;
     onChoose: ((choices: MediaChoice[]) => void) | undefined;
     pickForm: ((asset: FileEntry, section: MediaSection) => MediaPickForm | null) | undefined;
     /** What an asset shows as it's opened, where its library has no `properties` of its own. */
@@ -392,6 +396,7 @@ const MediaFrame = ({
     multiple,
     maxChoices,
     canSelect,
+    selectGroups,
     onChoose,
     pickForm,
     properties,
@@ -685,7 +690,7 @@ const MediaFrame = ({
     // A pick keeps its entry as last listed, so what's handed over while another library is shown has
     // what's been made of it since, and it's followed there as what it's listed as.
     useEffect(() => {
-        const listedById = new Map([...found, ...listed].map((entry) => [entry.id, entry]));
+        const listedById = new Map([...found, ...level].map((entry) => [entry.id, entry]));
 
         setPicks((previous) => {
             let changed = false;
@@ -704,7 +709,7 @@ const MediaFrame = ({
 
             return changed ? { ...previous, items } : previous;
         });
-    }, [listed, found, sectionsById, adapterOf, sectionAdapter]);
+    }, [level, found, sectionsById, adapterOf, sectionAdapter]);
 
     const terms = useMemo(() => searchTerms(query, foldLetters), [query, foldLetters]);
 
@@ -817,7 +822,8 @@ const MediaFrame = ({
     // only for that, so it stays as it was.
     const choicesOf = useCallback(
         (items: readonly Pick[]): MediaChoice[] => {
-            const listedById = state?.status === "ready" ? new Map(library.map((entry) => [entry.id, entry])) : undefined;
+            // Groups too, as one may be picked.
+            const listedById = state?.status === "ready" ? new Map(leveled.map((entry) => [entry.id, entry])) : undefined;
             const flat = !inGroup && library.length === leveled.length;
 
             return items.flatMap(({ sectionId: pickedIn, asset, values, trail: pickedAmong }) => {
@@ -999,18 +1005,32 @@ const MediaFrame = ({
         [choices, inOpen],
     );
 
+    // The groups shown that can be selected, while the app takes them.
+    const groupPicks = useMemo(
+        () =>
+            choosing && selectGroups && section
+                ? groupPicksOf(
+                      shownEntries.filter(isGroup),
+                      section,
+                      selectedIds,
+                      rule && ((group) => rule(group, section, multiple ? choices : NO_CHOICES)),
+                  )
+                : NO_GROUP_PICKS,
+        [choosing, selectGroups, section, shownEntries, selectedIds, rule, multiple, choices],
+    );
+
     // Why assets shown can't be added now: as above, or refused by the app's rule beside those picked,
     // one at a time none, as it would replace them. Those selected already stay as they are, as they
     // can be taken out, and their rows say it.
     const holds = useMemo(() => {
-        if (!section || !rule) {
+        if (!section || (!rule && groupPicks.refusals.size === 0)) {
             return assetHolds;
         }
 
-        const held = new Map(assetHolds);
+        const held = new Map([...assetHolds, ...groupPicks.refusals]);
 
         shownAssets.forEach((entry) => {
-            if (!held.has(entry.id) && !selectedIds.has(entry.id)) {
+            if (rule && !held.has(entry.id) && !selectedIds.has(entry.id)) {
                 const refusal = refusalOf(entry, section, multiple ? choices : NO_CHOICES);
 
                 if (refusal) {
@@ -1020,7 +1040,7 @@ const MediaFrame = ({
         });
 
         return held.size > 0 ? held : NO_HOLDS;
-    }, [section, rule, assetHolds, shownAssets, selectedIds, refusalOf, multiple, choices]);
+    }, [section, rule, assetHolds, groupPicks, shownAssets, selectedIds, refusalOf, multiple, choices]);
 
     // Why picks can't be chosen now, by their keys, which holds Choose back until they can, or are
     // taken out: past the limit, still being processed, failed, refused by their library or the app's
@@ -1099,7 +1119,7 @@ const MediaFrame = ({
 
             const kept = choices.filter((choice) => (inOpen(choice) ? ids.has(choice.asset.id) : multiple));
             const { fit, cut } = fitting(
-                shownAssets.filter((entry) => ids.has(entry.id) && !selectedIds.has(entry.id)),
+                shownEntries.filter((entry) => ids.has(entry.id) && !selectedIds.has(entry.id)),
                 section,
                 kept,
             );
@@ -1116,15 +1136,19 @@ const MediaFrame = ({
                 anchor: anchor === null ? null : { sectionId, id: anchor },
             };
         },
-        [sectionId, section, choices, inOpen, multiple, shownAssets, selectedIds, fitting, sayFull, placeOf],
+        [sectionId, section, choices, inOpen, multiple, shownEntries, selectedIds, fitting, sayFull, placeOf],
     );
 
-    // The open library's share as `ids` would make it, without the groups and those it adds that can't
-    // be chosen now, as a Shift-click's range or Select all may hold.
+    // The open library's share as `ids` would make it, without the groups that can't be selected and
+    // those it adds that can't be chosen now, as a Shift-click's range or Select all may hold.
     const selectable = useCallback(
         (ids: ReadonlySet<string>) =>
-            new Set([...ids].filter((id) => !shownGroupIds.has(id) && (selectedIds.has(id) || !holds.has(id)))),
-        [shownGroupIds, holds, selectedIds],
+            new Set(
+                [...ids].filter((id) =>
+                    shownGroupIds.has(id) ? groupPicks.checks.has(id) : selectedIds.has(id) || !holds.has(id),
+                ),
+            ),
+        [shownGroupIds, groupPicks, holds, selectedIds],
     );
 
     // Several at once, a click adds or takes away the asset, as a media picker does, and Shift adds
@@ -1139,8 +1163,8 @@ const MediaFrame = ({
                 return;
             }
 
-            // A group isn't selected, though a range may run through it.
-            if (shownGroupIds.has(id) && !(multiple && keys.range)) {
+            // A group is only selected by its check, though a range may run through one without.
+            if (shownGroupIds.has(id) && !groupPicks.checks.has(id) && !(multiple && keys.range)) {
                 return;
             }
 
@@ -1155,13 +1179,28 @@ const MediaFrame = ({
                 ids: selectedIds,
                 anchor: picks.anchor?.sectionId === sectionId ? picks.anchor.id : null,
             };
-            const next = multiple
-                ? nextSelection(base, id, { toggle: true, range: keys.range }, order)
-                : nextSelection(base, id, NO_MODIFIERS, order);
+            // A group's check takes it out again, one at a time too, as nothing else on it could.
+            const next =
+                multiple || (shownGroupIds.has(id) && selectedIds.has(id))
+                    ? nextSelection(base, id, { toggle: true, range: multiple && keys.range }, order)
+                    : nextSelection(base, id, NO_MODIFIERS, order);
 
             setPicks(picksWith(selectable(next.ids), next.anchor));
         },
-        [order, holds, shownGroupIds, selectedIds, full, sayFull, picks.anchor, sectionId, multiple, picksWith, selectable],
+        [
+            order,
+            holds,
+            shownGroupIds,
+            groupPicks,
+            selectedIds,
+            full,
+            sayFull,
+            picks.anchor,
+            sectionId,
+            multiple,
+            picksWith,
+            selectable,
+        ],
     );
 
     const selectAll = useCallback(() => {
@@ -1213,7 +1252,7 @@ const MediaFrame = ({
     // The asset view's Select: adds the asset, or with one at a time puts it in place of what was
     // selected, or takes it out.
     const toggleViewed = useCallback(() => {
-        if (!viewed || !section || isGroup(viewed.entry)) {
+        if (!viewed || !section || (isGroup(viewed.entry) && !groupPicks.checks.has(viewed.entry.id))) {
             return;
         }
 
@@ -1229,7 +1268,7 @@ const MediaFrame = ({
                 anchor: { sectionId: section.id, id: viewed.entry.id },
             }));
         }
-    }, [viewed, section, selectedIds, removeChoice, multiple, text, formatPercent, refusedNow, viewedTrail]);
+    }, [viewed, section, groupPicks, selectedIds, removeChoice, multiple, text, formatPercent, refusedNow, viewedTrail]);
 
     // Whether what's open can be deleted from: its adapter does, its library can be changed, and it can
     // be written to. A listing's own `delete` is about the folder, not what's in it.
@@ -1558,6 +1597,32 @@ const MediaFrame = ({
     const showInLibrary = useCallback((choice: MediaChoice) => {
         const pickedAmong = PICK_TRAILS.get(choice);
 
+        // A group is shown by going in, as it may have no details, and what's in it is what it's picked for.
+        if (isGroup(choice.asset)) {
+            levelFocusRef.current = { groupId: null, waited: false };
+            setLevels((previous) => ({
+                ...previous,
+                [choice.section.id]: {
+                    rootId: choice.section.rootId,
+                    adapter: adapterOf(choice.section),
+                    trail: [...(pickedAmong ?? NO_TRAIL), choice.asset],
+                },
+            }));
+            setOpenId(choice.section.id);
+            setQuery("");
+            setSearching(false);
+            setViewing(null);
+            setUploadStep(null);
+            setProcessStep(null);
+            setMoveStep(null);
+            setEditStep(null);
+            setCreatingAt(null);
+            setChosenOverlay(false);
+            announce(text.mediaInGroup(isolate(choice.asset.name)));
+
+            return;
+        }
+
         // Among the groups it was picked in, so back from it goes to its fellows.
         if (pickedAmong) {
             setLevels((previous) => ({
@@ -1580,7 +1645,7 @@ const MediaFrame = ({
         setEditStep(null);
         setCreatingAt(null);
         setChosenOverlay(false);
-    }, [adapterOf]);
+    }, [adapterOf, announce, text]);
 
     // What the library is listed again by, a search through it being asked again too.
     const reloadLibrary = useCallback(() => {
@@ -1931,11 +1996,11 @@ const MediaFrame = ({
     // Why the asset shown can't be chosen now, which its view shows, with Select held.
     const viewedHold = useMemo(
         () =>
-            viewedEntry && section && !viewedGroup
+            viewedEntry && section && (!viewedGroup || groupPicks.checks.has(viewedEntry.id))
                 ? (holdOf(viewedEntry, section, { text, formatPercent }) ??
                   (selectedIds.has(viewedEntry.id) ? undefined : refusedNow(viewedEntry, section)))
                 : undefined,
-        [viewedEntry, viewedGroup, section, text, formatPercent, selectedIds, refusedNow],
+        [viewedEntry, viewedGroup, groupPicks, section, text, formatPercent, selectedIds, refusedNow],
     );
 
     // The backend's work on it while it can be chosen all the same, which its view shows.
@@ -2477,6 +2542,7 @@ const MediaFrame = ({
                                 selectedIds={selectedIds}
                                 holds={holds}
                                 works={works}
+                                groupChecks={groupPicks.checks}
                                 full={full}
                                 multiple={multiple}
                                 status={search.on ? search.status : (state?.status ?? "loading")}
@@ -2505,7 +2571,7 @@ const MediaFrame = ({
                             layout={layout}
                             adapter={sectionAdapter}
                             backTo={viewing?.fromInside ? viewed.entry.name : levelName}
-                            choosing={choosing}
+                            choosing={choosing && (!viewedGroup || groupPicks.checks.has(viewed.entry.id))}
                             selected={selectedIds.has(viewed.entry.id)}
                             hold={viewedHold}
                             work={viewedWork}

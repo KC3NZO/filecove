@@ -358,4 +358,6 @@ const STOCK_FORM: MediaPickForm = {
 export const stockPickForm = () => STOCK_FORM;
 
 /** What the carousel asks of each pick, by its kind, for the libraries without a form of their own. */
-export const pickForm = (_asset: FileEntry, section: MediaSection) => FORMS[section.kind];
+export const pickForm = (asset: FileEntry, section: MediaSection) =>
+    // A group has none of what's asked of an asset, so nothing is asked of it here.
+    asset.kind === "folder" ? null : FORMS[section.kind];

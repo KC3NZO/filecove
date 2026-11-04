@@ -51,7 +51,7 @@ interface MediaAssetProps {
     adapter: FileAdapter;
     /** The name of the library or group it's in, which its back button goes to. */
     backTo: string;
-    /** Whether something can be chosen, which shows the Select toggle. */
+    /** Whether it can be chosen here, which shows the Select toggle: an asset, or a group that can be selected. */
     choosing: boolean;
     selected: boolean;
     /** Why it can't be chosen now, shown under the header, with Select held unless it's selected. */
@@ -629,7 +629,7 @@ const MediaAsset = ({
                         {text.mediaProcess}
                     </Button>
                 )}
-                {choosing && !group && (
+                {choosing && (
                     <Button
                         variant={selected ? "contained" : "outlined"}
                         color={selected ? "primary" : "inherit"}

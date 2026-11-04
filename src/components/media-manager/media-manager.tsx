@@ -68,6 +68,16 @@ interface BaseProps<V> extends RootAttributes {
      */
     canSelect?: (asset: FileEntry, section: MediaSection, choices: readonly MediaChoice<V>[]) => boolean | string;
     /**
+     * Whether groups can be selected and chosen as well as assets, such as a whole album or season,
+     * while the app takes a pick. A click on a group still goes in, so one that can be has a check of
+     * its own, and Space does the same. `canSelect` and a library's `selectable` decide per group, a
+     * plain `false` only leaving its check off, and a pick's form is handed the group as its `asset`.
+     * What's chosen hands it back as listed, for the backend to expand: nothing walks down to collect
+     * what's inside it, and a group picked with something inside it are the backend's to settle. Off
+     * when omitted.
+     */
+    selectGroups?: boolean;
+    /**
      * Takes what's chosen, with the Choose button, a double click or Enter on an asset: each as it
      * was listed, `meta` and all, with the library it's from, whose `kind` says what it is, and what
      * the app's form holds for it (`values`), in the order set in the selected column. Pass only
@@ -245,6 +255,7 @@ const MediaManager = <V,>({
     multiple = false,
     maxChoices,
     canSelect,
+    selectGroups = false,
     onChoose,
     pickForm,
     properties,
@@ -296,6 +307,7 @@ const MediaManager = <V,>({
                             multiple={multiple}
                             maxChoices={maxChoices}
                             canSelect={canSelect as MediaFrameProps["canSelect"]}
+                            selectGroups={selectGroups}
                             // The frame keeps the app's values by their keys, not knowing their shape.
                             onChoose={onChoose as ((choices: MediaChoice[]) => void) | undefined}
                             pickForm={pickForm as MediaFrameProps["pickForm"]}

@@ -15,7 +15,7 @@ import { audioUploadForm, imageUploadForm, videoUploadForm } from "./media-uploa
 import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
 import { savePicks } from "./mocks/mock-save";
 import { useStoredState } from "./hooks/use-stored-state";
-import { browse, live, locale, maxChoices, multiple, oneVideo, single, uncontrolled } from "./options";
+import { browse, live, locale, maxChoices, multiple, oneVideo, selectGroups, single, uncontrolled } from "./options";
 
 import type {
     FieldErrors,
@@ -235,6 +235,7 @@ const MediaApp = () => {
         multiple,
         maxChoices,
         canSelect: oneVideo ? oneVideoAtMost : undefined,
+        selectGroups,
         ...(uncontrolled ? { defaultLayout: layout } : { layout, onLayoutChange: setLayout }),
         locale,
         onChoose: browse || live ? undefined : choose,

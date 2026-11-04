@@ -9,6 +9,7 @@ import type {
     FileAdapter,
     FileEntry,
     FolderRef,
+    GroupPicks,
     IconName,
     Locale,
     MediaKind,
@@ -18,6 +19,9 @@ import type {
     MediaUploadCheck,
     RefusedName,
 } from "../types";
+
+/** No group can be selected. */
+export const NO_GROUP_PICKS: GroupPicks = { checks: new Set(), refusals: new Map() };
 
 /** The icon of a library of each kind, where its section brings none, and of its empty state. */
 export const KIND_ICONS: Record<MediaKind, IconName> = {
@@ -158,6 +162,42 @@ export const holdOf = (
     return allowed === true
         ? undefined
         : { status: "refused", text: typeof allowed === "string" && allowed ? allowed : locale.text.mediaUnavailable };
+};
+
+/**
+ * Which of the groups shown can be selected, where the app takes groups (`selectGroups`), by what its
+ * library's `selectable` and the app's rule answer: `checks`, those with a check of their own, those
+ * selected already among them, as they can be taken out. A group is still gone into when it can't be, so
+ * a plain `false` only leaves the check off, as a series may not be one to pick while its seasons are, and
+ * nothing fades it; `refusals` says why where the answer does.
+ */
+export const groupPicksOf = (
+    groups: readonly FileEntry[],
+    section: MediaSection,
+    selectedIds: ReadonlySet<string>,
+    rule: ((group: FileEntry) => boolean | string) | undefined,
+): GroupPicks => {
+    const checks = new Set<string>();
+    const refusals = new Map<string, AssetHold>();
+
+    groups.forEach((group) => {
+        if (selectedIds.has(group.id)) {
+            checks.add(group.id);
+
+            return;
+        }
+
+        const own = section.selectable?.(group) ?? true;
+        const allowed = own === true ? (rule?.(group) ?? true) : own;
+
+        if (allowed === true) {
+            checks.add(group.id);
+        } else if (allowed) {
+            refusals.set(group.id, { status: "refused", text: allowed });
+        }
+    });
+
+    return { checks, refusals };
 };
 
 /**

@@ -267,6 +267,8 @@ const ChoiceRow = ({
                 <Box sx={thumbnailSx}>
                     {thumbnail ? (
                         <img src={thumbnail} alt="" draggable={false} />
+                    ) : asset.kind === "folder" ? (
+                        <Icon name="folder" fontSize="small" />
                     ) : section.kind === "audio" ? (
                         <Icon name={KIND_ICONS.audio} fontSize="small" />
                     ) : (

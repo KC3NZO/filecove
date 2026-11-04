@@ -57,6 +57,8 @@ interface MediaGridProps {
     holds: ReadonlyMap<string, AssetHold>;
     /** The backend's work on assets that can be chosen all the same, by their ids. */
     works: ReadonlyMap<string, AssetHold>;
+    /** The groups that can be selected, each with a check of its own, as a click on one goes in. */
+    groupChecks?: ReadonlySet<string>;
     /** Whether as many as may be are selected (`maxChoices`), so there's no room for the others. */
     full: boolean;
     multiple: boolean;
@@ -188,6 +190,7 @@ const MediaGrid = ({
     selectedIds,
     holds,
     works,
+    groupChecks,
     full,
     multiple,
     status,
@@ -242,6 +245,17 @@ const MediaGrid = ({
         [shownAt, entries, onEnterGroup, onPress],
     );
 
+    // A group's own check, which selects it as a click selects an asset.
+    const handleCheck = useCallback(
+        (index: number, event: MouseEvent) => {
+            if (performance.now() - shownAt >= SETTLING) {
+                setFocusIndex(index);
+                onPress(index, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey });
+            }
+        },
+        [shownAt, onPress],
+    );
+
     const handleDoubleClick = useCallback(
         (index: number) => {
             if (performance.now() - shownAt >= SETTLING) {
@@ -291,8 +305,8 @@ const MediaGrid = ({
             if (event.key === " ") {
                 event.preventDefault();
 
-                // A group isn't one to select.
-                if (entries[index]?.kind === "folder") {
+                // A group is only one to select where it has a check.
+                if (entries[index]?.kind === "folder" && !groupChecks?.has(entries[index].id)) {
                     return;
                 }
 
@@ -318,7 +332,7 @@ const MediaGrid = ({
                 onSelectAll();
             }
         },
-        [entries, multiple, moveTo, onPress, onActivate, onLevelUp, onOpen, onSelectAll],
+        [entries, groupChecks, multiple, moveTo, onPress, onActivate, onLevelUp, onOpen, onSelectAll],
     );
 
     if (status === "error") {
@@ -393,12 +407,14 @@ const MediaGrid = ({
                         work={works.get(entry.id)}
                         trail={trails?.get(entry.id)}
                         limited={full && !selectedIds.has(entry.id) && entry.kind !== "folder"}
+                        checkable={!!groupChecks?.has(entry.id)}
                         focused={index === tabStop}
                         draw={drawAsset}
                         drawGroup={drawGroup}
                         opensGroups={opensGroups}
                         opensAssets={opensAssets}
                         onPress={handlePress}
+                        onCheck={handleCheck}
                         onActivate={handleDoubleClick}
                         onOpen={onOpen}
                         onFocus={setFocusIndex}

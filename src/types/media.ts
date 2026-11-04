@@ -354,6 +354,12 @@ export interface MediaSection
     selectable?(entry: FileEntry): boolean | string;
 }
 
+/** Which of the groups shown can be selected, and why those that say so can't (internal). */
+export interface GroupPicks {
+    checks: ReadonlySet<string>;
+    refusals: ReadonlyMap<string, AssetHold>;
+}
+
 /** Assets being processed, followed through the adapter serving them (internal). */
 export interface FollowedAssets {
     adapter: FileAdapter;
@@ -392,7 +398,8 @@ export interface MediaSectionGroup {
  * what the app's form holds for it (`values`). What's chosen may come from several libraries, such
  * as pictures and videos for a product's carousel, in the order set. An asset is known by its
  * library's adapter and its id, since ids are only unique within an adapter, so an app keeps
- * `section.id` with `asset.id` to find it again.
+ * `section.id` with `asset.id` to find it again. With `selectGroups`, `asset` may be a group, of
+ * `kind: "folder"`, for the app's backend to expand.
  */
 export interface MediaChoice<V = Record<string, unknown>> {
     asset: FileEntry;

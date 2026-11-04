@@ -103,6 +103,15 @@ export const maxChoices = maxParam !== null && !Number.isNaN(Number(maxParam)) ?
 /** `?media&multiple&oneVideo`: the media manager's `canSelect`, with one video at most among the picks. */
 export const oneVideo = params.has("oneVideo");
 
+/** `?media&selectGroups`: the media manager's and the picker's `selectGroups`, a group having a check of its own. */
+export const selectGroups = params.has("selectGroups");
+
+/**
+ * `?media&selectGroups&oneGroup`: the gallery's `MediaPicker` takes `canSelect`, with one group at most
+ * among its picks, the others saying why.
+ */
+export const oneGroup = params.has("oneGroup");
+
 /** `?media&browse`: no `onChoose`, so the media manager is a library to look through, without Choose. */
 export const browse = params.has("browse");
 

@@ -225,6 +225,8 @@ const ChoiceDetails = ({ choice, adapter, hold, children, onShowInLibrary }: Cho
                 <Box sx={pictureSx}>
                     {thumbnail ? (
                         <img src={thumbnail} alt="" draggable={false} />
+                    ) : asset.kind === "folder" ? (
+                        <Icon name="folder" />
                     ) : section.kind === "audio" ? (
                         <Icon name={KIND_ICONS.audio} />
                     ) : (

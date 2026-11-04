@@ -17,6 +17,7 @@ import {
 import Icon from "../icons/icon";
 import { HoldBar, HoldLine } from "./asset-hold";
 import AssetTrail from "./asset-trail";
+import GroupCheck from "./group-check";
 import MediaRow from "./media-row";
 import MediaTile from "./media-tile";
 import OpenButton from "./open-button";
@@ -40,6 +41,8 @@ interface AssetOptionProps {
     trail: readonly FolderRef[] | undefined;
     /** Whether there's no room for it among those selected (`maxChoices`): dimmed, with nothing said on it. */
     limited: boolean;
+    /** Whether it's a group that can be selected, which has a check of its own to do it by. */
+    checkable: boolean;
     /** Whether it has the grid's Tab stop. */
     focused: boolean;
     /** What the app draws it with, the library's `renderAsset` or the media manager's. */
@@ -51,6 +54,8 @@ interface AssetOptionProps {
     /** Whether an asset has a view to open, which puts the Open button on it. */
     opensAssets: boolean;
     onPress: (index: number, event: MouseEvent) => void;
+    /** A group's own check. */
+    onCheck: (index: number, event: MouseEvent) => void;
     /** A double click, which chooses it, or opens it while nothing is chosen. */
     onActivate: (index: number) => void;
     /** Its button opening it in the library's place. */
@@ -161,6 +166,44 @@ const rowCheckSx: SxProps<Theme> = {
     [forcedColors]: { bgcolor: "Highlight", color: "HighlightText", outline: "1px solid HighlightText" },
 };
 
+// A group's own check, always shown, as it's the one way a pointer selects it: empty on the panel's
+// surface, filled while it's selected.
+const groupCheckSx = {
+    width: 22,
+    height: 22,
+    p: 0,
+    bgcolor: "background.paper",
+    color: "transparent",
+    outline: "2px solid",
+    outlineColor: "text.secondary",
+    outlineOffset: "-2px",
+    "& svg": { fontSize: 16 },
+    "&:hover": { bgcolor: "background.paper", outlineColor: "primary.main" },
+    "[aria-selected='true'] > &, [aria-selected='true'] > &:hover": {
+        bgcolor: "primary.main",
+        color: "primary.contrastText",
+        outlineColor: "primary.main",
+    },
+    [forcedColors]: {
+        outlineColor: "CanvasText",
+        "[aria-selected='true'] > &, [aria-selected='true'] > &:hover": {
+            bgcolor: "Highlight",
+            color: "HighlightText",
+            outlineColor: "HighlightText",
+        },
+    },
+} satisfies SxProps<Theme>;
+
+const tileGroupCheckSx: SxProps<Theme> = {
+    ...groupCheckSx,
+    position: "absolute",
+    top: (theme) => `calc(${theme.spacing(TILE_PADDING)} + 6px)`,
+    insetInlineEnd: (theme) => `calc(${theme.spacing(TILE_PADDING)} + 6px)`,
+    boxShadow: 1,
+};
+
+const rowGroupCheckSx: SxProps<Theme> = { ...groupCheckSx, flexShrink: 0 };
+
 // The button opening the asset, at a tile's top start corner, on the panel's own surface, shown as
 // the pointer is over it or the focus is on it, and always on a touch screen.
 const tileOpenSx: SxProps<Theme> = {
@@ -215,12 +258,14 @@ const AssetOption = memo(
         work,
         trail,
         limited,
+        checkable,
         focused,
         draw,
         drawGroup,
         opensGroups,
         opensAssets,
         onPress,
+        onCheck,
         onActivate,
         onOpen,
         onFocus,
@@ -257,16 +302,17 @@ const AssetOption = memo(
         return (
             <Box
                 role="option"
-                // A group isn't one to select, which an `option` says by having none of this.
-                aria-selected={group ? undefined : selected}
-                // One selected before it was held, as an upload still processed is, can be taken out.
-                aria-disabled={(hold && !selected) || limited ? true : undefined}
+                // A group that can't be selected says so by having none of this.
+                aria-selected={group && !checkable ? undefined : selected}
+                // One selected before it was held, as an upload still processed is, can be taken out. A
+                // group is still gone into, so it's never disabled.
+                aria-disabled={!group && ((hold && !selected) || limited) ? true : undefined}
                 aria-label={own ? entry.name : undefined}
                 aria-describedby={own ? contentId : undefined}
                 tabIndex={focused ? 0 : -1}
                 data-index={index}
                 data-layout={row ? "row" : "tile"}
-                data-held={!!hold}
+                data-held={!!hold && !group}
                 data-limited={limited}
                 sx={row ? ROW_SX : TILE_SX}
                 onClick={(event) => onPress(index, event)}
@@ -301,9 +347,13 @@ const AssetOption = memo(
                         sx={row ? rowOpenSx : tileOpenSx}
                     />
                 )}
-                <Box component="span" sx={row ? rowCheckSx : tileCheckSx} aria-hidden>
-                    <Icon name="check" />
-                </Box>
+                {checkable ? (
+                    <GroupCheck index={index} onCheck={onCheck} sx={row ? rowGroupCheckSx : tileGroupCheckSx} />
+                ) : (
+                    <Box component="span" sx={row ? rowCheckSx : tileCheckSx} aria-hidden>
+                        <Icon name="check" />
+                    </Box>
+                )}
             </Box>
         );
     },

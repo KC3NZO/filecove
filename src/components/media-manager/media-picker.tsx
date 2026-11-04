@@ -64,6 +64,24 @@ export interface MediaPickerProps<V = Record<string, unknown>> extends RootAttri
     /** How many can be selected at once with `multiple`. No limit when omitted. */
     maxChoices?: number;
     /**
+     * Whether an asset or group can be added, for this use of the picker, beside what's picked already,
+     * as the media manager's `canSelect`: `true`, or `false`, or why not, in the app's language, which
+     * its tile shows. `section` is the library given, so one function can serve a `MediaManager` too, and
+     * `choices` are those before it, without it, in the order set, and none one at a time, as it would
+     * replace them. Asked for everything shown as the picks change, so keep it quick, and outside the
+     * component or memoized. A pick that breaks it, as given with `defaultValue`, says why and holds Choose
+     * back until it's taken out. A library's own `selectable` is for what depends on the backend, and
+     * one has to pass both.
+     */
+    canSelect?: (asset: FileEntry, section: MediaSection, choices: readonly MediaChoice<V>[]) => boolean | string;
+    /**
+     * Whether groups can be selected and chosen as well as assets. A click on a group still goes in, so
+     * one that can be has a check of its own, and Space does the same. `canSelect` and the library's
+     * `selectable` decide per group, a plain `false` only leaving its check off. What's chosen hands it
+     * back as listed, for the backend to expand. Off when omitted.
+     */
+    selectGroups?: boolean;
+    /**
      * Whether files can be uploaded here, for when what's wanted isn't there yet, by an Upload button,
      * a drop or a paste, into the level open: off by default, as nothing else in a picker changes the
      * backend. It still needs the adapter's `upload` and a library taking them (`acceptUploads`, not
@@ -136,6 +154,8 @@ const MediaPicker = <V,>({
     onCancel,
     multiple = false,
     maxChoices,
+    canSelect,
+    selectGroups = false,
     allowUpload = false,
     value,
     defaultValue,
@@ -173,6 +193,8 @@ const MediaPicker = <V,>({
                             onCancel={onCancel}
                             multiple={multiple}
                             maxChoices={maxChoices}
+                            canSelect={canSelect as PickerFrameProps["canSelect"]}
+                            selectGroups={selectGroups}
                             allowUpload={allowUpload}
                             value={value as PickerFrameProps["value"]}
                             defaultValue={defaultValue as PickerFrameProps["defaultValue"]}
