@@ -5,7 +5,7 @@ What's left in the two components, `FileManager` and `MediaManager`, what they s
 ## Order
 
 1. ~~Re-listing folders in the background, tooltips, high contrast and announcements, properties, folder upload.~~ Done 2026-10-23 to 2026-10-24.
-2. The media manager's necessary gaps and features, in the order listed below: the contract's open points first (`pickForm` on the section; `value` / `onChange` done 2026-11-03), then what's left of groups in a library, then virtualizing the grid, which then has group tiles and levels to cover too (uploading and processing done 2026-10-31).
+2. The media manager's necessary gaps and features, in the order listed below: what's left of groups in a library, then virtualizing the grid, which then has group tiles and levels to cover too (uploading and processing done 2026-10-31).
 3. Packaging, in one pass before a release, as the last step.
 
 Everything optional waits until then, unless an app needs it.
@@ -154,8 +154,8 @@ Tests, moving entries to another adapter's trash (each backend's trash holds its
 ### Gaps
 
 #### Necessary
-- [ ] **The contract's open points**, settled in talk on 2026-10-31 but not built:
-  - `pickForm` on `MediaSection`, beside its `properties`, with the component's `pickForm(asset, section)` kept as the fallback, as `properties` has it (the user's idea, agreed).
+- [x] **The contract's open points**, settled in talk on 2026-10-31:
+  - [x] `pickForm` on `MediaSection`, beside its `properties`, with the component's `pickForm(asset, section)` kept as the fallback (the user's idea, agreed). *Done 2026-11-03: `MediaSection.pickForm(asset)`, read by `MediaManager` and `MediaPicker` through `pickFormOf`, a library returning `null` asking nothing rather than falling back; in the picker it turns the selected column on, as the prop does. Typed `MediaPickForm<any>`, as a section's other forms are. The playground's Stock photos ask a Credit too. Not type-checked or run yet.*
   - [x] A controlled selection, `value` / `onChange` called on every change, the pick's fields included. *Done 2026-11-03, on `MediaManager` and `MediaPicker`, through `usePicks`. Picking is turned on by any of `value`, `defaultValue`, `onChange` or `onChoose`, and the Choose button and finishing only with `onChoose`, as MUI X's pickers have `onChange` and `onAccept` (the user agreed); without it a double click or Enter opens the asset. Tried by `?media&live`. Not type-checked or run yet.*
 - [ ] **Virtualizing the grid**, which renders every tile for now, so a library of thousands is slow (the file manager's lines, see `virtualization.md`).
 - [ ] **The rest of the props checklist** (`props.md`): the open library, the search and the asset open controlled, an `apiRef` (focus, refresh, open a library, open an asset, select, choose), `limits`, `relistAfter`, and announcements, such as the number of matches.
