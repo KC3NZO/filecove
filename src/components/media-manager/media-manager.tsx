@@ -65,8 +65,18 @@ interface BaseProps<V> extends RootAttributes {
      * it, as given with `defaultValue`, is told apart by the ones before it: its row says why, and it
      * holds Choose back until it's taken out. A library's own `selectable` is for what depends on the
      * backend, such as an expired licence, and an asset has to pass both.
+     *
+     * `trail` is the groups it's in, from its library's root, and each of `choices` has its own, so what's
+     * inside a group picked, or a group with a pick inside it, can be refused, what that means being the
+     * app's: nothing is refused for it otherwise. `trail` is unset for a pick given without one, whose
+     * place isn't known. Ids are only unique within an adapter, so compare them within a library's.
      */
-    canSelect?: (asset: FileEntry, section: MediaSection, choices: readonly MediaChoice<V>[]) => boolean | string;
+    canSelect?: (
+        asset: FileEntry,
+        section: MediaSection,
+        choices: readonly MediaChoice<V>[],
+        trail: readonly FileEntry[] | undefined,
+    ) => boolean | string;
     /**
      * Whether groups can be selected and chosen as well as assets, such as a whole album or season,
      * while the app takes a pick. A click on a group still goes in, so one that can be has a check of

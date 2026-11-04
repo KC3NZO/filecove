@@ -11,11 +11,23 @@ import { groupForm } from "./media-groups";
 import { audioPreviewer, hlsPreviewer } from "./media-previewers";
 import { audioProcessForm, imageProcessForm, videoProcessForm } from "./media-processing";
 import { assetProperties, videoEntryProperties } from "./media-properties";
+import { noOverlapping } from "./media-relation";
 import { audioUploadForm, imageUploadForm, videoUploadForm } from "./media-uploads";
 import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
 import { savePicks } from "./mocks/mock-save";
 import { useStoredState } from "./hooks/use-stored-state";
-import { browse, live, locale, maxChoices, multiple, oneVideo, selectGroups, single, uncontrolled } from "./options";
+import {
+    browse,
+    live,
+    locale,
+    maxChoices,
+    multiple,
+    noOverlap,
+    oneVideo,
+    selectGroups,
+    single,
+    uncontrolled,
+} from "./options";
 
 import type {
     FieldErrors,
@@ -234,7 +246,7 @@ const MediaApp = () => {
         adapter: siteMediaAdapter,
         multiple,
         maxChoices,
-        canSelect: oneVideo ? oneVideoAtMost : undefined,
+        canSelect: oneVideo ? oneVideoAtMost : noOverlap ? noOverlapping : undefined,
         selectGroups,
         ...(uncontrolled ? { defaultLayout: layout } : { layout, onLayoutChange: setLayout }),
         locale,

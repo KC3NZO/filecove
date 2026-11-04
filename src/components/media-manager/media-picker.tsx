@@ -72,8 +72,18 @@ export interface MediaPickerProps<V = Record<string, unknown>> extends RootAttri
      * component or memoized. A pick that breaks it, as given with `defaultValue`, says why and holds Choose
      * back until it's taken out. A library's own `selectable` is for what depends on the backend, and
      * one has to pass both.
+     *
+     * `trail` is the groups it's in, from the library's root, and each of `choices` has its own, so what's
+     * inside a group picked, or a group with a pick inside it, can be refused, what that means being the
+     * app's: nothing is refused for it otherwise. `trail` is unset for a pick given without one, whose
+     * place isn't known.
      */
-    canSelect?: (asset: FileEntry, section: MediaSection, choices: readonly MediaChoice<V>[]) => boolean | string;
+    canSelect?: (
+        asset: FileEntry,
+        section: MediaSection,
+        choices: readonly MediaChoice<V>[],
+        trail: readonly FileEntry[] | undefined,
+    ) => boolean | string;
     /**
      * Whether groups can be selected and chosen as well as assets. A click on a group still goes in, so
      * one that can be has a check of its own, and Space does the same. `canSelect` and the library's

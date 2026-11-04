@@ -78,7 +78,14 @@ export interface PickerFrameProps {
     multiple: boolean;
     maxChoices: number | undefined;
     /** Whether an asset or group can be added beside those already picked, for this use. */
-    canSelect: ((asset: FileEntry, section: MediaSection, choices: readonly MediaChoice[]) => boolean | string) | undefined;
+    canSelect:
+        | ((
+              asset: FileEntry,
+              section: MediaSection,
+              choices: readonly MediaChoice[],
+              trail: readonly FileEntry[] | undefined,
+          ) => boolean | string)
+        | undefined;
     /** Whether groups can be selected as well as assets. */
     selectGroups: boolean;
     allowUpload: boolean;
@@ -88,12 +95,13 @@ export interface PickerFrameProps {
 }
 
 /**
- * An asset selected, with the level it was selected at, none for one the app gave, as that's unknown,
- * and what the app's form holds for it, `NO_VALUES` until it's changed, for the form's defaults.
+ * An asset selected, with the groups it was selected among, none for one the app gave without them, as
+ * that's unknown, and what the app's form holds for it, `NO_VALUES` until it's changed, for the form's
+ * defaults.
  */
 interface PickerPick {
     asset: FileEntry;
-    folderId?: string;
+    trail?: readonly FileEntry[];
     values: Record<string, unknown>;
 }
 
@@ -145,7 +153,7 @@ const samePickerPick = (a: PickerPick, b: PickerPick) => a.asset.id === b.asset.
 const pickerPicksGiven = (list: readonly MediaPickerValue[], known: readonly PickerPick[]): PickerPick[] =>
     list.map((given) => ({
         asset: given.asset,
-        folderId: known.find((item) => item.asset.id === given.asset.id)?.folderId,
+        trail: given.trail ?? known.find((item) => item.asset.id === given.asset.id)?.trail,
         values: DEFAULTED.has(given) ? NO_VALUES : (given.values ?? NO_VALUES),
     }));
 
@@ -287,10 +295,15 @@ const PickerFrame = ({
     // Each time something here changes the backend, which a search through it is asked again after.
     const [changes, setChanges] = useState(0);
     const search = useLevelSearch(section, adapter, folderId, query, changes);
-    // The level an asset shown is in: the one open, or the one a search found it in below it.
-    const pickedAtOf = useCallback(
-        (id: string) => search.trails.get(id)?.at(-1)?.id ?? folderId,
-        [search.trails, folderId],
+    // The groups an entry shown is in, from the library's root: those open, and any a search found it
+    // below them.
+    const placeOf = useCallback(
+        (id: string) => {
+            const below = search.trails.get(id);
+
+            return below ? [...trail, ...groupsOfTrail(below)] : trail;
+        },
+        [search.trails, trail],
     );
     // What the app is told is made as `choices` is, which needs the listing, and more below that needs
     // the picks, so it's reached through this.
@@ -435,15 +448,21 @@ const PickerFrame = ({
             // Groups too, as one may be picked.
             const byId = state?.status === "ready" ? new Map(leveled.map((entry) => [entry.id, entry])) : undefined;
 
-            return items.flatMap(({ asset, folderId: pickedAt, values }) => {
+            return items.flatMap(({ asset, trail: pickedAmong, values }) => {
+                const pickedHere = !!pickedAmong && (pickedAmong.at(-1)?.id ?? section.rootId) === folderId;
                 const now =
-                    byId?.get(asset.id) ?? (byId && pickedAt === folderId ? undefined : withState(asset, said?.get(asset.id)));
+                    byId?.get(asset.id) ?? (byId && pickedHere ? undefined : withState(asset, said?.get(asset.id)));
 
                 if (!now) {
                     return [];
                 }
 
-                const choice: MediaChoice = { asset: now, section, values: values === NO_VALUES ? defaultsOf(now) : values };
+                const choice: MediaChoice = {
+                    asset: now,
+                    section,
+                    values: values === NO_VALUES ? defaultsOf(now) : values,
+                    trail: pickedAmong,
+                };
 
                 if (values === NO_VALUES) {
                     DEFAULTED.add(choice);
@@ -473,10 +492,15 @@ const PickerFrame = ({
     const full = choices.length >= limit;
     const sayFull = useCallback(() => announce(text.mediaChoicesFull), [announce, text]);
 
-    // Why the app's `canSelect` refuses an asset beside those picked; nothing when it allows it.
+    // Why the app's `canSelect` refuses an asset beside those picked, given the groups it's in, unknown
+    // for a pick the app gave without them; nothing when it allows it.
     const refusalOf = useCallback(
-        (asset: FileEntry, picked: readonly MediaChoice[]): AssetHold | undefined => {
-            const allowed = canSelect?.(asset, section, picked) ?? true;
+        (
+            asset: FileEntry,
+            picked: readonly MediaChoice[],
+            among: readonly FileEntry[] | undefined,
+        ): AssetHold | undefined => {
+            const allowed = canSelect?.(asset, section, picked, among) ?? true;
 
             return allowed === true
                 ? undefined
@@ -497,15 +521,17 @@ const PickerFrame = ({
                     return { fit, cut: true };
                 }
 
-                if (!refusalOf(asset, growing)) {
+                const among = placeOf(asset.id);
+
+                if (!refusalOf(asset, growing, among)) {
                     fit.push(asset);
-                    growing.push({ asset, section, values: defaultsOf(asset) });
+                    growing.push({ asset, section, values: defaultsOf(asset), trail: among });
                 }
             }
 
             return { fit, cut: false };
         },
-        [limit, refusalOf, section, defaultsOf],
+        [limit, refusalOf, section, defaultsOf, placeOf],
     );
 
     const terms = useMemo(() => searchTerms(query, foldLetters), [query, foldLetters]);
@@ -529,10 +555,11 @@ const PickerFrame = ({
                       shownEntries.filter(isGroup),
                       section,
                       selectedIds,
-                      canSelect && ((group) => canSelect(group, section, multiple ? choices : NO_CHOICES)),
+                      canSelect &&
+                          ((group) => canSelect(group, section, multiple ? choices : NO_CHOICES, placeOf(group.id))),
                   )
                 : NO_GROUP_PICKS,
-        [selectGroups, shownEntries, section, selectedIds, canSelect, multiple, choices],
+        [selectGroups, shownEntries, section, selectedIds, canSelect, multiple, choices, placeOf],
     );
 
     // Why those shown can't be added now: being processed, failed, refused by their library, or by the
@@ -544,7 +571,9 @@ const PickerFrame = ({
         shownAssets.forEach((entry) => {
             const hold =
                 holdOf(entry, section, { text, formatPercent }) ??
-                (selectedIds.has(entry.id) ? undefined : refusalOf(entry, multiple ? choices : NO_CHOICES));
+                (selectedIds.has(entry.id)
+                    ? undefined
+                    : refusalOf(entry, multiple ? choices : NO_CHOICES, placeOf(entry.id)));
 
             if (hold) {
                 held.set(entry.id, hold);
@@ -552,7 +581,7 @@ const PickerFrame = ({
         });
 
         return held.size > 0 ? held : NO_HOLDS;
-    }, [groupPicks, shownAssets, section, text, formatPercent, selectedIds, refusalOf, multiple, choices]);
+    }, [groupPicks, shownAssets, section, text, formatPercent, selectedIds, refusalOf, multiple, choices, placeOf]);
 
     const works = useMemo(() => {
         const working = new Map<string, AssetHold>();
@@ -606,7 +635,7 @@ const PickerFrame = ({
                 index >= limit
                     ? { status: "refused", text: text.mediaOverLimit(formatNumber(limit)) }
                     : (holdOf(choice.asset, section, { text, formatPercent }) ??
-                      refusalOf(choice.asset, choices.slice(0, index)) ??
+                      refusalOf(choice.asset, choices.slice(0, index), choice.trail) ??
                       unfilledOf(choice, index, choices));
 
             if (hold) {
@@ -639,12 +668,12 @@ const PickerFrame = ({
             setPicks({
                 items: [
                     ...kept,
-                    ...fit.map((asset) => ({ asset, folderId: pickedAtOf(asset.id), values: NO_VALUES })),
+                    ...fit.map((asset) => ({ asset, trail: placeOf(asset.id), values: NO_VALUES })),
                 ],
                 anchor: nextAnchor,
             });
         },
-        [picks, selectedIds, choices, fitting, shownEntries, holds, sayFull, pickedAtOf, setPicks],
+        [picks, selectedIds, choices, fitting, shownEntries, holds, sayFull, placeOf, setPicks],
     );
 
     // Several at once, a click adds or takes away the asset, and Shift adds those from the last one
@@ -1028,14 +1057,14 @@ const PickerFrame = ({
 
         setArrivals((previous) => previous.filter((waiting) => !keys.has(waiting.key)));
 
-        const last = (multiple ? assets : assets.filter((asset) => !refusalOf(asset, NO_CHOICES))).at(-1);
+        const last = (multiple ? assets : assets.filter((asset) => !refusalOf(asset, NO_CHOICES, trail))).at(-1);
 
         if (!last) {
             return;
         }
 
         if (!multiple) {
-            setPicks({ items: [{ asset: last, folderId, values: NO_VALUES }], anchor: last.id });
+            setPicks({ items: [{ asset: last, trail, values: NO_VALUES }], anchor: last.id });
 
             return;
         }
@@ -1051,9 +1080,9 @@ const PickerFrame = ({
 
         setPicks((previous) => ({
             ...previous,
-            items: [...previous.items, ...fit.map((asset) => ({ asset, folderId, values: NO_VALUES }))],
+            items: [...previous.items, ...fit.map((asset) => ({ asset, trail, values: NO_VALUES }))],
         }));
-    }, [state?.status, library, arrivals, folderId, section, multiple, selectedIds, refusalOf, fitting, choices, sayFull]);
+    }, [state?.status, library, arrivals, folderId, trail, section, multiple, selectedIds, refusalOf, fitting, choices, sayFull]);
 
     // The open level's uploads, before what it holds: those waiting or being sent, and those done until
     // they're listed.

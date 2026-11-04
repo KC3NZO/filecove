@@ -410,6 +410,13 @@ export interface MediaChoice<V = Record<string, unknown>> {
      * until something is changed, or as given with `defaultValue`.
      */
     values: V;
+    /**
+     * The groups it was picked among, from its library's root, none at its root, for a `canSelect` to
+     * tell what's inside what. Handed over with it, so it's kept by giving a choice back as it is, and
+     * unset for one given without it, whose place isn't known. Those a search went through hold only what
+     * the adapter's trail gave.
+     */
+    trail?: readonly FileEntry[];
 }
 
 /**
@@ -420,4 +427,6 @@ export interface MediaChoice<V = Record<string, unknown>> {
 export interface MediaPickerValue<V = Record<string, unknown>> {
     asset: FileEntry;
     values?: V;
+    /** The groups it's among, from the library's root, as `MediaChoice.trail`; its place is unknown without it. */
+    trail?: readonly FileEntry[];
 }

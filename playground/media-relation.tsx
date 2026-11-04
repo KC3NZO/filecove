@@ -8,7 +8,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { MediaFields, MediaPicker, MediaPicture } from "../src";
 import { imageUploadForm, videoUploadForm } from "./media-uploads";
-import { oneGroup, selectGroups } from "./options";
+import { noOverlap, oneGroup, selectGroups } from "./options";
 
 import type {
     FileAdapter,
@@ -33,6 +33,25 @@ import type {
 /** A gallery's rule, for this use of the picker (`?oneGroup`): one group at most among its pictures. */
 const oneGroupAtMost = (entry: FileEntry, _section: MediaSection, choices: readonly MediaChoice[]) =>
     entry.kind !== "folder" || !choices.some(({ asset }) => asset.kind === "folder") || "One group at most";
+
+/**
+ * A rule for a use where picking a group means all of it (`?noOverlap`): nothing inside a group picked,
+ * and no group with a pick inside it. Ids only mean something within a library's adapter.
+ */
+export const noOverlapping = (
+    entry: FileEntry,
+    section: MediaSection,
+    choices: readonly MediaChoice[],
+    trail: readonly FileEntry[] | undefined,
+) => {
+    const here = choices.filter((choice) => choice.section.id === section.id);
+
+    if (trail?.some(({ id }) => here.some(({ asset }) => asset.id === id))) {
+        return "Already in a picked group";
+    }
+
+    return !here.some((choice) => choice.trail?.some(({ id }) => id === entry.id)) || "Holds something picked already";
+};
 
 // The same libraries as the page's, without what's for managing them, which a picker doesn't read.
 const VIDEOS: MediaSection = {
@@ -198,7 +217,7 @@ const RelationsField = ({ section, maxChoices, value, onChange, adapter, labelId
             >
                 <MediaPicker
                     selectGroups={selectGroups}
-                    canSelect={oneGroup ? oneGroupAtMost : undefined}
+                    canSelect={oneGroup ? oneGroupAtMost : noOverlap ? noOverlapping : undefined}
                     adapter={adapter}
                     section={section}
                     multiple

@@ -112,6 +112,12 @@ export const selectGroups = params.has("selectGroups");
  */
 export const oneGroup = params.has("oneGroup");
 
+/**
+ * `?media&multiple&selectGroups&noOverlap`: `canSelect` on the media manager and the gallery's `MediaPicker`
+ * refuses what's inside a group picked, and a group with a pick inside it.
+ */
+export const noOverlap = params.has("noOverlap");
+
 /** `?media&browse`: no `onChoose`, so the media manager is a library to look through, without Choose. */
 export const browse = params.has("browse");
 

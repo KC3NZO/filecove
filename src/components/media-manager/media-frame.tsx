@@ -99,7 +99,14 @@ export interface MediaFrameProps {
     /** How many can be selected at once with `multiple`. */
     maxChoices: number | undefined;
     /** Whether an asset can be added beside those already picked, for this use. */
-    canSelect: ((asset: FileEntry, section: MediaSection, choices: readonly MediaChoice[]) => boolean | string) | undefined;
+    canSelect:
+        | ((
+              asset: FileEntry,
+              section: MediaSection,
+              choices: readonly MediaChoice[],
+              trail: readonly FileEntry[] | undefined,
+          ) => boolean | string)
+        | undefined;
     /** Whether groups can be selected as well as assets, while the app takes a pick. */
     selectGroups: boolean;
     onChoose: ((choices: MediaChoice[]) => void) | undefined;
@@ -248,8 +255,6 @@ const NO_FOLDER_IDS: readonly string[] = [];
 // The choices made from a pick's form's defaults, nothing being changed yet, so what's made from them
 // again is too, and they go on following the form.
 const DEFAULTED = new WeakSet<MediaChoice>();
-// The groups each choice was picked among, kept with it this way as it's no business of the app's.
-const PICK_TRAILS = new WeakMap<MediaChoice, readonly FileEntry[]>();
 const NO_TRAIL: readonly FileEntry[] = [];
 const NO_LEVELS: Readonly<Record<string, OpenLevel>> = {};
 const NO_PREVIEWERS: readonly FilePreviewer[] = [];
@@ -271,7 +276,7 @@ const pickOf = (choice: MediaChoice): Pick => ({
     sectionId: choice.section.id,
     asset: choice.asset,
     values: DEFAULTED.has(choice) ? NO_VALUES : (choice.values ?? NO_VALUES),
-    trail: PICK_TRAILS.get(choice),
+    trail: choice.trail,
 });
 
 // The same format as `choiceKey`, so a pick can be found among the choices made from it.
@@ -281,8 +286,8 @@ const pickKey = ({ sectionId, asset }: Pick) => `${sectionId}\u0000${asset.id}`;
 const sameToApp = (a: Pick, b: Pick) => pickKey(a) === pickKey(b) && a.values === b.values;
 
 /**
- * The picks the app's list means. A choice it was handed still says what's kept with it; one it made
- * or copied takes where it was picked from what's known, or has no known level. Its values count as
+ * The picks the app's list means. A choice says where it was picked; one the app made without that
+ * takes it from what's known, or has no known level. One it made or copied has its values count as
  * changed, as nothing says they were the form's defaults.
  */
 const picksGiven = (list: readonly MediaChoice[], known: readonly Pick[]) =>
@@ -298,14 +303,9 @@ const picksGiven = (list: readonly MediaChoice[], known: readonly Pick[]) =>
  */
 const handedCopy = (choice: MediaChoice): MediaChoice => {
     const copy = { ...choice, values: { ...choice.values } };
-    const trail = PICK_TRAILS.get(choice);
 
     if (DEFAULTED.has(choice)) {
         DEFAULTED.add(copy);
-    }
-
-    if (trail) {
-        PICK_TRAILS.set(copy, trail);
     }
 
     return copy;
@@ -846,14 +846,15 @@ const MediaFrame = ({
                     return [];
                 }
 
-                const choice = { asset: now, section: from, values: values === NO_VALUES ? defaultsOf(now, from) : values };
+                const choice = {
+                    asset: now,
+                    section: from,
+                    values: values === NO_VALUES ? defaultsOf(now, from) : values,
+                    trail: pickedAmong,
+                };
 
                 if (values === NO_VALUES) {
                     DEFAULTED.add(choice);
-                }
-
-                if (pickedAmong) {
-                    PICK_TRAILS.set(choice, pickedAmong);
                 }
 
                 return [choice];
@@ -943,10 +944,16 @@ const MediaFrame = ({
         [formOf, pickState, text],
     );
 
-    // Why the app's `canSelect` refuses an asset beside those picked; nothing when it allows it.
+    // Why the app's `canSelect` refuses an asset beside those picked, given the groups it's in, unknown
+    // for a pick the app gave without them; nothing when it allows it.
     const refusalOf = useCallback(
-        (asset: FileEntry, from: MediaSection, picked: readonly MediaChoice[]): AssetHold | undefined => {
-            const allowed = rule?.(asset, from, picked) ?? true;
+        (
+            asset: FileEntry,
+            from: MediaSection,
+            picked: readonly MediaChoice[],
+            among: readonly FileEntry[] | undefined,
+        ): AssetHold | undefined => {
+            const allowed = rule?.(asset, from, picked, among) ?? true;
 
             return allowed === true
                 ? undefined
@@ -970,21 +977,23 @@ const MediaFrame = ({
                     return { fit, cut: true };
                 }
 
-                if (!refusalOf(asset, from, growing)) {
+                const among = placeOf(asset.id);
+
+                if (!refusalOf(asset, from, growing, among)) {
                     fit.push(asset);
-                    growing.push({ asset, section: from, values: defaultsOf(asset, from) });
+                    growing.push({ asset, section: from, values: defaultsOf(asset, from), trail: among });
                 }
             }
 
             return { fit, cut: false };
         },
-        [limit, refusalOf, defaultsOf],
+        [limit, refusalOf, defaultsOf, placeOf],
     );
 
     // Why an asset that isn't selected can't be added now, for its view: the app's rule, or no room.
     const refusedNow = useCallback(
-        (asset: FileEntry, from: MediaSection): AssetHold | undefined =>
-            refusalOf(asset, from, multiple ? choices : NO_CHOICES) ??
+        (asset: FileEntry, from: MediaSection, among: readonly FileEntry[]): AssetHold | undefined =>
+            refusalOf(asset, from, multiple ? choices : NO_CHOICES, among) ??
             (full ? { status: "refused", text: text.mediaChoicesFull } : undefined),
         [refusalOf, multiple, choices, full, text],
     );
@@ -1013,10 +1022,10 @@ const MediaFrame = ({
                       shownEntries.filter(isGroup),
                       section,
                       selectedIds,
-                      rule && ((group) => rule(group, section, multiple ? choices : NO_CHOICES)),
+                      rule && ((group) => rule(group, section, multiple ? choices : NO_CHOICES, placeOf(group.id))),
                   )
                 : NO_GROUP_PICKS,
-        [choosing, selectGroups, section, shownEntries, selectedIds, rule, multiple, choices],
+        [choosing, selectGroups, section, shownEntries, selectedIds, rule, multiple, choices, placeOf],
     );
 
     // Why assets shown can't be added now: as above, or refused by the app's rule beside those picked,
@@ -1031,7 +1040,7 @@ const MediaFrame = ({
 
         shownAssets.forEach((entry) => {
             if (rule && !held.has(entry.id) && !selectedIds.has(entry.id)) {
-                const refusal = refusalOf(entry, section, multiple ? choices : NO_CHOICES);
+                const refusal = refusalOf(entry, section, multiple ? choices : NO_CHOICES, placeOf(entry.id));
 
                 if (refusal) {
                     held.set(entry.id, refusal);
@@ -1040,7 +1049,7 @@ const MediaFrame = ({
         });
 
         return held.size > 0 ? held : NO_HOLDS;
-    }, [section, rule, assetHolds, groupPicks, shownAssets, selectedIds, refusalOf, multiple, choices]);
+    }, [section, rule, assetHolds, groupPicks, shownAssets, selectedIds, refusalOf, multiple, choices, placeOf]);
 
     // Why picks can't be chosen now, by their keys, which holds Choose back until they can, or are
     // taken out: past the limit, still being processed, failed, refused by their library or the app's
@@ -1053,7 +1062,7 @@ const MediaFrame = ({
                 index >= limit
                     ? { status: "refused", text: text.mediaOverLimit(formatNumber(limit)) }
                     : (holdOf(choice.asset, choice.section, { text, formatPercent }) ??
-                      refusalOf(choice.asset, choice.section, choices.slice(0, index)) ??
+                      refusalOf(choice.asset, choice.section, choices.slice(0, index), choice.trail) ??
                       unfilledOf(choice, index, choices));
 
             if (hold) {
@@ -1260,7 +1269,7 @@ const MediaFrame = ({
 
         if (selectedIds.has(viewed.entry.id)) {
             removeChoice(choice);
-        } else if (!holdOf(viewed.entry, section, { text, formatPercent }) && !refusedNow(viewed.entry, section)) {
+        } else if (!holdOf(viewed.entry, section, { text, formatPercent }) && !refusedNow(viewed.entry, section, viewedTrail)) {
             const pick = { ...pickOf(choice), trail: viewedTrail };
 
             setPicks((previous) => ({
@@ -1595,7 +1604,7 @@ const MediaFrame = ({
 
     // A pick's "Show in library": its library, open at it, the overlay closing so it shows.
     const showInLibrary = useCallback((choice: MediaChoice) => {
-        const pickedAmong = PICK_TRAILS.get(choice);
+        const pickedAmong = choice.trail;
 
         // A group is shown by going in, as it may have no details, and what's in it is what it's picked for.
         if (isGroup(choice.asset)) {
@@ -1775,7 +1784,7 @@ const MediaFrame = ({
             .flatMap((waiting) => listedById.get(waiting.entryId) ?? [])
             .filter(({ processing }) => processing?.status !== "failed" || processing.usable)
             .filter((asset) => (section.selectable?.(asset) ?? true) === true);
-        const last = (multiple ? assets : assets.filter((asset) => !refusalOf(asset, section, NO_CHOICES))).at(-1);
+        const last = (multiple ? assets : assets.filter((asset) => !refusalOf(asset, section, NO_CHOICES, trail))).at(-1);
 
         setArrivals((previous) => previous.filter((waiting) => !keys.has(waiting.key)));
 
@@ -1998,9 +2007,9 @@ const MediaFrame = ({
         () =>
             viewedEntry && section && (!viewedGroup || groupPicks.checks.has(viewedEntry.id))
                 ? (holdOf(viewedEntry, section, { text, formatPercent }) ??
-                  (selectedIds.has(viewedEntry.id) ? undefined : refusedNow(viewedEntry, section)))
+                  (selectedIds.has(viewedEntry.id) ? undefined : refusedNow(viewedEntry, section, viewedTrail)))
                 : undefined,
-        [viewedEntry, viewedGroup, groupPicks, section, text, formatPercent, selectedIds, refusedNow],
+        [viewedEntry, viewedGroup, groupPicks, section, text, formatPercent, selectedIds, refusedNow, viewedTrail],
     );
 
     // The backend's work on it while it can be chosen all the same, which its view shows.
