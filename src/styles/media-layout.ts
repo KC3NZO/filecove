@@ -1,3 +1,5 @@
+import type { SxProps, Theme } from "@mui/material/styles";
+
 import type { MediaKind } from "../types";
 
 /*
@@ -22,6 +24,46 @@ export const LIBRARIES_WIDTH = 220;
 
 /** The docked selected column's width, in px. */
 export const CHOICES_WIDTH = 320;
+
+/** The backdrop behind the selected column while it's an overlay. */
+export const chosenBackdropSx: SxProps<Theme> = {
+    position: "absolute",
+    zIndex: 2,
+    [mediaWide]: { display: "none" },
+};
+
+/**
+ * The selected column's box. Below `mediaWide`, an overlay at the end side while it's opened
+ * (`data-overlay`); from it, docked beside the library, from the top, as a sidebar.
+ */
+export const chosenColumnSx: SxProps<Theme> = {
+    display: "none",
+    flexDirection: "column",
+    position: "absolute",
+    zIndex: 3,
+    top: 0,
+    bottom: 0,
+    insetInlineEnd: 0,
+    width: `min(${CHOICES_WIDTH + 40}px, 90%)`,
+    overflow: "hidden",
+    bgcolor: "background.paper",
+    boxShadow: 8,
+    '&[data-overlay="true"]': { display: "flex" },
+    // One at a time with nothing selected, there's nothing to show, so it isn't there.
+    '&[data-empty="true"]': { display: "none" },
+    [mediaWide]: {
+        display: "flex",
+        position: "relative",
+        zIndex: "auto",
+        flexShrink: 0,
+        width: CHOICES_WIDTH,
+        my: 0.75,
+        marginInlineEnd: 0.75,
+        borderRadius: 3,
+        boxShadow: "none",
+        '&[data-empty="true"]': { display: "none" },
+    },
+};
 
 /** The asset view's details' width beside its picture, in px. */
 export const ASSET_DETAILS_WIDTH = 340;

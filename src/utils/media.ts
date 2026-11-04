@@ -144,5 +144,29 @@ export const holdOf = (
  * The backend's work on an asset that can be used all the same, in the same line and bar, or nothing
  * when there's none: it shows, but holds nothing back.
  */
+/**
+ * What holds Choose back, said beside it: those to take out first, then those to fill in, by why when
+ * there's one, else those still processed. Nothing with none held.
+ */
+export const chooseHeldBy = (held: readonly AssetHold[], text: Locale["text"]) => {
+    if (held.length === 0) {
+        return undefined;
+    }
+
+    const waiting = held.filter(({ status }) => status === "processing").length;
+    const unfilled = held.filter(({ status }) => status === "unfilled");
+    const refused = held.length - waiting - unfilled.length;
+
+    if (refused > 0) {
+        return text.mediaChoicesUnavailable(refused);
+    }
+
+    if (unfilled.length > 0) {
+        return unfilled.length === 1 ? unfilled[0].text : text.mediaChoicesUnfilled(unfilled.length);
+    }
+
+    return text.mediaChoicesProcessing(waiting);
+};
+
 export const workOf = (entry: FileEntry, locale: Pick<Locale, "text" | "formatPercent">) =>
     entry.processing?.usable ? standing(entry.processing, locale) : undefined;

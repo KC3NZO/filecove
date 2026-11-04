@@ -8,6 +8,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useAnnouncer } from "../../hooks/use-announcer";
 import { useAssetStates } from "../../hooks/use-asset-states";
+import { overlays, useChosenColumn } from "../../hooks/use-chosen-column";
 import { useData, useFolder } from "../../hooks/use-folder";
 import { useFilesDrop } from "../../hooks/use-files-drop";
 import { useLocale } from "../../hooks/use-locale";
@@ -17,7 +18,7 @@ import type { PicksState } from "../../hooks/use-picks";
 import { useTransferQueue } from "../../hooks/use-transfer-queue";
 import { useSetting } from "../../hooks/use-setting";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
-import { CHOICES_WIDTH, mediaMedium, mediaWide } from "../../styles/media-layout";
+import { chosenBackdropSx, chosenColumnSx, mediaMedium, mediaWide } from "../../styles/media-layout";
 import { visuallyHiddenSx } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
 import { firstInView, focusLost } from "../../utils/dom";
@@ -28,6 +29,7 @@ import { countLimit } from "../../utils/limits";
 import {
     byDate,
     checkMediaUpload,
+    chooseHeldBy,
     groupRule,
     holdOf,
     layoutsOf,
@@ -361,47 +363,10 @@ const uploadsSx: SxProps<Theme> = {
     [mediaWide]: { '[data-choosing="true"] &': { mt: 0 } },
 };
 
-const backdropSx: SxProps<Theme> = {
-    position: "absolute",
-    zIndex: 2,
-    [mediaWide]: { display: "none" },
-};
-
 const librariesBackdropSx: SxProps<Theme> = {
     position: "absolute",
     zIndex: 2,
     [mediaMedium]: { display: "none" },
-};
-
-// Below `mediaWide`, an overlay at the end side while it's opened (`data-overlay`); from it, docked
-// beside the library, from the top, as a sidebar.
-const chosenSx: SxProps<Theme> = {
-    display: "none",
-    flexDirection: "column",
-    position: "absolute",
-    zIndex: 3,
-    top: 0,
-    bottom: 0,
-    insetInlineEnd: 0,
-    width: `min(${CHOICES_WIDTH + 40}px, 90%)`,
-    overflow: "hidden",
-    bgcolor: "background.paper",
-    boxShadow: 8,
-    '&[data-overlay="true"]': { display: "flex" },
-    // One at a time with nothing selected, there's nothing to show, so it isn't there.
-    '&[data-empty="true"]': { display: "none" },
-    [mediaWide]: {
-        display: "flex",
-        position: "relative",
-        zIndex: "auto",
-        flexShrink: 0,
-        width: CHOICES_WIDTH,
-        my: 0.75,
-        marginInlineEnd: 0.75,
-        borderRadius: 3,
-        boxShadow: "none",
-        '&[data-empty="true"]': { display: "none" },
-    },
 };
 
 const noLibrariesSx: SxProps<Theme> = {
@@ -414,10 +379,6 @@ const noLibrariesSx: SxProps<Theme> = {
     color: "text.secondary",
     "& > svg": { fontSize: 56, opacity: 0.6 },
 };
-
-// Whether the selected column, or the libraries, are an overlay, as the container queries lay them
-// out, read from their style.
-const overlays = (pane: HTMLElement) => getComputedStyle(pane).position === "absolute";
 
 /** Everything inside the media manager's root, below the contexts it provides. */
 const MediaFrame = ({
@@ -542,12 +503,8 @@ const MediaFrame = ({
     const uploadButtonRef = useRef<HTMLButtonElement>(null);
     const [processStep, setProcessStep] = useState<ProcessStep | null>(null);
 
-    // The selected column: docked where there's room, or an overlay while opened.
-    const [chosenOverlay, setChosenOverlay] = useState(false);
-    const [docked, setDocked] = useState(true);
-    const frameRef = useRef<HTMLDivElement>(null);
-    const chosenRef = useRef<HTMLDivElement>(null);
-    const openerRef = useRef<HTMLButtonElement>(null);
+    const { chosenOverlay, setChosenOverlay, docked, frameRef, chosenRef, openerRef, closeChosen } =
+        useChosenColumn(choosing);
 
     // The libraries: docked where there's room, or a drawer while opened.
     const [librariesOpen, setLibrariesOpen] = useState(false);
@@ -582,38 +539,6 @@ const MediaFrame = ({
             (list.querySelector<HTMLElement>('[aria-current="page"]') ?? list).focus();
         }
     }, [librariesOpen]);
-
-    // Follows the column docking as the root's width changes, and closes the overlay as it docks,
-    // so narrowing again doesn't bring it back unasked.
-    useEffect(() => {
-        const frame = frameRef.current;
-        const pane = chosenRef.current;
-
-        if (!frame || !pane) {
-            return;
-        }
-
-        const observer = new ResizeObserver(() => {
-            const nowDocked = !overlays(pane);
-
-            setDocked(nowDocked);
-
-            if (nowDocked) {
-                setChosenOverlay(false);
-            }
-        });
-
-        observer.observe(frame);
-
-        return () => observer.disconnect();
-    }, [choosing]);
-
-    // The overlay takes the focus as it opens.
-    useEffect(() => {
-        if (chosenOverlay) {
-            chosenRef.current?.querySelector<HTMLElement>("section")?.focus();
-        }
-    }, [chosenOverlay]);
 
     // What the open level holds, as its adapter lists it: inside a group, in the backend's order, as an
     // album's tracks have theirs; at the root, the newest first. Groups aren't put first, so one coming
@@ -1067,28 +992,7 @@ const MediaFrame = ({
 
     const holdOfChoice = useCallback((choice: MediaChoice) => choiceHolds.get(choiceKey(choice)), [choiceHolds]);
 
-    // What holds Choose back, said beside it: those to take out first, then those to fill in, by why
-    // when there's one, else those still processed.
-    const chooseHeld = useMemo(() => {
-        if (choiceHolds.size === 0) {
-            return undefined;
-        }
-
-        const held = [...choiceHolds.values()];
-        const waiting = held.filter(({ status }) => status === "processing").length;
-        const unfilled = held.filter(({ status }) => status === "unfilled");
-        const refused = held.length - waiting - unfilled.length;
-
-        if (refused > 0) {
-            return text.mediaChoicesUnavailable(refused);
-        }
-
-        if (unfilled.length > 0) {
-            return unfilled.length === 1 ? unfilled[0].text : text.mediaChoicesUnfilled(unfilled.length);
-        }
-
-        return text.mediaChoicesProcessing(waiting);
-    }, [choiceHolds, text]);
+    const chooseHeld = useMemo(() => chooseHeldBy([...choiceHolds.values()], text), [choiceHolds, text]);
 
     // Whether a pick kept is of the same asset as a choice.
     const samePick = useCallback(
@@ -1565,11 +1469,6 @@ const MediaFrame = ({
         },
         [librariesOpen, closeLibraries],
     );
-
-    const closeChosen = useCallback(() => {
-        setChosenOverlay(false);
-        openerRef.current?.focus();
-    }, []);
 
     // A pick's "Show in library": its library, open at it, the overlay closing so it shows.
     const showInLibrary = useCallback((choice: MediaChoice) => {
@@ -2659,10 +2558,10 @@ const MediaFrame = ({
             </Box>
             {choosing && (
                 <>
-                    <Backdrop open={chosenOverlay && !docked && !chosenEmpty} sx={backdropSx} onClick={closeChosen} />
+                    <Backdrop open={chosenOverlay && !docked && !chosenEmpty} sx={chosenBackdropSx} onClick={closeChosen} />
                     <Box
                         ref={chosenRef}
-                        sx={chosenSx}
+                        sx={chosenColumnSx}
                         data-overlay={chosenOverlay}
                         data-empty={chosenEmpty}
                         onKeyDown={(event) => {
