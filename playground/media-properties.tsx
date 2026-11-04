@@ -7,7 +7,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { PropertyDisplay } from "../src";
-import { posterField, teaserField } from "./media-relation";
+import { galleryField, posterField, teaserField } from "./media-relation";
 import { pollRenditions } from "./mocks/mock-media";
 
 import type {
@@ -421,6 +421,7 @@ const groupProperties: PropertyDefinitionGroup[] = [
             { field: "released", label: "Released", type: "date", editable: false },
             teaserField,
             posterField,
+            galleryField,
         ],
     },
 ];

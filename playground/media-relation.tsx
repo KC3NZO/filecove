@@ -16,7 +16,7 @@ import type { FileAdapter, FileEntry, MediaSection, PropertyDefinition, Property
 // app's, and the field holds the asset as it was chosen, where a real backend would keep its id and send
 // it back so. Only `MediaPicker` and `MediaPicture` are the component's: the first finds or uploads the asset, and
 // nothing can be deleted or moved from it, the second shows it. What's asked of an upload is the library's `uploadForm`, and anything about
-// this use of the asset would be a field beside this one.
+// this use of the asset would be a field beside this one. A gallery holds several, by the picker's `multiple`.
 
 // The same libraries as the page's, without what's for managing them, which a picker doesn't read.
 const VIDEOS: MediaSection = {
@@ -40,6 +40,8 @@ const IMAGES: MediaSection = {
 };
 
 const rowSx: SxProps<Theme> = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 };
+
+const listSx: SxProps<Theme> = { display: "flex", flexDirection: "column", gap: 1 };
 
 const pictureSx: SxProps<Theme> = { width: 72, aspectRatio: "16 / 9" };
 
@@ -100,6 +102,75 @@ const RelationField = ({ section, value, onChange, adapter, labelId, disabled }:
     );
 };
 
+interface RelationsFieldProps extends RelationFieldProps {
+    /** How many it can hold. */
+    maxChoices?: number;
+}
+
+/**
+ * What's chosen, each with its Remove, in the order they were selected, and Choose or Change opening
+ * the picker on them, so what's there can be added to or taken from.
+ */
+const RelationsField = ({ section, maxChoices, value, onChange, adapter, labelId, disabled }: RelationsFieldProps) => {
+    const chosen = (value as FileEntry[] | undefined) ?? [];
+    const [open, setOpen] = useState(false);
+
+    return (
+        <Box sx={listSx}>
+            {chosen.map((entry) => (
+                <Box key={entry.id} sx={rowSx}>
+                    <Chosen entry={entry} adapter={adapter} />
+                    <Button
+                        size="small"
+                        color="inherit"
+                        disabled={disabled}
+                        onClick={() => {
+                            const rest = chosen.filter(({ id }) => id !== entry.id);
+
+                            onChange(rest.length > 0 ? rest : undefined);
+                        }}
+                    >
+                        Remove
+                    </Button>
+                </Box>
+            ))}
+            <Box sx={rowSx}>
+                <Button
+                    size="small"
+                    variant="outlined"
+                    color="inherit"
+                    disabled={disabled}
+                    onClick={() => setOpen(true)}
+                >
+                    {chosen.length > 0 ? "Change" : `Choose from ${section.label}`}
+                </Button>
+            </Box>
+            <Dialog
+                open={open}
+                fullWidth
+                maxWidth="md"
+                aria-labelledby={labelId}
+                sx={dialogSx}
+                onClose={() => setOpen(false)}
+            >
+                <MediaPicker
+                    adapter={adapter}
+                    section={section}
+                    multiple
+                    maxChoices={maxChoices}
+                    allowUpload
+                    defaultValue={chosen}
+                    onCancel={() => setOpen(false)}
+                    onChoose={(assets) => {
+                        onChange(assets);
+                        setOpen(false);
+                    }}
+                />
+            </Dialog>
+        </Box>
+    );
+};
+
 /** A field pointing at an asset of a library: chosen in a form, and shown in the details. */
 const relation = (field: string, label: string, section: MediaSection): PropertyDefinition => ({
     field,
@@ -113,5 +184,26 @@ const relation = (field: string, label: string, section: MediaSection): Property
     renderEdit: (params) => <RelationField {...params} section={section} />,
 });
 
+/** A field pointing at several assets of a library. */
+const relations = (field: string, label: string, section: MediaSection, maxChoices?: number): PropertyDefinition => ({
+    field,
+    label,
+    render: ({ value, adapter }) => {
+        const chosen = (value as FileEntry[] | undefined) ?? [];
+
+        return chosen.length > 0 ? (
+            <Box sx={listSx}>
+                {chosen.map((entry) => (
+                    <Box key={entry.id} sx={rowSx}>
+                        <Chosen entry={entry} adapter={adapter} />
+                    </Box>
+                ))}
+            </Box>
+        ) : null;
+    },
+    renderEdit: (params) => <RelationsField {...params} section={section} maxChoices={maxChoices} />,
+});
+
 export const teaserField = relation("teaser", "Teaser", VIDEOS);
 export const posterField = relation("poster", "Poster", IMAGES);
+export const galleryField = relations("gallery", "Gallery", IMAGES, 6);

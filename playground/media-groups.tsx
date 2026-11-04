@@ -6,7 +6,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { MediaFields } from "../src";
-import { posterField, teaserField } from "./media-relation";
+import { galleryField, posterField, teaserField } from "./media-relation";
 import { coverUrl } from "./mocks/mock-media";
 
 import type {
@@ -153,7 +153,7 @@ const isReleased = (type: unknown) => type === "Season" || type === "Album";
 
 /**
  * Its fields, following each other: a Season or an Album has a date, and a Series a teaser from Videos
- * and a poster from Images, each going when the type's changed.
+ * and a poster and a gallery from Images, each going when the type's changed.
  */
 const GroupFields = (form: MediaGroupFormParams) => {
     const { values, parent, group } = form;
@@ -182,7 +182,7 @@ const GroupFields = (form: MediaGroupFormParams) => {
                 ...(isReleased(values.type)
                     ? [{ field: "released", label: "Released", type: "date" } satisfies PropertyDefinition]
                     : []),
-                ...(values.type === "Series" ? [teaserField, posterField] : []),
+                ...(values.type === "Series" ? [teaserField, posterField, galleryField] : []),
                 { field: "description", label: "Description", type: "string", multiline: true },
             ],
         },
@@ -195,12 +195,12 @@ const GroupFields = (form: MediaGroupFormParams) => {
                 {...form}
                 groups={groups}
                 setValues={(next) => {
-                    const { released, teaser, poster, ...rest } = next;
+                    const { released, teaser, poster, gallery, ...rest } = next;
 
                     form.setValues({
                         ...rest,
                         ...(isReleased(next.type) ? { released } : {}),
-                        ...(next.type === "Series" ? { teaser, poster } : {}),
+                        ...(next.type === "Series" ? { teaser, poster, gallery } : {}),
                     });
                 }}
             />
