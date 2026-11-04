@@ -16,11 +16,12 @@ import {
 } from "../../styles/mixins";
 import Icon from "../icons/icon";
 import { HoldBar, HoldLine } from "./asset-hold";
+import AssetTrail from "./asset-trail";
 import MediaRow from "./media-row";
 import MediaTile from "./media-tile";
 import OpenButton from "./open-button";
 
-import type { AssetHold, FileAdapter, FileEntry, MediaAssetDraw, MediaKind, MediaLayout } from "../../types";
+import type { AssetHold, FileAdapter, FileEntry, FolderRef, MediaAssetDraw, MediaKind, MediaLayout } from "../../types";
 
 interface AssetOptionProps {
     entry: FileEntry;
@@ -35,6 +36,8 @@ interface AssetOptionProps {
     hold: AssetHold | undefined;
     /** The backend's work on it while it can be chosen all the same, shown the same way, unfaded. */
     work: AssetHold | undefined;
+    /** Where it is below the level searched, as a search's result from further down. */
+    trail: readonly FolderRef[] | undefined;
     /** Whether there's no room for it among those selected (`maxChoices`): dimmed, with nothing said on it. */
     limited: boolean;
     /** Whether it has the grid's Tab stop. */
@@ -197,7 +200,7 @@ const AssetBody = memo(({ draw, params }: AssetBodyProps): ReactNode => draw(par
  * whoever draws it. The `option` with its keys, clicks and marks, the check and the Open button. Inside it,
  * the media manager's own look (`MediaTile`, `MediaRow`), or what the app's `renderAsset` returns.
  * An app may use the same looks there. When it has drawn something else entirely, this says why the
- * asset can't be chosen under it, fades it as those do, and names it, what the app drew being read
+ * asset can't be chosen, and where a search found it, under it, fades it as those do, and names it, what the app drew being read
  * as its description, so no asset is left unnamed or held without a word.
  */
 const AssetOption = memo(
@@ -210,6 +213,7 @@ const AssetOption = memo(
         selected,
         hold,
         work,
+        trail,
         limited,
         focused,
         draw,
@@ -245,8 +249,8 @@ const AssetOption = memo(
         // Whether the app has drawn this entirely itself.
         const own = !!drawn && looks === 0;
         const params = useMemo(
-            () => ({ asset: entry, kind, layout, adapter, thumbnail, selected, hold: standing }),
-            [entry, kind, layout, adapter, thumbnail, selected, standing],
+            () => ({ asset: entry, kind, layout, adapter, thumbnail, selected, hold: standing, trail }),
+            [entry, kind, layout, adapter, thumbnail, selected, standing, trail],
         );
         const Look = row ? MediaRow : MediaTile;
 
@@ -283,9 +287,10 @@ const AssetOption = memo(
                                 <HoldBar hold={standing} place="row" />
                             </>
                         )}
+                        {own && trail && <AssetTrail trail={trail} />}
                     </Box>
                 ) : (
-                    <Look asset={entry} kind={kind} thumbnail={thumbnail} hold={standing} />
+                    <Look asset={entry} kind={kind} thumbnail={thumbnail} hold={standing} trail={trail} />
                 )}
                 {(group ? opensGroups : opensAssets) && (
                     <OpenButton

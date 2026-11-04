@@ -11,6 +11,7 @@ import { useAssetStates } from "../../hooks/use-asset-states";
 import { overlays, useChosenColumn } from "../../hooks/use-chosen-column";
 import { useData, useFolder } from "../../hooks/use-folder";
 import { useFilesDrop } from "../../hooks/use-files-drop";
+import { useLevelSearch } from "../../hooks/use-level-search";
 import { useLocale } from "../../hooks/use-locale";
 import { useMediaSearch } from "../../hooks/use-media-search";
 import { usePicks } from "../../hooks/use-picks";
@@ -31,6 +32,7 @@ import {
     checkMediaUpload,
     chooseHeldBy,
     groupRule,
+    groupsOfTrail,
     holdOf,
     layoutsOf,
     pickFormOf,
@@ -173,6 +175,8 @@ interface Viewing {
     entry: FileEntry;
     /** Whether it's the group that was open, opened from inside it, so going back goes back in. */
     fromInside?: boolean;
+    /** The groups it's in, from the library's root, as it was opened; without it, those open. */
+    among?: readonly FileEntry[];
 }
 
 /**
@@ -441,6 +445,24 @@ const MediaFrame = ({
         stopSearching,
         closeSearch,
     } = useMediaSearch();
+    // Each time something here changes the backend, which a search through it is asked again after.
+    const [changes, setChanges] = useState(0);
+    const search = useLevelSearch(section, sectionAdapter, folderId, query, changes);
+    // What a search found that's been deleted or moved, gone at once until it's answered again.
+    const [goneHits, setGoneHits] = useState<ReadonlySet<string>>(NO_IDS);
+
+    useEffect(() => setGoneHits(NO_IDS), [search.hits]);
+
+    // The groups an entry shown is in, from the library's root: those open, and any a search found it
+    // below them.
+    const placeOf = useCallback(
+        (id: string) => {
+            const below = search.trails.get(id);
+
+            return below ? [...trail, ...groupsOfTrail(below)] : trail;
+        },
+        [search.trails, trail],
+    );
     // What the app is told is made as `choices` is, which needs the listing, and more below that needs
     // the picks, so it's reached through this.
     const choicesOfRef = useRef<(items: readonly Pick[]) => MediaChoice[]>(() => []);
@@ -555,6 +577,12 @@ const MediaFrame = ({
     // Its assets: they're all of the library's kind, so nothing is sorted into kinds here.
     const listed = useMemo(() => level.filter((entry) => !isGroup(entry)), [level]);
 
+    // What the adapter's search found, in its order, but for what's since gone or on its way elsewhere.
+    const found = useMemo(
+        () => search.hits.map(({ entry }) => entry).filter(({ id }) => !goneHits.has(id) && !movingIds.has(id)),
+        [search.hits, goneHits, movingIds],
+    );
+
     // Assets just deleted are gone at once, until the listing comes back without them. Forgotten then,
     // as a backend whose ids are paths may give the id to a file uploaded later.
     useEffect(() => setDeletedIds(NO_IDS), [state?.entries]);
@@ -569,6 +597,7 @@ const MediaFrame = ({
     // end in, every one on the adapter rooted there, are listed again.
     const relist = useCallback(
         (served: FileAdapter, folderIds: string[]) => {
+            setChanges((count) => count + 1);
             sections.forEach((item) => {
                 if (adapterOf(item) === served) {
                     store.relist(item.id, served, folderIds);
@@ -595,18 +624,20 @@ const MediaFrame = ({
         [relist, sections, adapterOf, levels],
     );
 
-    // Assets their listing says are being processed, in the library shown and among the picks, each
-    // through its adapter, followed until they're done; a pick of the library shown as it's listed.
+    // Assets their listing says are being processed, in the library shown, among what its search found
+    // and among the picks, each through its adapter, followed until they're done; a pick of the library
+    // shown as it's listed.
     const processed = useMemo<FollowedAssets[]>(() => {
         const byAdapter = new Map<FileAdapter, Map<string, FileEntry>>();
-        const listedIds = new Set(listed.map(({ id }) => id));
+        const assets = [...listed, ...found.filter((entry) => !isGroup(entry))];
+        const listedIds = new Set(assets.map(({ id }) => id));
         const add = (served: FileAdapter, entry: FileEntry) => {
             if (entry.processing?.status === "processing") {
                 byAdapter.set(served, (byAdapter.get(served) ?? new Map()).set(entry.id, entry));
             }
         };
 
-        listed.forEach((entry) => add(sectionAdapter, entry));
+        assets.forEach((entry) => add(sectionAdapter, entry));
         picks.items.forEach(({ sectionId: pickedIn, asset }) => {
             const from = sectionsById.get(pickedIn);
             const served = from && adapterOf(from);
@@ -617,7 +648,7 @@ const MediaFrame = ({
         });
 
         return [...byAdapter].map(([served, entries]) => ({ adapter: served, entries: [...entries.values()] }));
-    }, [listed, picks.items, sectionsById, adapterOf, sectionAdapter]);
+    }, [listed, found, picks.items, sectionsById, adapterOf, sectionAdapter]);
 
     const { states: assetStates, forget: forgetStates } = useAssetStates(processed, relistAll);
 
@@ -641,10 +672,20 @@ const MediaFrame = ({
         }
     }, [state?.status, listed, sectionAdapter, forgetStates]);
 
+    // And once the search has, for what it found elsewhere.
+    useEffect(() => {
+        if (search.on && search.status === "ready") {
+            forgetStates(
+                sectionAdapter,
+                found.filter((entry) => !entry.processing).map(({ id }) => id),
+            );
+        }
+    }, [search.on, search.status, found, sectionAdapter, forgetStates]);
+
     // A pick keeps its entry as last listed, so what's handed over while another library is shown has
     // what's been made of it since, and it's followed there as what it's listed as.
     useEffect(() => {
-        const listedById = new Map(listed.map((entry) => [entry.id, entry]));
+        const listedById = new Map([...found, ...listed].map((entry) => [entry.id, entry]));
 
         setPicks((previous) => {
             let changed = false;
@@ -663,16 +704,21 @@ const MediaFrame = ({
 
             return changed ? { ...previous, items } : previous;
         });
-    }, [listed, sectionsById, adapterOf, sectionAdapter]);
+    }, [listed, found, sectionsById, adapterOf, sectionAdapter]);
 
     const terms = useMemo(() => searchTerms(query, foldLetters), [query, foldLetters]);
 
-    // What's shown of the open level, by the search: what the grid's indexes go by, and the focus.
-    const shownEntries = useMemo(
-        () =>
-            terms.length === 0 ? leveled : leveled.filter((entry) => holdsTerms(foldLetters(entry.name), terms)),
-        [leveled, terms, foldLetters],
-    );
+    // What's shown: what the adapter's search found, or without one, the open level filtered by name.
+    // It's what the grid's indexes go by, and the focus.
+    const shownEntries = useMemo(() => {
+        if (search.on) {
+            const own = assetStates.get(sectionAdapter);
+
+            return own ? found.map((entry) => withState(entry, own.get(entry.id))) : found;
+        }
+
+        return terms.length === 0 ? leveled : leveled.filter((entry) => holdsTerms(foldLetters(entry.name), terms));
+    }, [search.on, found, assetStates, sectionAdapter, leveled, terms, foldLetters]);
 
     const shownAssets = useMemo(() => shownEntries.filter((entry) => !isGroup(entry)), [shownEntries]);
     const shownGroupIds = useMemo(
@@ -1019,7 +1065,10 @@ const MediaFrame = ({
             return undefined;
         }
 
-        const entry = leveled.find(({ id }) => id === viewing.entry.id) ?? viewing.entry;
+        const entry =
+            leveled.find(({ id }) => id === viewing.entry.id) ??
+            shownEntries.find(({ id }) => id === viewing.entry.id) ??
+            viewing.entry;
 
         return {
             entry,
@@ -1027,6 +1076,17 @@ const MediaFrame = ({
             step: shownAssets.findIndex(({ id }) => id === entry.id),
         };
     }, [viewing, sectionId, section, leveled, shownEntries, shownAssets]);
+
+    // Where it is, which a search may have found it below what's open: what it's picked among, moved
+    // from and listed in. There, what's open says nothing of what can be done to it, and it's asked of
+    // the group it's in as far as that's known, and then the backend.
+    const viewedTrail = viewing?.among ?? trail;
+    const viewedFolderId = viewedTrail.at(-1)?.id ?? section?.rootId ?? "";
+    const viewedElsewhere = viewedFolderId !== folderId;
+    const viewedChangeable =
+        !!section &&
+        !section.readOnly &&
+        (viewedElsewhere ? allows("write", viewedTrail.at(-1)?.permissions) : writable);
 
     // The picks with the open library's share made `ids`: those of other libraries stay when several
     // can be chosen, in their place, and those `ids` adds go at the end, in the order shown, as many
@@ -1049,11 +1109,14 @@ const MediaFrame = ({
             }
 
             return {
-                items: [...kept.map(pickOf), ...fit.map((asset) => ({ sectionId, asset, values: NO_VALUES, trail }))],
+                items: [
+                    ...kept.map(pickOf),
+                    ...fit.map((asset) => ({ sectionId, asset, values: NO_VALUES, trail: placeOf(asset.id) })),
+                ],
                 anchor: anchor === null ? null : { sectionId, id: anchor },
             };
         },
-        [sectionId, section, choices, inOpen, multiple, shownAssets, selectedIds, fitting, sayFull, trail],
+        [sectionId, section, choices, inOpen, multiple, shownAssets, selectedIds, fitting, sayFull, placeOf],
     );
 
     // The open library's share as `ids` would make it, without the groups and those it adds that can't
@@ -1159,14 +1222,14 @@ const MediaFrame = ({
         if (selectedIds.has(viewed.entry.id)) {
             removeChoice(choice);
         } else if (!holdOf(viewed.entry, section, { text, formatPercent }) && !refusedNow(viewed.entry, section)) {
-            const pick = { ...pickOf(choice), trail };
+            const pick = { ...pickOf(choice), trail: viewedTrail };
 
             setPicks((previous) => ({
                 items: multiple ? [...previous.items, pick] : [pick],
                 anchor: { sectionId: section.id, id: viewed.entry.id },
             }));
         }
-    }, [viewed, section, selectedIds, removeChoice, multiple, text, formatPercent, refusedNow, trail]);
+    }, [viewed, section, selectedIds, removeChoice, multiple, text, formatPercent, refusedNow, viewedTrail]);
 
     // Whether what's open can be deleted from: its adapter does, its library can be changed, and it can
     // be written to. A listing's own `delete` is about the folder, not what's in it.
@@ -1188,16 +1251,25 @@ const MediaFrame = ({
                     !!sectionAdapter.move ||
                     (!!section.groupForm && !!sectionAdapter.updateGroup))));
 
-    // Opens an asset, or a group's details, in the library's place.
+    // Opens an asset, or a group's details, in the library's place, where it is.
+    const viewAt = useCallback(
+        (entry: FileEntry) => {
+            if (section) {
+                setViewing({ sectionId: section.id, entry, among: placeOf(entry.id) });
+            }
+        },
+        [section, placeOf],
+    );
+
     const openAsset = useCallback(
         (index: number) => {
             const entry = shownEntries[index];
 
-            if (entry && section && (!isGroup(entry) || opensGroups)) {
-                setViewing({ sectionId: section.id, entry });
+            if (entry && (!isGroup(entry) || opensGroups)) {
+                viewAt(entry);
             }
         },
-        [shownEntries, section, opensGroups],
+        [shownEntries, opensGroups, viewAt],
     );
 
     // Shows another level of the open library, with what was over this one gone, as opening a folder
@@ -1226,7 +1298,11 @@ const MediaFrame = ({
         [section, sectionAdapter, announce, text],
     );
 
-    const enterGroup = useCallback((group: FileEntry) => showLevel([...trail, group], null), [showLevel, trail]);
+    // Into a group, from wherever it's shown, as a search may have found it far below what's open.
+    const enterGroup = useCallback(
+        (group: FileEntry) => showLevel([...placeOf(group.id), group], null),
+        [showLevel, placeOf],
+    );
 
     // Back to a level on the way here, the group left through it taking the focus.
     const goToLevel = useCallback(
@@ -1391,7 +1467,7 @@ const MediaFrame = ({
             if (!onChoose) {
                 if (!choosing) {
                     setPicks({
-                        items: [{ sectionId: section.id, asset: entry, values: NO_VALUES, trail }],
+                        items: [{ sectionId: section.id, asset: entry, values: NO_VALUES, trail: placeOf(entry.id) }],
                         anchor: { sectionId: section.id, id: entry.id },
                     });
                 }
@@ -1449,7 +1525,7 @@ const MediaFrame = ({
             press,
             full,
             enterGroup,
-            trail,
+            placeOf,
         ],
     );
 
@@ -1506,7 +1582,11 @@ const MediaFrame = ({
         setChosenOverlay(false);
     }, [adapterOf]);
 
-    const reloadLibrary = useCallback(() => reload(), [reload]);
+    // What the library is listed again by, a search through it being asked again too.
+    const reloadLibrary = useCallback(() => {
+        setChanges((count) => count + 1);
+        reload();
+    }, [reload]);
 
     // Down or Enter in the field goes on to the assets shown, staying in the field with none.
     const focusAssets = () => {
@@ -1873,36 +1953,44 @@ const MediaFrame = ({
             section &&
             sectionAdapter.process &&
             !section.readOnly &&
-            allows("write", state?.permissions, viewedEntry.permissions)
+            allows("write", viewedElsewhere ? undefined : state?.permissions, viewedEntry.permissions)
                 ? (section.processForm?.(viewedEntry) ?? null)
                 : null,
-        [viewedEntry, viewedGroup, section, sectionAdapter, state?.permissions],
+        [viewedEntry, viewedGroup, section, sectionAdapter, viewedElsewhere, state?.permissions],
     );
 
     // Whether the asset or group shown can be deleted: where what's open can be, and it allows it.
-    const viewedDeletable = !!viewedEntry && deletes && allows("delete", viewedEntry.permissions);
+    const viewedDeletable =
+        !!viewedEntry && !!sectionAdapter.delete && viewedChangeable && allows("delete", viewedEntry.permissions);
 
     // Whether the asset or group shown can be moved: where what's open can be, it allows it, and there's
     // somewhere for it to go, a level above or another group here, so a flat library offers nothing.
     const viewedMovable =
         !!viewedEntry &&
-        moves &&
+        !!sectionAdapter.move &&
+        viewedChangeable &&
         allows("move", viewedEntry.permissions) &&
-        (inGroup || leveled.some((entry) => isGroup(entry) && entry.id !== viewedEntry.id));
+        (viewedTrail.length > 0 || leveled.some((entry) => isGroup(entry) && entry.id !== viewedEntry.id));
 
     const shownProcess =
         processStep && processStep.sectionId === sectionId && processStep.entry.id === viewedEntry?.id
             ? processStep
             : null;
 
+    const viewedParent = viewedTrail.at(-1) ?? null;
+
     // What can be edited of the group shown: its library's form for it, where its adapter takes what it
     // holds and it can be changed.
     const viewedEdit = useMemo(
         () =>
-            viewedEntry && viewedGroup && editsGroups && allows("write", viewedEntry.permissions)
-                ? (section?.groupForm?.({ group: viewedEntry, parent: openGroup ?? null }) ?? null)
+            viewedEntry &&
+            viewedGroup &&
+            !!sectionAdapter.updateGroup &&
+            viewedChangeable &&
+            allows("write", viewedEntry.permissions)
+                ? (section?.groupForm?.({ group: viewedEntry, parent: viewedParent }) ?? null)
                 : null,
-        [viewedEntry, viewedGroup, editsGroups, section, openGroup],
+        [viewedEntry, viewedGroup, sectionAdapter, viewedChangeable, section, viewedParent],
     );
 
     const shownEdit =
@@ -1975,9 +2063,10 @@ const MediaFrame = ({
             }
 
             setDeletedIds((previous) => new Set(previous).add(entry.id));
+            setGoneHits((previous) => new Set(previous).add(entry.id));
             forgetStates(sectionAdapter, [entry.id]);
             propertiesCache.forgetDetails(entry, sectionAdapter);
-            relistAll(sectionAdapter);
+            relistAll(sectionAdapter, [viewedFolderId]);
             deletedAtRef.current = index;
             setViewing(null);
             setProcessStep(null);
@@ -1995,6 +2084,7 @@ const MediaFrame = ({
             propertiesCache,
             sectionAdapter,
             relistAll,
+            viewedFolderId,
             announce,
             text,
         ],
@@ -2012,7 +2102,7 @@ const MediaFrame = ({
             sectionAdapter,
             sectionAdapter,
             [viewed.entry],
-            { id: folderId, name: levelName },
+            { id: viewedFolderId, name: viewedParent?.name ?? section.label },
             { id: to.at(-1)?.id ?? section.rootId, name: to.at(-1)?.name ?? section.label },
             "keepBoth",
         );
@@ -2115,6 +2205,8 @@ const MediaFrame = ({
             if (group) {
                 leaveGroup(entry, item.adapter);
             }
+
+            setGoneHits((previous) => new Set(previous).add(entry.id));
 
             // Gone from here at once, as what's on its way was, until the listing comes back without it.
             if (item.source.id === folderId && item.adapter === sectionAdapter) {
@@ -2221,14 +2313,17 @@ const MediaFrame = ({
 
     const shownMoves = transfers.items.filter((item) => item.shown);
 
+    const failure = search.on ? search.error : state?.error;
     const errorMessage =
-        state?.status !== "error"
+        (search.on ? search.status : state?.status) !== "error"
             ? undefined
-            : state.error instanceof Error && state.error.message
-              ? isolate(state.error.message)
-              : inGroup
-                ? text.mediaGroupLoadFailed
-                : undefined;
+            : failure instanceof Error && failure.message
+              ? isolate(failure.message)
+              : search.on
+                ? text.searchFailed(isolate(levelName))
+                : inGroup
+                  ? text.mediaGroupLoadFailed
+                  : undefined;
 
     return (
         <Box
@@ -2366,6 +2461,7 @@ const MediaFrame = ({
                                 // its own, may draw an asset of the same id, and each starts at its top.
                                 key={levelKey}
                                 entries={shownEntries}
+                                trails={search.trails}
                                 uploads={shownUploads}
                                 kind={section.kind}
                                 layout={layout}
@@ -2383,11 +2479,11 @@ const MediaFrame = ({
                                 works={works}
                                 full={full}
                                 multiple={multiple}
-                                status={state?.status ?? "loading"}
-                                hasMedia={leveled.length > 0}
-                                busy={state?.status === "loading" || !!state?.checking}
+                                status={search.on ? search.status : (state?.status ?? "loading")}
+                                hasMedia={search.on || leveled.length > 0}
+                                busy={search.on ? search.searching : state?.status === "loading" || !!state?.checking}
                                 error={errorMessage}
-                                onRetry={reloadLibrary}
+                                onRetry={search.on ? search.retry : reloadLibrary}
                                 onPress={press}
                                 onActivate={activate}
                                 onEnterGroup={enterGroupAt}
@@ -2418,13 +2514,11 @@ const MediaFrame = ({
                             propertiesCache={propertiesCache}
                             onBack={closeAsset}
                             onPrevious={
-                                viewed.step > 0
-                                    ? () => setViewing({ sectionId: section.id, entry: shownAssets[viewed.step - 1] })
-                                    : undefined
+                                viewed.step > 0 ? () => viewAt(shownAssets[viewed.step - 1]) : undefined
                             }
                             onNext={
                                 viewed.step !== -1 && viewed.step < shownAssets.length - 1
-                                    ? () => setViewing({ sectionId: section.id, entry: shownAssets[viewed.step + 1] })
+                                    ? () => viewAt(shownAssets[viewed.step + 1])
                                     : undefined
                             }
                             onToggleSelected={toggleViewed}
@@ -2472,8 +2566,8 @@ const MediaFrame = ({
                         <MediaGroup
                             key={shownEdit.entry.id}
                             group={viewed?.entry ?? shownEdit.entry}
-                            parent={openGroup ?? null}
-                            parentId={folderId}
+                            parent={viewedParent}
+                            parentId={viewedFolderId}
                             section={section}
                             adapter={sectionAdapter}
                             form={viewedEdit ?? shownEdit.form}
@@ -2506,7 +2600,7 @@ const MediaFrame = ({
                             key={shownMove.entry.id}
                             entry={viewed?.entry ?? shownMove.entry}
                             section={section}
-                            from={trail}
+                            from={viewedTrail}
                             movingIds={movingIds}
                             onCancel={() => setMoveStep(null)}
                             onMove={startMove}

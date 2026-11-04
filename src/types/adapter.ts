@@ -204,6 +204,8 @@ export interface SearchMatch {
      * The folders from the root searched down to the one holding the entry, outermost first, not
      * counting the root itself; empty for an entry right in the root. The file manager never
      * parses ids, so this is how it shows where the entry is, opens its folder and acts on it there.
+     * The media manager goes into a group found below by these alone, handing them to the app's
+     * `groupHeader` and `groupForm`, so give whole `FileEntry`s where those read more of a group.
      */
     trail: FolderRef[];
     /**
@@ -707,6 +709,10 @@ export interface FileAdapter {
      * anywhere and in any order, case and accents aside. Results come all at once or a page at a
      * time (`nextCursor`). Without it, the sections it serves aren't searched everywhere. Reject
      * with an `Error` to show its message beside the section's results.
+     *
+     * The media manager and the picker call it for their search, with the open group's id as `rootId`,
+     * or the library's at its root, and show the matches in the order given, ignoring `score`. Groups
+     * may be among them. Without it, they filter the open level by name.
      */
     search?(rootId: string, query: string, options: SearchOptions): Promise<SearchResult>;
     /**

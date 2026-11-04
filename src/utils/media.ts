@@ -8,6 +8,7 @@ import type {
     DroppedFiles,
     FileAdapter,
     FileEntry,
+    FolderRef,
     IconName,
     Locale,
     MediaKind,
@@ -90,6 +91,14 @@ export const uploadStandIn = (files: readonly File[]): FileEntry => ({
     size: files.reduce((total, file) => total + file.size, 0),
     mimeType: files[0]?.type || undefined,
 });
+
+/**
+ * The groups of a search's trail as entries, for the ways through a library, which walked ones are.
+ * All that's known of them is what the adapter's trail gave, so one giving whole entries is drawn as
+ * one walked to is, by `groupHeader` for one.
+ */
+export const groupsOfTrail = (refs: readonly FolderRef[]): FileEntry[] =>
+    refs.map((ref) => ({ kind: "folder", ...ref }));
 
 /**
  * An asset as the backend's latest word on its processing has it, where its listing said it was

@@ -11,6 +11,7 @@ import { KIND_ICONS } from "../../utils/media";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 import { HoldBar, HoldLine } from "./asset-hold";
+import AssetTrail from "./asset-trail";
 
 import type { MediaAssetLookProps, MediaKind } from "../../types";
 
@@ -117,9 +118,9 @@ const detailSx: SxProps<Theme> = {
  * while it's processed. Its look only: what makes it an asset to select, its check and its Open
  * button stay the media manager's, around it, so it's only drawn inside `renderAsset`. A group, an
  * entry of `kind: "folder"`, is drawn as one: its picture, marked as a group, or a folder's icon, and
- * how many it holds under its name.
+ * how many it holds under its name. A search's result from further down says where it is, under those.
  */
-const MediaTile = ({ asset, kind, thumbnail, hold, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
+const MediaTile = ({ asset, kind, thumbnail, hold, trail, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
     const { formatDuration, formatNumber, formatSize, text } = useLocale();
     const group = asset.kind === "folder";
     const duration =
@@ -189,6 +190,7 @@ const MediaTile = ({ asset, kind, thumbnail, hold, title, detail, badge, picture
                         </Typography>
                     )
                 )}
+                {trail && trail.length > 0 && <AssetTrail trail={trail} />}
             </Box>
             {group && (
                 <Box component="span" sx={visuallyHiddenSx}>

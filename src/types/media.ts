@@ -5,7 +5,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import type { AssetState, FileAdapter, FileEntry } from "./adapter";
 import type { FilePreviewer } from "./previewer";
 import type { FieldErrors, PropertyDefinitionGroup } from "./property-definition";
-import type { Section } from "./section";
+import type { FolderRef, Section } from "./section";
 
 /**
  * The one kind of asset a media manager's library holds, which decides the shape of its tiles
@@ -203,13 +203,19 @@ export interface MediaAssetParams {
      * show it; under anything else, the media manager does.
      */
     hold: AssetHold | undefined;
+    /**
+     * Where it is below the level searched, the groups on the way, outermost first, while it's a
+     * result of the adapter's `search` from further down. `MediaTile` and `MediaRow` show it; under
+     * anything else, the media manager does.
+     */
+    trail?: readonly FolderRef[];
 }
 
 /**
  * The media manager's own look of an asset, `MediaTile` or `MediaRow`: what `renderAsset` hands over,
  * spread onto it, and what to change. Each part left out stays as it is, and `null` takes it away.
  */
-export interface MediaAssetLookProps extends Pick<MediaAssetParams, "asset" | "kind" | "thumbnail" | "hold"> {
+export interface MediaAssetLookProps extends Pick<MediaAssetParams, "asset" | "kind" | "thumbnail" | "hold" | "trail"> {
     /** In place of its name. */
     title?: ReactNode;
     /**

@@ -22,14 +22,17 @@ import type {
     FileAdapter,
     FileEntry,
     FileUploadItem,
+    FolderRef,
     MediaAssetDraw,
     MediaKind,
     MediaLayout,
 } from "../../types";
 
 interface MediaGridProps {
-    /** The open level's assets and groups the search leaves, in the order shown. */
+    /** The open level's assets and groups the search leaves, or what it found below, in the order shown. */
     entries: readonly FileEntry[];
+    /** Where those from further down than the open level are, by their ids. */
+    trails?: ReadonlyMap<string, readonly FolderRef[]>;
     /** Files being uploaded into the library, shown before its assets until they're listed. */
     uploads: readonly FileUploadItem[];
     /** The library's kind, whose tiles' shape they take, and its icon. */
@@ -171,6 +174,7 @@ const stepOf = (event: KeyboardEvent<HTMLElement>, columns: number) => {
  */
 const MediaGrid = ({
     entries,
+    trails,
     uploads,
     kind,
     layout,
@@ -387,6 +391,7 @@ const MediaGrid = ({
                         selected={selectedIds.has(entry.id)}
                         hold={holds.get(entry.id)}
                         work={works.get(entry.id)}
+                        trail={trails?.get(entry.id)}
                         limited={full && !selectedIds.has(entry.id) && entry.kind !== "folder"}
                         focused={index === tabStop}
                         draw={drawAsset}

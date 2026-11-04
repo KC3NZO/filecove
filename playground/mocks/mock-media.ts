@@ -662,6 +662,20 @@ const storedAs = (entry: FileEntry, readOnly = false): FileEntry => ({
     name: storedNames.get(`${readOnly}:${entry.id}`) ?? entry.name,
 });
 
+/** An entry as a media backend lists it: an asset with what its listing says, a group with what it holds. */
+const listedEntry = (entry: FileEntry, readOnly: boolean): FileEntry =>
+    entry.kind === "file"
+        ? listedAs(entry)
+        : {
+              ...entry,
+              modifiedAt: coversChanged.get(`${readOnly}:${entry.id}`) ?? entry.modifiedAt,
+              meta: {
+                  type: savedValues.get(`${readOnly}:${entry.id}`)?.type ?? GROUPS[entry.id]?.type,
+                  description:
+                      savedValues.get(`${readOnly}:${entry.id}`)?.description ?? GROUPS[entry.id]?.description,
+              },
+          };
+
 /**
  * Makes an adapter of the mock a media backend: what its listings say of each asset (`media`, and
  * a video's delivery in `meta`), a video's poster frame in use as its thumbnail, and its properties,
@@ -765,21 +779,19 @@ const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
     list: (folderId, options) =>
         adapter.list(folderId, options).then((result) => ({
             ...result,
-            entries: result.entries.map((entry) =>
-                entry.kind === "file"
-                    ? listedAs(entry)
-                    : {
-                          ...entry,
-                          modifiedAt: coversChanged.get(`${readOnly}:${entry.id}`) ?? entry.modifiedAt,
-                          meta: {
-                              type: savedValues.get(`${readOnly}:${entry.id}`)?.type ?? GROUPS[entry.id]?.type,
-                              description:
-                                  savedValues.get(`${readOnly}:${entry.id}`)?.description ??
-                                  GROUPS[entry.id]?.description,
-                          },
-                      },
-            ),
+            entries: result.entries.map((entry) => listedEntry(entry, readOnly)),
         })),
+    // What's found is as it's listed, and the groups on the way to it too, whole as a backend's would be,
+    // so one gone into from a result has what it has when it's walked to.
+    search: (rootId, query, options) =>
+        adapter.search?.(rootId, query, options).then((result) => ({
+            ...result,
+            matches: result.matches.map((match) => ({
+                ...match,
+                entry: listedEntry(match.entry, readOnly),
+                trail: match.trail.map((group) => listedEntry({ ...group, kind: "folder" }, readOnly)),
+            })),
+        })) ?? Promise.resolve({ matches: [] }),
     // How its assets' processing stands, asked by the media manager as it polls, or with `?push`,
     // pushed every second as a socket would, rather than asked.
     ...(push
@@ -888,6 +900,16 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => {
         ...backend,
         list: (folderId, options) =>
             backend.list(folderId, options).then((result) => ({ ...result, entries: result.entries.map(named) })),
+        // Found by the names the tree has, as this mock walks it, shown by those saved since.
+        search: (rootId, query, options) =>
+            backend.search?.(rootId, query, options).then((result) => ({
+                ...result,
+                matches: result.matches.map((match) => ({
+                    ...match,
+                    entry: named(match.entry),
+                    trail: match.trail.map((group) => named({ ...group, kind: "folder" })),
+                })),
+            })) ?? Promise.resolve({ matches: [] }),
         process: (entry, values, options) => backend.process?.(stored(entry), values, options) ?? Promise.resolve(),
         content: (entry, options) =>
             backend.content?.(stored(entry), options) ?? Promise.reject(new Error("No contents here.")),

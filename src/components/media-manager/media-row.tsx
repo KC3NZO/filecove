@@ -12,6 +12,7 @@ import { KIND_ICONS } from "../../utils/media";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 import { HoldBar, HoldLine } from "./asset-hold";
+import AssetTrail from "./asset-trail";
 
 import type { MediaAssetLookProps } from "../../types";
 
@@ -69,9 +70,9 @@ const durationSx: SxProps<Theme> = {
  * while it's processed, and its length. Its look only: what makes it an asset to select, its Open
  * button and its check stay the media manager's, beside it, so it's only drawn inside `renderAsset`.
  * A group, an entry of `kind: "folder"`, is drawn as one: its picture or a folder's icon, and how many
- * it holds under its name.
+ * it holds under its name. A search's result from further down says where it is, under those.
  */
-const MediaRow = ({ asset, kind, thumbnail, hold, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
+const MediaRow = ({ asset, kind, thumbnail, hold, trail, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
     const { describeType, formatDuration, formatNumber, formatSize, text } = useLocale();
     const group = asset.kind === "folder";
     const duration = !group && badge === undefined ? asset.media?.duration : undefined;
@@ -131,6 +132,7 @@ const MediaRow = ({ asset, kind, thumbnail, hold, title, detail, badge, picture,
                         {joinIsolated(facts)}
                     </Typography>
                 )}
+                {trail && trail.length > 0 && <AssetTrail trail={trail} />}
             </Box>
             {group && (
                 <Box component="span" sx={visuallyHiddenSx}>

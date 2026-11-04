@@ -13,6 +13,7 @@ import { useChosenColumn } from "../../hooks/use-chosen-column";
 import { useFilesDrop } from "../../hooks/use-files-drop";
 import { useData, useFolder } from "../../hooks/use-folder";
 import { useLocale } from "../../hooks/use-locale";
+import { useLevelSearch } from "../../hooks/use-level-search";
 import { useMediaSearch } from "../../hooks/use-media-search";
 import { usePicks } from "../../hooks/use-picks";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
@@ -24,7 +25,17 @@ import { NO_ERRORS } from "../../utils/field-errors";
 import { carriesFiles, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
 import { countLimit } from "../../utils/limits";
-import { byDate, checkMediaUpload, chooseHeldBy, holdOf, layoutsOf, pickFormOf, withState, workOf } from "../../utils/media";
+import {
+    byDate,
+    checkMediaUpload,
+    chooseHeldBy,
+    groupsOfTrail,
+    holdOf,
+    layoutsOf,
+    pickFormOf,
+    withState,
+    workOf,
+} from "../../utils/media";
 import { allows } from "../../utils/permissions";
 import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
@@ -264,6 +275,14 @@ const PickerFrame = ({
     const folderId = openGroup?.id ?? section.rootId;
     const levelName = openGroup?.name ?? section.label;
     const { state, reload } = useFolder(section, folderId, true, true);
+    // Each time something here changes the backend, which a search through it is asked again after.
+    const [changes, setChanges] = useState(0);
+    const search = useLevelSearch(section, adapter, folderId, query, changes);
+    // The level an asset shown is in: the one open, or the one a search found it in below it.
+    const pickedAtOf = useCallback(
+        (id: string) => search.trails.get(id)?.at(-1)?.id ?? folderId,
+        [search.trails, folderId],
+    );
     // What the app is told is made as `choices` is, which needs the listing, and more below that needs
     // the picks, so it's reached through this.
     const choicesOfRef = useRef<(items: readonly PickerPick[]) => MediaChoice[]>(() => []);
@@ -301,7 +320,10 @@ const PickerFrame = ({
     const uploadButtonRef = useRef<HTMLButtonElement>(null);
 
     const relist = useCallback(
-        (served: FileAdapter, folderIds: string[]) => store.relist(section.id, served, folderIds),
+        (served: FileAdapter, folderIds: string[]) => {
+            setChanges((count) => count + 1);
+            store.relist(section.id, served, folderIds);
+        },
         [store, section.id],
     );
 
@@ -320,18 +342,22 @@ const PickerFrame = ({
 
     const listed = useMemo(() => level.filter((entry) => !isGroup(entry)), [level]);
 
-    // Assets being processed, here and among the picks, followed until they're done.
+    // What the adapter's search found, in its order.
+    const found = useMemo(() => search.hits.map(({ entry }) => entry), [search.hits]);
+
+    // Assets being processed, here, among what the search found and among the picks, followed until
+    // they're done.
     const processed = useMemo<readonly FollowedAssets[]>(() => {
         const entries = new Map<string, FileEntry>();
 
-        [...listed, ...picks.map(({ asset }) => asset)].forEach((entry) => {
+        [...listed, ...found.filter((entry) => !isGroup(entry)), ...picks.map(({ asset }) => asset)].forEach((entry) => {
             if (entry.processing?.status === "processing" && !entries.has(entry.id)) {
                 entries.set(entry.id, entry);
             }
         });
 
         return entries.size > 0 ? [{ adapter, entries: [...entries.values()] }] : NO_FOLLOWED;
-    }, [listed, picks, adapter]);
+    }, [listed, found, picks, adapter]);
 
     const { states, forget } = useAssetStates(processed, relistOpen);
     const said = states.get(adapter);
@@ -354,10 +380,20 @@ const PickerFrame = ({
         }
     }, [state?.status, listed, adapter, forget]);
 
+    // And once the search has, for what it found elsewhere.
+    useEffect(() => {
+        if (search.on && search.status === "ready") {
+            forget(
+                adapter,
+                found.filter((entry) => !entry.processing).map(({ id }) => id),
+            );
+        }
+    }, [search.on, search.status, found, adapter, forget]);
+
     // A pick keeps its entry as last listed, so what's handed over from another level has what's been
     // made of it since.
     useEffect(() => {
-        const byId = new Map(listed.map((entry) => [entry.id, entry]));
+        const byId = new Map([...found, ...listed].map((entry) => [entry.id, entry]));
 
         setPicks((previous) => {
             let changed = false;
@@ -375,7 +411,7 @@ const PickerFrame = ({
 
             return changed ? { ...previous, items } : previous;
         });
-    }, [listed, setPicks]);
+    }, [listed, found, setPicks]);
 
     // What the app's form holds for a pick until it's changed.
     const defaultsOf = useCallback(
@@ -428,10 +464,14 @@ const PickerFrame = ({
     const sayFull = useCallback(() => announce(text.mediaChoicesFull), [announce, text]);
 
     const terms = useMemo(() => searchTerms(query, foldLetters), [query, foldLetters]);
-    const shownEntries = useMemo(
-        () => (terms.length === 0 ? leveled : leveled.filter((entry) => holdsTerms(foldLetters(entry.name), terms))),
-        [leveled, terms, foldLetters],
-    );
+    // What the adapter's search found, or without one, the open level filtered by name.
+    const shownEntries = useMemo(() => {
+        if (search.on) {
+            return said ? found.map((entry) => withState(entry, said.get(entry.id))) : found;
+        }
+
+        return terms.length === 0 ? leveled : leveled.filter((entry) => holdsTerms(foldLetters(entry.name), terms));
+    }, [search.on, found, said, leveled, terms, foldLetters]);
     const shownAssets = useMemo(() => shownEntries.filter((entry) => !isGroup(entry)), [shownEntries]);
     const shownGroupIds = useMemo(() => new Set(shownEntries.filter(isGroup).map(({ id }) => id)), [shownEntries]);
     const order = useMemo(() => shownEntries.map(({ id }) => id), [shownEntries]);
@@ -528,11 +568,14 @@ const PickerFrame = ({
             }
 
             setPicks({
-                items: [...kept, ...adding.slice(0, room).map((asset) => ({ asset, folderId, values: NO_VALUES }))],
+                items: [
+                    ...kept,
+                    ...adding.slice(0, room).map((asset) => ({ asset, folderId: pickedAtOf(asset.id), values: NO_VALUES })),
+                ],
                 anchor: nextAnchor,
             });
         },
-        [picks, selectedIds, limit, shownAssets, holds, sayFull, folderId, setPicks],
+        [picks, selectedIds, limit, shownAssets, holds, sayFull, pickedAtOf, setPicks],
     );
 
     // Several at once, a click adds or takes away the asset, and Shift adds those from the last one
@@ -673,10 +716,10 @@ const PickerFrame = ({
             const group = shownEntries[index];
 
             if (group) {
-                showLevel([...trail, group], null);
+                showLevel([...trail, ...groupsOfTrail(search.trails.get(group.id) ?? []), group], null);
             }
         },
-        [shownEntries, showLevel, trail],
+        [shownEntries, showLevel, trail, search.trails],
     );
 
     const levelUp = useCallback(() => goToLevel(trail.length - 1), [goToLevel, trail.length]);
@@ -1014,14 +1057,17 @@ const PickerFrame = ({
     const note = chooseHeld ?? (count === limit ? text.mediaChoicesFull : undefined);
     // One at a time with nothing selected, there's no column to show.
     const chosenEmpty = !multiple && count === 0;
+    const failure = search.on ? search.error : state?.error;
     const errorMessage =
-        state?.status !== "error"
+        (search.on ? search.status : state?.status) !== "error"
             ? undefined
-            : state.error instanceof Error && state.error.message
-              ? isolate(state.error.message)
-              : inGroup
-                ? text.mediaGroupLoadFailed
-                : undefined;
+            : failure instanceof Error && failure.message
+              ? isolate(failure.message)
+              : search.on
+                ? text.searchFailed(isolate(levelName))
+                : inGroup
+                  ? text.mediaGroupLoadFailed
+                  : undefined;
 
     return (
         <Box
@@ -1130,6 +1176,7 @@ const PickerFrame = ({
                             <MediaGrid
                                 key={folderId}
                                 entries={shownEntries}
+                                trails={search.trails}
                                 uploads={shownUploads}
                                 kind={section.kind}
                                 layout={layout}
@@ -1150,11 +1197,11 @@ const PickerFrame = ({
                                 works={works}
                                 full={full}
                                 multiple={multiple}
-                                status={state?.status ?? "loading"}
-                                hasMedia={leveled.length > 0}
-                                busy={state?.status === "loading" || !!state?.checking}
+                                status={search.on ? search.status : (state?.status ?? "loading")}
+                                hasMedia={search.on || leveled.length > 0}
+                                busy={search.on ? search.searching : state?.status === "loading" || !!state?.checking}
                                 error={errorMessage}
-                                onRetry={reload}
+                                onRetry={search.on ? search.retry : reload}
                                 onPress={press}
                                 onActivate={activate}
                                 onEnterGroup={enterGroupAt}
