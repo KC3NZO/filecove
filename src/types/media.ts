@@ -389,3 +389,13 @@ export interface MediaChoice<V = Record<string, unknown>> {
      */
     values: V;
 }
+
+/**
+ * What a `MediaPicker` is given as selected. It has one library, so a pick needs no `section`, and what
+ * `onChoose` and `onChange` hand over can be given back as it is. Without `values`, it holds the form's
+ * `defaults`, and follows them until it's changed.
+ */
+export interface MediaPickerValue<V = Record<string, unknown>> {
+    asset: FileEntry;
+    values?: V;
+}

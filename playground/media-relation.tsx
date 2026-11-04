@@ -6,17 +6,27 @@ import Dialog from "@mui/material/Dialog";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
-import { MediaPicker, MediaPicture } from "../src";
+import { MediaFields, MediaPicker, MediaPicture } from "../src";
 import { imageUploadForm, videoUploadForm } from "./media-uploads";
 
-import type { FileAdapter, FileEntry, MediaSection, PropertyDefinition, PropertyEditParams } from "../src";
+import type {
+    FileAdapter,
+    FileEntry,
+    MediaPickerValue,
+    MediaPickForm,
+    MediaSection,
+    PropertyDefinition,
+    PropertyDefinitionGroup,
+    PropertyEditParams,
+} from "../src";
 
 // A field pointing at an asset of another library, the playground's own, as the media manager knows of
 // no such thing: a series' teaser in Videos and its poster in Images. The dialog and what's kept are the
 // app's, and the field holds the asset as it was chosen, where a real backend would keep its id and send
 // it back so. Only `MediaPicker` and `MediaPicture` are the component's: the first finds or uploads the asset, and
-// nothing can be deleted or moved from it, the second shows it. What's asked of an upload is the library's `uploadForm`, and anything about
-// this use of the asset would be a field beside this one. A gallery holds several, by the picker's `multiple`.
+// nothing can be deleted or moved from it, the second shows it. What's asked of an upload is the library's `uploadForm`, and what's
+// about this use of the asset is the picker's `pickForm`, as a gallery's caption for each picture. A gallery holds several, by the
+// picker's `multiple`, kept as the picks are, each picture with what its form holds.
 
 // The same libraries as the page's, without what's for managing them, which a picker doesn't read.
 const VIDEOS: MediaSection = {
@@ -39,6 +49,19 @@ const IMAGES: MediaSection = {
     uploadForm: imageUploadForm,
 };
 
+const CAPTION_GROUPS: PropertyDefinitionGroup[] = [
+    { id: "gallery", properties: [{ field: "caption", label: "Caption", type: "string", required: true }] },
+];
+
+// What's asked of each picture for this gallery, which the library knows nothing of.
+const CAPTION_FORM: MediaPickForm = {
+    defaults: { caption: "" },
+    render: (form) => <MediaFields {...form} groups={CAPTION_GROUPS} />,
+    ready: ({ values }) => !!String(values.caption ?? "").trim() || "Write a caption for each picture.",
+};
+
+const captionForm = () => CAPTION_FORM;
+
 const rowSx: SxProps<Theme> = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 };
 
 const listSx: SxProps<Theme> = { display: "flex", flexDirection: "column", gap: 1 };
@@ -49,11 +72,23 @@ const nameSx: SxProps<Theme> = { flex: "1 1 6rem", minWidth: 0, overflowWrap: "a
 
 const dialogSx: SxProps<Theme> = { "& .MuiDialog-paper": { height: "min(85dvh, 760px)" } };
 
-const Chosen = ({ entry, adapter }: { entry: FileEntry; adapter: FileAdapter }) => (
+interface ChosenProps {
+    entry: FileEntry;
+    adapter: FileAdapter;
+    /** What's written about this use of it, under its name. */
+    caption?: string;
+}
+
+const Chosen = ({ entry, adapter, caption }: ChosenProps) => (
     <>
         <MediaPicture entry={entry} adapter={adapter} sx={pictureSx} />
-        <Typography variant="body2" sx={nameSx}>
+        <Typography component="div" variant="body2" sx={nameSx}>
             <bdi>{entry.name}</bdi>
+            {caption && (
+                <Typography variant="caption" color="text.secondary" component="div">
+                    <bdi>{caption}</bdi>
+                </Typography>
+            )}
         </Typography>
     </>
 );
@@ -90,10 +125,10 @@ const RelationField = ({ section, value, onChange, adapter, labelId, disabled }:
                     adapter={adapter}
                     section={section}
                     allowUpload
-                    defaultValue={chosen ? [chosen] : undefined}
+                    defaultValue={chosen ? [{ asset: chosen }] : undefined}
                     onCancel={() => setOpen(false)}
-                    onChoose={([asset]) => {
-                        onChange(asset);
+                    onChoose={([choice]) => {
+                        onChange(choice.asset);
                         setOpen(false);
                     }}
                 />
@@ -108,24 +143,25 @@ interface RelationsFieldProps extends RelationFieldProps {
 }
 
 /**
- * What's chosen, each with its Remove, in the order they were selected, and Choose or Change opening
- * the picker on them, so what's there can be added to or taken from.
+ * What's chosen, each with its Remove, in the order set, and Choose or Change opening the picker on
+ * them, with what's written about each, so what's there can be added to, taken from, put in order or
+ * written about again. A wider dialog, for the selected column to dock beside the library.
  */
 const RelationsField = ({ section, maxChoices, value, onChange, adapter, labelId, disabled }: RelationsFieldProps) => {
-    const chosen = (value as FileEntry[] | undefined) ?? [];
+    const chosen = (value as MediaPickerValue[] | undefined) ?? [];
     const [open, setOpen] = useState(false);
 
     return (
         <Box sx={listSx}>
-            {chosen.map((entry) => (
-                <Box key={entry.id} sx={rowSx}>
-                    <Chosen entry={entry} adapter={adapter} />
+            {chosen.map(({ asset, values }) => (
+                <Box key={asset.id} sx={rowSx}>
+                    <Chosen entry={asset} adapter={adapter} caption={String(values?.caption ?? "")} />
                     <Button
                         size="small"
                         color="inherit"
                         disabled={disabled}
                         onClick={() => {
-                            const rest = chosen.filter(({ id }) => id !== entry.id);
+                            const rest = chosen.filter((each) => each.asset.id !== asset.id);
 
                             onChange(rest.length > 0 ? rest : undefined);
                         }}
@@ -148,7 +184,7 @@ const RelationsField = ({ section, maxChoices, value, onChange, adapter, labelId
             <Dialog
                 open={open}
                 fullWidth
-                maxWidth="md"
+                maxWidth="lg"
                 aria-labelledby={labelId}
                 sx={dialogSx}
                 onClose={() => setOpen(false)}
@@ -159,10 +195,11 @@ const RelationsField = ({ section, maxChoices, value, onChange, adapter, labelId
                     multiple
                     maxChoices={maxChoices}
                     allowUpload
+                    pickForm={captionForm}
                     defaultValue={chosen}
                     onCancel={() => setOpen(false)}
-                    onChoose={(assets) => {
-                        onChange(assets);
+                    onChoose={(choices) => {
+                        onChange(choices.map(({ asset, values }) => ({ asset, values })));
                         setOpen(false);
                     }}
                 />
@@ -189,13 +226,13 @@ const relations = (field: string, label: string, section: MediaSection, maxChoic
     field,
     label,
     render: ({ value, adapter }) => {
-        const chosen = (value as FileEntry[] | undefined) ?? [];
+        const chosen = (value as MediaPickerValue[] | undefined) ?? [];
 
         return chosen.length > 0 ? (
             <Box sx={listSx}>
-                {chosen.map((entry) => (
-                    <Box key={entry.id} sx={rowSx}>
-                        <Chosen entry={entry} adapter={adapter} />
+                {chosen.map(({ asset, values }) => (
+                    <Box key={asset.id} sx={rowSx}>
+                        <Chosen entry={asset} adapter={adapter} caption={String(values?.caption ?? "")} />
                     </Box>
                 ))}
             </Box>

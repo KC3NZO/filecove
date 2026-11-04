@@ -15,13 +15,22 @@ import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { MEDIA_CONTAINER } from "../../styles/media-layout";
 import { withSx } from "../../styles/sx";
 import PickerFrame from "./picker-frame";
+import type { PickerFrameProps } from "./picker-frame";
 
-import type { FileAdapter, FileEntry, MediaManagerLocaleText, MediaSection } from "../../types";
+import type {
+    FileAdapter,
+    FileEntry,
+    MediaChoice,
+    MediaManagerLocaleText,
+    MediaPickerValue,
+    MediaPickForm,
+    MediaSection,
+} from "../../types";
 
 // The root element's own attributes, which go on it as they do on a MUI component's root.
 type RootAttributes = Omit<ComponentPropsWithoutRef<"div">, "children" | "defaultValue" | "onChange">;
 
-export interface MediaPickerProps extends RootAttributes {
+export interface MediaPickerProps<V = Record<string, unknown>> extends RootAttributes {
     /** Serves the library, unless it brings its own adapter. */
     adapter: FileAdapter;
     /**
@@ -32,12 +41,21 @@ export interface MediaPickerProps extends RootAttributes {
      */
     section: MediaSection;
     /**
-     * Takes what's chosen, with the Choose button, a double click or Enter on an asset, each as it was
-     * listed, `meta` and all: one asset, unless `multiple`. What's stored of it, and anything asked about
-     * this use of it, are the app's, around the picker. Without it there's no Choose, for an app taking
-     * what's selected as it changes (`onChange`), and a double click or Enter only selects.
+     * Takes what's chosen, with the Choose button, a double click or Enter on an asset: each its `asset`
+     * as it was listed, `meta` and all, and what `pickForm` holds for it (`values`), in the order set:
+     * one, unless `multiple`. What's stored of it is the app's. Without it there's no Choose, for an app
+     * taking what's selected as it changes (`onChange`), and a double click or Enter only selects.
      */
-    onChoose?: (assets: FileEntry[]) => void;
+    onChoose?: (choices: MediaChoice<V>[]) => void;
+    /**
+     * What's asked of each pick for this use of it, such as a caption, or `null` for nothing, by the
+     * form's shape the media manager's `pickForm` has. Passing it adds the selected column beside the
+     * library, or over it where there's no room: what's selected, put in order with `multiple`, and each
+     * one's form. Its `defaults` count from the moment it's picked and its `ready` holds Choose back;
+     * the backend's `errors` have no place here, as what's picked is saved by the app's form around the
+     * picker. Without it there's no column. Keep it outside the component, or memoized.
+     */
+    pickForm?: (asset: FileEntry, section: MediaSection) => MediaPickForm<V> | null;
     /** Puts a Cancel button beside Choose, for a picker in the app's own dialog. */
     onCancel?: () => void;
     /** Whether several can be chosen at once, in the order they were selected. One at a time when omitted. */
@@ -54,14 +72,15 @@ export interface MediaPickerProps extends RootAttributes {
      */
     allowUpload?: boolean;
     /** What's selected, when the app keeps it, with `onChange`: every change is then only asked for. */
-    value?: readonly FileEntry[];
+    value?: readonly MediaPickerValue<V>[];
     /** What's selected as it mounts, such as what the field it's picking for holds now. */
-    defaultValue?: readonly FileEntry[];
+    defaultValue?: readonly MediaPickerValue<V>[];
     /**
-     * Told everything selected as it changes, in the order set. One found to be gone, no longer listed
-     * where it was picked, is told too; a new listing of an asset alone isn't.
+     * Told everything selected as it changes, in the order set, each with what its form holds, so at
+     * every key typed in one. One found to be gone, no longer listed where it was picked, is told too; a
+     * new listing of an asset alone isn't.
      */
-    onChange?: (assets: FileEntry[]) => void;
+    onChange?: (choices: MediaChoice<V>[]) => void;
     /** The component's own text, the media manager's. Keys left out stay in English, as `enUS` has them. */
     localeText?: Partial<MediaManagerLocaleText>;
     /** The BCP 47 language tag that numbers, sizes and dates are written in and names are matched by. */
@@ -103,14 +122,16 @@ const numberOf = (adapter: FileAdapter) => {
  * One library to find an asset in and choose it, for a field that points at an asset of another
  * library, such as a series' teaser or a video's poster: its assets and groups, a search by name, and,
  * when the app allows it, uploading what isn't there yet. It's a sibling of `MediaManager` built from
- * the same parts, with nothing for managing a library: no list of libraries, no asset view, no selected
- * column, no forms for a pick, and nothing to delete, move or make a group with, so none of that needs
- * turning off. It has no dialog of its own, as a picker's place is the app's.
+ * the same parts, with nothing for managing a library: no list of libraries, no asset view, and nothing
+ * to delete, move or make a group with, so none of that needs turning off. With `pickForm`, what's
+ * selected is listed beside the library, each with the app's form for this use of it. It has no dialog
+ * of its own, as a picker's place is the app's.
  */
-const MediaPicker = ({
+const MediaPicker = <V,>({
     adapter,
     section,
     onChoose,
+    pickForm,
     onCancel,
     multiple = false,
     maxChoices,
@@ -123,7 +144,7 @@ const MediaPicker = ({
     ref,
     sx,
     ...rootAttributes
-}: MediaPickerProps) => {
+}: MediaPickerProps<V>) => {
     const localeValue = useLocaleValue(localeText, locale);
     const [store] = useState(createFolderStore);
     const [thumbnails] = useState(createThumbnailCache);
@@ -146,14 +167,15 @@ const MediaPicker = ({
                             key={`${numberOf(section.adapter ?? adapter)}/${section.id}/${section.rootId}`}
                             section={section}
                             adapter={section.adapter ?? adapter}
-                            onChoose={onChoose}
+                            onChoose={onChoose as PickerFrameProps["onChoose"]}
+                            pickForm={pickForm as PickerFrameProps["pickForm"]}
                             onCancel={onCancel}
                             multiple={multiple}
                             maxChoices={maxChoices}
                             allowUpload={allowUpload}
-                            value={value}
-                            defaultValue={defaultValue}
-                            onChange={onChange}
+                            value={value as PickerFrameProps["value"]}
+                            defaultValue={defaultValue as PickerFrameProps["defaultValue"]}
+                            onChange={onChange as PickerFrameProps["onChange"]}
                         />
                     </Box>
                 </DataContext>

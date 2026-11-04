@@ -9,17 +9,17 @@ export interface PicksState<P, A> {
     anchor: A | null;
 }
 
-interface PicksOptions<P, A, T> {
+interface PicksOptions<P, A, T, G> {
     /** Names the component in MUI's warning about switching between controlled and not. */
     component: string;
     /** What's selected, when the app keeps it. */
-    value: readonly T[] | undefined;
+    value: readonly G[] | undefined;
     /** What's selected as it mounts, while the app doesn't. */
-    defaultValue: readonly T[] | undefined;
+    defaultValue: readonly G[] | undefined;
     /** Told what's selected, as it changes. */
     onChange: ((value: T[]) => void) | undefined;
     /** The picks the app's list means, with `known`, those it was last told of and those kept, for what it can't say. */
-    given: (list: readonly T[], known: readonly P[]) => P[];
+    given: (list: readonly G[], known: readonly P[]) => P[];
     /** The list the app is told of, for picks. */
     told: (items: readonly P[]) => T[];
     /** Whether two picks are one to the app: a new listing's entry for an asset isn't a change. */
@@ -41,8 +41,9 @@ const sameList = <T>(a: readonly T[], b: readonly T[], same: (a: T, b: T) => boo
  * Every change goes through the setter returned, and only one the app would see is told. While
  * the app keeps the list, such a change is only asked for, the rest being made at once. Two changes
  * in one event build on each other, the second seeing the first until the next render says what came of it.
+ * What the app gives (`G`) may ask less of it than what it's told of (`T`).
  */
-export const usePicks = <P, A, T>({
+export const usePicks = <P, A, T, G = T>({
     component,
     value,
     defaultValue,
@@ -51,9 +52,9 @@ export const usePicks = <P, A, T>({
     told,
     sameItem,
     keyOf,
-}: PicksOptions<P, A, T>) => {
+}: PicksOptions<P, A, T, G>) => {
     // Only for its warning: what's kept has more in it than the app's list.
-    useControlled<readonly T[]>({ controlled: value, default: NO_LIST, name: component, state: "value" });
+    useControlled<readonly G[]>({ controlled: value, default: NO_LIST, name: component, state: "value" });
 
     const [state, setState] = useState<PicksState<P, A>>(() => ({
         items: given(value ?? defaultValue ?? NO_LIST, NO_LIST),

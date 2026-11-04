@@ -59,6 +59,7 @@ export type {
     MediaAssetLookProps,
     MediaAssetParams,
     MediaChoice,
+    MediaPickerValue,
     MediaForm,
     MediaFormParams,
     MediaFormRefusal,

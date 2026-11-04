@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, SetStateAction } from "react";
 
+import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
@@ -8,25 +9,32 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useAnnouncer } from "../../hooks/use-announcer";
 import { useAssetStates } from "../../hooks/use-asset-states";
+import { useChosenColumn } from "../../hooks/use-chosen-column";
 import { useFilesDrop } from "../../hooks/use-files-drop";
 import { useData, useFolder } from "../../hooks/use-folder";
 import { useLocale } from "../../hooks/use-locale";
 import { useMediaSearch } from "../../hooks/use-media-search";
 import { usePicks } from "../../hooks/use-picks";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
+import { chosenBackdropSx, chosenColumnSx, mediaWide } from "../../styles/media-layout";
 import { visuallyHiddenSx } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
 import { firstInView, focusLost } from "../../utils/dom";
+import { NO_ERRORS } from "../../utils/field-errors";
 import { carriesFiles, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
 import { countLimit } from "../../utils/limits";
-import { byDate, checkMediaUpload, holdOf, layoutsOf, withState, workOf } from "../../utils/media";
+import { byDate, checkMediaUpload, chooseHeldBy, holdOf, layoutsOf, withState, workOf } from "../../utils/media";
 import { allows } from "../../utils/permissions";
 import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
 import { pressesKey } from "../../utils/shortcut";
+import Icon from "../icons/icon";
 import UploadPanel from "../uploads/upload-panel";
+import { choiceKey } from "./choice-list";
+import ChoicesPane from "./choices-pane";
 import DropZone from "./drop-zone";
+import { MediaFormBody } from "./media-form";
 import MediaGrid from "./media-grid";
 import MediaHeader from "./media-header";
 import MediaUpload from "./media-upload";
@@ -39,29 +47,37 @@ import type {
     FileUploadItem,
     FollowedAssets,
     MediaAssetDraw,
+    MediaChoice,
     MediaLayout,
+    MediaPickerValue,
+    MediaPickForm,
     MediaSection,
     MediaUploadCheck,
     MediaUploadForm,
 } from "../../types";
 
-interface PickerFrameProps {
+export interface PickerFrameProps {
     section: MediaSection;
     adapter: FileAdapter;
-    onChoose: ((assets: FileEntry[]) => void) | undefined;
+    onChoose: ((choices: MediaChoice[]) => void) | undefined;
+    pickForm: ((asset: FileEntry, section: MediaSection) => MediaPickForm | null) | undefined;
     onCancel: (() => void) | undefined;
     multiple: boolean;
     maxChoices: number | undefined;
     allowUpload: boolean;
-    value: readonly FileEntry[] | undefined;
-    defaultValue: readonly FileEntry[] | undefined;
-    onChange: ((assets: FileEntry[]) => void) | undefined;
+    value: readonly MediaPickerValue[] | undefined;
+    defaultValue: readonly MediaPickerValue[] | undefined;
+    onChange: ((choices: MediaChoice[]) => void) | undefined;
 }
 
-/** An asset selected, with the level it was selected at; none for one the app gave, as that's unknown. */
+/**
+ * An asset selected, with the level it was selected at, none for one the app gave, as that's unknown,
+ * and what the app's form holds for it, `NO_VALUES` until it's changed, for the form's defaults.
+ */
 interface PickerPick {
     asset: FileEntry;
     folderId?: string;
+    values: Record<string, unknown>;
 }
 
 /** Who takes the focus as a level shows: the group left, or with none, the first thing in it. */
@@ -97,13 +113,35 @@ const NO_ENTRIES: FileEntry[] = [];
 const NO_TRAIL: readonly FileEntry[] = [];
 const NO_PICKS = { items: [] as readonly PickerPick[], anchor: null };
 
+const NO_VALUES: Record<string, unknown> = {};
+// The choices made from a pick's form's defaults, nothing being changed yet, so what's made from them
+// again is too, and they go on following the form.
+const DEFAULTED = new WeakSet<object>();
+
 const pickerPickKey = ({ asset }: PickerPick) => asset.id;
 
-const samePickerPick = (a: PickerPick, b: PickerPick) => a.asset.id === b.asset.id;
+/** Whether two picks are one to the app, which a new listing's entry for the asset doesn't change. */
+const samePickerPick = (a: PickerPick, b: PickerPick) => a.asset.id === b.asset.id && a.values === b.values;
 
-/** The picks the app's list means, each at the level known of it, or none. */
-const pickerPicksGiven = (list: readonly FileEntry[], known: readonly PickerPick[]): PickerPick[] =>
-    list.map((asset) => ({ asset, folderId: known.find((item) => item.asset.id === asset.id)?.folderId }));
+/** The picks the app's list means, each at the level known of it, or none, with what it holds. */
+const pickerPicksGiven = (list: readonly MediaPickerValue[], known: readonly PickerPick[]): PickerPick[] =>
+    list.map((given) => ({
+        asset: given.asset,
+        folderId: known.find((item) => item.asset.id === given.asset.id)?.folderId,
+        values: DEFAULTED.has(given) ? NO_VALUES : (given.values ?? NO_VALUES),
+    }));
+
+/** A choice as the app is handed it, its values its own, known for what it is if it's handed back. */
+const handedCopy = (choice: MediaChoice): MediaChoice => {
+    const copy = { ...choice, values: { ...choice.values } };
+
+    if (DEFAULTED.has(choice)) {
+        DEFAULTED.add(copy);
+    }
+
+    return copy;
+};
+
 const NO_FOLLOWED: readonly FollowedAssets[] = [];
 const NO_ARRIVALS: readonly Arrival[] = [];
 const NO_UPLOADS: readonly FileUploadItem[] = [];
@@ -127,6 +165,22 @@ const frameSx: SxProps<Theme> = {
     color: "text.primary",
 };
 
+// The library with the selected column beside it, or over it, placed by this so its foot stays
+// reachable under the overlay, Choose and Cancel staying where they are.
+const bodySx: SxProps<Theme> = {
+    position: "relative",
+    display: "flex",
+    flex: 1,
+    minHeight: 0,
+};
+
+const mainSx: SxProps<Theme> = {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    minWidth: 0,
+};
+
 // The library, an inset panel as the media manager's is. Positioned, so the upload step covers it.
 const panelSx: SxProps<Theme> = {
     position: "relative",
@@ -138,6 +192,7 @@ const panelSx: SxProps<Theme> = {
     borderRadius: 3,
     overflow: "hidden",
     bgcolor: "background.paper",
+    [mediaWide]: { '[data-column="true"] &': { mb: 0.75 } },
 };
 
 const gridSx: SxProps<Theme> = {
@@ -152,6 +207,7 @@ const uploadsSx: SxProps<Theme> = {
     flexShrink: 0,
     marginInline: 0.75,
     mt: 0.75,
+    [mediaWide]: { '[data-column="true"] &': { mt: 0, mb: 0.75 } },
 };
 
 const footSx: SxProps<Theme> = {
@@ -170,6 +226,11 @@ const countSx: SxProps<Theme> = {
     fontSize: "0.8125rem",
 };
 
+// Only where the selected column doesn't dock; beside it, there's nothing to open.
+const openerSx: SxProps<Theme> = {
+    [mediaWide]: { display: "none" },
+};
+
 // What holds Choose back, or that there's no room, pushing the buttons to the end side.
 const noteSx: SxProps<Theme> = {
     flex: "1 1 8rem",
@@ -183,6 +244,7 @@ const PickerFrame = ({
     section,
     adapter,
     onChoose,
+    pickForm,
     onCancel,
     multiple,
     maxChoices,
@@ -202,20 +264,20 @@ const PickerFrame = ({
     const folderId = openGroup?.id ?? section.rootId;
     const levelName = openGroup?.name ?? section.label;
     const { state, reload } = useFolder(section, folderId, true, true);
-    // What the app is told is made as `chosen` is, which needs the listing, and more below that needs
+    // What the app is told is made as `choices` is, which needs the listing, and more below that needs
     // the picks, so it's reached through this.
-    const chosenOfRef = useRef<(items: readonly PickerPick[]) => FileEntry[]>(() => []);
+    const choicesOfRef = useRef<(items: readonly PickerPick[]) => MediaChoice[]>(() => []);
     const {
         picks: { items: picks, anchor },
         setPicks,
         dropGone,
-    } = usePicks<PickerPick, string, FileEntry>({
+    } = usePicks<PickerPick, string, MediaChoice, MediaPickerValue>({
         component: "MediaPicker",
         value,
         defaultValue,
         onChange,
         given: pickerPicksGiven,
-        told: (items) => chosenOfRef.current(items),
+        told: (items) => choicesOfRef.current(items).map(handedCopy),
         sameItem: samePickerPick,
         keyOf: pickerPickKey,
     });
@@ -223,6 +285,8 @@ const PickerFrame = ({
     const panelRef = useRef<HTMLDivElement>(null);
     const levelFocusRef = useRef<LevelFocus | null>(null);
     const noteId = useId();
+    const { chosenOverlay, setChosenOverlay, docked, frameRef, chosenRef, openerRef, closeChosen } =
+        useChosenColumn(!!pickForm);
 
     const [uploadStep, setUploadStep] = useState<UploadStep | null>(null);
     const uploadStepCount = useRef(0);
@@ -310,41 +374,54 @@ const PickerFrame = ({
         });
     }, [listed, setPicks]);
 
+    // What the app's form holds for a pick until it's changed.
+    const defaultsOf = useCallback(
+        (asset: FileEntry) => (pickForm?.(asset, section)?.defaults as Record<string, unknown>) ?? NO_VALUES,
+        [pickForm, section],
+    );
+
     // What picks are, as they are now: as the open level lists one when it does; picked at this level
     // and listed without it, gone; or else as it was picked.
-    const chosenOf = useCallback(
+    const choicesOf = useCallback(
         (items: readonly PickerPick[]) => {
             const byId = state?.status === "ready" ? new Map(library.map((entry) => [entry.id, entry])) : undefined;
 
-            return items.flatMap(({ asset, folderId: pickedAt }) => {
-                const now = byId?.get(asset.id);
+            return items.flatMap(({ asset, folderId: pickedAt, values }) => {
+                const now =
+                    byId?.get(asset.id) ?? (byId && pickedAt === folderId ? undefined : withState(asset, said?.get(asset.id)));
 
-                if (now) {
-                    return [now];
+                if (!now) {
+                    return [];
                 }
 
-                return byId && pickedAt === folderId ? [] : [withState(asset, said?.get(asset.id))];
+                const choice: MediaChoice = { asset: now, section, values: values === NO_VALUES ? defaultsOf(now) : values };
+
+                if (values === NO_VALUES) {
+                    DEFAULTED.add(choice);
+                }
+
+                return [choice];
             });
         },
-        [state?.status, library, folderId, said],
+        [state?.status, library, folderId, said, section, defaultsOf],
     );
 
-    const chosen = useMemo(() => chosenOf(picks), [chosenOf, picks]);
+    const choices = useMemo(() => choicesOf(picks), [choicesOf, picks]);
 
     useLayoutEffect(() => {
-        chosenOfRef.current = chosenOf;
+        choicesOfRef.current = choicesOf;
     });
 
     // What's found to be gone is taken out and told, so the app isn't left holding a pick nothing shows.
     // A listing still loading finds nothing gone.
     useEffect(() => {
-        const shown = new Set(chosen.map(({ id }) => id));
+        const shown = new Set(choices.map(({ asset }) => asset.id));
 
         dropGone(picks.map(pickerPickKey).filter((id) => !shown.has(id)));
-    }, [chosen, picks, dropGone]);
+    }, [choices, picks, dropGone]);
 
-    const selectedIds = useMemo(() => new Set(chosen.map(({ id }) => id)), [chosen]);
-    const full = chosen.length >= limit;
+    const selectedIds = useMemo(() => new Set(choices.map(({ asset }) => asset.id)), [choices]);
+    const full = choices.length >= limit;
     const sayFull = useCallback(() => announce(text.mediaChoicesFull), [announce, text]);
 
     const terms = useMemo(() => searchTerms(query, foldLetters), [query, foldLetters]);
@@ -384,23 +461,54 @@ const PickerFrame = ({
         return working.size > 0 ? working : NO_HOLDS;
     }, [shownAssets, text, formatPercent]);
 
-    // What holds Choose back, said beside it: those past the limit, failed or refused, to take out
-    // first, then those still processed.
-    const chooseHeld = useMemo(() => {
-        const standing = chosen.map((asset, index) =>
-            index >= limit
-                ? ({ status: "refused", text: text.mediaOverLimit(formatNumber(limit)) } satisfies AssetHold)
-                : holdOf(asset, section, { text, formatPercent }),
-        );
-        const waiting = standing.filter((hold) => hold?.status === "processing").length;
-        const refused = standing.filter((hold) => hold && hold.status !== "processing").length;
+    // What a pick's form is drawn from and its functions read. The backend's errors have no place here,
+    // as what's picked is saved by the app's form around the picker.
+    const pickState = useCallback(
+        (choice: MediaChoice, index: number, all: readonly MediaChoice[]) => ({
+            asset: choice.asset,
+            section,
+            adapter,
+            values: choice.values,
+            errors: NO_ERRORS,
+            index,
+            choices: all,
+        }),
+        [section, adapter],
+    );
 
-        return refused > 0
-            ? text.mediaChoicesUnavailable(refused)
-            : waiting > 0
-              ? text.mediaChoicesProcessing(waiting)
-              : undefined;
-    }, [chosen, limit, section, text, formatNumber, formatPercent]);
+    // Why a pick's form isn't ready, by its `ready`; nothing once it is.
+    const unfilledOf = useCallback(
+        (choice: MediaChoice, index: number, all: readonly MediaChoice[]): AssetHold | undefined => {
+            const answer = pickForm?.(choice.asset, section)?.ready?.(pickState(choice, index, all)) ?? true;
+
+            return answer === true
+                ? undefined
+                : { status: "unfilled", text: typeof answer === "string" && answer ? answer : text.mediaChoiceUnfilled };
+        },
+        [pickForm, section, pickState, text],
+    );
+
+    // Why picks can't be chosen now, by their keys, which holds Choose back until they can, or are taken
+    // out: past the limit, still being processed, failed, refused by their library, or their form not ready.
+    const choiceHolds = useMemo(() => {
+        const held = new Map<string, AssetHold>();
+
+        choices.forEach((choice, index) => {
+            const hold: AssetHold | undefined =
+                index >= limit
+                    ? { status: "refused", text: text.mediaOverLimit(formatNumber(limit)) }
+                    : (holdOf(choice.asset, section, { text, formatPercent }) ?? unfilledOf(choice, index, choices));
+
+            if (hold) {
+                held.set(choiceKey(choice), hold);
+            }
+        });
+
+        return held.size > 0 ? held : NO_HOLDS;
+    }, [choices, limit, section, text, formatNumber, formatPercent, unfilledOf]);
+
+    const holdOfChoice = useCallback((choice: MediaChoice) => choiceHolds.get(choiceKey(choice)), [choiceHolds]);
+    const chooseHeld = useMemo(() => chooseHeldBy([...choiceHolds.values()], text), [choiceHolds, text]);
 
     // What's selected made `ids`: those there stay in their place, and those added go at the end, in the
     // order shown, as many as the limit lets in.
@@ -417,7 +525,7 @@ const PickerFrame = ({
             }
 
             setPicks({
-                items: [...kept, ...adding.slice(0, room).map((asset) => ({ asset, folderId }))],
+                items: [...kept, ...adding.slice(0, room).map((asset) => ({ asset, folderId, values: NO_VALUES }))],
                 anchor: nextAnchor,
             });
         },
@@ -461,6 +569,80 @@ const PickerFrame = ({
     const clearSelection = () => {
         setPicks(NO_PICKS);
     };
+
+    // Moves one in the order they're handed over in, from the selected column.
+    const moveChoice = useCallback(
+        (from: number, to: number) => {
+            const byId = new Map(picks.map((pick) => [pick.asset.id, pick]));
+            const items = choices.flatMap(({ asset }) => byId.get(asset.id) ?? []);
+            const [moved] = items.splice(from, 1);
+
+            if (moved) {
+                items.splice(to, 0, moved);
+                setPicks((previous) => ({ ...previous, items }));
+            }
+        },
+        [picks, choices, setPicks],
+    );
+
+    const removeChoice = useCallback(
+        (choice: MediaChoice) => {
+            setPicks((previous) => ({
+                ...previous,
+                items: previous.items.filter(({ asset }) => asset.id !== choice.asset.id),
+            }));
+        },
+        [setPicks],
+    );
+
+    // What the app's form holds for one pick, kept with it.
+    const setChoiceValues = useCallback(
+        (choice: MediaChoice, next: SetStateAction<Record<string, unknown>>) => {
+            setPicks((previous) => ({
+                ...previous,
+                items: previous.items.map((item) => {
+                    if (item.asset.id !== choice.asset.id) {
+                        return item;
+                    }
+
+                    const held = item.values === NO_VALUES ? choice.values : item.values;
+
+                    return { ...item, values: typeof next === "function" ? next(held) : next };
+                }),
+            }));
+        },
+        [setPicks],
+    );
+
+    // One pick's form, drawn with what it holds, and what can read and change the others.
+    const renderDetails = useMemo(
+        () =>
+            pickForm &&
+            ((choice: MediaChoice, index: number) => {
+                const form = pickForm(choice.asset, section);
+
+                return (
+                    form && (
+                        <MediaFormBody
+                            form={form}
+                            params={{
+                                ...pickState(choice, index, choices),
+                                setValues: (next: SetStateAction<Record<string, unknown>>) =>
+                                    setChoiceValues(choice, next),
+                                setChoiceValues,
+                            }}
+                        />
+                    )
+                );
+            }),
+        [pickForm, section, pickState, choices, setChoiceValues],
+    );
+
+    // Hands the picks to the app, each with its values to itself.
+    const handOver = useCallback(
+        (handed: readonly MediaChoice[]) => onChoose?.(handed.map(handedCopy)),
+        [onChoose],
+    );
 
     // Shows another level, with what was over this one gone, and says where it is, as the focus only
     // says what it's on.
@@ -531,8 +713,8 @@ const PickerFrame = ({
     }, [shownEntries, state?.status, folderId, searchButtonRef]);
 
     const choose = () => {
-        if (onChoose && chosen.length > 0 && !chooseHeld) {
-            onChoose([...chosen]);
+        if (choices.length > 0 && !chooseHeld) {
+            handOver(choices);
         }
     };
 
@@ -560,7 +742,7 @@ const PickerFrame = ({
                 return;
             }
 
-            const picked = selectedIds.has(entry.id);
+            const picked = choices.find(({ asset }) => asset.id === entry.id);
 
             if (!picked && full) {
                 sayFull();
@@ -577,10 +759,19 @@ const PickerFrame = ({
                 return;
             }
 
-            const others = multiple ? chosen.filter(({ id }) => id !== entry.id) : [];
+            const chosen = picked ?? { asset: entry, section, values: defaultsOf(entry) };
+            const handed = multiple ? [...choices.filter((choice) => choice !== chosen), chosen] : [chosen];
 
-            if (others.every((asset) => !holdOf(asset, section, { text, formatPercent })) && others.length < limit) {
-                onChoose([...others, entry]);
+            // Its form asks for more first: it's selected instead, its form saying what.
+            if (!picked && unfilledOf(chosen, handed.length - 1, handed)) {
+                press(index, { toggle: false, range: false });
+
+                return;
+            }
+
+            // The others selected hold it back as they hold Choose.
+            if (!handed.some((choice) => choiceHolds.has(choiceKey(choice)))) {
+                handOver(handed);
             } else if (chooseHeld) {
                 announce(chooseHeld);
             }
@@ -590,15 +781,15 @@ const PickerFrame = ({
             enterGroupAt,
             holds,
             announce,
-            selectedIds,
             full,
             sayFull,
             multiple,
-            chosen,
+            choices,
             section,
-            text,
-            formatPercent,
-            limit,
+            defaultsOf,
+            unfilledOf,
+            choiceHolds,
+            handOver,
             onChoose,
             press,
             chooseHeld,
@@ -721,13 +912,13 @@ const PickerFrame = ({
         }
 
         if (!multiple) {
-            setPicks({ items: [{ asset: last, folderId }], anchor: last.id });
+            setPicks({ items: [{ asset: last, folderId, values: NO_VALUES }], anchor: last.id });
 
             return;
         }
 
         const adding = assets.filter(({ id }) => !selectedIds.has(id));
-        const room = limit === Infinity ? Infinity : Math.max(limit - chosen.length, 0);
+        const room = limit === Infinity ? Infinity : Math.max(limit - choices.length, 0);
 
         if (adding.length > room) {
             sayFull();
@@ -735,9 +926,9 @@ const PickerFrame = ({
 
         setPicks((previous) => ({
             ...previous,
-            items: [...previous.items, ...adding.slice(0, room).map((asset) => ({ asset, folderId }))],
+            items: [...previous.items, ...adding.slice(0, room).map((asset) => ({ asset, folderId, values: NO_VALUES }))],
         }));
-    }, [state?.status, library, arrivals, folderId, section, multiple, selectedIds, limit, chosen.length, sayFull]);
+    }, [state?.status, library, arrivals, folderId, section, multiple, selectedIds, limit, choices.length, sayFull]);
 
     // The open level's uploads, before what it holds: those waiting or being sent, and those done until
     // they're listed.
@@ -804,14 +995,21 @@ const PickerFrame = ({
         }
     }, [layout]);
 
-    const count = chosen.length;
+    const count = choices.length;
     const limited = limit !== Infinity;
     const selectedText = limited
         ? text.mediaSelectedOf(formatNumber(count), formatNumber(limit))
         : multiple && count > 0
           ? text.mediaSelected(count)
           : undefined;
+    const badge = limited
+        ? text.mediaCountOf(formatNumber(count), formatNumber(limit))
+        : multiple && count > 0
+          ? formatNumber(count)
+          : undefined;
     const note = chooseHeld ?? (count === limit ? text.mediaChoicesFull : undefined);
+    // One at a time with nothing selected, there's no column to show.
+    const chosenEmpty = !multiple && count === 0;
     const errorMessage =
         state?.status !== "error"
             ? undefined
@@ -823,7 +1021,9 @@ const PickerFrame = ({
 
     return (
         <Box
+            ref={frameRef}
             sx={frameSx}
+            data-column={!!pickForm}
             onKeyDown={(event) => {
                 // Ctrl+F or ⌘F opens the search, in place of the browser's find, as the media manager's does.
                 if (
@@ -834,7 +1034,8 @@ const PickerFrame = ({
                     !event.defaultPrevented &&
                     event.target instanceof Node &&
                     event.currentTarget.contains(event.target) &&
-                    searchable
+                    searchable &&
+                    !chosenOverlay
                 ) {
                     event.preventDefault();
                     openSearch();
@@ -862,134 +1063,197 @@ const PickerFrame = ({
             }}
             onPaste={(event) => event.stopPropagation()}
         >
-            <MediaHeader
-                section={section}
-                trail={trail}
-                onGoToLevel={goToLevel}
-                onGroupDetails={undefined}
-                groupDetailsRef={null}
-                several={false}
-                librariesOpen={false}
-                librariesOpenerRef={null}
-                onOpenLibraries={ignore}
-                searchable={searchable}
-                searching={searching && searchable}
-                query={query}
-                searchInputRef={searchInputRef}
-                searchButtonRef={searchButtonRef}
-                onQueryChange={setQuery}
-                onToggleSearch={() => (searching ? closeSearch() : openSearch())}
-                onCloseSearch={closeSearch}
-                onDismissSearch={stopSearching}
-                onFocusAssets={() =>
-                    panelRef.current?.querySelector<HTMLElement>('[role="listbox"] [role="option"][tabindex="0"]')?.focus()
-                }
-                otherLayout={uploadStep ? undefined : otherLayout}
-                onSwitchLayout={switchLayout}
-                onNewGroup={undefined}
-                newGroupLabel=""
-                creatingGroup={false}
-                newGroupRef={null}
-                onUpload={takesFiles ? () => pickerRef.current?.click() : undefined}
-                uploadRef={uploadButtonRef}
-            />
-            {takesFiles && (
-                <input
-                    ref={pickerRef}
-                    type="file"
-                    multiple={multiple}
-                    hidden
-                    tabIndex={-1}
-                    accept={typeof section.acceptUploads === "string" ? section.acceptUploads : undefined}
-                    onChange={(event) => {
-                        const files = Array.from(event.target.files ?? []);
-
-                        // Emptied, so picking the same files again still changes it.
-                        event.target.value = "";
-                        askUpload({ files, folders: [] });
-                    }}
-                />
-            )}
-            <Box
-                ref={panelRef}
-                sx={panelSx}
-                onDragEnter={offerDrop}
-                onDragOver={offerDrop}
-                onDragLeave={leaveDrop}
-                onDrop={takeDrop}
-                onPaste={pasteFiles}
-            >
-                <Box sx={gridSx} data-covered={!!uploadStep}>
-                    <MediaGrid
-                        key={folderId}
-                        entries={shownEntries}
-                        uploads={shownUploads}
-                        kind={section.kind}
-                        layout={layout}
-                        adapter={adapter}
-                        drawAsset={drawAsset}
-                        drawGroup={drawGroup}
-                        opensGroups={false}
-                        opensAssets={false}
-                        header={
-                            openGroup &&
-                            section.groupHeader && (
-                                <GroupHeader draw={section.groupHeader} group={openGroup} section={section} />
-                            )
-                        }
-                        label={levelName}
-                        selectedIds={selectedIds}
-                        holds={holds}
-                        works={works}
-                        full={full}
-                        multiple={multiple}
-                        status={state?.status ?? "loading"}
-                        hasMedia={leveled.length > 0}
-                        busy={state?.status === "loading" || !!state?.checking}
-                        error={errorMessage}
-                        onRetry={reload}
-                        onPress={press}
-                        onActivate={activate}
-                        onEnterGroup={enterGroupAt}
-                        onLevelUp={inGroup ? levelUp : undefined}
-                        onOpen={ignore}
-                        onSelectAll={selectAll}
-                    />
-                </Box>
-                {uploadStep && (
-                    <MediaUpload
-                        key={uploadStep.key}
+            <Box sx={bodySx}>
+                <Box sx={mainSx}>
+                    <MediaHeader
                         section={section}
-                        levelName={uploadStep.into.name}
-                        adapter={adapter}
-                        check={uploadStep.check}
-                        form={uploadStep.form}
-                        onCancel={closeUploadStep}
-                        onUpload={(values) => {
-                            sendUpload(uploadStep.into, uploadStep.check.files, values);
-                            closeUploadStep();
-                        }}
+                        trail={trail}
+                        onGoToLevel={goToLevel}
+                        onGroupDetails={undefined}
+                        groupDetailsRef={null}
+                        several={false}
+                        librariesOpen={false}
+                        librariesOpenerRef={null}
+                        onOpenLibraries={ignore}
+                        searchable={searchable}
+                        searching={searching && searchable}
+                        query={query}
+                        searchInputRef={searchInputRef}
+                        searchButtonRef={searchButtonRef}
+                        onQueryChange={setQuery}
+                        onToggleSearch={() => (searching ? closeSearch() : openSearch())}
+                        onCloseSearch={closeSearch}
+                        onDismissSearch={stopSearching}
+                        onFocusAssets={() =>
+                            panelRef.current?.querySelector<HTMLElement>('[role="listbox"] [role="option"][tabindex="0"]')?.focus()
+                        }
+                        otherLayout={uploadStep ? undefined : otherLayout}
+                        onSwitchLayout={switchLayout}
+                        onNewGroup={undefined}
+                        newGroupLabel=""
+                        creatingGroup={false}
+                        newGroupRef={null}
+                        onUpload={takesFiles ? () => pickerRef.current?.click() : undefined}
+                        uploadRef={uploadButtonRef}
                     />
-                )}
-                {dropping && <DropZone label={text.mediaDropToUpload(isolate(levelName))} />}
-            </Box>
-            {uploads.items.length > 0 && (
-                <Box sx={uploadsSx}>
-                    <UploadPanel
-                        items={uploads.items}
-                        onCancel={uploads.queue.cancel}
-                        onRetry={uploads.queue.retry}
-                        onCancelAll={uploads.queue.cancelAll}
-                        onClear={clearUploads}
-                    />
+                    {takesFiles && (
+                        <input
+                            ref={pickerRef}
+                            type="file"
+                            multiple={multiple}
+                            hidden
+                            tabIndex={-1}
+                            accept={typeof section.acceptUploads === "string" ? section.acceptUploads : undefined}
+                            onChange={(event) => {
+                                const files = Array.from(event.target.files ?? []);
+
+                                // Emptied, so picking the same files again still changes it.
+                                event.target.value = "";
+                                askUpload({ files, folders: [] });
+                            }}
+                        />
+                    )}
+                    <Box
+                        ref={panelRef}
+                        sx={panelSx}
+                        onDragEnter={offerDrop}
+                        onDragOver={offerDrop}
+                        onDragLeave={leaveDrop}
+                        onDrop={takeDrop}
+                        onPaste={pasteFiles}
+                    >
+                        <Box sx={gridSx} data-covered={!!uploadStep}>
+                            <MediaGrid
+                                key={folderId}
+                                entries={shownEntries}
+                                uploads={shownUploads}
+                                kind={section.kind}
+                                layout={layout}
+                                adapter={adapter}
+                                drawAsset={drawAsset}
+                                drawGroup={drawGroup}
+                                opensGroups={false}
+                                opensAssets={false}
+                                header={
+                                    openGroup &&
+                                    section.groupHeader && (
+                                        <GroupHeader draw={section.groupHeader} group={openGroup} section={section} />
+                                    )
+                                }
+                                label={levelName}
+                                selectedIds={selectedIds}
+                                holds={holds}
+                                works={works}
+                                full={full}
+                                multiple={multiple}
+                                status={state?.status ?? "loading"}
+                                hasMedia={leveled.length > 0}
+                                busy={state?.status === "loading" || !!state?.checking}
+                                error={errorMessage}
+                                onRetry={reload}
+                                onPress={press}
+                                onActivate={activate}
+                                onEnterGroup={enterGroupAt}
+                                onLevelUp={inGroup ? levelUp : undefined}
+                                onOpen={ignore}
+                                onSelectAll={selectAll}
+                            />
+                        </Box>
+                        {uploadStep && (
+                            <MediaUpload
+                                key={uploadStep.key}
+                                section={section}
+                                levelName={uploadStep.into.name}
+                                adapter={adapter}
+                                check={uploadStep.check}
+                                form={uploadStep.form}
+                                onCancel={closeUploadStep}
+                                onUpload={(values) => {
+                                    sendUpload(uploadStep.into, uploadStep.check.files, values);
+                                    closeUploadStep();
+                                }}
+                            />
+                        )}
+                        {dropping && <DropZone label={text.mediaDropToUpload(isolate(levelName))} />}
+                    </Box>
+                    {uploads.items.length > 0 && (
+                        <Box sx={uploadsSx}>
+                            <UploadPanel
+                                items={uploads.items}
+                                onCancel={uploads.queue.cancel}
+                                onRetry={uploads.queue.retry}
+                                onCancelAll={uploads.queue.cancelAll}
+                                onClear={clearUploads}
+                            />
+                        </Box>
+                    )}
                 </Box>
-            )}
+                {pickForm && (
+                    <>
+                        <Backdrop
+                            open={chosenOverlay && !docked && !chosenEmpty}
+                            sx={chosenBackdropSx}
+                            onClick={closeChosen}
+                        />
+                        <Box
+                            ref={chosenRef}
+                            sx={chosenColumnSx}
+                            data-overlay={chosenOverlay}
+                            data-empty={chosenEmpty}
+                            onKeyDown={(event) => {
+                                // Stopped here, or it would reach a dialog around the picker and close that too.
+                                if (event.key === "Escape" && !docked && !event.defaultPrevented) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    closeChosen();
+                                }
+                            }}
+                        >
+                            <ChoicesPane
+                                choices={choices}
+                                adapter={adapter}
+                                multiple={multiple}
+                                renderDetails={renderDetails}
+                                problemsOf={undefined}
+                                holdOf={holdOfChoice}
+                                held={undefined}
+                                badge={badge}
+                                selectedText={selectedText}
+                                note={undefined}
+                                onRemove={removeChoice}
+                                onMove={moveChoice}
+                                onClear={clearSelection}
+                                onChoose={undefined}
+                                onShowInLibrary={undefined}
+                                onClose={closeChosen}
+                            />
+                        </Box>
+                    </>
+                )}
+            </Box>
             <Box sx={footSx}>
-                {selectedText && <Typography sx={countSx}>{selectedText}</Typography>}
-                {multiple && count > 0 && (
-                    <Button size="small" color="inherit" onClick={clearSelection}>
-                        {text.mediaClearSelection}
-                    </Button>
+                {pickForm ? (
+                    !chosenEmpty && (
+                        <Button
+                            ref={openerRef}
+                            color="inherit"
+                            aria-expanded={chosenOverlay}
+                            endIcon={<Icon name="expand" fontSize="small" />}
+                            sx={openerSx}
+                            onClick={() => setChosenOverlay(true)}
+                        >
+                            {selectedText ?? text.mediaChosen}
+                        </Button>
+                    )
+                ) : (
+                    <>
+                        {selectedText && <Typography sx={countSx}>{selectedText}</Typography>}
+                        {multiple && count > 0 && (
+                            <Button size="small" color="inherit" onClick={clearSelection}>
+                                {text.mediaClearSelection}
+                            </Button>
+                        )}
+                    </>
                 )}
                 <Typography id={noteId} sx={noteSx}>
                     {note}

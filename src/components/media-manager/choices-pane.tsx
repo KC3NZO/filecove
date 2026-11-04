@@ -53,8 +53,8 @@ interface ChoicesPaneProps {
     onClear: () => void;
     /** Choose at its foot, while finishing is the app's to take; without it, the app takes the picks as they change. */
     onChoose: (() => void) | undefined;
-    /** Opens the asset itself in its library, in the library's place. */
-    onShowInLibrary: (choice: MediaChoice) => void;
+    /** Opens the asset itself in its library, in the library's place; none where there's no asset view. */
+    onShowInLibrary: ((choice: MediaChoice) => void) | undefined;
     /** Closes the column where it's an overlay over the library. */
     onClose: () => void;
 }
@@ -64,7 +64,7 @@ interface ChoiceDetailsProps {
     adapter: FileAdapter;
     hold: AssetHold | undefined;
     children: ReactNode;
-    onShowInLibrary: () => void;
+    onShowInLibrary: (() => void) | undefined;
 }
 
 const paneSx: SxProps<Theme> = {
@@ -239,9 +239,11 @@ const ChoiceDetails = ({ choice, adapter, hold, children, onShowInLibrary }: Cho
                         {section.label}
                     </Typography>
                     {hold && <HoldLine hold={hold} />}
-                    <Button size="small" sx={showSx} onClick={onShowInLibrary}>
-                        {text.mediaShowInLibrary}
-                    </Button>
+                    {onShowInLibrary && (
+                        <Button size="small" sx={showSx} onClick={onShowInLibrary}>
+                            {text.mediaShowInLibrary}
+                        </Button>
+                    )}
                 </Box>
             </Box>
             {children}
@@ -358,7 +360,7 @@ const ChoicesPane = ({
                         choice={open}
                         adapter={adapter}
                         hold={holdOf(open)}
-                        onShowInLibrary={() => onShowInLibrary(open)}
+                        onShowInLibrary={onShowInLibrary && (() => onShowInLibrary(open))}
                     >
                         {renderDetails(open, choices.indexOf(open))}
                     </ChoiceDetails>
@@ -394,7 +396,7 @@ const ChoicesPane = ({
                             choice={only}
                             adapter={adapter}
                             hold={holdOf(only)}
-                            onShowInLibrary={() => onShowInLibrary(only)}
+                            onShowInLibrary={onShowInLibrary && (() => onShowInLibrary(only))}
                         >
                             {renderDetails?.(only, 0)}
                         </ChoiceDetails>
