@@ -15,7 +15,7 @@ import { audioUploadForm, imageUploadForm, videoUploadForm } from "./media-uploa
 import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
 import { savePicks } from "./mocks/mock-save";
 import { useStoredState } from "./hooks/use-stored-state";
-import { browse, locale, maxChoices, multiple, oneVideo, single, uncontrolled } from "./options";
+import { browse, live, locale, maxChoices, multiple, oneVideo, single, uncontrolled } from "./options";
 
 import type {
     FieldErrors,
@@ -179,7 +179,11 @@ const firstMessage = (errors: FieldErrors, key: string) => {
     return typeof found === "string" ? found : found?.[0];
 };
 
-const describe = (chosen: MediaChoice[] | null, saving: Saving) => {
+const describe = (chosen: MediaChoice[] | null, picked: MediaChoice[], saving: Saving) => {
+    if (live) {
+        return picked.length > 0 ? `Selected: ${picked.map(describeOne).join("; ")}` : "Nothing selected";
+    }
+
     if (saving.status === "saving") {
         return "Saving…";
     }
@@ -199,6 +203,8 @@ const describe = (chosen: MediaChoice[] | null, saving: Saving) => {
 
 const MediaApp = () => {
     const [chosen, setChosen] = useState<MediaChoice[] | null>(null);
+    // What's selected, kept here as an app would, unless `?uncontrolled` leaves it to the media manager.
+    const [picked, setPicked] = useState<MediaChoice[]>([]);
     const [errors, setErrors] = useState<FieldErrors>();
     const [saving, setSaving] = useState<Saving>({ status: "idle" });
     // Which layout each library was last shown in, kept across reloads, as a consumer might.
@@ -230,7 +236,8 @@ const MediaApp = () => {
         canSelect: oneVideo ? oneVideoAtMost : undefined,
         ...(uncontrolled ? { defaultLayout: layout } : { layout, onLayoutChange: setLayout }),
         locale,
-        onChoose: browse ? undefined : choose,
+        onChoose: browse || live ? undefined : choose,
+        ...(browse ? {} : uncontrolled ? { onChange: setPicked } : { value: picked, onChange: setPicked }),
         pickForm,
         renderGroup,
         groupHeader: renderGroupHeader,
@@ -249,7 +256,7 @@ const MediaApp = () => {
             )}
             <Box component="footer" sx={footerSx}>
                 <Typography variant="body2" noWrap>
-                    {describe(chosen, saving)}
+                    {describe(chosen, picked, saving)}
                 </Typography>
             </Box>
         </Box>

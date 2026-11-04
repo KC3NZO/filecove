@@ -12,6 +12,7 @@ import { useFilesDrop } from "../../hooks/use-files-drop";
 import { useData, useFolder } from "../../hooks/use-folder";
 import { useLocale } from "../../hooks/use-locale";
 import { useMediaSearch } from "../../hooks/use-media-search";
+import { usePicks } from "../../hooks/use-picks";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { visuallyHiddenSx } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
@@ -47,12 +48,14 @@ import type {
 interface PickerFrameProps {
     section: MediaSection;
     adapter: FileAdapter;
-    onChoose: (assets: FileEntry[]) => void;
+    onChoose: ((assets: FileEntry[]) => void) | undefined;
     onCancel: (() => void) | undefined;
     multiple: boolean;
     maxChoices: number | undefined;
     allowUpload: boolean;
+    value: readonly FileEntry[] | undefined;
     defaultValue: readonly FileEntry[] | undefined;
+    onChange: ((assets: FileEntry[]) => void) | undefined;
 }
 
 /** An asset selected, with the level it was selected at; none for one the app gave, as that's unknown. */
@@ -92,7 +95,15 @@ interface GroupHeaderProps {
 
 const NO_ENTRIES: FileEntry[] = [];
 const NO_TRAIL: readonly FileEntry[] = [];
-const NO_PICKS: readonly PickerPick[] = [];
+const NO_PICKS = { items: [] as readonly PickerPick[], anchor: null };
+
+const pickerPickKey = ({ asset }: PickerPick) => asset.id;
+
+const samePickerPick = (a: PickerPick, b: PickerPick) => a.asset.id === b.asset.id;
+
+/** The picks the app's list means, each at the level known of it, or none. */
+const pickerPicksGiven = (list: readonly FileEntry[], known: readonly PickerPick[]): PickerPick[] =>
+    list.map((asset) => ({ asset, folderId: known.find((item) => item.asset.id === asset.id)?.folderId }));
 const NO_FOLLOWED: readonly FollowedAssets[] = [];
 const NO_ARRIVALS: readonly Arrival[] = [];
 const NO_UPLOADS: readonly FileUploadItem[] = [];
@@ -176,7 +187,9 @@ const PickerFrame = ({
     multiple,
     maxChoices,
     allowUpload,
+    value,
     defaultValue,
+    onChange,
 }: PickerFrameProps) => {
     const { text, foldLetters, compareNames, formatNumber, formatPercent } = useLocale();
     const { store } = useData();
@@ -189,10 +202,23 @@ const PickerFrame = ({
     const folderId = openGroup?.id ?? section.rootId;
     const levelName = openGroup?.name ?? section.label;
     const { state, reload } = useFolder(section, folderId, true, true);
-    const [picks, setPicks] = useState<readonly PickerPick[]>(() =>
-        defaultValue?.length ? defaultValue.map((asset) => ({ asset })) : NO_PICKS,
-    );
-    const [anchor, setAnchor] = useState<string | null>(null);
+    // What the app is told is made as `chosen` is, which needs the listing, and more below that needs
+    // the picks, so it's reached through this.
+    const chosenOfRef = useRef<(items: readonly PickerPick[]) => FileEntry[]>(() => []);
+    const {
+        picks: { items: picks, anchor },
+        setPicks,
+        dropGone,
+    } = usePicks<PickerPick, string, FileEntry>({
+        component: "MediaPicker",
+        value,
+        defaultValue,
+        onChange,
+        given: pickerPicksGiven,
+        told: (items) => chosenOfRef.current(items),
+        sameItem: samePickerPick,
+        keyOf: pickerPickKey,
+    });
     const limit = multiple ? (countLimit(maxChoices, 1) ?? Infinity) : Infinity;
     const panelRef = useRef<HTMLDivElement>(null);
     const levelFocusRef = useRef<LevelFocus | null>(null);
@@ -268,7 +294,7 @@ const PickerFrame = ({
 
         setPicks((previous) => {
             let changed = false;
-            const next = previous.map((pick) => {
+            const items = previous.items.map((pick) => {
                 const now = byId.get(pick.asset.id);
 
                 if (!now || now === pick.asset) {
@@ -280,25 +306,42 @@ const PickerFrame = ({
                 return { ...pick, asset: now };
             });
 
-            return changed ? next : previous;
+            return changed ? { ...previous, items } : previous;
         });
-    }, [listed]);
+    }, [listed, setPicks]);
 
-    // What's selected, as it is now: as the open level lists it when it does; picked at this level and
-    // listed without it, gone; or else as it was picked.
-    const chosen = useMemo(() => {
-        const byId = state?.status === "ready" ? new Map(library.map((entry) => [entry.id, entry])) : undefined;
+    // What picks are, as they are now: as the open level lists one when it does; picked at this level
+    // and listed without it, gone; or else as it was picked.
+    const chosenOf = useCallback(
+        (items: readonly PickerPick[]) => {
+            const byId = state?.status === "ready" ? new Map(library.map((entry) => [entry.id, entry])) : undefined;
 
-        return picks.flatMap(({ asset, folderId: pickedAt }) => {
-            const now = byId?.get(asset.id);
+            return items.flatMap(({ asset, folderId: pickedAt }) => {
+                const now = byId?.get(asset.id);
 
-            if (now) {
-                return [now];
-            }
+                if (now) {
+                    return [now];
+                }
 
-            return byId && pickedAt === folderId ? [] : [withState(asset, said?.get(asset.id))];
-        });
-    }, [picks, state?.status, library, folderId, said]);
+                return byId && pickedAt === folderId ? [] : [withState(asset, said?.get(asset.id))];
+            });
+        },
+        [state?.status, library, folderId, said],
+    );
+
+    const chosen = useMemo(() => chosenOf(picks), [chosenOf, picks]);
+
+    useLayoutEffect(() => {
+        chosenOfRef.current = chosenOf;
+    });
+
+    // What's found to be gone is taken out and told, so the app isn't left holding a pick nothing shows.
+    // A listing still loading finds nothing gone.
+    useEffect(() => {
+        const shown = new Set(chosen.map(({ id }) => id));
+
+        dropGone(picks.map(pickerPickKey).filter((id) => !shown.has(id)));
+    }, [chosen, picks, dropGone]);
 
     const selectedIds = useMemo(() => new Set(chosen.map(({ id }) => id)), [chosen]);
     const full = chosen.length >= limit;
@@ -373,10 +416,12 @@ const PickerFrame = ({
                 sayFull();
             }
 
-            setPicks([...kept, ...adding.slice(0, room).map((asset) => ({ asset, folderId }))]);
-            setAnchor(nextAnchor);
+            setPicks({
+                items: [...kept, ...adding.slice(0, room).map((asset) => ({ asset, folderId }))],
+                anchor: nextAnchor,
+            });
         },
-        [picks, selectedIds, limit, shownAssets, holds, sayFull, folderId],
+        [picks, selectedIds, limit, shownAssets, holds, sayFull, folderId, setPicks],
     );
 
     // Several at once, a click adds or takes away the asset, and Shift adds those from the last one
@@ -415,7 +460,6 @@ const PickerFrame = ({
 
     const clearSelection = () => {
         setPicks(NO_PICKS);
-        setAnchor(null);
     };
 
     // Shows another level, with what was over this one gone, and says where it is, as the focus only
@@ -424,13 +468,13 @@ const PickerFrame = ({
         (next: readonly FileEntry[], groupId: string | null) => {
             levelFocusRef.current = { groupId, waited: false };
             setTrail(next);
-            setAnchor(null);
+            setPicks((previous) => (previous.anchor === null ? previous : { ...previous, anchor: null }));
             setQuery("");
             setSearching(false);
             setUploadStep(null);
             announce(text.mediaInGroup(isolate(next.at(-1)?.name ?? section.label)));
         },
-        [setQuery, setSearching, announce, text, section.label],
+        [setQuery, setSearching, announce, text, section.label, setPicks],
     );
 
     const goToLevel = useCallback(
@@ -487,7 +531,7 @@ const PickerFrame = ({
     }, [shownEntries, state?.status, folderId, searchButtonRef]);
 
     const choose = () => {
-        if (chosen.length > 0 && !chooseHeld) {
+        if (onChoose && chosen.length > 0 && !chooseHeld) {
             onChoose([...chosen]);
         }
     };
@@ -524,6 +568,15 @@ const PickerFrame = ({
                 return;
             }
 
+            // There's no choosing to finish, so it's only selected, the one thing it can be.
+            if (!onChoose) {
+                if (!picked) {
+                    press(index, { toggle: false, range: false });
+                }
+
+                return;
+            }
+
             const others = multiple ? chosen.filter(({ id }) => id !== entry.id) : [];
 
             if (others.every((asset) => !holdOf(asset, section, { text, formatPercent })) && others.length < limit) {
@@ -547,6 +600,7 @@ const PickerFrame = ({
             formatPercent,
             limit,
             onChoose,
+            press,
             chooseHeld,
         ],
     );
@@ -667,8 +721,7 @@ const PickerFrame = ({
         }
 
         if (!multiple) {
-            setPicks([{ asset: last, folderId }]);
-            setAnchor(last.id);
+            setPicks({ items: [{ asset: last, folderId }], anchor: last.id });
 
             return;
         }
@@ -680,7 +733,10 @@ const PickerFrame = ({
             sayFull();
         }
 
-        setPicks((previous) => [...previous, ...adding.slice(0, room).map((asset) => ({ asset, folderId }))]);
+        setPicks((previous) => ({
+            ...previous,
+            items: [...previous.items, ...adding.slice(0, room).map((asset) => ({ asset, folderId }))],
+        }));
     }, [state?.status, library, arrivals, folderId, section, multiple, selectedIds, limit, chosen.length, sayFull]);
 
     // The open level's uploads, before what it holds: those waiting or being sent, and those done until
@@ -943,15 +999,17 @@ const PickerFrame = ({
                         {text.cancel}
                     </Button>
                 )}
-                <Button
-                    variant="contained"
-                    disableElevation
-                    disabled={count === 0 || !!chooseHeld}
-                    aria-describedby={chooseHeld ? noteId : undefined}
-                    onClick={choose}
-                >
-                    {text.mediaChoose}
-                </Button>
+                {onChoose && (
+                    <Button
+                        variant="contained"
+                        disableElevation
+                        disabled={count === 0 || !!chooseHeld}
+                        aria-describedby={chooseHeld ? noteId : undefined}
+                        onClick={choose}
+                    >
+                        {text.mediaChoose}
+                    </Button>
+                )}
             </Box>
             <Box role="status" sx={visuallyHiddenSx}>
                 {/* A space every other time, so the same message said again is heard again. */}

@@ -36,7 +36,7 @@ import type {
 } from "../../types";
 
 // The root element's own attributes, which go on it as they do on a MUI component's root.
-type RootAttributes = Omit<ComponentPropsWithoutRef<"div">, "children">;
+type RootAttributes = Omit<ComponentPropsWithoutRef<"div">, "children" | "defaultValue" | "onChange">;
 
 interface BaseProps<V> extends RootAttributes {
     /** Serves the libraries that don't bring their own adapter. */
@@ -128,10 +128,26 @@ interface BaseProps<V> extends RootAttributes {
     /** Told every library's layout, as the user switches one. */
     onLayoutChange?: (layout: MediaLayouts) => void;
     /**
+     * What's selected, when the app keeps it, with `onChange`: every change is then only asked for, and
+     * shows once it's passed back. Each is matched to its library by `section.id`. Pass back what
+     * `onChange` handed over where you can: a choice made or copied by the app takes its `values` as
+     * changed, so they stop following the form's `defaults`, as those of `defaultValue` do.
+     */
+    value?: readonly MediaChoice<V>[];
+    /**
      * What's selected as it mounts, with what the app's form held for each, such as a product's
      * carousel being edited, in its order. Each is matched to its library by `section.id`.
      */
     defaultValue?: readonly MediaChoice<V>[];
+    /**
+     * Told everything selected as it changes, in the order set, each with what its form holds, so at
+     * every key typed in a form: keep it quick. A pick found to be gone, its library or its listing no
+     * longer having it, is told too; a new listing of an asset alone isn't. Any of `value`,
+     * `defaultValue`, `onChange` and `onChoose` has the media manager take picks, with the selected column;
+     * without `onChoose` there's no Choose, for picks that are part of a form of the app's, saved by
+     * its own button, and a double click or Enter opens the asset.
+     */
+    onChange?: (choices: MediaChoice<V>[]) => void;
     /**
      * What the app's backend answered when the picks were saved, as it came, by its own keys, a
      * message or several each, as Laravel's validation errors are:
@@ -239,7 +255,9 @@ const MediaManager = <V,>({
     layout,
     defaultLayout,
     onLayoutChange,
+    value,
     defaultValue,
+    onChange,
     errors = NO_ERRORS,
     choiceErrorKey,
     localeText,
@@ -289,7 +307,9 @@ const MediaManager = <V,>({
                             layout={layout}
                             defaultLayout={defaultLayout}
                             onLayoutChange={onLayoutChange}
+                            value={value as readonly MediaChoice[] | undefined}
                             defaultValue={defaultValue as readonly MediaChoice[] | undefined}
+                            onChange={onChange as ((choices: MediaChoice[]) => void) | undefined}
                             errors={errors}
                             choiceErrorKey={choiceErrorKey}
                             propertiesCache={propertiesCache}

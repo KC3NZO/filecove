@@ -19,7 +19,7 @@ import PickerFrame from "./picker-frame";
 import type { FileAdapter, FileEntry, MediaManagerLocaleText, MediaSection } from "../../types";
 
 // The root element's own attributes, which go on it as they do on a MUI component's root.
-type RootAttributes = Omit<ComponentPropsWithoutRef<"div">, "children">;
+type RootAttributes = Omit<ComponentPropsWithoutRef<"div">, "children" | "defaultValue" | "onChange">;
 
 export interface MediaPickerProps extends RootAttributes {
     /** Serves the library, unless it brings its own adapter. */
@@ -34,9 +34,10 @@ export interface MediaPickerProps extends RootAttributes {
     /**
      * Takes what's chosen, with the Choose button, a double click or Enter on an asset, each as it was
      * listed, `meta` and all: one asset, unless `multiple`. What's stored of it, and anything asked about
-     * this use of it, are the app's, around the picker.
+     * this use of it, are the app's, around the picker. Without it there's no Choose, for an app taking
+     * what's selected as it changes (`onChange`), and a double click or Enter only selects.
      */
-    onChoose: (assets: FileEntry[]) => void;
+    onChoose?: (assets: FileEntry[]) => void;
     /** Puts a Cancel button beside Choose, for a picker in the app's own dialog. */
     onCancel?: () => void;
     /** Whether several can be chosen at once, in the order they were selected. One at a time when omitted. */
@@ -52,8 +53,15 @@ export interface MediaPickerProps extends RootAttributes {
      * goes.
      */
     allowUpload?: boolean;
+    /** What's selected, when the app keeps it, with `onChange`: every change is then only asked for. */
+    value?: readonly FileEntry[];
     /** What's selected as it mounts, such as what the field it's picking for holds now. */
     defaultValue?: readonly FileEntry[];
+    /**
+     * Told everything selected as it changes, in the order set. One found to be gone, no longer listed
+     * where it was picked, is told too; a new listing of an asset alone isn't.
+     */
+    onChange?: (assets: FileEntry[]) => void;
     /** The component's own text, the media manager's. Keys left out stay in English, as `enUS` has them. */
     localeText?: Partial<MediaManagerLocaleText>;
     /** The BCP 47 language tag that numbers, sizes and dates are written in and names are matched by. */
@@ -107,7 +115,9 @@ const MediaPicker = ({
     multiple = false,
     maxChoices,
     allowUpload = false,
+    value,
     defaultValue,
+    onChange,
     localeText,
     locale,
     ref,
@@ -141,7 +151,9 @@ const MediaPicker = ({
                             multiple={multiple}
                             maxChoices={maxChoices}
                             allowUpload={allowUpload}
+                            value={value}
                             defaultValue={defaultValue}
+                            onChange={onChange}
                         />
                     </Box>
                 </DataContext>

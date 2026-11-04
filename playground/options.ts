@@ -107,6 +107,12 @@ export const oneVideo = params.has("oneVideo");
 export const browse = params.has("browse");
 
 /**
+ * `?media&live`: no `onChoose`, so there's no Choose, and the app takes the picks as they change, as
+ * for a field in a form of its own, saved by its own button. The footer shows them.
+ */
+export const live = params.has("live");
+
+/**
  * `?media&push`: the media backend pushes how its assets' processing stands (`watchProcessing`, a
  * timer standing in for a socket) rather than being polled for it (`processing`).
  */

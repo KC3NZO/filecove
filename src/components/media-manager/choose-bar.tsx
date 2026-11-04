@@ -26,7 +26,8 @@ interface ChooseBarProps {
     /** The button opening the selected column, which takes the focus back as it closes. */
     openerRef: Ref<HTMLButtonElement>;
     onOpenChosen: () => void;
-    onChoose: () => void;
+    /** Choose, while finishing is the app's to take; without it, the app takes the picks as they change. */
+    onChoose: (() => void) | undefined;
 }
 
 // Only where the selected column doesn't dock; beside it, the column has its own Choose.
@@ -71,6 +72,10 @@ const ChooseBar = ({
     const heldId = useId();
     const said = held ?? note;
 
+    if (!onChoose && !showOpener) {
+        return null;
+    }
+
     return (
         <Box sx={barSx}>
             {showOpener ? (
@@ -92,15 +97,17 @@ const ChooseBar = ({
                     {said}
                 </Typography>
             )}
-            <Button
-                variant="contained"
-                disableElevation
-                disabled={count === 0 || !!held}
-                aria-describedby={held ? heldId : undefined}
-                onClick={onChoose}
-            >
-                {text.mediaChoose}
-            </Button>
+            {onChoose && (
+                <Button
+                    variant="contained"
+                    disableElevation
+                    disabled={count === 0 || !!held}
+                    aria-describedby={held ? heldId : undefined}
+                    onClick={onChoose}
+                >
+                    {text.mediaChoose}
+                </Button>
+            )}
         </Box>
     );
 };

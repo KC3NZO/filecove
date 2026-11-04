@@ -51,7 +51,8 @@ interface ChoicesPaneProps {
     onRemove: (choice: MediaChoice) => void;
     onMove: (from: number, to: number) => void;
     onClear: () => void;
-    onChoose: () => void;
+    /** Choose at its foot, while finishing is the app's to take; without it, the app takes the picks as they change. */
+    onChoose: (() => void) | undefined;
     /** Opens the asset itself in its library, in the library's place. */
     onShowInLibrary: (choice: MediaChoice) => void;
     /** Closes the column where it's an overlay over the library. */
@@ -417,22 +418,24 @@ const ChoicesPane = ({
                     )}
                 </>
             )}
-            <Box sx={footerSx}>
-                {held && (
-                    <Typography id={heldId} variant="body2" sx={heldSx}>
-                        {held}
-                    </Typography>
-                )}
-                <Button
-                    variant="contained"
-                    disableElevation
-                    disabled={count === 0 || !!held}
-                    aria-describedby={held ? heldId : undefined}
-                    onClick={onChoose}
-                >
-                    {text.mediaChoose}
-                </Button>
-            </Box>
+            {onChoose && (
+                <Box sx={footerSx}>
+                    {held && (
+                        <Typography id={heldId} variant="body2" sx={heldSx}>
+                            {held}
+                        </Typography>
+                    )}
+                    <Button
+                        variant="contained"
+                        disableElevation
+                        disabled={count === 0 || !!held}
+                        aria-describedby={held ? heldId : undefined}
+                        onClick={onChoose}
+                    >
+                        {text.mediaChoose}
+                    </Button>
+                </Box>
+            )}
             <Box role="status" sx={visuallyHiddenSx}>
                 {count > 0 ? selectedText : ""}
             </Box>

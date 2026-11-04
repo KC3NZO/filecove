@@ -12,6 +12,8 @@ import { useData, useFolder } from "../../hooks/use-folder";
 import { useFilesDrop } from "../../hooks/use-files-drop";
 import { useLocale } from "../../hooks/use-locale";
 import { useMediaSearch } from "../../hooks/use-media-search";
+import { usePicks } from "../../hooks/use-picks";
+import type { PicksState } from "../../hooks/use-picks";
 import { useTransferQueue } from "../../hooks/use-transfer-queue";
 import { useSetting } from "../../hooks/use-setting";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
@@ -108,8 +110,12 @@ export interface MediaFrameProps {
     /** Where the libraries' layouts start, while it doesn't. */
     defaultLayout: MediaLayouts | undefined;
     onLayoutChange: ((layout: MediaLayouts) => void) | undefined;
-    /** What's selected as it mounts. */
+    /** What's selected, when the app keeps it. */
+    value: readonly MediaChoice[] | undefined;
+    /** What's selected as it mounts, while it doesn't. */
     defaultValue: readonly MediaChoice[] | undefined;
+    /** Told what's selected, as it changes. */
+    onChange: ((choices: MediaChoice[]) => void) | undefined;
     /** The app's backend's errors, for the picks and their forms, as the app passed them. */
     errors: FieldErrors;
     /** Where a pick's own errors are in `errors`, about it as a whole. */
@@ -156,10 +162,7 @@ interface GroupHeaderProps {
  * What's selected, in every library, in the order set, which is the order it's handed over in,
  * and the last asset picked without Shift, where a Shift-click's range starts in its library.
  */
-interface Picks {
-    items: readonly Pick[];
-    anchor: { sectionId: string; id: string } | null;
-}
+type Picks = PicksState<Pick, { sectionId: string; id: string }>;
 
 /** The asset shown in the library's place, by its library's id, as it was when it was opened. */
 interface Viewing {
@@ -256,19 +259,51 @@ const NO_SECTION: MediaSection = { id: "", label: "", rootId: "", kind: "image" 
 const pickOf = (choice: MediaChoice): Pick => ({
     sectionId: choice.section.id,
     asset: choice.asset,
-    values: DEFAULTED.has(choice) ? NO_VALUES : choice.values,
+    values: DEFAULTED.has(choice) ? NO_VALUES : (choice.values ?? NO_VALUES),
     trail: PICK_TRAILS.get(choice),
 });
+
+// The same format as `choiceKey`, so a pick can be found among the choices made from it.
+const pickKey = ({ sectionId, asset }: Pick) => `${sectionId}\u0000${asset.id}`;
+
+/** Whether two picks are one to the app, which a new listing's entry for the asset doesn't change. */
+const sameToApp = (a: Pick, b: Pick) => pickKey(a) === pickKey(b) && a.values === b.values;
+
+/**
+ * The picks the app's list means. A choice it was handed still says what's kept with it; one it made
+ * or copied takes where it was picked from what's known, or has no known level. Its values count as
+ * changed, as nothing says they were the form's defaults.
+ */
+const picksGiven = (list: readonly MediaChoice[], known: readonly Pick[]) =>
+    list.map((choice) => {
+        const pick = pickOf(choice);
+
+        return pick.trail ? pick : { ...pick, trail: known.find((item) => pickKey(item) === pickKey(pick))?.trail };
+    });
+
+/**
+ * A choice as the app is handed it, its values its own, as what a form's defaults gave may be one
+ * object, the form's. It's known for what it is if the app hands it back as `value`.
+ */
+const handedCopy = (choice: MediaChoice): MediaChoice => {
+    const copy = { ...choice, values: { ...choice.values } };
+    const trail = PICK_TRAILS.get(choice);
+
+    if (DEFAULTED.has(choice)) {
+        DEFAULTED.add(copy);
+    }
+
+    if (trail) {
+        PICK_TRAILS.set(copy, trail);
+    }
+
+    return copy;
+};
 
 const isGroup = (entry: FileEntry) => entry.kind === "folder";
 
 /** What the app draws above a group's contents, as a component of its own, so it may use hooks. */
 const GroupHeader = ({ draw, group, section }: GroupHeaderProps) => draw(group, section);
-
-const picksFrom = (choices: readonly MediaChoice[] | undefined): Picks =>
-    choices && choices.length > 0
-        ? { items: choices.map((choice) => pickOf({ ...choice, values: choice.values ?? NO_VALUES })), anchor: null }
-        : NO_PICKS;
 
 // Positioned, so the selected column's overlay and its backdrop are placed by it.
 const frameSx: SxProps<Theme> = {
@@ -401,7 +436,9 @@ const MediaFrame = ({
     layout: layoutProp,
     defaultLayout = NO_LAYOUTS,
     onLayoutChange,
+    value,
     defaultValue,
+    onChange,
     errors,
     choiceErrorKey,
     propertiesCache,
@@ -424,7 +461,8 @@ const MediaFrame = ({
     const levelName = openGroup?.name ?? section?.label ?? "";
     const levelKey = `${section?.id}/${folderId}`;
     const { state, reload } = useFolder(section ?? NO_SECTION, folderId, !!section, true);
-    const choosing = !!onChoose;
+    // Whether the app takes a pick at all, which Choose finishing or not doesn't change.
+    const choosing = !!onChoose || !!onChange || value !== undefined || defaultValue !== undefined;
     // Limits are on what's chosen, so they're nothing while the media manager is only looked through.
     const limit = choosing && multiple ? (countLimit(maxChoices, 1) ?? Infinity) : Infinity;
     const rule = choosing ? canSelect : undefined;
@@ -441,7 +479,19 @@ const MediaFrame = ({
         stopSearching,
         closeSearch,
     } = useMediaSearch();
-    const [picks, setPicks] = useState<Picks>(() => picksFrom(defaultValue));
+    // What the app is told is made as `choices` is, which needs the listing, and more below that needs
+    // the picks, so it's reached through this.
+    const choicesOfRef = useRef<(items: readonly Pick[]) => MediaChoice[]>(() => []);
+    const { picks, setPicks, dropGone } = usePicks<Pick, NonNullable<Picks["anchor"]>, MediaChoice>({
+        component: "MediaManager",
+        value,
+        defaultValue,
+        onChange,
+        given: picksGiven,
+        told: (items) => choicesOfRef.current(items).map(handedCopy),
+        sameItem: sameToApp,
+        keyOf: pickKey,
+    });
     const [viewing, setViewing] = useState<Viewing | null>(null);
     const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(NO_IDS);
     // The order the app was last handed the picks in, at Choose, by their keys, which the keys of
@@ -780,63 +830,79 @@ const MediaFrame = ({
         [pickForm],
     );
 
-    // What's selected, as it is now: in a library that's gone, it goes; picked at the open level of the
+    // What picks are, as they are now: in a library that's gone, one goes; picked at the open level of the
     // open library, once that's listed, as it's listed now, and gone when it isn't any more; picked
     // anywhere else, as the open level lists it when it does, through the same adapter, or else as it
     // was picked. One the app gave has no known level, so it's only known to be gone from a library
     // whose root holds no groups, where it can only have been. One on its way elsewhere isn't listed
     // only for that, so it stays as it was.
-    const choices = useMemo<MediaChoice[]>(() => {
-        const listedById = state?.status === "ready" ? new Map(library.map((entry) => [entry.id, entry])) : undefined;
-        const flat = !inGroup && library.length === leveled.length;
+    const choicesOf = useCallback(
+        (items: readonly Pick[]): MediaChoice[] => {
+            const listedById = state?.status === "ready" ? new Map(library.map((entry) => [entry.id, entry])) : undefined;
+            const flat = !inGroup && library.length === leveled.length;
 
-        return picks.items.flatMap(({ sectionId: pickedIn, asset, values, trail: pickedAmong }) => {
-            const from = sectionsById.get(pickedIn);
+            return items.flatMap(({ sectionId: pickedIn, asset, values, trail: pickedAmong }) => {
+                const from = sectionsById.get(pickedIn);
 
-            if (!from) {
-                return [];
-            }
+                if (!from) {
+                    return [];
+                }
 
-            const served = adapterOf(from);
-            const listedNow = listedById && served === sectionAdapter ? listedById.get(asset.id) : undefined;
-            const atOpenLevel =
-                pickedIn === sectionId && (pickedAmong ? (pickedAmong.at(-1)?.id ?? from.rootId) === folderId : flat);
-            const now =
-                listedById && atOpenLevel && !(served === sectionAdapter && movingIds.has(asset.id))
-                    ? listedNow
-                    : (listedNow ?? withState(asset, assetStates.get(served)?.get(asset.id)));
+                const served = adapterOf(from);
+                const listedNow = listedById && served === sectionAdapter ? listedById.get(asset.id) : undefined;
+                const atOpenLevel =
+                    pickedIn === sectionId && (pickedAmong ? (pickedAmong.at(-1)?.id ?? from.rootId) === folderId : flat);
+                const now =
+                    listedById && atOpenLevel && !(served === sectionAdapter && movingIds.has(asset.id))
+                        ? listedNow
+                        : (listedNow ?? withState(asset, assetStates.get(served)?.get(asset.id)));
 
-            if (!now) {
-                return [];
-            }
+                if (!now) {
+                    return [];
+                }
 
-            const choice = { asset: now, section: from, values: values === NO_VALUES ? defaultsOf(now, from) : values };
+                const choice = { asset: now, section: from, values: values === NO_VALUES ? defaultsOf(now, from) : values };
 
-            if (values === NO_VALUES) {
-                DEFAULTED.add(choice);
-            }
+                if (values === NO_VALUES) {
+                    DEFAULTED.add(choice);
+                }
 
-            if (pickedAmong) {
-                PICK_TRAILS.set(choice, pickedAmong);
-            }
+                if (pickedAmong) {
+                    PICK_TRAILS.set(choice, pickedAmong);
+                }
 
-            return [choice];
-        });
-    }, [
-        picks.items,
-        sectionsById,
-        state?.status,
-        library,
-        leveled,
-        inGroup,
-        folderId,
-        sectionId,
-        adapterOf,
-        sectionAdapter,
-        assetStates,
-        defaultsOf,
-        movingIds,
-    ]);
+                return [choice];
+            });
+        },
+        [
+            sectionsById,
+            state?.status,
+            library,
+            leveled,
+            inGroup,
+            folderId,
+            sectionId,
+            adapterOf,
+            sectionAdapter,
+            assetStates,
+            defaultsOf,
+            movingIds,
+        ],
+    );
+
+    const choices = useMemo(() => choicesOf(picks.items), [choicesOf, picks.items]);
+
+    useLayoutEffect(() => {
+        choicesOfRef.current = choicesOf;
+    });
+
+    // What's found to be gone, its library or its listing no longer having it, is taken out and told,
+    // so the app isn't left holding a pick nothing shows. A listing still loading finds nothing gone.
+    useEffect(() => {
+        const shown = new Set(choices.map(choiceKey));
+
+        dropGone(picks.items.map(pickKey).filter((key) => !shown.has(key)));
+    }, [choices, picks.items, dropGone]);
 
     // Until the app has been handed any, as with errors for the picks it gave as `defaultValue`, the
     // order of the picks as the errors came.
@@ -851,12 +917,11 @@ const MediaFrame = ({
     const errorsOrder = handedOrder ?? errorsCame.order;
     const errorPlaces = useMemo(() => new Map(errorsOrder.map((key, place) => [key, place])), [errorsOrder]);
 
-    // Hands the picks to the app, keeping the order they went in, each with its values to itself, as
-    // what its form's defaults gave may be one object, the form's.
+    // Hands the picks to the app, keeping the order they went in, each with its values to itself.
     const handOver = useCallback(
         (handed: MediaChoice[]) => {
             setHandedOrder(handed.map(choiceKey));
-            onChoose?.(handed.map((choice) => ({ ...choice, values: { ...choice.values } })));
+            onChoose?.(handed.map(handedCopy));
         },
         [onChoose],
     );
@@ -1394,8 +1459,9 @@ const MediaFrame = ({
         }
     }, [viewed, shownEntries]);
 
-    // A double click or Enter: chooses the asset, with the rest selected when several can be; without
-    // `onChoose`, opens it in the library's place.
+    // A double click or Enter: chooses the asset, with the rest selected when several can be. Without
+    // `onChoose` there's no choosing to finish, so it opens it in the library's place, selecting it
+    // alone only when browsing, as what the app is taking picks for isn't to be replaced by opening one.
     const activate = useCallback(
         (index: number) => {
             const entry = shownEntries[index];
@@ -1411,10 +1477,13 @@ const MediaFrame = ({
             }
 
             if (!onChoose) {
-                setPicks({
-                    items: [{ sectionId: section.id, asset: entry, values: NO_VALUES, trail }],
-                    anchor: { sectionId: section.id, id: entry.id },
-                });
+                if (!choosing) {
+                    setPicks({
+                        items: [{ sectionId: section.id, asset: entry, values: NO_VALUES, trail }],
+                        anchor: { sectionId: section.id, id: entry.id },
+                    });
+                }
+
                 openAsset(index);
 
                 return;
@@ -1454,6 +1523,7 @@ const MediaFrame = ({
         [
             shownEntries,
             onChoose,
+            choosing,
             handOver,
             multiple,
             choices,
@@ -1657,7 +1727,7 @@ const MediaFrame = ({
 
         setArrivals((previous) => previous.filter((waiting) => !keys.has(waiting.key)));
 
-        if (!onChoose || !last) {
+        if (!choosing || !last) {
             return;
         }
 
@@ -1700,7 +1770,7 @@ const MediaFrame = ({
         state?.status,
         library,
         arrivals,
-        onChoose,
+        choosing,
         multiple,
         samePick,
         refusalOf,
@@ -2257,7 +2327,8 @@ const MediaFrame = ({
             ref={frameRef}
             sx={frameSx}
             data-libraries={several}
-            data-choosing={choosing}
+            // Whether there's something under the library where the column doesn't dock.
+            data-choosing={!!onChoose || (choosing && !chosenEmpty)}
             onKeyDown={(event) => {
                 // Ctrl+F or ⌘F opens the search, in place of the browser's find while the focus is in
                 // here, as in the file manager, but for what's over the header or hides the library.
@@ -2572,21 +2643,21 @@ const MediaFrame = ({
                         />
                     </Box>
                 )}
-                {onChoose && (
+                {choosing && (
                     <ChooseBar
                         count={count}
                         selectedText={selectedText}
                         note={limitNote}
-                        held={chooseHeld}
+                        held={onChoose ? chooseHeld : undefined}
                         chosenOpen={chosenOverlay}
                         showOpener={!chosenEmpty}
                         openerRef={openerRef}
                         onOpenChosen={() => setChosenOverlay(true)}
-                        onChoose={() => !chooseHeld && handOver(choices)}
+                        onChoose={onChoose && (() => !chooseHeld && handOver(choices))}
                     />
                 )}
             </Box>
-            {onChoose && (
+            {choosing && (
                 <>
                     <Backdrop open={chosenOverlay && !docked && !chosenEmpty} sx={backdropSx} onClick={closeChosen} />
                     <Box
@@ -2608,14 +2679,14 @@ const MediaFrame = ({
                             renderDetails={renderDetails}
                             problemsOf={problemsOf}
                             holdOf={holdOfChoice}
-                            held={chooseHeld}
+                            held={onChoose ? chooseHeld : undefined}
                             badge={badge}
                             selectedText={selectedText}
                             note={limitNote}
                             onRemove={removeChoice}
                             onMove={moveChoice}
                             onClear={clearSelection}
-                            onChoose={() => !chooseHeld && handOver(choices)}
+                            onChoose={onChoose && (() => !chooseHeld && handOver(choices))}
                             onShowInLibrary={showInLibrary}
                             onClose={closeChosen}
                         />
