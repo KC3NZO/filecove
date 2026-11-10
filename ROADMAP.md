@@ -5,7 +5,7 @@ What's left in the two components, `FileManager` and `MediaManager`, what they s
 ## Order
 
 1. ~~Re-listing folders in the background, tooltips, high contrast and announcements, properties, folder upload.~~ Done 2026-10-23 to 2026-10-24.
-2. The media manager's necessary gaps and features, in the order listed below: virtualizing the grid, which has group tiles and levels to cover too, then the rest of the props checklist (uploading and processing done 2026-10-31, groups in a library 2026-11-10).
+2. The media manager's necessary gaps and features, in the order listed below: the rest of the props checklist (uploading and processing done 2026-10-31, groups in a library and virtualizing the grid 2026-11-10).
 3. Packaging, in one pass before a release, as the last step.
 
 Everything optional waits until then, unless an app needs it.
@@ -157,7 +157,7 @@ Tests, moving entries to another adapter's trash (each backend's trash holds its
 - [x] **The contract's open points**, settled in talk on 2026-10-31:
   - [x] `pickForm` on `MediaSection`, beside its `properties`, with the component's `pickForm(asset, section)` kept as the fallback (the user's idea, agreed). *Done 2026-11-03: `MediaSection.pickForm(asset)`, read by `MediaManager` and `MediaPicker` through `pickFormOf`, a library returning `null` asking nothing rather than falling back; in the picker it turns the selected column on, as the prop does. Typed `MediaPickForm<any>`, as a section's other forms are. The playground's Stock photos ask a Credit too. Not type-checked or run yet.*
   - [x] A controlled selection, `value` / `onChange` called on every change, the pick's fields included. *Done 2026-11-03, on `MediaManager` and `MediaPicker`, through `usePicks`. Picking is turned on by any of `value`, `defaultValue`, `onChange` or `onChoose`, and the Choose button and finishing only with `onChoose`, as MUI X's pickers have `onChange` and `onAccept` (the user agreed); without it a double click or Enter opens the asset. Tried by `?media&live`. Not type-checked or run yet.*
-- [ ] **Virtualizing the grid**, which renders every tile for now, so a library of thousands is slow (the file manager's lines, see `virtualization.md`).
+- [x] **Virtualizing the grid**, which rendered every tile, so a library of thousands was slow. *Done 2026-11-10: `MediaGrid` renders only the assets and groups in or near view through `useVirtualLines`, tiles and rows, levels and a search's results alike, in the media manager and `MediaPicker`, the Tab stop kept rendered and the frames focusing one through the grid's `focusAt`; every asset is kept as tall (the line under the name always there, a trail's and a hold's room kept while any shown needs it, a row's bar on its picture), and switching layouts keeps the asset at the top by the lines' anchor. The playground's `?media&many` (see "The media grid" in `virtualization.md`). Not run in a browser yet.*
 - [ ] **The rest of the props checklist** (`props.md`): the open library, the group open in each, the search and the asset open controlled, an `apiRef` (focus, refresh, open a library, open a group, open an asset, select, choose), `limits`, `relistAfter`, and announcements, such as the number of matches.
 
 #### Optional
@@ -165,6 +165,7 @@ Tests, moving entries to another adapter's trash (each backend's trash holds its
 - [ ] The selected column's extras, if apps need them: a least number to choose, resizing it.
 - [ ] Resizing the docked libraries (`ResizeEdge`, once shared out of `file-manager/`).
 - [ ] Touch: a long-press, and the check on every tile while selecting several.
+- [ ] Find in page over the virtualized grid: the file manager's find layer, once `FindLayer` moves out of `file-manager/`. Ctrl+F there is the media manager's own search, which reaches every asset, so only the browser's menu find misses tiles not rendered.
 - [ ] Other sort orders than newest first.
 - [ ] `renderAsset` for the selected column's rows and the asset view's picture, should apps want them to follow: they still show the name and thumbnail.
 

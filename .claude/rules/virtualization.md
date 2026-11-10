@@ -10,6 +10,8 @@ paths:
   - "src/components/file-manager/content/**"
   - "src/components/file-manager/sidebar/**"
   - "src/components/file-manager/dialogs/transfer-dialog.tsx"
+  - "src/components/media-manager/media-grid.tsx"
+  - "src/components/media-manager/asset-option.tsx"
   - "src/utils/dom.ts"
   - "src/types/view.ts"
   - "src/types/tree.ts"
@@ -17,11 +19,11 @@ paths:
 
 # Virtualization
 
-The content, the sidebar tree and the transfer picker's folder list render only what's in or near their scroll panel, so a folder of thousands of entries, or of thousands of folders in the tree or the picker, lists, scrolls and selects as fast as a small one.
+The content, the sidebar tree and the transfer picker's folder list render only what's in or near their scroll panel, so a folder of thousands of entries, or of thousands of folders in the tree or the picker, lists, scrolls and selects as fast as a small one. So does the media manager's grid, and the picker's (see "The media grid").
 
-All three build on `hooks/use-scroll-measure.ts`, which measures a list against the panel it scrolls in: after every render, on the panel's `scroll`, and on resizing (a `ResizeObserver` on the list and the panel). A scroll or resize that changes the measure is rendered under `flushSync`, so what scrolls in appears in the same frame. Each measure is handed a `ScrollView` (`types/view.ts`) of the panel, in px of the whole list: its `place(height)` lays the list out for its whole height, squeezing one too tall for the browser (see "Lists too tall for the browser"), and gives the part the panel shows, widened by `OVERSCAN` (400px); without a scrolling ancestor it's null, and everything is rendered. The list's ref is a callback ref that tears down when called with null, rather than returning a cleanup, which React 18 would ignore.
+All of them build on `hooks/use-scroll-measure.ts`, which measures a list against the panel it scrolls in: after every render, on the panel's `scroll`, and on resizing (a `ResizeObserver` on the list and the panel). A scroll or resize that changes the measure is rendered under `flushSync`, so what scrolls in appears in the same frame. Each measure is handed a `ScrollView` (`types/view.ts`) of the panel, in px of the whole list: its `place(height)` lays the list out for its whole height, squeezing one too tall for the browser (see "Lists too tall for the browser"), and gives the part the panel shows, widened by `OVERSCAN` (400px); without a scrolling ancestor it's null, and everything is rendered. The list's ref is a callback ref that tears down when called with null, rather than returning a cleanup, which React 18 would ignore.
 
-All three put the names of their rows in a find layer too, so the browser's find in page finds every one, rendered or not (see "Find in page").
+The file manager's three put the names of their rows in a find layer too, so the browser's find in page finds every one, rendered or not (see "Find in page"); the media grid doesn't yet.
 
 ## The content
 
@@ -104,6 +106,18 @@ The "Move to…" and "Copy to…" folder list (`dialogs/transfer-dialog.tsx`) us
 - The row with the Tab stop stays rendered (`keep`). The keyboard side is in `keyboard.md`.
 - The scrolling box is keyed by the folder, so each opens scrolled to the top and measured afresh.
 - A folder made with the New folder button is opened. Going back up from it, it takes the Tab stop as the folder left through, which renders it wherever it sorts, and `settleFocus` scrolls to it once the rows are in their places.
+
+## The media grid
+
+`media-manager/media-grid.tsx`, the media manager's assets and groups of the open level and `MediaPicker`'s, uses `useVirtualLines` as the file manager's grid and list do (built 2026-11-10), the same `MediaGrid` for tiles and rows, and for a search's results, which take its place.
+
+- **The listbox** is a CSS grid of the kind's tracks (`repeat(auto-fill, minmax(min, 1fr))`) or one track for rows, `position: relative`, as tall as all the lines (`lines.height`), with no padding of its own: it's in a box (`clipSx`, `rowsClipSx`) holding the padding, `overflow-y: clip` for what a squeeze places past its end, and `hidden` while only uploads show. The uploads under way (`UploadTile`) are a `ul` of their own before it, not virtualized, as they're few.
+- **Each option** (`AssetOption`, memoized) is absolutely placed, `insetInline: 0`, with `top` from its line less the lines' `offset` and `gridColumn: "<n> / span 1"`, and carries `aria-setsize` and `aria-posinset`. Only those rendered ask for their thumbnails.
+- **Every asset and group is as tall**, as the first one rendered gives every line's height, which the looks keep whatever an asset holds: `MediaTile` and `MediaRow` always have the line under the name, empty (`emptyDetail`) when there's nothing to say there or the app's `detail` is `null`; a row's processing bar is along its picture's foot, as a tile's is, not under its name; and while any result shown has a trail, the listbox's `data-trails` keeps a trail's room (`TrailRoom`) under those without one. Under what the app draws entirely itself, `AssetOption` keeps the same room for the trail, and for why it can't be chosen and its bar (`HoldSlot`) while any asset shown has a hold or work on it (`data-holds`). `renderAsset` and `renderGroup` are documented to draw every asset the same height.
+- **The Tab stop** is kept rendered wherever it is (`keep`). The arrow keys move by `lines.columns`. A key moving the focus, or a frame asking for an asset (`MediaGridHandle.focusAt(index)`, `types/media.ts`, through the grid's `ref`), sets `pendingFocus`, and once `settled()`, a layout effect focuses it without the browser's scroll and scrolls to it through `reveal`. The frames go through it for the group left on going up, the first asset of a level gone into, a group just made, and the asset whose view closes or the one after a deleted one, rather than finding them in the page; `focusAssets` still finds the Tab stop in the page, as it's always rendered.
+- **Switching layouts**, and the panel resizing, keep the asset at the panel's top there, by the lines' anchor, whoever changed the layout.
+- The playground's `?media&many` gives Images 10,000 pictures.
+- **Not yet**: the find layer, as `FindLayer` is in `file-manager/` and would move out first, and an app's own drawing has text of its own the browser would find twice. Ctrl+F in the media manager is its own search, which reaches every asset.
 
 ## Scrolling to an item
 
