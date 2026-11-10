@@ -31,7 +31,7 @@ export interface FileEntry {
      * from `properties` instead.
      */
     media?: MediaInfo;
-    /** Folders: how many entries they contain, shown in the size column. */
+    /** Folders: how many entries they contain, shown in the size column, and under a media manager's group. */
     childCount?: number;
     /**
      * Folders: whether they contain sub-folders, so the sidebar can drop the expand arrow without
@@ -64,7 +64,12 @@ export interface FileEntry {
      * the file manager ignores it.
      */
     processing?: AssetProcessing;
-    /** Anything else the adapter wants to carry for custom actions; the file manager ignores it. */
+    /**
+     * Anything else the adapter wants to carry for custom actions, such as how an asset is delivered
+     * (an HLS manifest, a picture's `srcset`) or what a group has of its own (its cover, as listed),
+     * for the app's own drawing and previewers. Neither component reads it; the media manager hands it
+     * back with a pick.
+     */
     meta?: Record<string, unknown>;
 }
 
@@ -560,7 +565,10 @@ export interface FileAdapter {
      * to show the folder as failed to load. It's called again, in the background, for a folder
      * opened again, so changes made elsewhere show. Entries that come back with the same fields
      * are kept as they were, so nothing showing them renders again. A folder copied or moved into a
-     * folder another adapter serves is walked with it, all the way down.
+     * folder another adapter serves is walked with it, all the way down. In the media manager, a
+     * library's root and its groups are listed with it, one level at a time: a folder listed there is
+     * a group (a collection, an album, a season), gone into with a click, and listed in the backend's
+     * own order inside it; a library listing no folders is flat.
      */
     list(folderId: string, options: ListOptions): Promise<ListResult>;
     /**

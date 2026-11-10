@@ -7,7 +7,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { PropertyDisplay } from "../src";
-import { galleryField, posterField, teaserField } from "./media-relation";
+import { coverField, galleryField, posterField, teaserField } from "./media-relation";
 import { pollRenditions } from "./mocks/mock-media";
 
 import type {
@@ -409,8 +409,9 @@ const NAMED_BY_KIND: Record<MediaKind, PropertyDefinitionGroup[]> = {
 // What this backend calls its groups, chosen once one's made, as it's made with only a name.
 const GROUP_TYPES = ["Series", "Season", "Collection", "Album"].map((type) => ({ value: type, label: type }));
 
-// What a group shows, whichever kind its library holds: this backend's own words for it, and what's
-// written about it. The media manager knows nothing of these.
+// What a group shows, whichever kind its library holds: this backend's own words for it, what's
+// written about it, and the assets it points at, its cover changed here too, for the libraries with
+// no group form. The media manager knows nothing of these.
 const groupProperties: PropertyDefinitionGroup[] = [
     naming,
     {
@@ -419,6 +420,7 @@ const groupProperties: PropertyDefinitionGroup[] = [
             { field: "type", label: "Type", type: "string", options: GROUP_TYPES, editable: true },
             { field: "description", label: "Description", type: "string", multiline: true, editable: true },
             { field: "released", label: "Released", type: "date", editable: false },
+            { ...coverField, editable: true },
             teaserField,
             posterField,
             galleryField,

@@ -23,7 +23,7 @@ import type {
 } from "../src";
 
 // A field pointing at an asset of another library, the playground's own, as the media manager knows of
-// no such thing: a series' teaser in Videos and its poster in Images. The dialog and what's kept are the
+// no such thing: a group's cover in Images, a series' teaser in Videos and its poster in Images. The dialog and what's kept are the
 // app's, and the field holds the asset as it was chosen, where a real backend would keep its id and send
 // it back so. Only `MediaPicker` and `MediaPicture` are the component's: the first finds or uploads the asset, and
 // nothing can be deleted or moved from it, the second shows it. What's asked of an upload is the library's `uploadForm`, and what's
@@ -269,6 +269,7 @@ const relations = (field: string, label: string, section: MediaSection, maxChoic
     renderEdit: (params) => <RelationsField {...params} section={section} maxChoices={maxChoices} />,
 });
 
+export const coverField = relation("cover", "Cover", IMAGES);
 export const teaserField = relation("teaser", "Teaser", VIDEOS);
 export const posterField = relation("poster", "Poster", IMAGES);
 export const galleryField = relations("gallery", "Gallery", IMAGES, 6);

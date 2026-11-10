@@ -1,13 +1,10 @@
-import { useState } from "react";
-
 import Box from "@mui/material/Box";
-import ButtonBase from "@mui/material/ButtonBase";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { MediaFields } from "../src";
-import { galleryField, posterField, teaserField } from "./media-relation";
-import { coverUrl } from "./mocks/mock-media";
+import { ResponsivePicture } from "./media-assets";
+import { coverField, galleryField, posterField, teaserField } from "./media-relation";
 
 import type {
     FileEntry,
@@ -20,11 +17,8 @@ import type {
 
 // Audio's group form, the playground's own: what a group is and has is this backend's, and the media
 // manager reads none of it. Images and Videos have none, so they make a group from a name alone, its
-// details opening next, to try both.
-
-const COVERS = ["harbour-dawn", "forest-path", "desert-noon", "city-night", "lake-sunrise", "glacier-blue"];
-
-const pickerSx: SxProps<Theme> = { display: "flex", flexDirection: "column", gap: 1.5 };
+// details opening next, to try both. A cover is a picture of Images and a teaser a video of Videos,
+// each chosen through `MediaPicker` and kept as the asset, which the backend hands back as it is now.
 
 const previewSx: SxProps<Theme> = {
     display: "flex",
@@ -35,110 +29,27 @@ const previewSx: SxProps<Theme> = {
     bgcolor: "action.hover",
 };
 
-const previewCoverSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    width: 72,
-    height: 72,
-    borderRadius: 1.5,
-    overflow: "hidden",
-    bgcolor: "action.selected",
-    color: "text.secondary",
-    fontSize: "0.75rem",
-    "& > img": { width: "100%", height: "100%", objectFit: "cover" },
-};
+const previewCoverSx: SxProps<Theme> = { width: 72, height: 72, borderRadius: 1.5 };
 
 const previewNameSx: SxProps<Theme> = { fontWeight: 700, overflowWrap: "anywhere" };
 
 const previewTypeSx: SxProps<Theme> = { color: "text.secondary", fontSize: "0.8125rem" };
 
-const coversLabelSx: SxProps<Theme> = { color: "text.secondary", fontSize: "0.75rem" };
-
-const coversSx: SxProps<Theme> = { display: "flex", flexWrap: "wrap", gap: 1 };
-
-const coverSx: SxProps<Theme> = {
-    width: 56,
-    height: 56,
-    borderRadius: 1.5,
-    overflow: "hidden",
-    bgcolor: "action.hover",
-    color: "text.secondary",
-    fontSize: "0.75rem",
-    outline: "2px solid transparent",
-    outlineOffset: 1,
-    "& > img": { width: "100%", height: "100%", objectFit: "cover" },
-    '&[aria-checked="true"]': { outlineColor: (theme) => (theme.vars || theme).palette.primary.main },
-    "&.Mui-focusVisible": { outlineColor: (theme) => (theme.vars || theme).palette.text.primary },
-};
-
 /**
- * A component entirely the playground's, in the form as anything can be: covers to pick from, the form
- * holding the one picked under `cover`, and how the group will look, following the name and type as
- * they're typed, and a cover the pointer or the focus is on, which only this component's state knows.
+ * How the group will look, following the form as it's filled in: its cover drawn by the picture's own
+ * sizes, and its name and type as they're typed.
  */
-const CoverPicker = ({ values, setValues, sending }: MediaGroupFormParams) => {
-    const [trying, setTrying] = useState<string | null>(null);
-    const picked = typeof values.cover === "string" ? values.cover : "";
-    const shown = trying ?? picked;
-    // One it has from before keeps its place among the others.
-    const covers = picked && !COVERS.includes(picked) ? [picked, ...COVERS] : COVERS;
-    const pick = (cover: string) => setValues((held) => ({ ...held, cover }));
-
-    return (
-        <Box sx={pickerSx}>
-            <Box sx={previewSx}>
-                <Box sx={previewCoverSx}>
-                    {shown ? <img src={coverUrl(shown)} alt="" draggable={false} /> : "No cover"}
-                </Box>
-                <div>
-                    <Typography sx={previewNameSx}>
-                        <bdi>{String(values.name ?? "").trim() || "Untitled"}</bdi>
-                    </Typography>
-                    <Typography sx={previewTypeSx}>{String(values.type ?? "")}</Typography>
-                </div>
-            </Box>
-            <Typography id="group-cover-label" sx={coversLabelSx}>
-                Cover
+const GroupPreview = ({ values }: MediaGroupFormParams) => (
+    <Box sx={previewSx}>
+        <ResponsivePicture entry={values.cover as FileEntry | undefined} sizes="72px" sx={previewCoverSx} />
+        <div>
+            <Typography sx={previewNameSx}>
+                <bdi>{String(values.name ?? "").trim() || "Untitled"}</bdi>
             </Typography>
-            <Box
-                role="radiogroup"
-                aria-labelledby="group-cover-label"
-                sx={coversSx}
-                onMouseLeave={() => setTrying(null)}
-                onBlur={() => setTrying(null)}
-            >
-                <ButtonBase
-                    role="radio"
-                    aria-checked={!picked}
-                    disabled={sending}
-                    sx={coverSx}
-                    onMouseEnter={() => setTrying("")}
-                    onFocus={() => setTrying("")}
-                    onClick={() => pick("")}
-                >
-                    None
-                </ButtonBase>
-                {covers.map((cover) => (
-                    <ButtonBase
-                        key={cover}
-                        role="radio"
-                        aria-checked={cover === picked}
-                        aria-label={cover}
-                        disabled={sending}
-                        sx={coverSx}
-                        onMouseEnter={() => setTrying(cover)}
-                        onFocus={() => setTrying(cover)}
-                        onClick={() => pick(cover)}
-                    >
-                        <img src={coverUrl(cover)} alt="" draggable={false} />
-                    </ButtonBase>
-                ))}
-            </Box>
-        </Box>
-    );
-};
+            <Typography sx={previewTypeSx}>{String(values.type ?? "")}</Typography>
+        </div>
+    </Box>
+);
 
 /** What can be made in a group, by what it is: a series holds seasons, a collection albums. */
 const typesIn = (parent: FileEntry | null) =>
@@ -152,8 +63,9 @@ const typesIn = (parent: FileEntry | null) =>
 const isReleased = (type: unknown) => type === "Season" || type === "Album";
 
 /**
- * Its fields, following each other: a Season or an Album has a date, and a Series a teaser from Videos
- * and a poster and a gallery from Images, each going when the type's changed.
+ * Its fields, following each other: a cover from Images for any, a Season or an Album has a date, and
+ * a Series a teaser from Videos and a poster and a gallery from Images, each going when the type's
+ * changed.
  */
 const GroupFields = (form: MediaGroupFormParams) => {
     const { values, parent, group } = form;
@@ -179,6 +91,7 @@ const GroupFields = (form: MediaGroupFormParams) => {
             properties: [
                 name,
                 type,
+                coverField,
                 ...(isReleased(values.type)
                     ? [{ field: "released", label: "Released", type: "date" } satisfies PropertyDefinition]
                     : []),
@@ -190,7 +103,7 @@ const GroupFields = (form: MediaGroupFormParams) => {
 
     return (
         <>
-            <CoverPicker {...form} />
+            <GroupPreview {...form} />
             <MediaFields
                 {...form}
                 groups={groups}

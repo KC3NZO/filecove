@@ -1,6 +1,6 @@
 import { push } from "../options";
-import { createMockAdapter, file, folder } from "./mock-adapter";
-import { shrink, thumbnailSource } from "./mock-content";
+import { childId, createMockAdapter, file, folder } from "./mock-adapter";
+import { pictureAt, shrink, thumbnailSource } from "./mock-content";
 
 import type {
     AssetProcessing,
@@ -106,6 +106,15 @@ const videoGroups: MockNode[] = [
 ];
 
 const imageGroups: MockNode[] = [
+    // The pictures groups of the other libraries have as their covers, as a site keeps them: assets of
+    // this library like any, delivered in their sizes, which a group points at by id.
+    folder("Covers", "2026-01-10T09:00", [
+        file("the-harbour-hour.jpg", 1_800_000, "2025-03-01T09:00", "image/jpeg"),
+        file("the-harbour-hour-season-1.jpg", 1_650_000, "2025-03-01T09:30", "image/jpeg"),
+        file("the-harbour-hour-season-2.jpg", 1_720_000, "2025-08-20T09:00", "image/jpeg"),
+        file("coasts.jpg", 2_100_000, "2026-01-10T09:00", "image/jpeg"),
+        file("getting-started.jpg", 1_400_000, "2026-04-28T09:00", "image/jpeg"),
+    ]),
     folder("Summer 2026", "2026-08-20T18:00", [
         folder("Harbour festival", "2026-08-20T18:00", [
             file("festival-stage.jpg", 2_400_000, "2026-08-20T18:00", "image/jpeg"),
@@ -116,20 +125,48 @@ const imageGroups: MockNode[] = [
 ];
 
 /**
- * What this backend says of its groups, by id: what each is, and what's written about it, which the
- * playground shows and changes as it likes. Those left out are only a name.
+ * What this backend says of its groups, by id: what each is, what's written about it, and what it
+ * points at, by id as a database relates them: its cover, a picture in Images, and a series' teaser,
+ * a video in Videos, each an asset of its own library, with its own sizes, renditions and subtitles,
+ * which the group only points at. The playground shows and changes them as it likes. Those left out
+ * are only a name.
  */
-const GROUPS: Record<string, { type: string; description?: string; cover?: boolean }> = {
-    "/audio/The Harbour Hour": { type: "Series", description: "Stories from the docks, every other Tuesday.", cover: true },
-    "/audio/The Harbour Hour/Season 1": { type: "Season", description: "Where it all began.", cover: true },
-    "/audio/The Harbour Hour/Season 2": { type: "Season", cover: true },
+const GROUPS: Record<string, { type: string; description?: string; cover?: string; teaser?: string }> = {
+    "/audio/The Harbour Hour": {
+        type: "Series",
+        description: "Stories from the docks, every other Tuesday.",
+        cover: "/images/Covers/the-harbour-hour.jpg",
+        teaser: "/videos/intro.webm",
+    },
+    "/audio/The Harbour Hour/Season 1": {
+        type: "Season",
+        description: "Where it all began.",
+        cover: "/images/Covers/the-harbour-hour-season-1.jpg",
+    },
+    "/audio/The Harbour Hour/Season 2": { type: "Season", cover: "/images/Covers/the-harbour-hour-season-2.jpg" },
     "/audio/Field recordings": { type: "Collection", description: "Sounds recorded outdoors." },
-    "/audio/Field recordings/Coasts": { type: "Album", description: "Shorelines at first light.", cover: true },
+    "/audio/Field recordings/Coasts": {
+        type: "Album",
+        description: "Shorelines at first light.",
+        cover: "/images/Covers/coasts.jpg",
+    },
     "/audio/Field recordings/Forests": { type: "Album" },
-    "/videos/Getting started": { type: "Series", description: "From signing up to your first project.", cover: true },
-    "/videos/Getting started/Season 1": { type: "Season", cover: true },
-    "/images/Summer 2026": { type: "Collection", description: "What the summer looked like.", cover: true },
-    "/images/Summer 2026/Harbour festival": { type: "Album", cover: true },
+    "/videos/Getting started": {
+        type: "Series",
+        description: "From signing up to your first project.",
+        cover: "/images/Covers/getting-started.jpg",
+    },
+    "/videos/Getting started/Season 1": { type: "Season", cover: "/images/Covers/getting-started.jpg" },
+    "/images/Covers": { type: "Collection", description: "The covers of this site's series and albums." },
+    "/images/Summer 2026": {
+        type: "Collection",
+        description: "What the summer looked like.",
+        cover: "/images/Summer 2026/summer-poster.png",
+    },
+    "/images/Summer 2026/Harbour festival": {
+        type: "Album",
+        cover: "/images/Summer 2026/Harbour festival/festival-stage.jpg",
+    },
 };
 
 const documents: MockNode[] = [
@@ -150,17 +187,39 @@ const stock: MockNode[] = Array.from({ length: 18 }, (_, index) =>
     ),
 );
 
-const siteAdapter = createMockAdapter(
-    {
-        "/images": [...imageGroups, ...images],
-        "/videos": [...videoGroups, ...videos],
-        "/audio": [...audioGroups, ...audio],
-        "/documents": documents,
-        // A library whose root refuses to be listed, to see the error.
-        "/old": [{ ...folder("archive", "2020-01-01T00:00", []), fails: true }],
-    },
-    { latency: [300, 900] },
-);
+const siteRoots: Record<string, MockNode[]> = {
+    "/images": [...imageGroups, ...images],
+    "/videos": [...videoGroups, ...videos],
+    "/audio": [...audioGroups, ...audio],
+    "/documents": documents,
+    // A library whose root refuses to be listed, to see the error.
+    "/old": [{ ...folder("archive", "2020-01-01T00:00", []), fails: true }],
+};
+
+const siteAdapter = createMockAdapter(siteRoots, { latency: [300, 900] });
+
+/** This site's assets as its tree starts, by id, as the mock's adapter lists them, for what groups point at. */
+const startingAssets = new Map<string, FileEntry>();
+
+const indexAssets = (parent: string, nodes: MockNode[]) =>
+    nodes.forEach((node) => {
+        const id = childId(parent, node.name);
+
+        if (node.children) {
+            indexAssets(id, node.children);
+        } else {
+            startingAssets.set(id, {
+                id,
+                name: node.name,
+                kind: "file",
+                size: node.size,
+                modifiedAt: node.modified ? new Date(node.modified) : undefined,
+                mimeType: node.mimeType,
+            });
+        }
+    });
+
+Object.entries(siteRoots).forEach(([root, nodes]) => indexAssets(root, nodes));
 
 const stockAdapter = createMockAdapter({ "/": stock }, { latency: [500, 1200] });
 
@@ -198,8 +257,23 @@ const frameUrl = (name: string) => {
     return url;
 };
 
-/** The picture of a cover of that name, as its group's thumbnail is made from it, for the playground's form. */
-export const coverUrl = (name: string) => frameUrl(`${name}.jpg`);
+// The widths this backend makes of a picture, for `srcset`.
+const PICTURE_WIDTHS = [320, 640, 1280];
+
+const sizedUrls = new Map<string, string>();
+
+/** The URL of a picture's file at a width, kept for the page's life, as a CDN's would be. */
+const sizedUrl = (name: string, width: number) => {
+    const key = `${name}@${width}`;
+    let url = sizedUrls.get(key);
+
+    if (!url) {
+        url = URL.createObjectURL(pictureAt(name, width));
+        sizedUrls.set(key, url);
+    }
+
+    return url;
+};
 
 const isVideo = (entry: FileEntry) => entry.mimeType?.startsWith("video/") ?? false;
 const isAudio = (entry: FileEntry) => entry.mimeType?.startsWith("audio/") ?? false;
@@ -351,6 +425,27 @@ const transcriptOf = (entry: FileEntry) => {
 const EPISODE = /^podcast-episode-(\d+)\./;
 
 /**
+ * What this backend delivers a picture by, which the media manager carries in `meta` without reading
+ * it, for the app to draw it once it's chosen: `src`, its largest size, and `srcset`, the sizes made of
+ * it for screens of every width, once they're made, so not for one uploaded without them, nor while
+ * it's being worked on. A vector picture is one file at any size. Each size is made up from its name
+ * and says its width, so which one the browser took shows, as the mock has no image server; so a
+ * picture uploaded here is delivered as a made-up one too.
+ */
+const pictureDelivery = (entry: FileEntry) => {
+    if (entry.mimeType === "image/svg+xml") {
+        return { src: frameUrl(entry.name) };
+    }
+
+    const sized = uploads.get(entry.id)?.values.responsive !== false && !processingOf(entry);
+
+    return {
+        src: sizedUrl(entry.name, PICTURE_WIDTHS[PICTURE_WIDTHS.length - 1]),
+        ...(sized ? { srcset: PICTURE_WIDTHS.map((width) => `${sizedUrl(entry.name, width)} ${width}w`).join(", ") } : {}),
+    };
+};
+
+/**
  * What this backend delivers a video by, which the media manager carries in `meta` without reading
  * it, for the playground's own player and for the app once it's chosen: an HLS manifest, as a
  * transcoding backend hands over, once it's made, and the poster in use. `sample` is the playground's
@@ -358,6 +453,10 @@ const EPISODE = /^podcast-episode-(\d+)\./;
  * audio says it has a transcript, and a podcast's episode its title and show.
  */
 const metaOf = (entry: FileEntry): FileEntry["meta"] => {
+    if (isImage(entry)) {
+        return pictureDelivery(entry);
+    }
+
     if (isAudio(entry)) {
         const episode = EPISODE.exec(entry.name)?.[1];
 
@@ -591,6 +690,57 @@ const coversChanged = new Map<string, Date>();
 /** A day some months before the playground's today, made up from a name, as ISO: "2026-05-14". */
 const dayOf = (hash: number) => new Date(Date.UTC(2026, 4, 1) - (hash % 400) * DAY).toISOString().slice(0, 10);
 
+const isEntry = (value: unknown): value is FileEntry =>
+    typeof value === "object" && value !== null && "id" in value && "kind" in value;
+
+/**
+ * The asset a group points at, its cover or its teaser, by `${readOnly}:${id}`: the one saved with it
+ * since, or none, or else the one it came with. The mock keeps the asset as it was picked, where a
+ * real backend would keep its id, and as ids here are paths, one moved or deleted since is lost to it.
+ */
+const relatedOf = (group: FileEntry, key: string, field: "cover" | "teaser"): FileEntry | undefined => {
+    const saved = savedValues.get(key);
+
+    if (saved && field in saved) {
+        const value = saved[field];
+
+        return isEntry(value) ? value : undefined;
+    }
+
+    const id = GROUPS[group.id]?.[field];
+
+    return id ? startingAssets.get(id) : undefined;
+};
+
+/**
+ * An asset something points at, all of them this site's, as it's listed now rather than as it was
+ * picked: its name, and its delivery as it is now, a teaser's HLS once its renditions are made, a
+ * cover's sizes once they're made.
+ */
+const asListedNow = (entry: FileEntry): FileEntry => {
+    const name = savedValues.get(`false:${entry.id}`)?.name;
+    const listed = listedAs(storedAs(entry));
+
+    return typeof name === "string" ? { ...listed, name } : listed;
+};
+
+/** A group's values with the assets they point at as listed now: a cover, a teaser, a poster and a gallery's. */
+const listedNow = (values: PropertyValues): PropertyValues => ({
+    ...values,
+    ...Object.fromEntries(
+        (["cover", "teaser", "poster"] as const)
+            .filter((field) => isEntry(values[field]))
+            .map((field) => [field, asListedNow(values[field] as FileEntry)]),
+    ),
+    ...(Array.isArray(values.gallery)
+        ? {
+              gallery: values.gallery.map((each: { asset?: unknown }) =>
+                  isEntry(each.asset) ? { ...each, asset: asListedNow(each.asset) } : each,
+              ),
+          }
+        : {}),
+});
+
 /**
  * An asset's values, as this backend keeps them, by its own keys: what a file is like, what was
  * written about it, how a video is delivered, and what's saved over them. Plain data, as JSON
@@ -598,14 +748,19 @@ const dayOf = (hash: number) => new Date(Date.UTC(2026, 4, 1) - (hash % 400) * D
  */
 const propertiesOf = (entry: FileEntry, key: string, stock: boolean): EntryProperties => {
     if (entry.kind === "folder") {
+        const { cover: _cover, teaser: _teaser, ...saved }: PropertyValues = savedValues.get(key) ?? {};
+        const cover = relatedOf(entry, key, "cover");
+        const teaser = relatedOf(entry, key, "teaser");
+
         return {
-            values: {
+            values: listedNow({
                 name: entry.name,
                 type: GROUPS[entry.id]?.type ?? "",
                 description: GROUPS[entry.id]?.description ?? "",
-                cover: GROUPS[entry.id]?.cover ? entry.name : "",
-                ...savedValues.get(key),
-            },
+                ...saved,
+                ...(cover && { cover }),
+                ...(teaser && { teaser }),
+            }),
         };
     }
 
@@ -662,19 +817,32 @@ const storedAs = (entry: FileEntry, readOnly = false): FileEntry => ({
     name: storedNames.get(`${readOnly}:${entry.id}`) ?? entry.name,
 });
 
-/** An entry as a media backend lists it: an asset with what its listing says, a group with what it holds. */
-const listedEntry = (entry: FileEntry, readOnly: boolean): FileEntry =>
-    entry.kind === "file"
-        ? listedAs(entry)
-        : {
-              ...entry,
-              modifiedAt: coversChanged.get(`${readOnly}:${entry.id}`) ?? entry.modifiedAt,
-              meta: {
-                  type: savedValues.get(`${readOnly}:${entry.id}`)?.type ?? GROUPS[entry.id]?.type,
-                  description:
-                      savedValues.get(`${readOnly}:${entry.id}`)?.description ?? GROUPS[entry.id]?.description,
-              },
-          };
+/**
+ * An entry as a media backend lists it: an asset with what its listing says; a group with what it is,
+ * what's written about it, and its cover and teaser as they're listed now, nested as an API's resource
+ * would hand them over, for the app to draw them by their own delivery.
+ */
+const listedEntry = (entry: FileEntry, readOnly: boolean): FileEntry => {
+    if (entry.kind === "file") {
+        return listedAs(entry);
+    }
+
+    const key = `${readOnly}:${entry.id}`;
+    const saved = savedValues.get(key);
+    const cover = relatedOf(entry, key, "cover");
+    const teaser = relatedOf(entry, key, "teaser");
+
+    return {
+        ...entry,
+        modifiedAt: coversChanged.get(key) ?? entry.modifiedAt,
+        meta: {
+            type: saved?.type ?? GROUPS[entry.id]?.type,
+            description: saved?.description ?? GROUPS[entry.id]?.description,
+            ...(cover && { cover: asListedNow(cover) }),
+            ...(teaser && { teaser: asListedNow(teaser) }),
+        },
+    };
+};
 
 /**
  * Makes an adapter of the mock a media backend: what its listings say of each asset (`media`, and
@@ -811,17 +979,11 @@ const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
                   wait(150, signal).then(() => statesOf(entries)),
           }),
     thumbnail: (entry, options) => {
-        // A group's cover, for those that have one, as this backend keeps it: the one picked, or else
-        // the one it came with.
+        // A group's is its cover's, for those that have one, the picture it points at.
         if (entry.kind === "folder") {
-            const picked = savedValues.get(`${readOnly}:${entry.id}`)?.cover;
-            const cover = typeof picked === "string" ? picked : GROUPS[entry.id]?.cover ? entry.name : "";
+            const cover = relatedOf(entry, `${readOnly}:${entry.id}`, "cover");
 
-            return cover
-                ? wait(200, options.signal)
-                      .then(() => shrink(thumbnailSource(`${cover}.jpg`) as Blob, options.size))
-                      .then((blob) => blob && { blob })
-                : Promise.resolve(null);
+            return (cover && adapter.thumbnail?.(storedAs(cover), options).catch(() => null)) ?? Promise.resolve(null);
         }
 
         return isVideo(entry)
@@ -858,6 +1020,11 @@ const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
             const key = `${readOnly}:${entry.id}`;
 
             savedValues.set(key, { ...savedValues.get(key), ...values });
+
+            // A group's thumbnail is its cover's, so a new one is a change to it, asked for again.
+            if (entry.kind === "folder" && "cover" in values) {
+                coversChanged.set(key, new Date());
+            }
         }),
 });
 
@@ -962,7 +1129,7 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => {
 
             savedValues.set(keyOf(made), rest as PropertyValues);
 
-            return { ...made, meta: { type: rest.type, description: rest.description } };
+            return listedEntry(made, readOnly);
         },
         // What it holds now, kept with it, its id staying, and its name a value as any asset's is.
         updateGroup: async (group, values, options) => {
@@ -978,21 +1145,26 @@ const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => {
 
             const given = stored(group);
 
-            const changed = values.cover !== (savedValues.get(keyOf(group))?.cover ?? "") ? new Date() : undefined;
+            const coverId = (value: unknown) => (isEntry(value) ? value.id : "");
+            const changed =
+                coverId(values.cover) !== coverId(relatedOf(group, keyOf(group), "cover")) ? new Date() : undefined;
 
-            savedValues.set(keyOf(group), { ...savedValues.get(keyOf(group)), ...values, name } as PropertyValues);
+            // What the form holds is all the group has now, so a cover or a teaser it left out is gone,
+            // rather than the one the group came with.
+            savedValues.set(keyOf(group), {
+                ...savedValues.get(keyOf(group)),
+                cover: undefined,
+                teaser: undefined,
+                ...values,
+                name,
+            } as PropertyValues);
             storedNames.set(keyOf(group), given.name);
 
             if (changed) {
                 coversChanged.set(keyOf(group), changed);
             }
 
-            return {
-                ...group,
-                name,
-                modifiedAt: coversChanged.get(keyOf(group)) ?? group.modifiedAt,
-                meta: { type: values.type, description: values.description },
-            };
+            return listedEntry({ ...group, name }, readOnly);
         },
         // What's kept of it goes with it, and of all that's in a group, as ids here are paths, and it's
         // handed back as listed, so what's selected of it keeps its delivery.

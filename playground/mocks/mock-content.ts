@@ -179,25 +179,46 @@ const hueOf = (name: string) => [...name].reduce((hash, char) => (hash * 31 + ch
 
 const escapeXml = (value: string) => value.replace(/[&<>"]/g, (char) => `&#${char.charCodeAt(0)};`);
 
-/** A landscape in the name's colours, with the name on it unless it's for a thumbnail, too small to read. */
-const picture = (name: string, labelled = true) => {
+/** A landscape in the name's colours, 1600 by 1000 in its own units, with what's put over it. */
+const landscape = (name: string, width: number, over: string) => {
     const hue = hueOf(name);
-    const label = labelled
-        ? `<text x="80" y="150" font-family="system-ui, sans-serif" font-size="72" font-weight="600" fill="white">
-${escapeXml(name)}</text>`
-        : "";
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${Math.round(width * 0.625)}" viewBox="0 0 1600 1000">
 <defs><linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
 <stop offset="0" stop-color="hsl(${hue} 70% 62%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360} 65% 34%)"/>
 </linearGradient></defs>
 <rect width="1600" height="1000" fill="url(#sky)"/>
 <circle cx="1240" cy="260" r="140" fill="hsl(${(hue + 30) % 360} 90% 88% / 0.6)"/>
 <path d="M0 820 L420 480 L760 760 L1060 560 L1600 900 L1600 1000 L0 1000 Z" fill="hsl(${hue} 40% 18% / 0.6)"/>
-${label}
+${over}
 </svg>`;
 
     return new Blob([svg], { type: "image/svg+xml" });
 };
+
+/** A landscape in the name's colours, with the name on it unless it's for a thumbnail, too small to read. */
+const picture = (name: string, labelled = true) =>
+    landscape(
+        name,
+        1600,
+        labelled
+            ? `<text x="80" y="150" font-family="system-ui, sans-serif" font-size="72" font-weight="600" fill="white">
+${escapeXml(name)}</text>`
+            : "",
+    );
+
+/**
+ * A picture at one of the sizes a backend makes of it for `srcset`, that many pixels wide, with its
+ * width written large at the foot of its middle, which a square crop keeps, so which one the browser
+ * took shows wherever it's drawn.
+ */
+export const pictureAt = (name: string, width: number) =>
+    landscape(
+        name,
+        width,
+        `<rect x="540" y="700" width="520" height="260" rx="40" fill="black" fill-opacity="0.55"/>
+<text x="800" y="890" text-anchor="middle" font-family="system-ui, sans-serif" font-size="190" font-weight="700"
+fill="white">${width}w</text>`,
+    );
 
 /** A round logo with the name's first letter. */
 const logo = (name: string) => {
