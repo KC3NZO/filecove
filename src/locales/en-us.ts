@@ -531,6 +531,7 @@ export const enUS: LocaleText = {
     mediaGroupPath: "Path",
     mediaInGroup: (name) => `In ${name}`,
     mediaGroupDetails: (name) => `Details of ${name}`,
+    mediaMoreActions: "More actions",
     mediaNewGroup: "New group",
     mediaGroupName: "Group name",
     mediaCreateGroupFailed: "Couldn't create the group.",

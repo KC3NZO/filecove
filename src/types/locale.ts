@@ -864,6 +864,8 @@ export interface MediaManagerLocaleText
     mediaInGroup: (name: string) => string;
     /** A group's button, and Alt+Enter on it, opening its details; `name` comes isolated. */
     mediaGroupDetails: (name: string) => string;
+    /** Names the header's button holding the app's actions that don't show as buttons. */
+    mediaMoreActions: string;
     /** The header's button making a group in the level open (`MediaSection.createGroups`). */
     mediaNewGroup: string;
     /** The label of the field asking its name. */

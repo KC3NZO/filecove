@@ -777,10 +777,11 @@ const mediaBackend = (adapter: FileAdapter, readOnly = false): FileAdapter => ({
             });
         }),
     list: (folderId, options) =>
-        adapter.list(folderId, options).then((result) => ({
-            ...result,
-            entries: result.entries.map((entry) => listedEntry(entry, readOnly)),
-        })),
+        adapter.list(folderId, options).then((result) => {
+            const entries = result.entries.map((entry) => listedEntry(entry, readOnly));
+
+            return { ...result, entries: reversedLevels.has(folderId) ? entries.reverse() : entries };
+        }),
     // What's found is as it's listed, and the groups on the way to it too, whole as a backend's would be,
     // so one gone into from a result has what it has when it's walked to.
     search: (rootId, query, options) =>
@@ -882,6 +883,16 @@ const moveBelow = <V>(kept: Map<string, V>, from: string, to: string) => {
  * staying as a database's would, so what's kept by id follows it. The mock's tree has paths for ids,
  * so it's left as it is, and whatever's made from a name goes on being made from the first one.
  */
+/** The levels listed backwards, which the backend keeps, as an app's own API would change their order. */
+const reversedLevels = new Set<string>();
+
+/** Turns a level's order around, for an action of the app's, whose `refresh()` then shows it (`media-actions.ts`). */
+export const reverseLevel = (id: string) => {
+    if (!reversedLevels.delete(id)) {
+        reversedLevels.add(id);
+    }
+};
+
 const withMedia = (adapter: FileAdapter, readOnly = false): FileAdapter => {
     const backend = mediaBackend(adapter, readOnly);
     const keyOf = (entry: FileEntry) => `${readOnly}:${entry.id}`;

@@ -99,7 +99,7 @@ const shownFrom = (wide: string | undefined): SxProps<Theme> =>
     wide ? { ...buttonsSx, display: "none", [wide]: { display: "flex" } } : buttonsSx;
 
 /**
- * The app's actions in a header, the preview's or the properties panel's: those with an icon as icon
+ * The app's actions in a header, the preview's, the properties panel's or the media manager's: those with an icon as icon
  * buttons, as many as `inline` says and the header has room for, and the rest in a "More actions"
  * menu, built as the context menu is. Each action runs on what the header shows, already bound. It
  * knows nothing of the file manager, so the media manager's panels can use it too.

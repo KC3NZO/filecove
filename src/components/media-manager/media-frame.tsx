@@ -21,6 +21,7 @@ import { useSetting } from "../../hooks/use-setting";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { chosenBackdropSx, chosenColumnSx, mediaMedium, mediaWide } from "../../styles/media-layout";
 import { visuallyHiddenSx } from "../../styles/mixins";
+import { runToolbarShortcut } from "../../utils/action-groups";
 import { isolate } from "../../utils/bidi";
 import { firstInView, focusLost } from "../../utils/dom";
 import { NO_ERRORS, choiceMessages, countErrorsAt } from "../../utils/field-errors";
@@ -37,6 +38,7 @@ import {
     groupsOfTrail,
     holdOf,
     layoutsOf,
+    mediaToolbarGroups,
     pickFormOf,
     withState,
     workOf,
@@ -44,7 +46,7 @@ import {
 import { allows } from "../../utils/permissions";
 import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
-import { pressesKey } from "../../utils/shortcut";
+import { pressesKey, typesInField } from "../../utils/shortcut";
 import Icon from "../icons/icon";
 import TransferPanel from "../transfers/transfer-panel";
 import UploadPanel from "../uploads/upload-panel";
@@ -75,6 +77,7 @@ import type {
     FileUploadItem,
     FieldErrors,
     FollowedAssets,
+    MediaActionGroup,
     MediaAssetDraw,
     MediaAssetParams,
     MediaChoice,
@@ -89,6 +92,7 @@ import type {
     MediaUploadForm,
     PropertyDefinitionGroup,
     PropertyErrorKeyParams,
+    ToolbarGroup,
     TransferItem,
 } from "../../types";
 
@@ -109,6 +113,8 @@ export interface MediaFrameProps {
         | undefined;
     /** Whether groups can be selected as well as assets, while the app takes a pick. */
     selectGroups: boolean;
+    /** The app's actions in the header. */
+    actions: readonly MediaActionGroup[] | undefined;
     onChoose: ((choices: MediaChoice[]) => void) | undefined;
     pickForm: ((asset: FileEntry, section: MediaSection) => MediaPickForm | null) | undefined;
     /** What an asset shows as it's opened, where its library has no `properties` of its own. */
@@ -266,6 +272,7 @@ const NO_UPLOADS: readonly FileUploadItem[] = [];
 const NO_UPLOAD_LEVELS: ReadonlyMap<number, UploadLevel> = new Map();
 const NO_HOLDS: ReadonlyMap<string, AssetHold> = new Map();
 const NO_CHOICES: readonly MediaChoice[] = [];
+const NO_ACTIONS: readonly ToolbarGroup[] = [];
 
 /** How long a file just uploaded is waited for in its library's listing, in ms. */
 const ARRIVAL_WAIT = 10_000;
@@ -397,6 +404,7 @@ const MediaFrame = ({
     maxChoices,
     canSelect,
     selectGroups,
+    actions,
     onChoose,
     pickForm,
     properties,
@@ -2073,6 +2081,51 @@ const MediaFrame = ({
     const shownMove =
         moveStep && moveStep.sectionId === sectionId && moveStep.entry.id === viewedEntry?.id ? moveStep : null;
 
+    // After an app's action: what's open and what a search found, on this library's adapter, where what's
+    // shown is, and what's kept of it, as the action may have changed any of them.
+    const refreshForAction = useCallback(() => {
+        if (viewedEntry) {
+            propertiesCache.forgetDetails(viewedEntry, sectionAdapter);
+        }
+
+        relistAll(sectionAdapter, viewedElsewhere ? [viewedFolderId] : NO_FOLDER_IDS);
+    }, [viewedEntry, viewedElsewhere, viewedFolderId, sectionAdapter, propertiesCache, relistAll]);
+
+    // The app's actions for what's shown, none while a step is in the library's place, as what they'd act
+    // on is under it.
+    const actionGroups = useMemo(
+        () =>
+            !actions || !section || shownStep || formingGroup || shownProcess || shownEdit || shownMove
+                ? NO_ACTIONS
+                : mediaToolbarGroups(actions, {
+                      section,
+                      adapter: sectionAdapter,
+                      group: openGroup ?? null,
+                      trail,
+                      viewed: viewedEntry ? { entry: viewedEntry, trail: viewedTrail } : null,
+                      choices: choices.map(handedCopy),
+                      readOnly: !viewedChangeable,
+                      refresh: refreshForAction,
+                  }),
+        [
+            actions,
+            section,
+            shownStep,
+            formingGroup,
+            shownProcess,
+            shownEdit,
+            shownMove,
+            sectionAdapter,
+            openGroup,
+            trail,
+            viewedEntry,
+            viewedTrail,
+            choices,
+            viewedChangeable,
+            refreshForAction,
+        ],
+    );
+
     // The backend took it on: what was said of the asset before no longer stands, as it may have
     // failed, and its listings say how it stands now.
     const processSent = useCallback(
@@ -2424,6 +2477,17 @@ const MediaFrame = ({
                 ) {
                     event.preventDefault();
                     openSearch();
+                } else if (
+                    // An app's action, as above, a press something in here took staying with it.
+                    !event.defaultPrevented &&
+                    event.target instanceof Node &&
+                    event.currentTarget.contains(event.target) &&
+                    !librariesOpen &&
+                    !chosenOverlay &&
+                    !typesInField(event) &&
+                    runToolbarShortcut(event, actionGroups)
+                ) {
+                    event.preventDefault();
                 }
             }}
             // Files dropped anywhere the library doesn't take them are refused, or the browser would
@@ -2485,6 +2549,7 @@ const MediaFrame = ({
                     newGroupLabel={newGroupForm?.title ?? text.mediaNewGroup}
                     creatingGroup={creatingGroup}
                     newGroupRef={newGroupRef}
+                    actions={actionGroups}
                     // Not from a group's details opened from inside it, where it would go in the level above.
                     onUpload={
                         takesFiles && !formingGroup && !viewing?.fromInside

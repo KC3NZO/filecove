@@ -3,6 +3,7 @@ import type { Dispatch, ReactNode, SetStateAction } from "react";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import type { AssetState, FileAdapter, FileEntry } from "./adapter";
+import type { IconSource } from "./icon";
 import type { FilePreviewer } from "./previewer";
 import type { FieldErrors, PropertyDefinitionGroup } from "./property-definition";
 import type { FolderRef, Section } from "./section";
@@ -417,6 +418,69 @@ export interface MediaChoice<V = Record<string, unknown>> {
      * the adapter's trail gave.
      */
     trail?: readonly FileEntry[];
+}
+
+/** What an action of the app's in the media manager's header is told (`MediaAction`). */
+export interface MediaActionContext<V = Record<string, unknown>> {
+    /** The library shown. */
+    section: MediaSection;
+    /** What serves it: its own adapter, or else the media manager's. */
+    adapter: FileAdapter;
+    /** The group open, or nothing at the library's root. */
+    group: FileEntry | null;
+    /** The groups gone into from the library's root, to the one open; none at its root. */
+    trail: readonly FileEntry[];
+    /**
+     * The asset or group shown in the library's place, with the groups it's in, which a search may have
+     * found below those open; nothing while the library itself shows.
+     */
+    viewed: { entry: FileEntry; trail: readonly FileEntry[] } | null;
+    /**
+     * What's selected, of every library, in the order set, each with its own `section`, as `onChange`
+     * hands it over: those that can't be chosen yet too, so what's done with them is the app's to check.
+     * None while the media manager takes no picks.
+     */
+    choices: readonly MediaChoice<V>[];
+    /**
+     * Whether nothing can be changed where this is, the level open or what's `viewed`: the library is
+     * `readOnly`, or the listing's or the group's `permissions` refuse writing. An action changing it can
+     * hide with `visible: (context) => !context.readOnly`.
+     */
+    readOnly: boolean;
+    /**
+     * Lists again what's open, what a search found and what's `viewed`, after the action changed them
+     * through the app's own API, in every library on this adapter.
+     */
+    refresh: () => void;
+}
+
+/**
+ * One of the app's actions in the media manager's header, for what the component leaves to it, such as
+ * reordering a group, or moving several at once.
+ */
+export interface MediaAction<V = Record<string, unknown>> {
+    id: string;
+    label: string;
+    /** Shown as a button where there's room, a few at most; without one, it's in "More actions". */
+    icon?: IconSource;
+    /** Narrows when it's offered, e.g. to a group, or to one library. */
+    visible?: (context: MediaActionContext<V>) => boolean;
+    disabled?: (context: MediaActionContext<V>) => boolean;
+    /**
+     * Shown beside the label, e.g. "Alt+R", and bound to the keyboard while the focus is in the
+     * media manager and not in a field. Written as `FileAction.shortcut` is, and a key something here
+     * uses itself stays with it.
+     */
+    shortcut?: string;
+    /** Styles it as destructive, for actions such as delete. */
+    destructive?: boolean;
+    onSelect: (context: MediaActionContext<V>) => void;
+}
+
+/** Actions shown together, divided from the next group by a rule in "More actions". */
+export interface MediaActionGroup<V = Record<string, unknown>> {
+    id: string;
+    actions: readonly MediaAction<V>[];
 }
 
 /**

@@ -88,6 +88,15 @@ interface BaseProps<V> extends RootAttributes {
      */
     selectGroups?: boolean;
     /**
+     * The app's own actions in the header, for what the component leaves to it, such as reordering a group
+     * or moving several at once through its API. Those with an icon show as buttons, two at most and from
+     * the width the list of libraries docks at, and the rest in a "More actions" menu. Each is told the
+     * library, the group open, the asset shown, what's selected and whether it can be changed, and given
+     * `refresh()` to list again what it changed. `visible` and `disabled` are asked as any of those change,
+     * so keep them quick. None show while a step such as an upload's form is in the library's place.
+     */
+    actions?: readonly MediaActionGroup<V>[];
+    /**
      * Takes what's chosen, with the Choose button, a double click or Enter on an asset: each as it
      * was listed, `meta` and all, with the library it's from, whose `kind` says what it is, and what
      * the app's form holds for it (`values`), in the order set in the selected column. Pass only
@@ -266,6 +275,7 @@ const MediaManager = <V,>({
     maxChoices,
     canSelect,
     selectGroups = false,
+    actions,
     onChoose,
     pickForm,
     properties,
@@ -318,6 +328,7 @@ const MediaManager = <V,>({
                             maxChoices={maxChoices}
                             canSelect={canSelect as MediaFrameProps["canSelect"]}
                             selectGroups={selectGroups}
+                            actions={actions as MediaFrameProps["actions"]}
                             // The frame keeps the app's values by their keys, not knowing their shape.
                             onChoose={onChoose as ((choices: MediaChoice[]) => void) | undefined}
                             pickForm={pickForm as MediaFrameProps["pickForm"]}

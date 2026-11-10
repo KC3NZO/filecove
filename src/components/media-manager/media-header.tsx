@@ -13,11 +13,12 @@ import { HEADER_HEIGHT } from "../../styles/layout";
 import { mediaMedium } from "../../styles/media-layout";
 import { forcedColors, forcedPressed } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
+import ToolbarActions from "../buttons/toolbar-actions";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import Icon from "../icons/icon";
 import GroupPath from "./group-path";
 
-import type { FileEntry, MediaLayout, MediaSection } from "../../types";
+import type { FileEntry, MediaLayout, MediaSection, ToolbarGroup } from "../../types";
 
 interface MediaHeaderProps {
     section: MediaSection | undefined;
@@ -60,10 +61,15 @@ interface MediaHeaderProps {
     /** Whether that field, or that form, is open. */
     creatingGroup: boolean;
     newGroupRef: Ref<HTMLButtonElement>;
+    /** The app's actions for what's shown, bound to it; none while a step is in the library's place. */
+    actions: readonly ToolbarGroup[];
     /** Picks files to upload into the level open; missing while it takes none. */
     onUpload: (() => void) | undefined;
     uploadRef: Ref<HTMLButtonElement>;
 }
+
+/** How many of the app's actions with icons show as buttons, where there's room for any. */
+const INLINE_ACTIONS = 2;
 
 const headerSx: SxProps<Theme> = {
     display: "flex",
@@ -116,7 +122,8 @@ const uploadSx: SxProps<Theme> = {
  * Above the library: the button opening the libraries where they don't dock, its name, or the path
  * to the group open, each step of it going back there, or the search field in its place while
  * searching, the button opening that, the button switching its layout, while it offers another, the
- * details of the group open, New group, while one can be made here, and Upload, while it takes files.
+ * details of the group open, New group, while one can be made here, the app's actions, and Upload, while
+ * it takes files.
  */
 const MediaHeader = ({
     section,
@@ -144,6 +151,7 @@ const MediaHeader = ({
     newGroupLabel,
     creatingGroup,
     newGroupRef,
+    actions,
     onUpload,
     uploadRef,
 }: MediaHeaderProps) => {
@@ -284,6 +292,12 @@ const MediaHeader = ({
                         <Icon name="newFolder" fontSize="small" />
                     </TooltipIconButton>
                 )}
+                <ToolbarActions
+                    groups={actions}
+                    moreLabel={text.mediaMoreActions}
+                    inline={INLINE_ACTIONS}
+                    wide={mediaMedium}
+                />
                 {onUpload && (
                     <Button
                         ref={uploadRef}

@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
 
 import Box from "@mui/material/Box";
+import Snackbar from "@mui/material/Snackbar";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { MediaManager } from "../src";
+import { createMediaActions } from "./media-actions";
 import { renderAudio, renderGroup, renderGroupHeader, renderStock } from "./media-assets";
 import { pickForm, stockPickForm } from "./media-fields";
 import { groupForm } from "./media-groups";
@@ -220,6 +222,9 @@ const MediaApp = () => {
     const [picked, setPicked] = useState<MediaChoice[]>([]);
     const [errors, setErrors] = useState<FieldErrors>();
     const [saving, setSaving] = useState<Saving>({ status: "idle" });
+    // What the header's actions last said, as an app would show it.
+    const [notice, setNotice] = useState({ open: false, message: "" });
+    const [actions] = useState(() => createMediaActions((message) => setNotice({ open: true, message })));
     // Which layout each library was last shown in, kept across reloads, as a consumer might.
     const [layout, setLayout] = useStoredState<MediaLayouts>("media-layout", {});
 
@@ -248,6 +253,7 @@ const MediaApp = () => {
         maxChoices,
         canSelect: oneVideo ? oneVideoAtMost : noOverlap ? noOverlapping : undefined,
         selectGroups,
+        actions,
         ...(uncontrolled ? { defaultLayout: layout } : { layout, onLayoutChange: setLayout }),
         locale,
         onChoose: browse || live ? undefined : choose,
@@ -273,6 +279,12 @@ const MediaApp = () => {
                     {describe(chosen, picked, saving)}
                 </Typography>
             </Box>
+            <Snackbar
+                open={notice.open}
+                message={notice.message}
+                autoHideDuration={4000}
+                onClose={() => setNotice((previous) => ({ ...previous, open: false }))}
+            />
         </Box>
     );
 };

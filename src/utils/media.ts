@@ -12,13 +12,39 @@ import type {
     GroupPicks,
     IconName,
     Locale,
+    MediaAction,
+    MediaActionContext,
+    MediaActionGroup,
     MediaKind,
     MediaLayout,
     MediaPickForm,
     MediaSection,
     MediaUploadCheck,
     RefusedName,
+    ToolbarGroup,
 } from "../types";
+
+/**
+ * The app's actions that apply as the media manager's header shows them, still grouped, with groups
+ * left empty dropped, each bound to what it's told.
+ */
+export const mediaToolbarGroups = (groups: readonly MediaActionGroup[], context: MediaActionContext): ToolbarGroup[] =>
+    groups
+        .map((group) => ({
+            id: group.id,
+            actions: group.actions
+                .filter((action) => action.visible?.(context) ?? true)
+                .map((action) => ({
+                    id: action.id,
+                    label: action.label,
+                    icon: action.icon,
+                    shortcut: action.shortcut,
+                    disabled: !!action.disabled?.(context),
+                    destructive: !!action.destructive,
+                    run: () => action.onSelect(context),
+                })),
+        }))
+        .filter((group) => group.actions.length > 0);
 
 /** No group can be selected. */
 export const NO_GROUP_PICKS: GroupPicks = { checks: new Set(), refusals: new Map() };
