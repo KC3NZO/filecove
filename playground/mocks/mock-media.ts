@@ -1,4 +1,4 @@
-import { push } from "../options";
+import { manyMedia, push } from "../options";
 import { childId, createMockAdapter, file, folder } from "./mock-adapter";
 import { pictureAt, shrink, thumbnailSource } from "./mock-content";
 
@@ -25,8 +25,11 @@ const DAY = 86_400_000;
 /** A date some days before the playground's today, as ISO. */
 const daysAgo = (days: number) => new Date(Date.UTC(2026, 9, 26) - days * DAY).toISOString();
 
-/** Pictures with made-up names and dates, newest first once sorted, spread over a few months. */
-const pictures: MockNode[] = Array.from({ length: 36 }, (_, index) => {
+/**
+ * Pictures with made-up names and dates, newest first once sorted, spread over a few months, or with
+ * `?media&many`, 10,000 of them over years.
+ */
+const pictures: MockNode[] = Array.from({ length: manyMedia ? 10_000 : 36 }, (_, index) => {
     const name = `${PLACES[index % PLACES.length]}-${MOMENTS[index % MOMENTS.length]}-${index + 1}`;
     const extension = ["jpg", "png", "webp", "avif"][index % 4];
 

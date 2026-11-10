@@ -23,7 +23,7 @@ import { chosenBackdropSx, chosenColumnSx, mediaMedium, mediaWide } from "../../
 import { visuallyHiddenSx } from "../../styles/mixins";
 import { runToolbarShortcut } from "../../utils/action-groups";
 import { isolate } from "../../utils/bidi";
-import { firstInView, focusLost } from "../../utils/dom";
+import { focusLost } from "../../utils/dom";
 import { NO_ERRORS, choiceMessages, countErrorsAt } from "../../utils/field-errors";
 import { carriesFiles, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
@@ -79,6 +79,7 @@ import type {
     FollowedAssets,
     MediaActionGroup,
     MediaAssetDraw,
+    MediaGridHandle,
     MediaAssetParams,
     MediaChoice,
     MediaGroupForm,
@@ -495,6 +496,8 @@ const MediaFrame = ({
     // the errors its backend answers go by.
     const [handedOrder, setHandedOrder] = useState<readonly string[] | null>(null);
     const panelRef = useRef<HTMLDivElement>(null);
+    // The grid of the level shown, which focuses an asset wherever it is, rendered or not.
+    const gridRef = useRef<MediaGridHandle>(null);
     // The asset the view went back from, whose tile takes the focus back.
     const backFromRef = useRef<string | null>(null);
     const deletedAtRef = useRef<number | null>(null);
@@ -1405,12 +1408,7 @@ const MediaFrame = ({
             return;
         }
 
-        const tile = found && panelRef.current?.querySelector<HTMLElement>(`[role="listbox"] [data-index="${index}"]`);
-
-        if (tile) {
-            tile.focus();
-            tile.scrollIntoView({ block: "nearest" });
-        } else {
+        if (!found || !gridRef.current?.focusAt(index)) {
             (groupDetailsRef.current ?? searchButtonRef.current)?.focus();
         }
     }, [shownEntries, state?.status, folderId]);
@@ -1427,10 +1425,7 @@ const MediaFrame = ({
         createdRef.current = null;
 
         if (focusLost() || document.activeElement === newGroupRef.current) {
-            const tile = panelRef.current?.querySelector<HTMLElement>(`[role="listbox"] [data-index="${index}"]`);
-
-            tile?.focus();
-            tile?.scrollIntoView({ block: "nearest" });
+            gridRef.current?.focusAt(index);
         }
     }, [shownEntries]);
 
@@ -1492,13 +1487,8 @@ const MediaFrame = ({
             deletedAt !== null
                 ? Math.min(Math.max(deletedAt, 0), shownEntries.length - 1)
                 : shownEntries.findIndex((entry) => entry.id === id);
-        const tile = panelRef.current?.querySelector<HTMLElement>(`[role="listbox"] [data-index="${index}"]`);
-
         // With no tile to go to, as the last one in it was deleted, the way back, or the search.
-        if (tile) {
-            tile.focus();
-            tile.scrollIntoView({ block: "nearest" });
-        } else {
+        if (!gridRef.current?.focusAt(index)) {
             (groupDetailsRef.current ?? searchButtonRef.current)?.focus();
         }
     }, [viewed, shownEntries]);
@@ -1963,33 +1953,14 @@ const MediaFrame = ({
     const chosenLayout = section ? layouts[section.id] : undefined;
     const layout = chosenLayout && offeredLayouts.includes(chosenLayout) ? chosenLayout : offeredLayouts[0];
     const otherLayout = offeredLayouts.find((each) => each !== layout);
-    // The asset at the top of the library as its layout is switched, to scroll back to in the new one.
-    const layoutAnchorRef = useRef<number | null>(null);
 
+    // What was at the top stays there in the other layout, as rows and tiles aren't the same height,
+    // which the grid's lines see to (`useVirtualLines`).
     const switchLayout = () => {
         if (section && otherLayout) {
-            layoutAnchorRef.current = firstInView(panelRef.current?.querySelector('[role="listbox"]'));
             setLayouts((current) => ({ ...current, [section.id]: otherLayout }));
         }
     };
-
-    useLayoutEffect(() => {
-        const index = layoutAnchorRef.current;
-
-        layoutAnchorRef.current = null;
-
-        if (index === null) {
-            return;
-        }
-
-        const list = panelRef.current?.querySelector('[role="listbox"]');
-        const item = list?.querySelector(`[data-index="${index}"]`);
-        const scroller = list?.parentElement;
-
-        if (item && scroller) {
-            scroller.scrollTop += item.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-        }
-    }, [layout]);
 
     const sectionPreviewers = useMemo(
         () => (section?.previewers ? [...section.previewers, ...previewers] : previewers),
@@ -2599,6 +2570,7 @@ const MediaFrame = ({
                                 // Each level's own, as another library's `renderAsset`, with hooks of
                                 // its own, may draw an asset of the same id, and each starts at its top.
                                 key={levelKey}
+                                ref={gridRef}
                                 entries={shownEntries}
                                 trails={search.trails}
                                 uploads={shownUploads}

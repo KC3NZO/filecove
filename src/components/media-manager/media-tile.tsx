@@ -11,7 +11,7 @@ import { KIND_ICONS } from "../../utils/media";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 import { HoldBar, HoldLine } from "./asset-hold";
-import AssetTrail from "./asset-trail";
+import AssetTrail, { TrailRoom } from "./asset-trail";
 
 import type { MediaAssetLookProps, MediaKind } from "../../types";
 
@@ -110,6 +110,13 @@ const detailSx: SxProps<Theme> = {
     fontSize: "0.75rem",
 };
 
+// The line under the name, empty, so a tile with nothing to say there is as tall as the others.
+const emptyDetail = (
+    <Typography variant="caption" sx={detailSx} aria-hidden>
+        {"\u00a0"}
+    </Typography>
+);
+
 /**
  * How the media manager draws an asset of a library of tiles, for an app's `renderAsset` to change a
  * little: `<MediaTile {...params} detail={params.asset.meta?.show} />`. Its picture or icon in the
@@ -119,6 +126,8 @@ const detailSx: SxProps<Theme> = {
  * button stay the media manager's, around it, so it's only drawn inside `renderAsset`. A group, an
  * entry of `kind: "folder"`, is drawn as one: its picture, marked as a group, or a folder's icon, and
  * how many it holds under its name. A search's result from further down says where it is, under those.
+ * Every tile is as tall: the line under the name is kept, empty or not, and so is a trail's while the
+ * grid shows results with them.
  */
 const MediaTile = ({ asset, kind, thumbnail, hold, trail, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
     const { formatDuration, formatNumber, formatSize, text } = useLocale();
@@ -167,30 +176,35 @@ const MediaTile = ({ asset, kind, thumbnail, hold, trail, title, detail, badge, 
                 {hold ? (
                     <HoldLine hold={hold} />
                 ) : detail !== undefined ? (
-                    detail !== null && (
+                    detail !== null ? (
                         <Typography variant="caption" noWrap sx={detailSx}>
                             <bdi>{detail}</bdi>
                         </Typography>
+                    ) : (
+                        emptyDetail
                     )
                 ) : group ? (
-                    asset.childCount !== undefined && (
+                    asset.childCount !== undefined ? (
                         <Typography variant="caption" noWrap sx={detailSx}>
                             <bdi>{text.itemCount(asset.childCount)}</bdi>
                         </Typography>
+                    ) : (
+                        emptyDetail
                     )
                 ) : measured ? (
                     <Typography variant="caption" noWrap sx={detailSx} aria-hidden>
                         <bdi>{`${formatNumber(width)} × ${formatNumber(height)}`}</bdi>
                     </Typography>
                 ) : (
-                    (kind === "document" || kind === "audio") &&
-                    asset.size !== undefined && (
+                    (kind === "document" || kind === "audio") && asset.size !== undefined ? (
                         <Typography variant="caption" noWrap sx={detailSx}>
                             <bdi>{formatSize(asset.size)}</bdi>
                         </Typography>
+                    ) : (
+                        emptyDetail
                     )
                 )}
-                {trail && trail.length > 0 && <AssetTrail trail={trail} />}
+                {trail && trail.length > 0 ? <AssetTrail trail={trail} /> : <TrailRoom />}
             </Box>
             {group && (
                 <Box component="span" sx={visuallyHiddenSx}>

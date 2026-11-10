@@ -16,6 +16,13 @@ const trailSx: SxProps<Theme> = {
     fontSize: "0.75rem",
 };
 
+// Only taken while the grid shows results with trails (`data-trails`), so those without one are as tall.
+const roomSx: SxProps<Theme> = {
+    ...trailSx,
+    display: "none",
+    "[data-trails='true'] &": { display: "block" },
+};
+
 /** Where a search's result is below the level searched, one line under what else its look says. */
 const AssetTrail = ({ trail }: AssetTrailProps) => {
     const { text } = useLocale();
@@ -34,3 +41,13 @@ const AssetTrail = ({ trail }: AssetTrailProps) => {
 };
 
 export default AssetTrail;
+
+/**
+ * The room a trail takes, empty, under what an asset found right in the level searched shows, while
+ * the grid shows results from further down too, as every asset in it is laid out as tall.
+ */
+export const TrailRoom = () => (
+    <Typography variant="caption" aria-hidden sx={roomSx}>
+        {"\u00a0"}
+    </Typography>
+);

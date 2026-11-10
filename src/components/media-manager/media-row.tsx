@@ -12,7 +12,7 @@ import { KIND_ICONS } from "../../utils/media";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 import { HoldBar, HoldLine } from "./asset-hold";
-import AssetTrail from "./asset-trail";
+import AssetTrail, { TrailRoom } from "./asset-trail";
 
 import type { MediaAssetLookProps } from "../../types";
 
@@ -38,8 +38,8 @@ const coverSx: SxProps<Theme> = {
     bgcolor: "action.hover",
     color: "text.secondary",
     "& > img": { width: "100%", height: "100%", objectFit: "cover" },
-    // An asset that can't be chosen now is faded, as a file being uploaded is.
-    "[data-held='true'] & > *": { opacity: 0.55 },
+    // An asset that can't be chosen now is faded, as a file being uploaded is, but for its bar.
+    "[data-held='true'] & > :not(.MuiLinearProgress-root)": { opacity: 0.55 },
     // One there's no room for is only dimmed, as taking another out makes room.
     "[data-limited='true'] & > *": { opacity: 0.7 },
 };
@@ -56,6 +56,13 @@ const detailSx: SxProps<Theme> = {
     fontSize: "0.75rem",
 };
 
+// The line under the name, empty, so a row with nothing to say there is as tall as the others.
+const emptyDetail = (
+    <Typography variant="caption" sx={detailSx} aria-hidden>
+        {"\u00a0"}
+    </Typography>
+);
+
 const durationSx: SxProps<Theme> = {
     flexShrink: 0,
     color: "text.secondary",
@@ -67,7 +74,8 @@ const durationSx: SxProps<Theme> = {
  * How the media manager draws an asset of a library shown as a list, for an app's `renderAsset` to
  * change a little: `<MediaRow {...params} title={params.asset.meta?.title} />`. Its picture or icon,
  * its name, its type, size and dimensions, or in their place why it can't be chosen now, with a bar
- * while it's processed, and its length. Its look only: what makes it an asset to select, its Open
+ * along its picture's foot while it's processed, and its length. Every row is as tall: the line under
+ * the name is kept, empty or not, and so is a trail's while the grid shows results with them. Its look only: what makes it an asset to select, its Open
  * button and its check stay the media manager's, beside it, so it's only drawn inside `renderAsset`.
  * A group, an entry of `kind: "folder"`, is drawn as one: its picture or a folder's icon, and how many
  * it holds under its name. A search's result from further down says where it is, under those.
@@ -96,27 +104,29 @@ const MediaRow = ({ asset, kind, thumbnail, hold, trail, title, detail, badge, p
                 ) : (
                     <FileTypeIcon fileName={asset.name} size="60%" />
                 )}
+                {hold && <HoldBar hold={hold} place="frame" />}
             </Box>
             <Box sx={textSx}>
                 <Typography variant="body2" noWrap>
                     {title ?? asset.name}
                 </Typography>
                 {hold ? (
-                    <>
-                        <HoldLine hold={hold} />
-                        <HoldBar hold={hold} place="row" />
-                    </>
+                    <HoldLine hold={hold} />
                 ) : detail !== undefined ? (
-                    detail !== null && (
+                    detail !== null ? (
                         <Typography variant="caption" noWrap sx={detailSx}>
                             <bdi>{detail}</bdi>
                         </Typography>
+                    ) : (
+                        emptyDetail
                     )
                 ) : group ? (
-                    asset.childCount !== undefined && (
+                    asset.childCount !== undefined ? (
                         <Typography variant="caption" noWrap sx={detailSx}>
                             <bdi>{text.itemCount(asset.childCount)}</bdi>
                         </Typography>
+                    ) : (
+                        emptyDetail
                     )
                 ) : measured ? (
                     <>
@@ -132,7 +142,7 @@ const MediaRow = ({ asset, kind, thumbnail, hold, trail, title, detail, badge, p
                         {joinIsolated(facts)}
                     </Typography>
                 )}
-                {trail && trail.length > 0 && <AssetTrail trail={trail} />}
+                {trail && trail.length > 0 ? <AssetTrail trail={trail} /> : <TrailRoom />}
             </Box>
             {group && (
                 <Box component="span" sx={visuallyHiddenSx}>

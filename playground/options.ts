@@ -92,6 +92,12 @@ export const lateSections = params.has("lateSections");
  */
 export const media = params.has("media");
 
+/**
+ * `?media&many`: Images holds 10,000 pictures, to see the grid render only the tiles in or near view
+ * (see "The media grid" in `virtualization.md`).
+ */
+export const manyMedia = media && params.has("many");
+
 /** `?media&multiple`: several files can be chosen at once. */
 export const multiple = params.has("multiple");
 

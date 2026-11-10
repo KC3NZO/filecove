@@ -15,8 +15,8 @@ import {
     selectedHoverBackground,
 } from "../../styles/mixins";
 import Icon from "../icons/icon";
-import { HoldBar, HoldLine } from "./asset-hold";
-import AssetTrail from "./asset-trail";
+import { HoldSlot } from "./asset-hold";
+import AssetTrail, { TrailRoom } from "./asset-trail";
 import GroupCheck from "./group-check";
 import MediaRow from "./media-row";
 import MediaTile from "./media-tile";
@@ -32,6 +32,12 @@ interface AssetOptionProps {
     adapter: FileAdapter;
     /** Where the entry is shown, from 0. */
     index: number;
+    /** How many the grid shows, for screen readers, as only those in or near view are rendered. */
+    count: number;
+    /** Where its line is, in px from the listbox's top. */
+    top: number;
+    /** Its column in the line, from 0; always 0 in a list of rows. */
+    column: number;
     selected: boolean;
     /** Why it can't be chosen now: it isn't selected then, but is opened. */
     hold: AssetHold | undefined;
@@ -72,8 +78,11 @@ interface AssetBodyProps {
 // The room between a tile's edge and what's in it, which the check and the Open button go by.
 const TILE_PADDING = 0.75;
 
+// Placed by `top` and `gridColumn`, set in `style`: an absolutely positioned child of a grid takes the
+// grid area it's placed in as its box, so it fills its column's width (see `virtualization.md`).
 const TILE_SX: SxProps<Theme> = (theme) => ({
-    position: "relative",
+    position: "absolute",
+    insetInline: 0,
     display: "flex",
     flexDirection: "column",
     minWidth: 0,
@@ -92,6 +101,8 @@ const TILE_SX: SxProps<Theme> = (theme) => ({
 });
 
 const ROW_SX: SxProps<Theme> = (theme) => ({
+    position: "absolute",
+    insetInline: 0,
     display: "flex",
     alignItems: "center",
     gap: 1.5,
@@ -118,7 +129,9 @@ const contentSx: SxProps<Theme> = {
     flex: 1,
     gap: 0.5,
     minWidth: 0,
-    "[data-layout='tile'] > & > [data-status]": { textAlign: "center" },
+    "[data-layout='tile'] > & > [data-status], [data-layout='tile'] > & > [data-part='hold'] > *": {
+        textAlign: "center",
+    },
 };
 
 // What the app drew entirely itself is faded as the media manager's own pictures are, which fade
@@ -244,7 +257,9 @@ const AssetBody = memo(({ draw, params }: AssetBodyProps): ReactNode => draw(par
  * the media manager's own look (`MediaTile`, `MediaRow`), or what the app's `renderAsset` returns.
  * An app may use the same looks there. When it has drawn something else entirely, this says why the
  * asset can't be chosen, and where a search found it, under it, fades it as those do, and names it, what the app drew being read
- * as its description, so no asset is left unnamed or held without a word.
+ * as its description, so no asset is left unnamed or held without a word; the room those take is kept
+ * under every asset drawn so while any in the grid needs it, so all are as tall. Absolutely placed at
+ * its line and column, as only the assets in or near view are rendered (see `MediaGrid`).
  */
 const AssetOption = memo(
     ({
@@ -253,6 +268,9 @@ const AssetOption = memo(
         layout,
         adapter,
         index,
+        count,
+        top,
+        column,
         selected,
         hold,
         work,
@@ -310,11 +328,14 @@ const AssetOption = memo(
                 aria-label={own ? entry.name : undefined}
                 aria-describedby={own ? contentId : undefined}
                 tabIndex={focused ? 0 : -1}
+                aria-setsize={count}
+                aria-posinset={index + 1}
                 data-index={index}
                 data-layout={row ? "row" : "tile"}
                 data-held={!!hold && !group}
                 data-limited={limited}
                 sx={row ? ROW_SX : TILE_SX}
+                style={{ top, gridColumn: `${column + 1} / span 1` }}
                 onClick={(event) => onPress(index, event)}
                 onDoubleClick={() => onActivate(index)}
                 onFocus={() => onFocus(index)}
@@ -327,13 +348,8 @@ const AssetOption = memo(
                                 <AssetBody draw={drawn} params={params} />
                             </AssetLookContext>
                         </Box>
-                        {own && standing && (
-                            <>
-                                <HoldLine hold={standing} />
-                                <HoldBar hold={standing} place="row" />
-                            </>
-                        )}
-                        {own && trail && <AssetTrail trail={trail} />}
+                        {own && <HoldSlot hold={standing} />}
+                        {own && (trail && trail.length > 0 ? <AssetTrail trail={trail} /> : <TrailRoom />)}
                     </Box>
                 ) : (
                     <Look asset={entry} kind={kind} thumbnail={thumbnail} hold={standing} trail={trail} />

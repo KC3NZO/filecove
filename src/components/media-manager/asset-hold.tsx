@@ -31,6 +31,17 @@ const lineSx: SxProps<Theme> = {
     '&[data-status="failed"]': { color: "error.main" },
 };
 
+// Under what an app drew: only while the grid holds an asset that can't be chosen (`data-holds`), or
+// this one can't, so every asset in it is as tall.
+const slotSx: SxProps<Theme> = {
+    display: "none",
+    flexDirection: "column",
+    '&[data-standing="true"], [data-holds="true"] &': { display: "flex" },
+};
+
+// As much room as a row's bar takes.
+const barRoomSx: SxProps<Theme> = { mt: 0.5, height: 3 };
+
 const BAR_SX: Record<BarPlace, SxProps<Theme>> = {
     frame: [{ position: "absolute", insetInline: 0, bottom: 0, height: 4 }, mirroredBarSx, forcedBarSx],
     row: [{ mt: 0.5, height: 3, borderRadius: 1.5 }, mirroredBarSx, forcedBarSx],
@@ -65,3 +76,20 @@ export const HoldBar = ({ hold, place }: HoldBarProps) =>
             sx={BAR_SX[place]}
         />
     ) : null;
+
+/**
+ * Why an asset the app drew entirely itself can't be chosen now, under what it drew, with its bar, or
+ * the same room empty while it can be, so every asset of the grid is laid out as tall.
+ */
+export const HoldSlot = ({ hold }: { hold: AssetHold | undefined }) => (
+    <Box data-part="hold" data-standing={!!hold} sx={slotSx}>
+        {hold ? (
+            <HoldLine hold={hold} />
+        ) : (
+            <Typography variant="caption" aria-hidden sx={lineSx}>
+                {"\u00a0"}
+            </Typography>
+        )}
+        {hold?.status === "processing" ? <HoldBar hold={hold} place="row" /> : <Box sx={barRoomSx} />}
+    </Box>
+);

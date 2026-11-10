@@ -221,7 +221,8 @@ export interface MediaAssetLookProps extends Pick<MediaAssetParams, "asset" | "k
     title?: ReactNode;
     /**
      * The line under its name, in place of its size or its type and size. While it can't be chosen
-     * or is being processed, why is said there instead (`hold`).
+     * or is being processed, why is said there instead (`hold`). `null` leaves the line empty, still
+     * as tall, so every asset is drawn the same height.
      */
     detail?: ReactNode;
     /** Over a tile's picture, or at a row's end, in place of its length. */
@@ -283,8 +284,9 @@ export interface MediaSection
      * only draws: selecting, the keys, the check and the Open button at a tile's top corners or a
      * row's end stay the media manager's, as does why an asset can't be chosen, under what it draws,
      * so it's for showing, with no buttons or links of its own. May use hooks. Every asset of a
-     * library is drawn the same height. Keep it outside the component, or memoized, as a new function
-     * draws every asset again.
+     * library, and every group, must be drawn the same height, whatever it holds: only the assets in or
+     * near view are rendered, laid out in lines as tall as the first one rendered. Keep it outside the
+     * component, or memoized, as a new function draws every asset again.
      */
     renderAsset?: (params: MediaAssetParams) => ReactNode;
     /**
@@ -359,6 +361,14 @@ export interface MediaSection
 export interface GroupPicks {
     checks: ReadonlySet<string>;
     refusals: ReadonlyMap<string, AssetHold>;
+}
+
+/**
+ * What the frames ask of the grid of a level (internal): an asset or group to take the focus, by its
+ * index, as only those in or near view are rendered; false for an index it doesn't show.
+ */
+export interface MediaGridHandle {
+    focusAt: (index: number) => boolean;
 }
 
 /** Assets being processed, followed through the adapter serving them (internal). */

@@ -74,6 +74,7 @@ export type {
     MediaGroupForm,
     MediaGroupFormParams,
     MediaGroupTarget,
+    MediaGridHandle,
     MediaKind,
     MediaLayout,
     MediaLayouts,

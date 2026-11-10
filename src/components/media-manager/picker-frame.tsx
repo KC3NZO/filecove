@@ -20,7 +20,7 @@ import { useUploadQueue } from "../../hooks/use-upload-queue";
 import { chosenBackdropSx, chosenColumnSx, mediaWide } from "../../styles/media-layout";
 import { visuallyHiddenSx } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
-import { firstInView, focusLost } from "../../utils/dom";
+import { focusLost } from "../../utils/dom";
 import { NO_ERRORS } from "../../utils/field-errors";
 import { carriesFiles, takesUploads, uploadPatterns } from "../../utils/files";
 import { isHidden } from "../../utils/hidden";
@@ -60,6 +60,7 @@ import type {
     FileUploadItem,
     FollowedAssets,
     MediaAssetDraw,
+    MediaGridHandle,
     MediaChoice,
     MediaLayout,
     MediaPickerValue,
@@ -324,6 +325,8 @@ const PickerFrame = ({
     });
     const limit = multiple ? (countLimit(maxChoices, 1) ?? Infinity) : Infinity;
     const panelRef = useRef<HTMLDivElement>(null);
+    // The grid of the level shown, which focuses an asset wherever it is, rendered or not.
+    const gridRef = useRef<MediaGridHandle>(null);
     const levelFocusRef = useRef<LevelFocus | null>(null);
     const noteId = useId();
     // The app's form for a pick, the library's or else the picker's, either of which turns the column on.
@@ -853,12 +856,7 @@ const PickerFrame = ({
             return;
         }
 
-        const tile = found && panelRef.current?.querySelector<HTMLElement>(`[role="listbox"] [data-index="${index}"]`);
-
-        if (tile) {
-            tile.focus();
-            tile.scrollIntoView({ block: "nearest" });
-        } else {
+        if (!found || !gridRef.current?.focusAt(index)) {
             searchButtonRef.current?.focus();
         }
     }, [shownEntries, state?.status, folderId, searchButtonRef]);
@@ -1123,31 +1121,10 @@ const PickerFrame = ({
     const [chosenLayout, setChosenLayout] = useState<MediaLayout>();
     const layout = chosenLayout && offeredLayouts.includes(chosenLayout) ? chosenLayout : offeredLayouts[0];
     const otherLayout = offeredLayouts.find((each) => each !== layout);
-    const layoutAnchorRef = useRef<number | null>(null);
 
-    const switchLayout = () => {
-        layoutAnchorRef.current = firstInView(panelRef.current?.querySelector('[role="listbox"]'));
-        setChosenLayout(otherLayout);
-    };
-
-    // What was at the top stays there as the layout changes, as rows and tiles aren't the same height.
-    useLayoutEffect(() => {
-        const index = layoutAnchorRef.current;
-
-        layoutAnchorRef.current = null;
-
-        if (index === null) {
-            return;
-        }
-
-        const list = panelRef.current?.querySelector('[role="listbox"]');
-        const item = list?.querySelector(`[data-index="${index}"]`);
-        const scroller = list?.parentElement;
-
-        if (item && scroller) {
-            scroller.scrollTop += item.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-        }
-    }, [layout]);
+    // What was at the top stays there in the other layout, as rows and tiles aren't the same height,
+    // which the grid's lines see to (`useVirtualLines`).
+    const switchLayout = () => setChosenLayout(otherLayout);
 
     const count = choices.length;
     const limited = limit !== Infinity;
@@ -1282,6 +1259,7 @@ const PickerFrame = ({
                         <Box sx={gridSx} data-covered={!!uploadStep}>
                             <MediaGrid
                                 key={folderId}
+                                ref={gridRef}
                                 entries={shownEntries}
                                 trails={search.trails}
                                 uploads={shownUploads}

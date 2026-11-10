@@ -1,5 +1,5 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -9,9 +9,10 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 import { useLocale } from "../../hooks/use-locale";
+import { useVirtualLines } from "../../hooks/use-virtual-lines";
 import { TILE_LAYOUTS } from "../../styles/media-layout";
 import { forcedBarSx } from "../../styles/mixins";
-import { gridColumns, isRtl } from "../../utils/dom";
+import { isRtl } from "../../utils/dom";
 import { KIND_ICONS } from "../../utils/media";
 import Icon from "../icons/icon";
 import AssetOption from "./asset-option";
@@ -24,6 +25,7 @@ import type {
     FileUploadItem,
     FolderRef,
     MediaAssetDraw,
+    MediaGridHandle,
     MediaKind,
     MediaLayout,
 } from "../../types";
@@ -81,6 +83,8 @@ interface MediaGridProps {
     /** Opening an asset in the library's place: its button, or Alt+Enter. */
     onOpen: (index: number) => void;
     onSelectAll: () => void;
+    /** Takes an asset or group to focus, by its index, wherever it is in the grid. */
+    ref?: Ref<MediaGridHandle>;
 }
 
 // A column, so a state fills what a group's header leaves it.
@@ -100,34 +104,45 @@ const rootSx: SxProps<Theme> = {
  */
 const SETTLING = 400;
 
-// The uploads under way are laid out as the assets are, before them, with no more room between the
-// two than the grid's gap.
-const gridSx: SxProps<Theme> = {
-    display: "grid",
-    alignContent: "start",
-    gap: 0.5,
+// How the assets are laid out: tiles in as many columns as fit, or rows in one, which the arrow keys
+// move along as the tiles' do. The uploads under way are laid out the same, before them, with no more
+// room between the two than the grid's gap. The listbox is as tall as all the lines, its assets placed
+// in them.
+const tilesOf = (min: number) =>
+    ({
+        display: "grid",
+        alignContent: "start",
+        gap: 0.5,
+        gridTemplateColumns: `repeat(auto-fill, minmax(${min}rem, 1fr))`,
+    }) as const;
+
+const rowsOf = { display: "grid", alignContent: "start", gap: 0.25, gridTemplateColumns: "minmax(0, 1fr)" } as const;
+const uploadsOf = { m: 0, pb: 0, listStyle: "none" } as const;
+const listboxOf = { position: "relative", outline: "none" } as const;
+
+const TILE_UPLOADS_SX = {} as Record<MediaKind, SxProps<Theme>>;
+const TILE_LISTBOX_SX = {} as Record<MediaKind, SxProps<Theme>>;
+
+for (const kind of Object.keys(TILE_LAYOUTS) as MediaKind[]) {
+    TILE_UPLOADS_SX[kind] = { ...tilesOf(TILE_LAYOUTS[kind].min), ...uploadsOf, p: 1.5, pb: 0 };
+    TILE_LISTBOX_SX[kind] = { ...tilesOf(TILE_LAYOUTS[kind].min), ...listboxOf };
+}
+
+const ROW_UPLOADS_SX: SxProps<Theme> = { ...rowsOf, ...uploadsOf, p: 1, pb: 0 };
+const ROW_LISTBOX_SX: SxProps<Theme> = { ...rowsOf, ...listboxOf };
+
+// Around the listbox, its padding, and cutting off what's placed below its end, as an asset kept
+// rendered far from view in a squeezed list is, which would stretch the scroll (see
+// `virtualization.md`), without being a scroll container itself.
+const clipSx: SxProps<Theme> = {
+    overflowY: "clip",
     p: 1.5,
-    outline: "none",
-    '&[data-part="uploads"]': { m: 0, pb: 0, listStyle: "none" },
     '&[data-after-uploads="true"]': { pt: 0.5 },
-    // Kept while only uploads show, so it keeps its Tab stop, but not shown.
+    // Kept while only uploads show, so the grid keeps its Tab stop, but not shown.
     "&[hidden]": { display: "none" },
 };
+const rowsClipSx: SxProps<Theme> = { ...clipSx, p: 1, '&[data-after-uploads="true"]': { pt: 0.5 } };
 
-const tilesSx = (min: number): SxProps<Theme> => ({
-    ...gridSx,
-    gridTemplateColumns: `repeat(auto-fill, minmax(${min}rem, 1fr))`,
-});
-
-const TILES_SX: Record<MediaKind, SxProps<Theme>> = {
-    image: tilesSx(TILE_LAYOUTS.image.min),
-    video: tilesSx(TILE_LAYOUTS.video.min),
-    document: tilesSx(TILE_LAYOUTS.document.min),
-    audio: tilesSx(TILE_LAYOUTS.audio.min),
-};
-
-// A list of rows, one column, which the arrow keys move along as the tiles' do.
-const rowsSx: SxProps<Theme> = { ...gridSx, gridTemplateColumns: "minmax(0, 1fr)", gap: 0.25, p: 1 };
 
 const barSx: SxProps<Theme> = {
     position: "sticky",
@@ -173,6 +188,11 @@ const stepOf = (event: KeyboardEvent<HTMLElement>, columns: number) => {
  * The open level's assets and groups as a grid of tiles, or a list of rows, a `listbox` of `option`s with one Tab
  * stop, which the arrow keys, Home and End move. Space selects, Enter chooses, Alt+Enter opens one in the
  * library's place, Ctrl+A selects them all. A click or Enter goes into a group, and Alt+Up back out.
+ *
+ * Only the assets in or near view are rendered, in lines as tall as the first one rendered, as the file
+ * manager's content is (`useVirtualLines`, see `virtualization.md`), and the one with the Tab stop
+ * wherever it is. So every asset is drawn as tall, and the frames focus one through `ref`'s `focusAt`
+ * rather than finding it in the page.
  */
 const MediaGrid = ({
     entries,
@@ -204,29 +224,69 @@ const MediaGrid = ({
     onLevelUp,
     onOpen,
     onSelectAll,
+    ref,
 }: MediaGridProps) => {
     const { text } = useLocale();
-    const shownSx = layout === "list" ? rowsSx : TILES_SX[kind];
-    const gridRef = useRef<HTMLDivElement>(null);
+    const row = layout === "list";
+    const listRef = useRef<HTMLElement | null>(null);
     const [focusIndex, setFocusIndex] = useState(0);
-    // Set as a key moves the focus, so the tile it went to takes it once it renders as the Tab stop.
-    const movedRef = useRef(false);
+    // Set as the focus is moved, by a key or a frame, so the asset it went to takes it once it's
+    // rendered in its place as the Tab stop; `asks` renders again for one asked for twice.
+    const pendingFocus = useRef(false);
+    const [, setAsks] = useState(0);
     const tabStop = Math.min(focusIndex, Math.max(entries.length - 1, 0));
     const [shownAt] = useState(() => performance.now());
+    // The asset with the Tab stop stays rendered however far the grid is scrolled, so it keeps it.
+    const { lines, settled, reveal } = useVirtualLines(entries.length, [entries.length > 0 ? tabStop : -1]);
+    const setList = useCallback(
+        (list: HTMLElement | null) => {
+            listRef.current = list;
+            lines.ref(list);
+        },
+        [lines.ref],
+    );
+    // Whether any asset shown says where a search found it, or can't be chosen now, so all keep the
+    // room it takes and every one is as tall.
+    const trailed = useMemo(() => !!trails && entries.some(({ id }) => trails.has(id)), [entries, trails]);
+    const held = useMemo(() => entries.some(({ id }) => holds.has(id) || works.has(id)), [entries, holds, works]);
 
+    // Once the lines are where the latest measure puts them, the asset the focus went to takes it,
+    // scrolled to by the least that shows it.
     useLayoutEffect(() => {
-        if (!movedRef.current) {
+        if (!pendingFocus.current || !settled()) {
             return;
         }
 
-        movedRef.current = false;
-        gridRef.current?.querySelector<HTMLElement>(`[data-index="${tabStop}"]`)?.focus();
-    }, [tabStop]);
+        const element = listRef.current?.querySelector<HTMLElement>(`[data-index="${tabStop}"]`);
+
+        if (element) {
+            pendingFocus.current = false;
+            element.focus({ preventScroll: true });
+            reveal(tabStop, element);
+        }
+    });
 
     const moveTo = useCallback((index: number) => {
-        movedRef.current = true;
+        pendingFocus.current = true;
         setFocusIndex(index);
+        setAsks((count) => count + 1);
     }, []);
+
+    useImperativeHandle(
+        ref,
+        () => ({
+            focusAt: (index) => {
+                if (index < 0 || index >= entries.length) {
+                    return false;
+                }
+
+                moveTo(index);
+
+                return true;
+            },
+        }),
+        [entries.length, moveTo],
+    );
 
     const handlePress = useCallback(
         (index: number, event: MouseEvent) => {
@@ -277,7 +337,7 @@ const MediaGrid = ({
                 return;
             }
 
-            const step = gridRef.current ? stepOf(event, gridColumns(gridRef.current)) : 0;
+            const step = stepOf(event, lines.columns);
 
             if (step !== 0) {
                 event.preventDefault();
@@ -332,7 +392,7 @@ const MediaGrid = ({
                 onSelectAll();
             }
         },
-        [entries, groupChecks, multiple, moveTo, onPress, onActivate, onLevelUp, onOpen, onSelectAll],
+        [entries, groupChecks, multiple, lines.columns, moveTo, onPress, onActivate, onLevelUp, onOpen, onSelectAll],
     );
 
     if (status === "error") {
@@ -378,49 +438,64 @@ const MediaGrid = ({
             {busy && <LinearProgress sx={barSx} aria-label={text.loading} />}
             {header}
             {uploads.length > 0 && (
-                <Box component="ul" aria-label={text.mediaUploading} data-part="uploads" sx={shownSx}>
+                <Box
+                    component="ul"
+                    aria-label={text.mediaUploading}
+                    data-part="uploads"
+                    sx={row ? ROW_UPLOADS_SX : TILE_UPLOADS_SX[kind]}
+                >
                     {uploads.map((item) => (
                         <UploadTile key={item.id} item={item} kind={kind} layout={layout} />
                     ))}
                 </Box>
             )}
-            <Box
-                ref={gridRef}
-                role="listbox"
-                aria-label={label}
-                aria-multiselectable={multiple}
-                aria-busy={busy}
-                hidden={entries.length === 0}
-                data-after-uploads={uploads.length > 0}
-                sx={shownSx}
-            >
-                {entries.map((entry, index) => (
-                    <AssetOption
-                        key={entry.id}
-                        entry={entry}
-                        kind={kind}
-                        layout={layout}
-                        adapter={adapter}
-                        index={index}
-                        selected={selectedIds.has(entry.id)}
-                        hold={holds.get(entry.id)}
-                        work={works.get(entry.id)}
-                        trail={trails?.get(entry.id)}
-                        limited={full && !selectedIds.has(entry.id) && entry.kind !== "folder"}
-                        checkable={!!groupChecks?.has(entry.id)}
-                        focused={index === tabStop}
-                        draw={drawAsset}
-                        drawGroup={drawGroup}
-                        opensGroups={opensGroups}
-                        opensAssets={opensAssets}
-                        onPress={handlePress}
-                        onCheck={handleCheck}
-                        onActivate={handleDoubleClick}
-                        onOpen={onOpen}
-                        onFocus={setFocusIndex}
-                        onKeyDown={handleKeyDown}
-                    />
-                ))}
+            <Box hidden={entries.length === 0} data-after-uploads={uploads.length > 0} sx={row ? rowsClipSx : clipSx}>
+                <Box
+                    ref={setList}
+                    role="listbox"
+                    aria-label={label}
+                    aria-multiselectable={multiple}
+                    aria-busy={busy}
+                    data-trails={trailed}
+                    data-holds={held}
+                    sx={row ? ROW_LISTBOX_SX : TILE_LISTBOX_SX[kind]}
+                    style={{ height: lines.height }}
+                >
+                    {lines.indexes.map((index) => {
+                        const entry = entries[index];
+
+                        return (
+                            <AssetOption
+                                key={entry.id}
+                                entry={entry}
+                                kind={kind}
+                                layout={layout}
+                                adapter={adapter}
+                                index={index}
+                                count={entries.length}
+                                top={Math.floor(index / lines.columns) * lines.pitch - lines.offset}
+                                column={index % lines.columns}
+                                selected={selectedIds.has(entry.id)}
+                                hold={holds.get(entry.id)}
+                                work={works.get(entry.id)}
+                                trail={trails?.get(entry.id)}
+                                limited={full && !selectedIds.has(entry.id) && entry.kind !== "folder"}
+                                checkable={!!groupChecks?.has(entry.id)}
+                                focused={index === tabStop}
+                                draw={drawAsset}
+                                drawGroup={drawGroup}
+                                opensGroups={opensGroups}
+                                opensAssets={opensAssets}
+                                onPress={handlePress}
+                                onCheck={handleCheck}
+                                onActivate={handleDoubleClick}
+                                onOpen={onOpen}
+                                onFocus={setFocusIndex}
+                                onKeyDown={handleKeyDown}
+                            />
+                        );
+                    })}
+                </Box>
             </Box>
         </Box>
     );
