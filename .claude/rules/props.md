@@ -35,6 +35,8 @@ Every feature added or changed is checked against this before it's called done. 
 - **Announcements**: an action that finishes with nothing spoken about it (focus doesn't move to the result, no dialog opens, nothing changes where the user is) is announced politely (`announce`; see "Announcements" in `keyboard.md`), in text from a `FileManagerLocaleText` key. One already spoken isn't announced again: opening a folder, or a rename that leaves focus on the renamed entry. A panel with its own live region (uploads, downloads) already counts.
 - **Docs**: the prop's comment in `file-manager.tsx` says what it does from the outside, and the rule of the feature says what isn't public yet, under "Not yet".
 
+`MediaManager` goes through the same checklist, its props' comments in `media-manager.tsx` and `types/media.ts` being the consumer's documentation. What of it isn't public yet (the open library, the group open in each, the search and the asset open controlled, an `apiRef`, `limits`, `relistAfter`, the announcements left) is under "Not yet" in `media-manager.md`, and on the roadmap.
+
 ## Controlled or not
 
 Thirteen pieces of state can each be controlled, as MUI's are: pass the value and change it in its callback, or leave it to the file manager, starting from its `default…` prop.
