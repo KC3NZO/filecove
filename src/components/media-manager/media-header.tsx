@@ -61,8 +61,11 @@ interface MediaHeaderProps {
     /** Whether that field, or that form, is open. */
     creatingGroup: boolean;
     newGroupRef: Ref<HTMLButtonElement>;
-    /** The app's actions for what's shown, bound to it; none while a step is in the library's place. */
-    actions: readonly ToolbarGroup[];
+    /**
+     * The app's actions for what's shown, bound to it; none while a step is in the library's place,
+     * and none in the picker, which has nothing for managing a library.
+     */
+    actions?: readonly ToolbarGroup[];
     /** Picks files to upload into the level open; missing while it takes none. */
     onUpload: (() => void) | undefined;
     uploadRef: Ref<HTMLButtonElement>;
@@ -70,6 +73,8 @@ interface MediaHeaderProps {
 
 /** How many of the app's actions with icons show as buttons, where there's room for any. */
 const INLINE_ACTIONS = 2;
+
+const NO_ACTIONS: readonly ToolbarGroup[] = [];
 
 const headerSx: SxProps<Theme> = {
     display: "flex",
@@ -151,7 +156,7 @@ const MediaHeader = ({
     newGroupLabel,
     creatingGroup,
     newGroupRef,
-    actions,
+    actions = NO_ACTIONS,
     onUpload,
     uploadRef,
 }: MediaHeaderProps) => {
