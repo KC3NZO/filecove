@@ -25,6 +25,45 @@ export type MediaLayout = "grid" | "list";
 export type MediaLayouts = Readonly<Record<string, MediaLayout>>;
 
 /**
+ * Where a media manager is: the library shown (`sectionId`) and the groups gone into from its root to
+ * the one open (`trail`), none at its root. Handed over with the groups as they were listed, `meta` and
+ * all, which `groupHeader` and a group's form read. One the app rebuilds from ids and names, such as from
+ * a URL, can give `{ id, name, kind: "folder" }` for each group, which is all that's known of them then.
+ */
+export interface MediaLocation {
+    sectionId: string;
+    trail: readonly FileEntry[];
+}
+
+/**
+ * Why the location changed: the user, or the app through `apiRef`, went there ("navigate"), or what
+ * was there changed under it ("replace"): a group on the way deleted, moved or renamed, or the library
+ * gone, rooted elsewhere or served by another adapter. An app keeping it in the URL pushes an entry of
+ * the browser's history for the first, and replaces the one it's on for the second.
+ */
+export type MediaLocationChangeReason = "navigate" | "replace";
+
+/**
+ * The asset, or the group's details, shown in a library's place (`entry`), in the library it's in
+ * (`sectionId`), among the groups it's in from that library's root (`trail`), which a search may have
+ * found below the one open. Handed over with `trail` always; leave it out for the groups open. Shown
+ * only while its library is the one shown.
+ */
+export interface MediaViewed {
+    sectionId: string;
+    entry: FileEntry;
+    trail?: readonly FileEntry[];
+}
+
+/**
+ * A media manager's search, while it's open: what's typed, as typed. Closed, it's null, so a closed
+ * search has no query. It's an object so it can grow, by addition, without changing what's there.
+ */
+export interface MediaSearch {
+    query: string;
+}
+
+/**
  * What the app's form is handed each time it's drawn. The media manager keeps what it holds, and the
  * form changes it, so anything in it can follow anything else: a field off as another is unticked,
  * and what it held gone. What it holds is the app's, by its own keys, and the media manager never

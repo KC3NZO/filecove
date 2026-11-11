@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
 
 import Box from "@mui/material/Box";
@@ -16,6 +16,7 @@ import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { MEDIA_CONTAINER } from "../../styles/media-layout";
 import { withSx } from "../../styles/sx";
 import { NO_ERRORS } from "../../utils/field-errors";
+import { countLimit, delayLimit } from "../../utils/limits";
 import MediaFrame from "./media-frame";
 import type { MediaFrameProps } from "./media-frame";
 
@@ -27,10 +28,16 @@ import type {
     MediaAssetParams,
     MediaChoice,
     MediaLayouts,
+    MediaLocation,
+    MediaLocationChangeReason,
+    MediaManagerApi,
+    MediaManagerLimits,
     MediaManagerLocaleText,
     MediaPickForm,
+    MediaSearch,
     MediaSection,
     MediaSectionGroup,
+    MediaViewed,
     PropertyDefinitionGroup,
     PropertyErrorKeyParams,
 } from "../../types";
@@ -157,6 +164,66 @@ interface BaseProps<V> extends RootAttributes {
     /** Told every library's layout, as the user switches one. */
     onLayoutChange?: (layout: MediaLayouts) => void;
     /**
+     * Where the media manager is, for an app keeping it, e.g. in the URL: the library shown and the groups
+     * gone into in it. Every change, the user's and the media manager's own, is asked for through
+     * `onLocationChange`, and shows once it's passed back. Null shows the first library's root. A location
+     * in a library that isn't there shows the first library's root, which is asked for as "replace", and so
+     * is a library's root in place of groups in one rooted elsewhere or served by another adapter since.
+     * Each other library's level is remembered while mounted, so opening it again goes back there. Changed
+     * by the app, what's over the library (an asset shown, a step, the search) goes, as when the user goes
+     * to a level, unless the app changed that too, and screen readers hear where it is.
+     */
+    location?: MediaLocation | null;
+    /** Where it starts, while `location` isn't passed: the first library's root when omitted. */
+    defaultLocation?: MediaLocation;
+    /**
+     * Told the location as it changes, and why: the user, or `apiRef`, going there ("navigate"), or
+     * what was there changing under it ("replace"), such as a group on the way deleted or renamed.
+     */
+    onLocationChange?: (location: MediaLocation, reason: MediaLocationChangeReason) => void;
+    /**
+     * The asset, or the group's details, shown in a library's place, for an app keeping it, e.g. in the
+     * URL; null for the library itself. Shown while its library is the one shown. Every change is asked
+     * for through `onViewedChange`: opening one, Previous and Next, going back, and anything closing it,
+     * such as going to another level or library.
+     */
+    viewed?: MediaViewed | null;
+    /** What's shown in the library's place as it mounts, while `viewed` isn't passed. */
+    defaultViewed?: MediaViewed;
+    /** Told what's shown in the library's place as it changes, with the groups it's in, or null. */
+    onViewedChange?: (viewed: MediaViewed | null) => void;
+    /**
+     * The search, for an app keeping it, null while it's closed. Every change is asked for through
+     * `onSearchChange`: opening it, each key typed, and closing it, which going to another level or
+     * library does too. It's focused as it opens once it's passed back.
+     */
+    search?: MediaSearch | null;
+    /** The search as it mounts, while `search` isn't passed: closed when omitted. */
+    defaultSearch?: MediaSearch;
+    /** Told the search as it opens, as what's typed changes, and as it closes, with null. */
+    onSearchChange?: (search: MediaSearch | null) => void;
+    /**
+     * How old, in ms, a library's or a group's listing may be before showing it lists it again. Listings
+     * are kept, so one shown again shows at once, and is listed again in the background meanwhile, so what
+     * changed elsewhere shows without a refresh. 0, the default, lists it again every time; `Infinity`
+     * never does, for a backend where listing costs, leaving changes made elsewhere to `apiRef.refresh`.
+     * Changes made through the media manager show either way.
+     */
+    relistAfter?: number;
+    /**
+     * How much the media manager does at once and keeps, for a backend that takes more, or less, than the
+     * defaults: uploads, moves and thumbnails at once, thumbnails and listings kept while nothing shows
+     * them, and how long the typing stops before the adapter's `search` is asked. Each is left to its
+     * default when omitted, and a change takes effect at once: more at once starts what's waiting, less
+     * lets what's under way finish, and fewer kept drops what's beyond them.
+     */
+    limits?: MediaManagerLimits;
+    /**
+     * Takes the `MediaManagerApi`, for going to a library or a group, showing an asset, searching,
+     * selecting, choosing, uploading, listing again or moving the focus in, from outside.
+     */
+    apiRef?: Ref<MediaManagerApi<V>>;
+    /**
      * What's selected, when the app keeps it, with `onChange`: every change is then only asked for, and
      * shows once it's passed back. Each is matched to its library by `section.id`. Pass back what
      * `onChange` handed over where you can: a choice made or copied by the app takes its `values` as
@@ -237,8 +304,8 @@ interface SingleSectionProps<V> extends BaseProps<V> {
 
 /**
  * Either `sections`, for several libraries to switch between, or a single `section`. Both may
- * change after mounting: the library shown goes back to the first when its section goes, and what
- * was picked in a library that's gone goes with it. `V` is the shape of what the app's form holds
+ * change after mounting: the library shown goes back to the first when its section goes (asked for
+ * through `onLocationChange` as "replace"), and what was picked in a library that's gone goes with it. `V` is the shape of what the app's form holds
  * for each pick (`pickForm`).
  */
 export type MediaManagerProps<V = Record<string, unknown>> = MultiSectionProps<V> | SingleSectionProps<V>;
@@ -286,6 +353,18 @@ const MediaManager = <V,>({
     layout,
     defaultLayout,
     onLayoutChange,
+    location,
+    defaultLocation,
+    onLocationChange,
+    viewed,
+    defaultViewed,
+    onViewedChange,
+    search,
+    defaultSearch,
+    onSearchChange,
+    relistAfter = 0,
+    limits,
+    apiRef,
     value,
     defaultValue,
     onChange,
@@ -301,13 +380,27 @@ const MediaManager = <V,>({
     const [store] = useState(createFolderStore);
     const [thumbnails] = useState(createThumbnailCache);
     const [propertiesCache] = useState(createPropertiesCache);
-    // Every library is listed again in the background as it's shown, as the file manager's folders are.
-    const data = useMemo(() => ({ store, adapter, thumbnails, relistAfter: 0 }), [store, adapter, thumbnails]);
+    // A library is listed again in the background as it's shown, as the file manager's folders are, once
+    // its listing is `relistAfter` old.
+    const data = useMemo(
+        () => ({ store, adapter, thumbnails, relistAfter }),
+        [store, adapter, thumbnails, relistAfter],
+    );
+    // The app's limits, each a number, so a new object of the same limits every render changes nothing.
+    const thumbnailLimit = countLimit(limits?.thumbnails, 1);
+    const keptThumbnails = countLimit(limits?.keptThumbnails, 0);
+    const keptEntries = countLimit(limits?.keptEntries, 0);
     const rootRef = useRef<HTMLDivElement>(null);
     const handleRootRef = useForkRef(rootRef, ref);
     const direction = useTextDirection(rootRef);
     const rootStyle = useMemo(() => withSx(rootSx, sx), [sx]);
 
+    // Set before the parts' own effects ask for anything as they mount.
+    useLayoutEffect(() => store.setMaxKept(keptEntries), [store, keptEntries]);
+    useLayoutEffect(
+        () => thumbnails.setLimits(thumbnailLimit, keptThumbnails),
+        [thumbnails, thumbnailLimit, keptThumbnails],
+    );
     useEffect(() => () => store.abortAll(), [store]);
     useEffect(() => () => thumbnails.clear(), [thumbnails]);
 
@@ -340,6 +433,19 @@ const MediaManager = <V,>({
                             layout={layout}
                             defaultLayout={defaultLayout}
                             onLayoutChange={onLayoutChange}
+                            location={location}
+                            defaultLocation={defaultLocation}
+                            onLocationChange={onLocationChange}
+                            viewed={viewed}
+                            defaultViewed={defaultViewed}
+                            onViewedChange={onViewedChange}
+                            search={search}
+                            defaultSearch={defaultSearch}
+                            onSearchChange={onSearchChange}
+                            uploadLimit={countLimit(limits?.uploads, 1)}
+                            transferLimit={countLimit(limits?.transfers, 1)}
+                            searchDelay={delayLimit(limits?.searchDelay)}
+                            apiRef={apiRef as MediaFrameProps["apiRef"]}
                             value={value as readonly MediaChoice[] | undefined}
                             defaultValue={defaultValue as readonly MediaChoice[] | undefined}
                             onChange={onChange as ((choices: MediaChoice[]) => void) | undefined}

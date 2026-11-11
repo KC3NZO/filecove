@@ -1,5 +1,8 @@
+import type { SetStateAction } from "react";
+
 import type { ActionContext } from "./action";
 import type { FileAdapter, FileEntry } from "./adapter";
+import type { MediaChoice, MediaLocation } from "./media";
 import type { FileManagerLocation, GoToPathResult } from "./navigation";
 import type { SearchScope } from "./search";
 
@@ -108,4 +111,71 @@ export interface FileManagerApi {
      * when there's nothing to redo, or an undo or redo is still under way.
      */
     redo: () => boolean;
+}
+
+/**
+ * Drives a `MediaManager` from outside, through its `apiRef`, such as from a toolbar of the app's own.
+ * The object stays the same for as long as the media manager is mounted, so it can be kept, and each
+ * method does what it says as of the moment it's called. What it changes is asked for through the
+ * matching callback where the app keeps it (`location`, `viewed`, `search`, `value`), as the user's
+ * changes are.
+ */
+export interface MediaManagerApi<V = Record<string, unknown>> {
+    /**
+     * Opens a library, as choosing it in the list of libraries does, and with `trail`, the group at its
+     * end, as going into it does: the groups from the library's root, none for the root itself. Without
+     * `trail`, it opens where it was left. It's told to `onLocationChange` as "navigate", closing what
+     * was over the library and the search, and said to screen readers. Returns false when there's no
+     * such library.
+     */
+    navigate: (location: { sectionId: string; trail?: MediaLocation["trail"] }) => boolean;
+    /**
+     * Shows an asset, or a group's details, in the library's place, as its Open button does: in the open
+     * library, among the groups open, or with `location`, in that library among those groups, going there
+     * first. It takes the focus. Returns false when the library is missing, or it's a group with nothing to
+     * show or do.
+     */
+    view: (entry: FileEntry, location?: MediaLocation) => boolean;
+    /** Goes back to the library from what's shown in its place, as its back button does. */
+    closeView: () => void;
+    /**
+     * Opens the search, as the search button and Ctrl+F do, and focuses it; `query` is put in it, or
+     * what's typed stays when omitted. Returns false when there's nothing to search: no library, or an
+     * asset or a step shown in its place.
+     */
+    search: (query?: string) => boolean;
+    /** Closes the search, as Escape does, which gives the focus back if it had it. */
+    closeSearch: () => void;
+    /**
+     * Puts these in place of what's selected, as `value` does, in this order, each matched to its library
+     * by `section.id`, or changes it by a function of what's selected now, as `onChange` hands it over:
+     * `select((choices) => [...choices, choice])`. What's given is taken as it is, as `defaultValue` is:
+     * past `maxChoices` or refused by `canSelect`, it holds Choose back. Asked for through `onChange`
+     * while the app keeps `value`.
+     */
+    select: (choices: SetStateAction<readonly MediaChoice<V>[]>) => void;
+    /**
+     * Hands what's selected to `onChoose`, as the Choose button does. Returns false when nothing was
+     * handed over: there's no `onChoose`, nothing is selected, or something holds Choose back.
+     */
+    choose: () => boolean;
+    /**
+     * Uploads into the level open, as the header's Upload, a drop or a paste do, asking first what the
+     * library's `uploadForm` asks: these files, or without any, those picked in the browser's own file
+     * picker, which browsers only open from a click or a key press, so call it from one. Returns false
+     * when the level open takes no files.
+     */
+    upload: (files?: readonly File[]) => boolean;
+    /**
+     * Lists libraries and groups again wherever the media manager has them, e.g. after the backend
+     * changed them some other way: those with these ids, and every one listing one of them, or every one
+     * it has listed when `folderIds` is omitted, with what's shown in a library's place and a search,
+     * which are asked for again. What's on screen stays until the new listing comes.
+     */
+    refresh: (folderIds?: readonly string[], options?: RefreshOptions) => void;
+    /**
+     * Moves the focus into the media manager, e.g. once it shows in a dialog: to what's shown in the
+     * library's place, or else the asset with the Tab stop.
+     */
+    focus: () => void;
 }

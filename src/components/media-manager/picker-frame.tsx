@@ -13,6 +13,7 @@ import { useChosenColumn } from "../../hooks/use-chosen-column";
 import { useFilesDrop } from "../../hooks/use-files-drop";
 import { useData, useFolder } from "../../hooks/use-folder";
 import { useLocale } from "../../hooks/use-locale";
+import { useMatchCount } from "../../hooks/use-match-count";
 import { useLevelSearch } from "../../hooks/use-level-search";
 import { useMediaSearch } from "../../hooks/use-media-search";
 import { usePicks } from "../../hooks/use-picks";
@@ -93,6 +94,10 @@ export interface PickerFrameProps {
     value: readonly MediaPickerValue[] | undefined;
     defaultValue: readonly MediaPickerValue[] | undefined;
     onChange: ((choices: MediaChoice[]) => void) | undefined;
+    /** Uploads at once, from `limits`, or the queue's default. */
+    uploadLimit: number | undefined;
+    /** How long the typing stops before the adapter's `search` is asked, from `limits`, or the default. */
+    searchDelay: number | undefined;
 }
 
 /**
@@ -281,12 +286,14 @@ const PickerFrame = ({
     value,
     defaultValue,
     onChange,
+    uploadLimit,
+    searchDelay,
 }: PickerFrameProps) => {
     const { text, foldLetters, compareNames, formatNumber, formatPercent } = useLocale();
     const { store } = useData();
     const { announcement, announce } = useAnnouncer();
-    const { query, setQuery, searching, setSearching, searchInputRef, searchButtonRef, openSearch, stopSearching, closeSearch } =
-        useMediaSearch();
+    const { query, setQuery, searching, searchInputRef, searchButtonRef, openSearch, stopSearching, closeSearch } =
+        useMediaSearch({ component: "MediaPicker" });
     const [trail, setTrail] = useState(NO_TRAIL);
     const openGroup = trail.at(-1);
     const inGroup = !!openGroup;
@@ -295,7 +302,7 @@ const PickerFrame = ({
     const { state, reload } = useFolder(section, folderId, true, true);
     // Each time something here changes the backend, which a search through it is asked again after.
     const [changes, setChanges] = useState(0);
-    const search = useLevelSearch(section, adapter, folderId, query, changes);
+    const search = useLevelSearch(section, adapter, folderId, query, changes, searchDelay);
     // The groups an entry shown is in, from the library's root: those open, and any a search found it
     // below them.
     const placeOf = useCallback(
@@ -805,12 +812,11 @@ const PickerFrame = ({
             levelFocusRef.current = { groupId, waited: false };
             setTrail(next);
             setPicks((previous) => (previous.anchor === null ? previous : { ...previous, anchor: null }));
-            setQuery("");
-            setSearching(false);
+            stopSearching();
             setUploadStep(null);
             announce(text.mediaInGroup(isolate(next.at(-1)?.name ?? section.label)));
         },
-        [setQuery, setSearching, announce, text, section.label, setPicks],
+        [stopSearching, announce, text, section.label, setPicks],
     );
 
     const goToLevel = useCallback(
@@ -955,6 +961,8 @@ const PickerFrame = ({
 
     const uploads = useUploadQueue(relist, text.keptBothName);
 
+    useLayoutEffect(() => uploads.queue.setMaxActive(uploadLimit), [uploads.queue, uploadLimit]);
+
     const sendUpload = useCallback(
         (into: UploadStep["into"], files: File[], values: Readonly<Record<string, unknown>> | undefined) => {
             const ids = uploads.queue.add(adapter, into, files, "keepBoth", values);
@@ -999,6 +1007,15 @@ const PickerFrame = ({
     }, []);
 
     const searchable = !uploadStep;
+
+    // How many the search found once it's answered, said for each new query, as nothing else says it.
+    const matchCount =
+        searching && searchable && (search.on ? search.status === "ready" : state?.status === "ready")
+            ? shownEntries.length
+            : null;
+
+    useMatchCount(query, matchCount, announce, text.searchResultCount);
+
     const patterns = useMemo(() => uploadPatterns(section), [section]);
     const { dropping, offerDrop, leaveDrop, takeDrop, pasteFiles } = useFilesDrop(
         takesFiles && !uploadStep,

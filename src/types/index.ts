@@ -1,5 +1,5 @@
 export type { ActionContext, ActionGroup, ActionTarget, ContextFolder, FileAction } from "./action";
-export type { FileManagerApi, RefreshOptions } from "./api";
+export type { FileManagerApi, MediaManagerApi, RefreshOptions } from "./api";
 export type {
     AssetProcessing,
     AssetReady,
@@ -52,7 +52,7 @@ export type {
     TransferLocaleText,
     UploadLocaleText,
 } from "./locale";
-export type { FileManagerLimits } from "./limits";
+export type { FileManagerLimits, MediaManagerLimits } from "./limits";
 export type { MainMenuGroup, MainMenuItem } from "./main-menu";
 export type {
     AssetHold,
@@ -78,14 +78,18 @@ export type {
     MediaKind,
     MediaLayout,
     MediaLayouts,
+    MediaLocation,
+    MediaLocationChangeReason,
     MediaPickForm,
     MediaPickFormParams,
     MediaProcessForm,
     MediaProcessFormParams,
     MediaSection,
+    MediaSearch,
     MediaSectionGroup,
     MediaUploadForm,
     MediaUploadFormParams,
+    MediaViewed,
 } from "./media";
 export type {
     EntryGroup,

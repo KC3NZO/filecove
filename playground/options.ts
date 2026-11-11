@@ -45,9 +45,10 @@ export const locale = params.get("locale") || undefined;
 export const downloadUrls = params.has("downloadUrls");
 
 /**
- * `?relistAfter=30000`: the file manager's `relistAfter`, how old a folder's listing may be, in ms,
- * before opening the folder lists it again; `?relistAfter=Infinity` never does. Every time when
- * left out. The footer's "Change elsewhere" adds a file the file manager isn't told of, to see it.
+ * `?relistAfter=30000`: the file manager's and the media manager's `relistAfter`, how old a folder's,
+ * a library's or a group's listing may be, in ms, before opening it lists it again;
+ * `?relistAfter=Infinity` never does. Every time when left out. The file manager's footer's "Change
+ * elsewhere" adds a file the file manager isn't told of, to see it.
  */
 const relistParam = params.get("relistAfter");
 
@@ -55,9 +56,10 @@ export const relistAfter =
     relistParam !== null && !Number.isNaN(Number(relistParam)) ? Number(relistParam) : undefined;
 
 /**
- * `?limits=uploads:1,thumbnails:2`: the file manager's `limits`, each `key:number` of
- * `FileManagerLimits` (`uploads`, `downloads`, `transfers`, `thumbnails`, `keptThumbnails`,
- * `keptEntries`, `undoSteps`, `searchDelay`), `Infinity` for no limit. The defaults when left out.
+ * `?limits=uploads:1,thumbnails:2`: the file manager's and the media manager's `limits`, each
+ * `key:number` of `FileManagerLimits` (`uploads`, `downloads`, `transfers`, `thumbnails`,
+ * `keptThumbnails`, `keptEntries`, `undoSteps`, `searchDelay`), `Infinity` for no limit, the media
+ * manager taking those of `MediaManagerLimits`. The defaults when left out.
  * One upload or copy at a time shows the rest waiting in their panels, `keptEntries:0` drops every
  * listing once nothing shows it, so a folder opened again is listed afresh, and `undoSteps:1` keeps
  * only the last change to undo, as GNOME Files does.

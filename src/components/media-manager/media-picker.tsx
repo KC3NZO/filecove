@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentPropsWithoutRef, Ref } from "react";
 
 import Box from "@mui/material/Box";
@@ -14,6 +14,7 @@ import { createFolderStore } from "../../store/folder-store";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { MEDIA_CONTAINER } from "../../styles/media-layout";
 import { withSx } from "../../styles/sx";
+import { countLimit, delayLimit } from "../../utils/limits";
 import PickerFrame from "./picker-frame";
 import type { PickerFrameProps } from "./picker-frame";
 
@@ -21,6 +22,7 @@ import type {
     FileAdapter,
     FileEntry,
     MediaChoice,
+    MediaManagerLimits,
     MediaManagerLocaleText,
     MediaPickerValue,
     MediaPickForm,
@@ -110,6 +112,18 @@ export interface MediaPickerProps<V = Record<string, unknown>> extends RootAttri
      * new listing of an asset alone isn't.
      */
     onChange?: (choices: MediaChoice<V>[]) => void;
+    /**
+     * How old, in ms, a level's listing may be before showing it lists it again in the background, as
+     * the media manager's `relistAfter`: 0, the default, every time; `Infinity` never.
+     */
+    relistAfter?: number;
+    /**
+     * How much it does at once and keeps, as the media manager's `limits`: uploads and thumbnails at once,
+     * thumbnails and listings kept, and how long the typing stops before the adapter's `search` is asked;
+     * `transfers` counts for nothing here. Each is its default when omitted, and a change takes effect at
+     * once. The picker has stores of its own, so a media manager around it doesn't share them.
+     */
+    limits?: MediaManagerLimits;
     /** The component's own text, the media manager's. Keys left out stay in English, as `enUS` has them. */
     localeText?: Partial<MediaManagerLocaleText>;
     /** The BCP 47 language tag that numbers, sizes and dates are written in and names are matched by. */
@@ -170,6 +184,8 @@ const MediaPicker = <V,>({
     value,
     defaultValue,
     onChange,
+    relistAfter = 0,
+    limits,
     localeText,
     locale,
     ref,
@@ -180,12 +196,25 @@ const MediaPicker = <V,>({
     const [store] = useState(createFolderStore);
     const [thumbnails] = useState(createThumbnailCache);
     // Listed again in the background as a level is shown, as the media manager's are.
-    const data = useMemo(() => ({ store, adapter, thumbnails, relistAfter: 0 }), [store, adapter, thumbnails]);
+    const data = useMemo(
+        () => ({ store, adapter, thumbnails, relistAfter }),
+        [store, adapter, thumbnails, relistAfter],
+    );
+    // The app's limits, each a number, so a new object of the same limits every render changes nothing.
+    const thumbnailLimit = countLimit(limits?.thumbnails, 1);
+    const keptThumbnails = countLimit(limits?.keptThumbnails, 0);
+    const keptEntries = countLimit(limits?.keptEntries, 0);
     const rootRef = useRef<HTMLDivElement>(null);
     const handleRootRef = useForkRef(rootRef, ref);
     const direction = useTextDirection(rootRef);
     const rootStyle = useMemo(() => withSx(rootSx, sx), [sx]);
 
+    // Set before the parts' own effects ask for anything as they mount.
+    useLayoutEffect(() => store.setMaxKept(keptEntries), [store, keptEntries]);
+    useLayoutEffect(
+        () => thumbnails.setLimits(thumbnailLimit, keptThumbnails),
+        [thumbnails, thumbnailLimit, keptThumbnails],
+    );
     useEffect(() => () => store.abortAll(), [store]);
     useEffect(() => () => thumbnails.clear(), [thumbnails]);
 
@@ -209,6 +238,8 @@ const MediaPicker = <V,>({
                             value={value as PickerFrameProps["value"]}
                             defaultValue={defaultValue as PickerFrameProps["defaultValue"]}
                             onChange={onChange as PickerFrameProps["onChange"]}
+                            uploadLimit={countLimit(limits?.uploads, 1)}
+                            searchDelay={delayLimit(limits?.searchDelay)}
                         />
                     </Box>
                 </DataContext>

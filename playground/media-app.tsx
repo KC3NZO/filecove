@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Snackbar from "@mui/material/Snackbar";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
@@ -17,15 +18,18 @@ import { noOverlapping } from "./media-relation";
 import { audioUploadForm, imageUploadForm, videoUploadForm } from "./media-uploads";
 import { siteMediaAdapter, stockMediaAdapter } from "./mocks/mock-media";
 import { savePicks } from "./mocks/mock-save";
+import { locationInHash, useMediaLocation } from "./hooks/use-media-location";
 import { useStoredState } from "./hooks/use-stored-state";
 import {
     browse,
+    limits,
     live,
     locale,
     maxChoices,
     multiple,
     noOverlap,
     oneVideo,
+    relistAfter,
     selectGroups,
     single,
     uncontrolled,
@@ -36,8 +40,12 @@ import type {
     FileEntry,
     MediaChoice,
     MediaLayouts,
+    MediaLocation,
+    MediaManagerApi,
+    MediaSearch,
     MediaSection,
     MediaSectionGroup,
+    MediaViewed,
     PropertyErrorKeyParams,
 } from "../src";
 
@@ -146,6 +154,27 @@ const libraries: MediaSectionGroup[] = [
 
 const previewers = [audioPreviewer];
 
+// The libraries shown, which the location in the hash is read against.
+const shownSections = single ? [libraries[0].sections[0]] : libraries.flatMap((group) => group.sections);
+
+const groupAt = (id: string): FileEntry => ({ id, name: id.slice(id.lastIndexOf("/") + 1), kind: "folder" });
+
+// Where the footer's "Go to a group" leads, and what its "Show an asset" opens, known by their ids and
+// names alone, as an app's own links to them would be.
+const groupTarget: MediaLocation = single
+    ? { sectionId: "images", trail: [groupAt("/images/Summer 2026"), groupAt("/images/Summer 2026/Harbour festival")] }
+    : { sectionId: "audio", trail: [groupAt("/audio/The Harbour Hour"), groupAt("/audio/The Harbour Hour/Season 1")] };
+
+const assetTarget: { entry: FileEntry; location: MediaLocation } = single
+    ? {
+          entry: { id: "/images/Summer 2026/summer-poster.png", name: "summer-poster.png", kind: "file" },
+          location: { sectionId: "images", trail: [groupAt("/images/Summer 2026")] },
+      }
+    : {
+          entry: { id: "/videos/intro.webm", name: "intro.webm", kind: "file" },
+          location: { sectionId: "videos", trail: [] },
+      };
+
 const appSx: SxProps<Theme> = {
     display: "flex",
     flexDirection: "column",
@@ -160,7 +189,9 @@ const mediaManagerSx: SxProps<Theme> = {
 
 const footerSx: SxProps<Theme> = {
     display: "flex",
+    flexWrap: "wrap",
     alignItems: "center",
+    columnGap: 2,
     minHeight: 40,
     px: 2,
     borderTop: 1,
@@ -168,6 +199,10 @@ const footerSx: SxProps<Theme> = {
     bgcolor: "background.default",
     color: "text.secondary",
 };
+
+const footerTextSx: SxProps<Theme> = { flex: "1 1 16rem", minWidth: 0 };
+
+const footerButtonsSx: SxProps<Theme> = { display: "flex", flexWrap: "wrap" };
 
 /** Where a pick's own errors are, as the playground's backend names them: `media.0`, `media.0.id`. */
 const choiceErrorKey = ({ index }: PropertyErrorKeyParams) => [`media.${index}`, `media.${index}.id`];
@@ -227,6 +262,14 @@ const MediaApp = () => {
     const [actions] = useState(() => createMediaActions((message) => setNotice({ open: true, message })));
     // Which layout each library was last shown in, kept across reloads, as a consumer might.
     const [layout, setLayout] = useStoredState<MediaLayouts>("media-layout", {});
+    // Where it is, in the URL's hash, and what's shown in a library's place and searched, kept here as
+    // an app would, unless `?uncontrolled` leaves them to the media manager, starting where the hash says.
+    const [location, setLocation] = useMediaLocation(shownSections);
+    const [viewed, setViewed] = useState<MediaViewed | null>(null);
+    const [search, setSearch] = useState<MediaSearch | null>(null);
+    const [startedAt] = useState(() => locationInHash(shownSections) ?? undefined);
+    const api = useRef<MediaManagerApi>(null);
+    const say = (message: string) => setNotice({ open: true, message });
 
     // Saved first, as an app would save a product's carousel: what the backend refuses goes back to
     // the media manager, and what it takes is chosen.
@@ -254,7 +297,21 @@ const MediaApp = () => {
         canSelect: oneVideo ? oneVideoAtMost : noOverlap ? noOverlapping : undefined,
         selectGroups,
         actions,
-        ...(uncontrolled ? { defaultLayout: layout } : { layout, onLayoutChange: setLayout }),
+        ...(uncontrolled
+            ? { defaultLayout: layout, defaultLocation: startedAt }
+            : {
+                  layout,
+                  onLayoutChange: setLayout,
+                  location,
+                  onLocationChange: setLocation,
+                  viewed,
+                  onViewedChange: setViewed,
+                  search,
+                  onSearchChange: setSearch,
+              }),
+        relistAfter,
+        limits,
+        apiRef: api,
         locale,
         onChoose: browse || live ? undefined : choose,
         ...(browse ? {} : uncontrolled ? { onChange: setPicked } : { value: picked, onChange: setPicked }),
@@ -275,9 +332,58 @@ const MediaApp = () => {
                 <MediaManager {...shared} sections={libraries} sx={mediaManagerSx} />
             )}
             <Box component="footer" sx={footerSx}>
-                <Typography variant="body2" noWrap>
+                <Typography variant="body2" noWrap sx={footerTextSx}>
                     {describe(chosen, picked, saving)}
                 </Typography>
+                {/* The app's own toolbar, driving the media manager through `apiRef`. */}
+                <Box sx={footerButtonsSx}>
+                    <Button
+                        size="small"
+                        color="inherit"
+                        onClick={() => api.current?.navigate(groupTarget) || say("That library isn't shown")}
+                    >
+                        Go to {groupTarget.trail.at(-1)?.name}
+                    </Button>
+                    <Button
+                        size="small"
+                        color="inherit"
+                        onClick={() =>
+                            api.current?.view(assetTarget.entry, assetTarget.location) || say("Couldn't show it")
+                        }
+                    >
+                        Show {assetTarget.entry.name}
+                    </Button>
+                    <Button
+                        size="small"
+                        color="inherit"
+                        onClick={() => api.current?.search("harbour") || say("Nothing to search here")}
+                    >
+                        Search “harbour”
+                    </Button>
+                    <Button
+                        size="small"
+                        color="inherit"
+                        onClick={() => api.current?.upload() || say("Nothing can be uploaded here")}
+                    >
+                        Upload…
+                    </Button>
+                    <Button size="small" color="inherit" onClick={() => api.current?.select([])}>
+                        Clear selection
+                    </Button>
+                    <Button
+                        size="small"
+                        color="inherit"
+                        onClick={() => api.current?.choose() || say("Nothing to choose, or something holds it back")}
+                    >
+                        Choose
+                    </Button>
+                    <Button size="small" color="inherit" onClick={() => api.current?.refresh()}>
+                        Reload all
+                    </Button>
+                    <Button size="small" color="inherit" onClick={() => api.current?.focus()}>
+                        Focus
+                    </Button>
+                </Box>
             </Box>
             <Snackbar
                 open={notice.open}

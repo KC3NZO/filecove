@@ -21,8 +21,11 @@ interface MediaProcessProps {
     /** Whether its library has nothing to ask of it now, which holds Process back. */
     unavailable: boolean;
     onCancel: () => void;
-    /** The backend took it on, or may have by the time it was cancelled: its library is listed again. */
-    onSent: () => void;
+    /**
+     * The backend took it on (`taken`), or may have by the time it was cancelled: its library is listed
+     * again.
+     */
+    onSent: (taken: boolean) => void;
 }
 
 /**
@@ -43,7 +46,7 @@ const MediaProcess = ({ entry, section, adapter, form, unavailable, onCancel, on
     const leave = () => {
         if (sending) {
             abort();
-            onSent();
+            onSent(false);
         } else {
             onCancel();
         }
@@ -64,7 +67,7 @@ const MediaProcess = ({ entry, section, adapter, form, unavailable, onCancel, on
                     <StepSend
                         held={sending || ready !== true}
                         describedBy={typeof ready === "string" && ready ? noteId : undefined}
-                        onClick={() => send((signal) => adapter.process?.(entry, values, { signal }), onSent)}
+                        onClick={() => send((signal) => adapter.process?.(entry, values, { signal }), () => onSent(true))}
                     >
                         {text.mediaProcess}
                     </StepSend>

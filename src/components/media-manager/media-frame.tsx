@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode, SetStateAction } from "react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode, Ref, SetStateAction } from "react";
 
 import Backdrop from "@mui/material/Backdrop";
 import Box from "@mui/material/Box";
@@ -13,6 +13,7 @@ import { useData, useFolder } from "../../hooks/use-folder";
 import { useFilesDrop } from "../../hooks/use-files-drop";
 import { useLevelSearch } from "../../hooks/use-level-search";
 import { useLocale } from "../../hooks/use-locale";
+import { useMatchCount } from "../../hooks/use-match-count";
 import { useMediaSearch } from "../../hooks/use-media-search";
 import { usePicks } from "../../hooks/use-picks";
 import type { PicksState } from "../../hooks/use-picks";
@@ -85,12 +86,17 @@ import type {
     MediaGroupForm,
     MediaLayout,
     MediaLayouts,
+    MediaLocation,
+    MediaLocationChangeReason,
+    MediaManagerApi,
     MediaPickForm,
     MediaProcessForm,
+    MediaSearch,
     MediaSection,
     MediaSectionGroup,
     MediaUploadCheck,
     MediaUploadForm,
+    MediaViewed,
     PropertyDefinitionGroup,
     PropertyErrorKeyParams,
     ToolbarGroup,
@@ -133,6 +139,28 @@ export interface MediaFrameProps {
     /** Where the libraries' layouts start, while it doesn't. */
     defaultLayout: MediaLayouts | undefined;
     onLayoutChange: ((layout: MediaLayouts) => void) | undefined;
+    /** The library shown and the group open in it, when the app keeps it; null for the first library's root. */
+    location: MediaLocation | null | undefined;
+    /** Where it starts, while the app doesn't keep it. */
+    defaultLocation: MediaLocation | undefined;
+    onLocationChange: ((location: MediaLocation, reason: MediaLocationChangeReason) => void) | undefined;
+    /** What's shown in the library's place, when the app keeps it; null for the library itself. */
+    viewed: MediaViewed | null | undefined;
+    /** What's shown in the library's place as it mounts, while the app doesn't keep it. */
+    defaultViewed: MediaViewed | undefined;
+    onViewedChange: ((viewed: MediaViewed | null) => void) | undefined;
+    /** The search, when the app keeps it; null while closed. */
+    search: MediaSearch | null | undefined;
+    /** The search as it mounts, while the app doesn't keep it. */
+    defaultSearch: MediaSearch | undefined;
+    onSearchChange: ((search: MediaSearch | null) => void) | undefined;
+    /** Uploads at once, from `limits`, or the queue's default. */
+    uploadLimit: number | undefined;
+    /** Moves at once, from `limits`, or the queue's default. */
+    transferLimit: number | undefined;
+    /** How long the typing stops before the adapter's `search` is asked, from `limits`, or the default. */
+    searchDelay: number | undefined;
+    apiRef: Ref<MediaManagerApi> | undefined;
     /** What's selected, when the app keeps it. */
     value: readonly MediaChoice[] | undefined;
     /** What's selected as it mounts, while it doesn't. */
@@ -168,8 +196,12 @@ interface OpenLevel {
     trail: readonly FileEntry[];
 }
 
-/** Who takes the focus as a level shows: the group left, or with none, the first thing in it. */
+/**
+ * Who takes the focus as a level shows: the group left, or with none, the first thing in it, once the
+ * level it was asked for (`key`) shows, which an app keeping the location may pass back later.
+ */
 interface LevelFocus {
+    key: string;
     groupId: string | null;
     /** Whether it had to wait for the listing, when the user may have gone on elsewhere. */
     waited: boolean;
@@ -321,6 +353,42 @@ const handedCopy = (choice: MediaChoice): MediaChoice => {
 
 const isGroup = (entry: FileEntry) => entry.kind === "folder";
 
+/** Whether two ways through a library are the same groups, by their ids and names. */
+const sameTrail = (a: readonly FileEntry[] | undefined, b: readonly FileEntry[] | undefined) =>
+    a === b ||
+    (!!a &&
+        !!b &&
+        a.length === b.length &&
+        a.every((group, index) => group.id === b[index].id && group.name === b[index].name));
+
+/** Whether two locations are the same place, as the app would see it, which telling it again would not change. */
+const sameLocation = (a: MediaLocation | null, b: MediaLocation | null) =>
+    a === b || (!!a && !!b && a.sectionId === b.sectionId && sameTrail(a.trail, b.trail));
+
+/**
+ * Whether two things shown in a library's place are the same: the same entry, as listed, so one saved
+ * since, as a group edited, takes its place, among the same groups.
+ */
+const sameViewed = (a: MediaViewed | null, b: MediaViewed | null) =>
+    a === b || (!!a && !!b && a.sectionId === b.sectionId && a.entry === b.entry && sameTrail(a.trail, b.trail));
+
+/**
+ * A way through a library as the app gave it, each group the fullest entry known of it: one of those
+ * walked or asked for, which an app rebuilding the location from ids and names, as from a URL, lacks.
+ */
+const fullestTrail = (given: readonly FileEntry[], ...known: (readonly FileEntry[] | undefined)[]) =>
+    given.map((group) => {
+        for (const trail of known) {
+            const fuller = trail?.find(({ id }) => id === group.id);
+
+            if (fuller) {
+                return fuller;
+            }
+        }
+
+        return group;
+    });
+
 /** What the app draws above a group's contents, as a component of its own, so it may use hooks. */
 const GroupHeader = ({ draw, group, section }: GroupHeaderProps) => draw(group, section);
 
@@ -416,6 +484,19 @@ const MediaFrame = ({
     layout: layoutProp,
     defaultLayout = NO_LAYOUTS,
     onLayoutChange,
+    location: locationProp,
+    defaultLocation,
+    onLocationChange,
+    viewed: viewedProp,
+    defaultViewed,
+    onViewedChange,
+    search: searchProp,
+    defaultSearch,
+    onSearchChange,
+    uploadLimit,
+    transferLimit,
+    searchDelay,
+    apiRef,
     value,
     defaultValue,
     onChange,
@@ -426,14 +507,57 @@ const MediaFrame = ({
     const { text, foldLetters, compareNames, formatNumber, formatPercent } = useLocale();
     const sections = useMemo(() => groups.flatMap((group) => group.sections), [groups]);
     const sectionsById = useMemo(() => new Map(sections.map((item) => [item.id, item])), [sections]);
-    const [openId, setOpenId] = useState<string>();
-    const section = sections.find(({ id }) => id === openId) ?? sections[0];
+    // Where it is, which the app may keep: the library shown and the groups gone into in it, or null
+    // for the first library's root. Each change says why, which `goTo` sets as it asks for it.
+    const changeReason = useRef<MediaLocationChangeReason>("navigate");
+    const [location, setLocation] = useSetting<MediaLocation | null>({
+        name: "location",
+        component: "MediaManager",
+        value: locationProp,
+        defaultValue: defaultLocation ?? null,
+        onChange: (next) => next && onLocationChange?.(next, changeReason.current),
+        equal: sameLocation,
+    });
+    // A location in a library that isn't there shows the first library's root, until it's replaced.
+    const placed = location && sectionsById.has(location.sectionId) ? location : null;
+    const section = (placed && sectionsById.get(placed.sectionId)) || sections[0];
     const sectionAdapter = section?.adapter ?? adapter;
     const several = sections.length > 1;
     // Each library stays at the group it was left at, going by the root and the adapter it was walked
-    // from, as an app may change either.
+    // from, as an app may change either: the location says where the one shown is, and each other's is
+    // remembered while mounted, to go back to.
     const [levels, setLevels] = useState(NO_LEVELS);
-    const kept = section && levels[section.id];
+    // The location last asked for, whose groups are the fullest known of them should the app hand back
+    // only their ids and names.
+    const askedLocation = useRef<MediaLocation | null>(null);
+    const [recorded, setRecorded] = useState<MediaLocation | null>(null);
+
+    // A new location is remembered as its library's level, as it's shown, with the root and the adapter
+    // it's shown under, each group the fullest entry known of it.
+    if (placed && section && !sameLocation(placed, recorded)) {
+        setRecorded(placed);
+        setLevels((previous) => {
+            const memo = previous[section.id];
+            const fits = !!memo && memo.rootId === section.rootId && memo.adapter === sectionAdapter;
+
+            return fits && sameTrail(memo.trail, placed.trail)
+                ? previous
+                : {
+                      ...previous,
+                      [section.id]: {
+                          rootId: section.rootId,
+                          adapter: sectionAdapter,
+                          trail: fullestTrail(
+                              placed.trail,
+                              askedLocation.current?.sectionId === section.id ? askedLocation.current.trail : undefined,
+                              fits ? memo.trail : undefined,
+                          ),
+                      },
+                  };
+        });
+    }
+
+    const kept = placed && section && levels[section.id];
     const trail = kept && kept.rootId === section.rootId && kept.adapter === sectionAdapter ? kept.trail : NO_TRAIL;
     const openGroup = trail.at(-1);
     const inGroup = !!openGroup;
@@ -449,19 +573,24 @@ const MediaFrame = ({
     const { announcement, announce } = useAnnouncer();
 
     const {
+        search: searchValue,
         query,
         setQuery,
         searching,
-        setSearching,
         searchInputRef,
         searchButtonRef,
         openSearch,
         stopSearching,
         closeSearch,
-    } = useMediaSearch();
+    } = useMediaSearch({
+        component: "MediaManager",
+        value: searchProp,
+        defaultValue: defaultSearch,
+        onChange: onSearchChange,
+    });
     // Each time something here changes the backend, which a search through it is asked again after.
     const [changes, setChanges] = useState(0);
-    const search = useLevelSearch(section, sectionAdapter, folderId, query, changes);
+    const search = useLevelSearch(section, sectionAdapter, folderId, query, changes, searchDelay);
     // What a search found that's been deleted or moved, gone at once until it's answered again.
     const [goneHits, setGoneHits] = useState<ReadonlySet<string>>(NO_IDS);
 
@@ -490,7 +619,35 @@ const MediaFrame = ({
         sameItem: sameToApp,
         keyOf: pickKey,
     });
-    const [viewing, setViewing] = useState<Viewing | null>(null);
+    // What's shown in the library's place, which the app may keep, and whether it's the group that was
+    // open, opened from inside it, which is the media manager's own.
+    const [viewedValue, setViewedValue] = useSetting<MediaViewed | null>({
+        name: "viewed",
+        component: "MediaManager",
+        value: viewedProp,
+        defaultValue: defaultViewed ?? null,
+        onChange: onViewedChange,
+        equal: sameViewed,
+    });
+    const [insideOf, setInsideOf] = useState<string | null>(null);
+    const viewing = useMemo<Viewing | null>(
+        () =>
+            viewedValue && {
+                sectionId: viewedValue.sectionId,
+                entry: viewedValue.entry,
+                among: viewedValue.trail,
+                fromInside: insideOf === viewedValue.entry.id,
+            },
+        [viewedValue, insideOf],
+    );
+    // Shows something in a library's place, among the groups it's in, or nothing.
+    const setViewing = useCallback(
+        (next: (Viewing & { among: readonly FileEntry[] }) | null) => {
+            setInsideOf(next?.fromInside ? next.entry.id : null);
+            setViewedValue(next && { sectionId: next.sectionId, entry: next.entry, trail: next.among });
+        },
+        [setViewedValue],
+    );
     const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(NO_IDS);
     // The order the app was last handed the picks in, at Choose, by their keys, which the keys of
     // the errors its backend answers go by.
@@ -520,6 +677,8 @@ const MediaFrame = ({
         (item, outcome, items, made) => moveEnded.current?.(item, outcome, items, made),
         text,
     );
+
+    useLayoutEffect(() => transfers.queue.setMaxActive(transferLimit), [transfers.queue, transferLimit]);
 
     // What's on its way elsewhere is gone from where it was, until it's back should it not go.
     const movingIds = useMemo(() => {
@@ -608,6 +767,47 @@ const MediaFrame = ({
     // The same asset is the same wherever it's listed: from the same adapter, with the same id. Ids
     // are only unique within an adapter, so two adapters never share one.
     const adapterOf = useCallback((item: MediaSection) => item.adapter ?? adapter, [adapter]);
+
+    // Where a library was left, under the root and the adapter it has now; its root otherwise.
+    const rememberedTrail = useCallback(
+        (target: MediaSection) => {
+            const memo = levels[target.id];
+
+            return memo && memo.rootId === target.rootId && memo.adapter === adapterOf(target) ? memo.trail : NO_TRAIL;
+        },
+        [levels, adapterOf],
+    );
+
+    // Goes somewhere, as the user or the media manager itself does, which the app keeping the location is
+    // only asked for, and told why.
+    const goTo = useCallback(
+        (next: MediaLocation, reason: MediaLocationChangeReason = "navigate") => {
+            askedLocation.current = next;
+            changeReason.current = reason;
+            setLocation(next);
+            changeReason.current = "navigate";
+        },
+        [setLocation],
+    );
+
+    // A location in a library that's gone is replaced by the first library's root, and one in a library
+    // now rooted elsewhere or served by another adapter by its root, as its groups lead nowhere there.
+    // Once a location, so an app passing it again isn't asked again and again.
+    const replacedLocation = useRef<MediaLocation | null>(null);
+
+    useLayoutEffect(() => {
+        if (!location || sections.length === 0 || replacedLocation.current === location) {
+            return;
+        }
+
+        if (!sectionsById.has(location.sectionId)) {
+            replacedLocation.current = location;
+            goTo({ sectionId: sections[0].id, trail: NO_TRAIL }, "replace");
+        } else if (location.trail.length > 0 && trail === NO_TRAIL) {
+            replacedLocation.current = location;
+            goTo({ sectionId: location.sectionId, trail: NO_TRAIL }, "replace");
+        }
+    }, [location, sections, sectionsById, trail, goTo]);
 
     // Uploads run in the background, a few at a time, while the user goes on; the libraries they
     // end in, every one on the adapter rooted there, are listed again.
@@ -780,6 +980,8 @@ const MediaFrame = ({
     }, [shownAssets, text, formatPercent]);
 
     const uploads = useUploadQueue(relist, text.keptBothName);
+
+    useLayoutEffect(() => uploads.queue.setMaxActive(uploadLimit), [uploads.queue, uploadLimit]);
 
     // Whether the open level can be changed, as far as its listing and the group's own entry say.
     const writable = allows("write", state?.permissions, openGroup?.permissions);
@@ -1301,14 +1503,23 @@ const MediaFrame = ({
     const editsGroups = !!section?.groupForm && !!sectionAdapter.updateGroup && !section.readOnly && writable;
     // A group opens for those, or to be edited, moved or deleted, the one way there is to.
     const opensGroups = hasDetails || deletes || moves || editsGroups;
-    // The same from inside one, where what's allowed at the level it's in isn't known until it's there.
-    const opensOpenGroup =
-        !!section &&
-        (hasDetails ||
-            (!section.readOnly &&
-                (!!sectionAdapter.delete ||
-                    !!sectionAdapter.move ||
-                    (!!section.groupForm && !!sectionAdapter.updateGroup))));
+    // Whether a group of a library opens for its details where what's allowed at the level it's in isn't
+    // known until it's there, as from inside it, or from outside the media manager: what the app defines,
+    // or anything to do to it.
+    const groupOpensIn = useCallback(
+        (target: MediaSection) => {
+            const served = adapterOf(target);
+
+            return (
+                !!target.properties ||
+                !!properties ||
+                !!served.properties ||
+                (!target.readOnly && (!!served.delete || !!served.move || (!!target.groupForm && !!served.updateGroup)))
+            );
+        },
+        [adapterOf, properties],
+    );
+    const opensOpenGroup = !!section && groupOpensIn(section);
 
     // Opens an asset, or a group's details, in the library's place, where it is.
     const viewAt = useCallback(
@@ -1317,7 +1528,7 @@ const MediaFrame = ({
                 setViewing({ sectionId: section.id, entry, among: placeOf(entry.id) });
             }
         },
-        [section, placeOf],
+        [section, placeOf, setViewing],
     );
 
     const openAsset = useCallback(
@@ -1331,30 +1542,38 @@ const MediaFrame = ({
         [shownEntries, opensGroups, viewAt],
     );
 
-    // Shows another level of the open library, with what was over this one gone, as opening a folder
-    // ends a search in the file manager, and says where it is, as the focus only says what it's on.
-    const showLevel = useCallback(
-        (next: readonly FileEntry[], groupId: string | null) => {
-            if (!section) {
-                return;
-            }
-
-            levelFocusRef.current = { groupId, waited: false };
-            setLevels((previous) => ({
-                ...previous,
-                [section.id]: { rootId: section.rootId, adapter: sectionAdapter, trail: next },
-            }));
-            setQuery("");
-            setSearching(false);
+    // Goes to a level of a library, with what was over the library gone, as opening a folder ends a
+    // search in the file manager, and says where it is, as the focus only says what it's on.
+    const leaveFor = useCallback(
+        (target: MediaSection, next: readonly FileEntry[]) => {
+            goTo({ sectionId: target.id, trail: next });
+            stopSearching();
             setViewing(null);
             setUploadStep(null);
             setProcessStep(null);
             setMoveStep(null);
             setEditStep(null);
             setCreatingAt(null);
-            announce(text.mediaInGroup(isolate(next.at(-1)?.name ?? section.label)));
+            announce(text.mediaInGroup(isolate(next.at(-1)?.name ?? target.label)));
         },
-        [section, sectionAdapter, announce, text],
+        [goTo, stopSearching, setViewing, announce, text],
+    );
+
+    // Another level of the open library, the group left or the first thing in it taking the focus.
+    const showLevel = useCallback(
+        (next: readonly FileEntry[], groupId: string | null) => {
+            if (!section) {
+                return;
+            }
+
+            levelFocusRef.current = {
+                key: `${section.id}/${next.at(-1)?.id ?? section.rootId}`,
+                groupId,
+                waited: false,
+            };
+            leaveFor(section, next);
+        },
+        [section, leaveFor],
     );
 
     // Into a group, from wherever it's shown, as a search may have found it far below what's open.
@@ -1389,7 +1608,8 @@ const MediaFrame = ({
     useLayoutEffect(() => {
         const asked = levelFocusRef.current;
 
-        if (!asked) {
+        // Not before the level asked for shows, which an app keeping the location may pass back later.
+        if (!asked || asked.key !== levelKey) {
             return;
         }
 
@@ -1411,7 +1631,7 @@ const MediaFrame = ({
         if (!found || !gridRef.current?.focusAt(index)) {
             (groupDetailsRef.current ?? searchButtonRef.current)?.focus();
         }
-    }, [shownEntries, state?.status, folderId]);
+    }, [shownEntries, state?.status, levelKey]);
 
     // A group just made, with no details to open, takes the focus from the button once it's listed.
     useLayoutEffect(() => {
@@ -1436,15 +1656,13 @@ const MediaFrame = ({
             return;
         }
 
-        setLevels((previous) => ({
-            ...previous,
-            [section.id]: { rootId: section.rootId, adapter: sectionAdapter, trail: trail.slice(0, -1) },
-        }));
-        setQuery("");
-        setSearching(false);
+        const parent = trail.slice(0, -1);
+
+        goTo({ sectionId: section.id, trail: parent });
+        stopSearching();
         setCreatingAt(null);
-        setViewing({ sectionId: section.id, entry: openGroup, fromInside: true });
-    }, [section, sectionAdapter, openGroup, trail]);
+        setViewing({ sectionId: section.id, entry: openGroup, fromInside: true, among: parent });
+    }, [section, openGroup, trail, goTo, stopSearching, setViewing]);
 
     // Back to the library, the asset's tile taking the focus when the view had it; or back into the
     // group its details were opened from, as it was left.
@@ -1462,7 +1680,7 @@ const MediaFrame = ({
 
         backFromRef.current = hadFocus ? (viewing?.entry.id ?? null) : null;
         setViewing(null);
-    }, [viewing, viewed, trail, showLevel]);
+    }, [viewing, viewed, trail, showLevel, setViewing]);
 
     useLayoutEffect(() => {
         if (backInsideRef.current && groupDetailsRef.current) {
@@ -1580,24 +1798,21 @@ const MediaFrame = ({
         librariesOpenerRef.current?.focus();
     }, []);
 
-    // Opening a library from the drawer closes it, the focus going back to its button.
+    // A library, at the group it was left at, said as a level is, as the list of libraries keeps the
+    // focus or gives it back to the button opening it. Opening it from the drawer closes it.
     const openSection = useCallback(
         (id: string) => {
-            setOpenId(id);
-            setQuery("");
-            setSearching(false);
-            setViewing(null);
-            setUploadStep(null);
-            setProcessStep(null);
-            setMoveStep(null);
-            setEditStep(null);
-            setCreatingAt(null);
+            const target = sectionsById.get(id);
+
+            if (target) {
+                leaveFor(target, rememberedTrail(target));
+            }
 
             if (librariesOpen) {
                 closeLibraries();
             }
         },
-        [librariesOpen, closeLibraries],
+        [sectionsById, leaveFor, rememberedTrail, librariesOpen, closeLibraries],
     );
 
     // A pick's "Show in library": its library, open at it, the overlay closing so it shows.
@@ -1606,53 +1821,73 @@ const MediaFrame = ({
 
         // A group is shown by going in, as it may have no details, and what's in it is what it's picked for.
         if (isGroup(choice.asset)) {
-            levelFocusRef.current = { groupId: null, waited: false };
-            setLevels((previous) => ({
-                ...previous,
-                [choice.section.id]: {
-                    rootId: choice.section.rootId,
-                    adapter: adapterOf(choice.section),
-                    trail: [...(pickedAmong ?? NO_TRAIL), choice.asset],
-                },
-            }));
-            setOpenId(choice.section.id);
-            setQuery("");
-            setSearching(false);
-            setViewing(null);
-            setUploadStep(null);
-            setProcessStep(null);
-            setMoveStep(null);
-            setEditStep(null);
-            setCreatingAt(null);
+            const next = [...(pickedAmong ?? NO_TRAIL), choice.asset];
+
+            levelFocusRef.current = { key: `${choice.section.id}/${choice.asset.id}`, groupId: null, waited: false };
+            leaveFor(choice.section, next);
             setChosenOverlay(false);
-            announce(text.mediaInGroup(isolate(choice.asset.name)));
 
             return;
         }
 
-        // Among the groups it was picked in, so back from it goes to its fellows.
-        if (pickedAmong) {
-            setLevels((previous) => ({
-                ...previous,
-                [choice.section.id]: {
-                    rootId: choice.section.rootId,
-                    adapter: adapterOf(choice.section),
-                    trail: pickedAmong,
-                },
-            }));
-        }
+        // Among the groups it was picked in, so back from it goes to its fellows, or else where its
+        // library was left.
+        const among = pickedAmong ?? rememberedTrail(choice.section);
 
-        setOpenId(choice.section.id);
-        setQuery("");
-        setSearching(false);
-        setViewing({ sectionId: choice.section.id, entry: choice.asset });
+        goTo({ sectionId: choice.section.id, trail: among });
+        stopSearching();
+        setViewing({ sectionId: choice.section.id, entry: choice.asset, among });
         setUploadStep(null);
         setProcessStep(null);
         setMoveStep(null);
         setEditStep(null);
         setCreatingAt(null);
         setChosenOverlay(false);
-    }, [adapterOf, announce, text]);
+    }, [leaveFor, rememberedTrail, goTo, stopSearching, setViewing]);
+
+    // A location the app changed of itself, as when its URL goes back: what was over the library goes, as
+    // when the user goes to a level, but for what the app changed along with it, and where it is now is
+    // said, the focus staying where it is. One the media manager asked for has seen to all that itself.
+    const seenLocation = useRef(location);
+    const lastViewed = useRef(viewedValue);
+    const lastSearch = useRef(searchValue);
+
+    useLayoutEffect(() => {
+        const before = seenLocation.current;
+
+        seenLocation.current = location;
+
+        if (sameLocation(before, location)) {
+            return;
+        }
+
+        if (askedLocation.current && sameLocation(askedLocation.current, location)) {
+            askedLocation.current = null;
+
+            return;
+        }
+
+        if (viewedValue === lastViewed.current) {
+            setViewing(null);
+        }
+
+        if (searchValue === lastSearch.current) {
+            stopSearching();
+        }
+
+        setUploadStep(null);
+        setProcessStep(null);
+        setMoveStep(null);
+        setEditStep(null);
+        setCreatingAt(null);
+        announce(text.mediaInGroup(isolate(levelName)));
+    }, [location, viewedValue, searchValue, setViewing, stopSearching, announce, text, levelName]);
+
+    // What was shown and searched as of the last render, to tell what the app changed with the location.
+    useLayoutEffect(() => {
+        lastViewed.current = viewedValue;
+        lastSearch.current = searchValue;
+    });
 
     // What the library is listed again by, a search through it being asked again too.
     const reloadLibrary = useCallback(() => {
@@ -1705,7 +1940,7 @@ const MediaFrame = ({
             uploadStepCount.current += 1;
             setUploadStep({ key: uploadStepCount.current, sectionId: section.id, into, check, form });
         },
-        [section, takesFiles, sectionAdapter, folderId, levelName, sendUpload],
+        [section, takesFiles, sectionAdapter, folderId, levelName, sendUpload, setViewing],
     );
 
     // Leaves the upload step, the focus going to Upload when the step had it.
@@ -1723,6 +1958,14 @@ const MediaFrame = ({
     // Nothing to search while an asset or a step is shown in the library's place; a search under way
     // comes back with the library.
     const searchable = !!section && !viewed && !shownStep && !formingGroup;
+
+    // How many the search found once it's answered, said for each new query, as nothing else says it.
+    const matchCount =
+        searching && searchable && (search.on ? search.status === "ready" : state?.status === "ready")
+            ? shownEntries.length
+            : null;
+
+    useMatchCount(query, matchCount, announce, text.searchResultCount);
 
     // Files dragged over the library are taken there while it's shown and takes them, of the types
     // it takes as far as a drag tells; otherwise the frame refuses them.
@@ -2099,19 +2342,32 @@ const MediaFrame = ({
 
     // The backend took it on: what was said of the asset before no longer stands, as it may have
     // failed, and its listings say how it stands now.
+    // Said only once the backend has answered, as the step closing with the focus on Process says nothing
+    // of it; left while it was sent, it may have been taken on all the same, which isn't known.
     const processSent = useCallback(
-        (entry: FileEntry) => {
+        (entry: FileEntry, taken: boolean) => {
             forgetStates(sectionAdapter, [entry.id]);
             relistAll(sectionAdapter);
             setProcessStep(null);
+
+            if (taken) {
+                announce(text.mediaProcessSent(isolate(entry.name)));
+            }
         },
-        [forgetStates, sectionAdapter, relistAll],
+        [forgetStates, sectionAdapter, relistAll, announce, text],
     );
 
     // A group gone from where it was, by a delete or a move: any library left open inside it goes back to
-    // where it was gone into from, and what's kept of its listings goes, as their ids may mean nothing now.
+    // where it was gone into from, the one shown at once, which the app keeping the location is asked to
+    // replace, and what's kept of its listings goes, as their ids may mean nothing now.
     const leaveGroup = useCallback(
         (group: FileEntry, served: FileAdapter) => {
+            const at = section && sectionAdapter === served ? trail.findIndex((walked) => walked.id === group.id) : -1;
+
+            if (section && at !== -1) {
+                goTo({ sectionId: section.id, trail: trail.slice(0, at) }, "replace");
+            }
+
             setLevels((previous) =>
                 Object.fromEntries(
                     Object.entries(previous).map(([id, open]) => {
@@ -2128,7 +2384,7 @@ const MediaFrame = ({
                 .filter((item) => adapterOf(item) === served)
                 .forEach(({ id }) => store.forget(id, [group.id]));
         },
-        [sections, adapterOf, store],
+        [section, sectionAdapter, trail, goTo, sections, adapterOf, store],
     );
 
     // Deleted: back to the library, the asset gone from it and from what's selected, wherever it was
@@ -2173,6 +2429,7 @@ const MediaFrame = ({
             announce(text.deleteDone(1, isolate(entry.name)));
         },
         [
+            setViewing,
             section,
             sectionsById,
             adapterOf,
@@ -2339,12 +2596,20 @@ const MediaFrame = ({
             }));
             leaveGroup(group, sectionAdapter);
         } else if (now) {
+            const shown = swapped(trail);
+
             setPicks((previous) => ({
                 ...previous,
                 items: previous.items.map((pick) =>
                     sameAdapter(pick.sectionId) && pick.trail ? { ...pick, trail: swapped(pick.trail) } : pick,
                 ),
             }));
+
+            // The app is told only of a new name, which is all it sees of a way through a library.
+            if (section && shown !== trail) {
+                goTo({ sectionId: section.id, trail: shown }, "replace");
+            }
+
             setLevels((previous) =>
                 Object.fromEntries(
                     Object.entries(previous).map(([id, open]) => [
@@ -2359,8 +2624,13 @@ const MediaFrame = ({
         relistAll(sectionAdapter);
         setEditStep(null);
 
-        if (now && section) {
-            setViewing((previous) => ({ ...previous, sectionId: section.id, entry: now }));
+        if (now) {
+            setViewedValue((current) =>
+                current?.entry.id === group.id
+                    ? { ...current, entry: now, trail: current.trail && swapped(current.trail) }
+                    : current,
+            );
+            setInsideOf((inside) => (inside === group.id ? now.id : inside));
         }
 
         announce(text.mediaGroupSaved(isolate((now ?? group).name)));
@@ -2379,14 +2649,13 @@ const MediaFrame = ({
         }
 
         setCreatingAt(null);
-        setQuery("");
-        setSearching(false);
+        stopSearching();
         relistAll(sectionAdapter);
         announce(text.mediaGroupCreated(isolate(group.name)));
 
         // A form has asked what it has to, so there's nothing to go on filling in.
         if (hasDetails && !newGroupForm) {
-            setViewing({ sectionId: section.id, entry: group });
+            setViewing({ sectionId: section.id, entry: group, among: trail });
         } else {
             createdRef.current = group.id;
             newGroupRef.current?.focus();
@@ -2410,6 +2679,139 @@ const MediaFrame = ({
     const limitNote = count === limit ? text.mediaChoicesFull : undefined;
 
     const shownMoves = transfers.items.filter((item) => item.shown);
+
+    // What the app's `apiRef` does, as of the latest render, which its methods, the same while mounted, call.
+    const api = useRef<MediaManagerApi | null>(null);
+
+    useLayoutEffect(() => {
+        api.current = {
+            navigate: ({ sectionId: id, trail: way }) => {
+                const target = sectionsById.get(id);
+
+                if (!target) {
+                    return false;
+                }
+
+                leaveFor(target, way ?? rememberedTrail(target));
+
+                return true;
+            },
+            view: (entry, at) => {
+                const target = at ? sectionsById.get(at.sectionId) : section;
+                const elsewhere = !!at && (target !== section || !sameTrail(at.trail, trail));
+
+                if (!target || (isGroup(entry) && !(elsewhere ? groupOpensIn(target) : opensGroups))) {
+                    return false;
+                }
+
+                if (at) {
+                    goTo({ sectionId: target.id, trail: at.trail });
+                    stopSearching();
+                }
+
+                setViewing({ sectionId: target.id, entry, among: at ? at.trail : placeOf(entry.id) });
+                setUploadStep(null);
+                setProcessStep(null);
+                setMoveStep(null);
+                setEditStep(null);
+                setCreatingAt(null);
+
+                return true;
+            },
+            closeView: () => {
+                if (viewing) {
+                    closeAsset();
+                }
+            },
+            search: (typed) => {
+                if (!searchable) {
+                    return false;
+                }
+
+                openSearch(typed);
+
+                return true;
+            },
+            closeSearch,
+            select: (next) =>
+                setPicks((previous) => ({
+                    items: picksGiven(
+                        typeof next === "function"
+                            ? next(choicesOfRef.current(previous.items).map(handedCopy))
+                            : next,
+                        previous.items,
+                    ),
+                    anchor: null,
+                })),
+            choose: () => {
+                if (!onChoose || chooseHeld || choices.length === 0) {
+                    return false;
+                }
+
+                handOver(choices);
+
+                return true;
+            },
+            upload: (files) => {
+                if (!takesFiles || formingGroup || shownStep || viewing?.fromInside) {
+                    return false;
+                }
+
+                if (files) {
+                    askUpload({ files: [...files], folders: [] });
+                } else {
+                    pickerRef.current?.click();
+                }
+
+                return true;
+            },
+            refresh: (folderIds, options) => {
+                const served = options?.adapter;
+
+                setChanges((count) => count + 1);
+                sections.forEach((item) => {
+                    if (!served || adapterOf(item) === served) {
+                        store.relist(item.id, adapterOf(item), folderIds);
+                    }
+                });
+
+                if (viewedEntry && (!served || served === sectionAdapter)) {
+                    propertiesCache.forgetDetails(viewedEntry, sectionAdapter);
+                }
+            },
+            focus: () => {
+                const panel = panelRef.current;
+                const over = panel
+                    ? Array.from(panel.querySelectorAll<HTMLElement>(":scope > section")).at(-1)
+                    : undefined;
+                const target =
+                    over ??
+                    panel?.querySelector<HTMLElement>('[role="listbox"] [role="option"][tabindex="0"]') ??
+                    panel?.querySelector<HTMLElement>("button, [tabindex='0']") ??
+                    groupDetailsRef.current ??
+                    searchButtonRef.current;
+
+                target?.focus();
+            },
+        };
+    });
+
+    useImperativeHandle(
+        apiRef,
+        (): MediaManagerApi => ({
+            navigate: (target) => api.current?.navigate(target) ?? false,
+            view: (entry, at) => api.current?.view(entry, at) ?? false,
+            closeView: () => api.current?.closeView(),
+            search: (typed) => api.current?.search(typed) ?? false,
+            closeSearch: () => api.current?.closeSearch(),
+            select: (next) => api.current?.select(next),
+            choose: () => api.current?.choose() ?? false,
+            upload: (files) => api.current?.upload(files) ?? false,
+            refresh: (folderIds, options) => api.current?.refresh(folderIds, options),
+            focus: () => api.current?.focus(),
+        }),
+        [],
+    );
 
     const failure = search.on ? search.error : state?.error;
     const errorMessage =
@@ -2671,7 +3073,7 @@ const MediaFrame = ({
                             form={viewedProcess ?? shownProcess.form}
                             unavailable={!viewedProcess}
                             onCancel={() => setProcessStep(null)}
-                            onSent={() => processSent(shownProcess.entry)}
+                            onSent={(taken) => processSent(shownProcess.entry, taken)}
                         />
                     )}
                     {shownEdit && section && (

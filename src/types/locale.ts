@@ -820,6 +820,7 @@ export interface MediaManagerLocaleText
             | "searchIn"
             | "clearSearch"
             | "closeSearch"
+            | "searchResultCount"
             | "gridView"
             | "listView"
             | "upload"
@@ -979,6 +980,8 @@ export interface MediaManagerLocaleText
     mediaProcessFailed: string;
     /** Beside Process, held back as the library's `processForm` no longer has anything to ask of the asset. */
     mediaProcessUnavailable: string;
+    /** Said once the adapter's `process` has taken an asset on, as the step closes; `name` comes isolated. */
+    mediaProcessSent: (name: string) => string;
     /** Over an upload form, its `validate` having refused it without saying why. */
     mediaUploadRefused: string;
     /** A pick's row, while its form isn't ready and doesn't say why (`MediaForm.ready`). */
