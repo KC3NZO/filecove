@@ -35,7 +35,7 @@ Every feature added or changed is checked against this before it's called done. 
 - **Announcements**: an action that finishes with nothing spoken about it (focus doesn't move to the result, no dialog opens, nothing changes where the user is) is announced politely (`announce`; see "Announcements" in `keyboard.md`), in text from a `FileManagerLocaleText` key. One already spoken isn't announced again: opening a folder, or a rename that leaves focus on the renamed entry. A panel with its own live region (uploads, downloads) already counts.
 - **Docs**: the prop's comment in `file-manager.tsx` says what it does from the outside, and the rule of the feature says what isn't public yet, under "Not yet".
 
-`MediaManager` goes through the same checklist, its props' comments in `media-manager.tsx` and `types/media.ts` being the consumer's documentation. What of it isn't public yet (the open library, the group open in each, the search and the asset open controlled, an `apiRef`, `limits`, `relistAfter`, the announcements left) is under "Not yet" in `media-manager.md`, and on the roadmap.
+`MediaManager` goes through the same checklist, its props' comments in `media-manager.tsx` and `types/media.ts` being the consumer's documentation. Its public state (the location, what's shown in a library's place, the search, the layouts, what's selected), its `apiRef` (`MediaManagerApi`), `relistAfter`, `limits` and its announcements, gone through on 2026-11-11, are in "Public state and the API" in `media-manager.md`, with what it leaves internal by choice. A feature added to it is checked against both this list and that section.
 
 ## Controlled or not
 
@@ -126,7 +126,7 @@ What the checklist leaves internal, and why. Anything not listed here or above i
 
 ## Limits
 
-`limits` (`FileManagerLimits`, `types/limits.ts`, public) sets how much the file manager does at once and keeps, for a backend that takes more, or less, than the defaults. Each field is left to its default when omitted:
+`limits` (`FileManagerLimits`, `types/limits.ts`, public) sets how much the file manager does at once and keeps, for a backend that takes more, or less, than the defaults. `MediaManager` and `MediaPicker` take `MediaManagerLimits`, which `FileManagerLimits` extends: all of them but `downloads` and `undoSteps`, which only the file manager has, `searchDelay` setting a media library's search, `transfers` the media manager's Move, and nothing in the picker (see "Public state and the API" in `media-manager.md`). Each field is left to its default when omitted:
 
 | Field | Default | Least | What it sets |
 |---|---|---|---|
@@ -140,7 +140,7 @@ What the checklist leaves internal, and why. Anything not listed here or above i
 | `searchDelay` | 300 ms | 0 | how long the typing stops before a search everywhere (`hooks/use-search.ts`) |
 
 - Counts are made whole and raised to their least, with `Infinity` as no limit (`countLimit`, `utils/limits.ts`); a delay must be finite (`delayLimit`). Anything else, NaN included, is the default.
-- Each store keeps its default as its constant and takes the limit through a setter (`setMaxActive`, `setLimits`, `setMaxKept`), so the queues the media manager will share have the same defaults without the prop. `file-manager.tsx` reads the fields into numbers, so a new object of the same limits every render changes nothing, and sets them in layout effects, before the parts' own effects ask for anything on mounting. The undo history is the file manager's own, and trims itself to `undoSteps` in a layout effect.
+- Each store keeps its default as its constant and takes the limit through a setter (`setMaxActive`, `setLimits`, `setMaxKept`), so the queues the media manager shares have the same defaults without the prop, and each component sets its own stores' from its own `limits`. `file-manager.tsx` reads the fields into numbers, so a new object of the same limits every render changes nothing, and sets them in layout effects, before the parts' own effects ask for anything on mounting. The undo history is the file manager's own, and trims itself to `undoSteps` in a layout effect.
 - A change takes effect at once: more at once starts what's waiting, less lets what's under way finish, and fewer kept drops what's beyond them (listings and thumbnails nothing shows). A new search delay applies from the next keystroke, and to one waiting.
 - Fixed by choice, as interface timing rather than capacity: the long-press, the drag hold, type-ahead's pause, when the panels show a task (`SHOW_AFTER`), and how often progress and pages are shown.
 
