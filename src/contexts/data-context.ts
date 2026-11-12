@@ -4,7 +4,7 @@ import type { FolderStore } from "../store/folder-store";
 import type { ThumbnailCache } from "../store/thumbnail-cache";
 import type { FileAdapter } from "../types";
 
-interface DataContextValue {
+export interface DataContextValue {
     store: FolderStore;
     /** Used by sections that don't bring their own adapter. */
     adapter: FileAdapter;

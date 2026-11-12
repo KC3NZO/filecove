@@ -278,7 +278,7 @@ export const useTreeRows = (
 ): FlatTree => {
     const { store, adapter, relistAfter } = useData();
     const locale = useLocale();
-    const version = useSyncExternalStore(store.subscribe, store.version);
+    const version = useSyncExternalStore(store.subscribe, store.version, store.version);
 
     const tree = useMemo(
         () =>

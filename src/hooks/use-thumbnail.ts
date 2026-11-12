@@ -30,9 +30,9 @@ export const useThumbnail = (
             thumbnails && source && view ? thumbnails.subscribe(source, view, id, listener) : unsubscribed,
         [thumbnails, source, view, id],
     );
-    const url = useSyncExternalStore(subscribe, () =>
-        thumbnails && source && view ? thumbnails.get(source, view, id) : null,
-    );
+    const snapshot = () => (thumbnails && source && view ? thumbnails.get(source, view, id) : null);
+    // The same on a server, where the cache, made per root, is as empty as it starts in the browser.
+    const url = useSyncExternalStore(subscribe, snapshot, snapshot);
 
     useEffect(() => {
         if (!thumbnails || !source || !view) {

@@ -41,7 +41,7 @@ export const useProperties = (
     items: readonly PropertiesItem[],
     { cache, changes, showHidden, measures = true }: UsePropertiesOptions,
 ) => {
-    useSyncExternalStore(cache.subscribe, cache.version);
+    useSyncExternalStore(cache.subscribe, cache.version, cache.version);
 
     const [detailsAttempt, setDetailsAttempt] = useState(0);
     const [countAttempt, setCountAttempt] = useState(0);

@@ -134,7 +134,7 @@ const PropertiesPane = ({
 }: PropertiesPaneProps) => {
     const { store, adapter } = useData();
     const { text } = useLocale();
-    const listings = useSyncExternalStore(store.subscribe, store.version);
+    const listings = useSyncExternalStore(store.subscribe, store.version, store.version);
     const paneRef = useRef<HTMLDivElement>(null);
     const forkedRef = useForkRef(paneRef, ref);
     // Whether it docks, as container queries decide, read from its style whenever the space it's in

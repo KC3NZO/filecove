@@ -8,7 +8,7 @@ import { createDownloadQueue } from "../store/download-queue";
  */
 export const useDownloadQueue = () => {
     const [queue] = useState(createDownloadQueue);
-    const items = useSyncExternalStore(queue.subscribe, queue.getItems);
+    const items = useSyncExternalStore(queue.subscribe, queue.getItems, queue.getItems);
 
     useEffect(() => () => queue.abortAll(), [queue]);
 

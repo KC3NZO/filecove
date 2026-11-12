@@ -28,7 +28,7 @@ export const useFolder = (section: Section, folderId: string, enabled: boolean, 
     const adapter = section.adapter ?? defaultAdapter;
     const key = folderKey(section.id, folderId);
 
-    const state = useSyncExternalStore(store.subscribe, () => store.get(key));
+    const state = useSyncExternalStore(store.subscribe, () => store.get(key), () => store.get(key));
     const dropped = state === undefined;
 
     useEffect(() => (enabled ? store.show(key) : undefined), [enabled, store, key]);

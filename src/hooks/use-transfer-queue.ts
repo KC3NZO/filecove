@@ -26,7 +26,7 @@ export const useTransferQueue = (onEnded: TransferEnded, text: AcrossText) => {
             serverError: (status, statusText) => textRef.current.serverError(status, statusText),
         }),
     );
-    const items = useSyncExternalStore(queue.subscribe, queue.getItems);
+    const items = useSyncExternalStore(queue.subscribe, queue.getItems, queue.getItems);
 
     useEffect(() => () => queue.abortAll(), [queue]);
 

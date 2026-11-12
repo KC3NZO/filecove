@@ -28,7 +28,7 @@ export const useUploadQueue = (
             (name, number) => keptBothNameRef.current(name, number),
         ),
     );
-    const items = useSyncExternalStore(queue.subscribe, queue.getItems);
+    const items = useSyncExternalStore(queue.subscribe, queue.getItems, queue.getItems);
 
     useEffect(() => () => queue.abortAll(), [queue]);
 

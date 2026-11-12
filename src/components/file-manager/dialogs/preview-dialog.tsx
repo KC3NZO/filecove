@@ -213,7 +213,7 @@ const folderKeyOf = ({ section, trail }: PreviewFile) => folderKey(section.id, f
  */
 const useLiveFiles = (request: PreviewRequest) => {
     const { store } = useData();
-    const version = useSyncExternalStore(store.subscribe, store.version);
+    const version = useSyncExternalStore(store.subscribe, store.version, store.version);
     // Each folder's listing, once all of it has come.
     const listings = useMemo(() => {
         const found = new Map<string, FileEntry[] | undefined>();
