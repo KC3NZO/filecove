@@ -1,11 +1,23 @@
 {
   "name": "filecove",
-  "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "A file manager and media manager for React: bring your own backend through a small adapter.",
+  "keywords": [
+    "react",
+    "file-manager",
+    "file-explorer",
+    "file-browser",
+    "media-library",
+    "media-manager",
+    "media-picker",
+    "uploader"
+  ],
   "license": "MIT",
   "type": "module",
   "files": [
     "dist",
+    "docs",
+    "CHANGELOG.md",
     "THIRD_PARTY_NOTICES.md"
   ],
   "module": "./dist/index.js",
@@ -47,7 +59,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "build:lib": "vite build -c vite.lib.config.ts && tsc -p tsconfig.lib.json && bun scripts/clean-declarations.ts"
+    "build:lib": "vite build -c vite.lib.config.ts && tsc -p tsconfig.lib.json && bun scripts/clean-declarations.ts",
+    "prepublishOnly": "bun run build:lib"
   },
   "peerDependencies": {
     "react": "^19.0.0",
