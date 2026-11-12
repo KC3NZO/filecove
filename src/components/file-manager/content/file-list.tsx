@@ -10,6 +10,7 @@ import { cx } from "../../../utils/cx";
 import { drawnState } from "../../../utils/permissions";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
+import { chain, slotAttributesFor } from "../../../utils/slots";
 import { SORT_LABELS, toggleSortKey } from "../../../utils/sort";
 import { listIconSize } from "../../../utils/zoom";
 import Icon from "../../icons/icon";
@@ -32,7 +33,10 @@ interface ColumnHeaderProps {
 }
 
 interface FileRowProps
-    extends Pick<FileViewProps, "adapter" | "draggable" | "hasActions" | "onSelect" | "onOpen" | "onMenu"> {
+    extends Pick<
+        FileViewProps,
+        "adapter" | "draggable" | "hasActions" | "onSelect" | "onOpen" | "onMenu" | "entrySlot"
+    > {
     entry: FileEntry;
     /**
      * Where a search everywhere's result comes from, or where an entry in the trash was, which the
@@ -122,11 +126,19 @@ const FileRow = memo(
         onSelect,
         onOpen,
         onMenu,
+        entrySlot,
     }: FileRowProps) => {
         const { text, describeListDate, describeSize, describeType } = useLocale();
+        // The app's, under what the row sets itself, which goes on as it is.
+        const attributes = slotAttributesFor(entrySlot, () => ({
+            entry: origin?.entry ?? entry,
+            view: "list" as const,
+            selected,
+        }));
 
         return (
             <div
+                {...attributes}
                 className={cx(
                     fmClasses.listRow,
                     styles.row,
@@ -136,8 +148,9 @@ const FileRow = memo(
                     marks.focusRing,
                     marks.drag,
                     marks.forcedSelected,
+                    attributes?.className,
                 )}
-                style={{ top }}
+                style={{ ...attributes?.style, top }}
                 role="option"
                 aria-selected={selected}
                 // Only some rows are rendered, so each says where it is among all of them.
@@ -159,18 +172,18 @@ const FileRow = memo(
                 data-found={found}
                 data-dragged={dragged}
                 data-drop-target={dropTarget}
-                onClick={(event) => {
+                onClick={chain(attributes?.onClick, (event) => {
                     event.stopPropagation();
                     onSelect(entry.id, selectModifiers(event));
-                }}
-                onDoubleClick={() => onOpen(entry)}
-                onContextMenu={(event) => {
+                })}
+                onDoubleClick={chain(attributes?.onDoubleClick, () => onOpen(entry))}
+                onContextMenu={chain(attributes?.onContextMenu, (event) => {
                     event.stopPropagation();
 
                     if (onMenu(pointerPosition(event), entry)) {
                         event.preventDefault();
                     }
-                }}
+                })}
             >
                 <div className={cx(styles.nameCell, fmClasses.listCell)} data-column="name">
                     <ItemIcon
@@ -261,6 +274,7 @@ const FileList = ({
     onOpen,
     onMenu,
     onSortChange,
+    entrySlot,
 }: FileViewProps) => {
     const { text } = useLocale();
     const iconSize = listIconSize(zoom);
@@ -322,6 +336,7 @@ const FileList = ({
                             onSelect={onSelect}
                             onOpen={onOpen}
                             onMenu={onMenu}
+                            entrySlot={entrySlot}
                         />
                     );
                 })}

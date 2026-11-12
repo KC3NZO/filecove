@@ -132,3 +132,12 @@ export const live = params.has("live");
  * timer standing in for a socket) rather than being polled for it (`processing`).
  */
 export const push = params.has("push");
+
+/**
+ * `?slots`: the file manager and the media manager with parts of the playground's own, as an app
+ * would add them (`playground/slots.tsx`): the header's New folder, Upload files and Share buttons
+ * (`headerActions`), an empty folder offering to upload into it and a storage meter under the
+ * sidebar's tree (`slots`), dotfiles in italics by a class of each entry's (`slotProps.entry`), and
+ * an empty library or group offering to upload into it.
+ */
+export const slots = params.has("slots");

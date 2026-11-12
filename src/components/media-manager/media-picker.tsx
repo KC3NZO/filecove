@@ -25,6 +25,8 @@ import type {
     MediaManagerLocaleText,
     MediaPickerValue,
     MediaPickForm,
+    MediaPickerSlotProps,
+    MediaPickerSlots,
     MediaSection,
 } from "../../types";
 
@@ -101,6 +103,18 @@ export interface MediaPickerProps<V = Record<string, unknown>> extends RootAttri
      * goes.
      */
     allowUpload?: boolean;
+    /**
+     * The library's states drawn as the app's own components (`empty`, `noResults`, `error`,
+     * `loading`), each in the box the picker's own takes. Keep them outside the app's component, as
+     * one made while rendering starts over every time. See `MediaPickerSlots`.
+     */
+    slots?: MediaPickerSlots;
+    /**
+     * Attributes for the picker's parts, `header`, `chosen`, and `asset`, each asset's and group's
+     * option, or a function giving each its own. What a part sets itself stays its own (see
+     * `SlotAttributes`). Keep the object outside the app's component, or memoized.
+     */
+    slotProps?: MediaPickerSlotProps;
     /** What's selected, when the app keeps it, with `onChange`: every change is then only asked for. */
     value?: readonly MediaPickerValue<V>[];
     /** What's selected as it mounts, such as what the field it's picking for holds now. */
@@ -134,6 +148,9 @@ export interface MediaPickerProps<V = Record<string, unknown>> extends RootAttri
 }
 
 // A number for each adapter, so changing it can start the frame afresh by its `key`.
+const NO_SLOTS: MediaPickerSlots = {};
+const NO_SLOT_PROPS: MediaPickerSlotProps = {};
+
 const adapterNumbers = new WeakMap<FileAdapter, number>();
 let adaptersNumbered = 0;
 
@@ -170,6 +187,8 @@ const MediaPicker = <V,>({
     canSelect,
     selectGroups = false,
     allowUpload = false,
+    slots = NO_SLOTS,
+    slotProps = NO_SLOT_PROPS,
     value,
     defaultValue,
     onChange,
@@ -228,6 +247,8 @@ const MediaPicker = <V,>({
                             onChange={onChange as PickerFrameProps["onChange"]}
                             uploadLimit={countLimit(limits?.uploads, 1)}
                             searchDelay={delayLimit(limits?.searchDelay)}
+                            slots={slots}
+                            slotProps={slotProps}
                         />
                     </div>
                 </DataContext>

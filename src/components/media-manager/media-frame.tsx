@@ -15,10 +15,12 @@ import type { PicksState } from "../../hooks/use-picks";
 import { useTransferQueue } from "../../hooks/use-transfer-queue";
 import { useSetting } from "../../hooks/use-setting";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
+import { fmClasses } from "../../styles/classes";
 import mediaLayout from "../../styles/media-layout.module.css";
 import util from "../../styles/util.module.css";
 import { runToolbarShortcut } from "../../utils/action-groups";
 import { isolate } from "../../utils/bidi";
+import { cx } from "../../utils/cx";
 import { focusLost } from "../../utils/dom";
 import { NO_ERRORS, choiceMessages, countErrorsAt } from "../../utils/field-errors";
 import { carriesFiles, takesUploads, uploadPatterns } from "../../utils/files";
@@ -87,6 +89,8 @@ import type {
     MediaLocation,
     MediaLocationChangeReason,
     MediaManagerApi,
+    MediaManagerSlotProps,
+    MediaManagerSlots,
     MediaPickForm,
     MediaProcessForm,
     MediaSearch,
@@ -170,6 +174,10 @@ export interface MediaFrameProps {
     /** Where a pick's own errors are in `errors`, about it as a whole. */
     choiceErrorKey: ((params: PropertyErrorKeyParams) => string | readonly string[]) | undefined;
     propertiesCache: PropertiesCache;
+    /** The app's own states, drawn in their boxes in place of the media manager's (`slots`). */
+    slots: MediaManagerSlots;
+    /** The app's attributes for the media manager's parts (`slotProps`). */
+    slotProps: MediaManagerSlotProps;
 }
 
 /**
@@ -428,6 +436,8 @@ const MediaFrame = ({
     errors,
     choiceErrorKey,
     propertiesCache,
+    slots,
+    slotProps,
 }: MediaFrameProps) => {
     const { text, foldLetters, compareNames, formatNumber, formatPercent } = useLocale();
     const sections = useMemo(() => groups.flatMap((group) => group.sections), [groups]);
@@ -2750,6 +2760,8 @@ const MediaFrame = ({
                   ? text.mediaGroupLoadFailed
                   : undefined;
 
+    const NoSections = slots.noSections;
+
     return (
         <div
             ref={frameRef}
@@ -2812,6 +2824,7 @@ const MediaFrame = ({
                         open={librariesOpen}
                         onOpen={openSection}
                         onClose={closeLibraries}
+                        attributes={slotProps.libraries}
                     />
                 </>
             )}
@@ -2855,6 +2868,7 @@ const MediaFrame = ({
                             : undefined
                     }
                     uploadRef={uploadButtonRef}
+                    attributes={slotProps.header}
                 />
                 <input
                     ref={pickerRef}
@@ -2929,11 +2943,23 @@ const MediaFrame = ({
                                 onLevelUp={inGroup ? levelUp : undefined}
                                 onOpen={openAsset}
                                 onSelectAll={selectAll}
+                                section={section}
+                                group={openGroup ?? null}
+                                query={query}
+                                onUpload={takesFiles ? () => pickerRef.current?.click() : undefined}
+                                slots={slots}
+                                assetSlot={slotProps.asset}
                             />
                         ) : (
-                            <div role="status" className={styles.noLibraries}>
-                                <Icon name="pictures" />
-                                <Text variant="body1">{text.mediaNoLibraries}</Text>
+                            <div role="status" className={cx(styles.noLibraries, fmClasses.state)}>
+                                {NoSections ? (
+                                    <NoSections />
+                                ) : (
+                                    <>
+                                        <Icon name="pictures" />
+                                        <Text variant="body1">{text.mediaNoLibraries}</Text>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>
@@ -3130,6 +3156,7 @@ const MediaFrame = ({
                             onChoose={onChoose && (() => !chooseHeld && handOver(choices))}
                             onShowInLibrary={showInLibrary}
                             onClose={closeChosen}
+                            attributes={slotProps.chosen}
                         />
                     </div>
                 </>

@@ -8,6 +8,7 @@ import { cx } from "../../../utils/cx";
 import { pointerPosition } from "../../../utils/menu-position";
 import { drawnState } from "../../../utils/permissions";
 import { selectModifiers } from "../../../utils/selection";
+import { chain, slotAttributesFor } from "../../../utils/slots";
 import { gridSize } from "../../../utils/zoom";
 import Icon from "../../icons/icon";
 import Text from "../../ui/text";
@@ -17,7 +18,8 @@ import ItemIcon from "./item-icon";
 
 import type { EntryOrigin, FileEntry, FileViewProps, MovingKind } from "../../../types";
 
-interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "onSelect" | "onOpen" | "onMenu"> {
+interface FileTileProps
+    extends Pick<FileViewProps, "adapter" | "draggable" | "onSelect" | "onOpen" | "onMenu" | "entrySlot"> {
     entry: FileEntry;
     /** Where a search everywhere's result comes from: its own entry and adapter give its icon, and its location is shown under the name. */
     origin?: EntryOrigin;
@@ -74,11 +76,19 @@ const FileTile = memo(
         onSelect,
         onOpen,
         onMenu,
+        entrySlot,
     }: FileTileProps) => {
         const { text } = useLocale();
+        // The app's, under what the tile sets itself, which goes on as it is.
+        const attributes = slotAttributesFor(entrySlot, () => ({
+            entry: origin?.entry ?? entry,
+            view: "grid" as const,
+            selected,
+        }));
 
         return (
             <div
+                {...attributes}
                 className={cx(
                     fmClasses.gridTile,
                     styles.tile,
@@ -88,9 +98,10 @@ const FileTile = memo(
                     marks.focusRing,
                     marks.drag,
                     marks.forcedSelected,
+                    attributes?.className,
                 )}
                 // The span ends the tile's box at its column's far side, not at the grid's.
-                style={{ top, gridColumn: `${column + 1} / span 1` }}
+                style={{ ...attributes?.style, top, gridColumn: `${column + 1} / span 1` }}
                 role="option"
                 aria-selected={selected}
                 // Only some tiles are rendered, so each says where it is among all of them.
@@ -109,18 +120,18 @@ const FileTile = memo(
                 data-found={found}
                 data-dragged={dragged}
                 data-drop-target={dropTarget}
-                onClick={(event) => {
+                onClick={chain(attributes?.onClick, (event) => {
                     event.stopPropagation();
                     onSelect(entry.id, selectModifiers(event));
-                }}
-                onDoubleClick={() => onOpen(entry)}
-                onContextMenu={(event) => {
+                })}
+                onDoubleClick={chain(attributes?.onDoubleClick, () => onOpen(entry))}
+                onContextMenu={chain(attributes?.onContextMenu, (event) => {
                     event.stopPropagation();
 
                     if (onMenu(pointerPosition(event), entry)) {
                         event.preventDefault();
                     }
-                }}
+                })}
             >
                 <ItemIcon
                     entry={origin?.entry ?? entry}
@@ -168,6 +179,7 @@ const FileGrid = ({
     onSelect,
     onOpen,
     onMenu,
+    entrySlot,
 }: FileViewProps) => {
     const size = gridSize(zoom);
     const style = {
@@ -205,6 +217,7 @@ const FileGrid = ({
                             onSelect={onSelect}
                             onOpen={onOpen}
                             onMenu={onMenu}
+                            entrySlot={entrySlot}
                         />
                     );
                 })}

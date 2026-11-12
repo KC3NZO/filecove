@@ -8,6 +8,7 @@ import Icon from "../icons/icon";
 import { HoldSlot } from "./asset-hold";
 import { fmClasses } from "../../styles/classes";
 import { cx } from "../../utils/cx";
+import { chain, slotAttributesFor } from "../../utils/slots";
 import styles from "./asset-option.module.css";
 import AssetTrail, { TrailRoom } from "./asset-trail";
 import GroupCheck from "./group-check";
@@ -15,7 +16,17 @@ import MediaRow from "./media-row";
 import MediaTile from "./media-tile";
 import OpenButton from "./open-button";
 
-import type { AssetHold, FileAdapter, FileEntry, FolderRef, MediaAssetDraw, MediaKind, MediaLayout } from "../../types";
+import type {
+    AssetHold,
+    FileAdapter,
+    FileEntry,
+    FolderRef,
+    MediaAssetDraw,
+    MediaKind,
+    MediaLayout,
+    MediaPickerSlotProps,
+    MediaSection,
+} from "../../types";
 
 interface AssetOptionProps {
     entry: FileEntry;
@@ -61,6 +72,10 @@ interface AssetOptionProps {
     onOpen: (index: number) => void;
     onFocus: (index: number) => void;
     onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+    /** Its library, which the app's attributes for it are handed. */
+    section: MediaSection;
+    /** The app's attributes for each asset (`slotProps.asset`). */
+    assetSlot: MediaPickerSlotProps["asset"];
 }
 
 interface AssetBodyProps {
@@ -111,6 +126,8 @@ const AssetOption = memo(
         onOpen,
         onFocus,
         onKeyDown,
+        section,
+        assetSlot,
     }: AssetOptionProps) => {
         const row = layout === "list";
         const group = entry.kind === "folder";
@@ -139,9 +156,12 @@ const AssetOption = memo(
             [entry, kind, layout, adapter, thumbnail, selected, standing, trail],
         );
         const Look = row ? MediaRow : MediaTile;
+        // The app's, under what the option sets itself, which goes on as it is.
+        const attributes = slotAttributesFor(assetSlot, () => ({ asset: entry, section, selected }));
 
         return (
             <div
+                {...attributes}
                 role="option"
                 // A group that can't be selected says so by having none of this.
                 aria-selected={group && !checkable ? undefined : selected}
@@ -157,12 +177,12 @@ const AssetOption = memo(
                 data-layout={row ? "row" : "tile"}
                 data-held={!!hold && !group}
                 data-limited={limited}
-                className={cx(row ? styles.row : styles.tile, fmClasses.mediaOption)}
-                style={{ top, gridColumn: `${column + 1} / span 1` }}
-                onClick={(event) => onPress(index, event)}
-                onDoubleClick={() => onActivate(index)}
-                onFocus={() => onFocus(index)}
-                onKeyDown={onKeyDown}
+                className={cx(row ? styles.row : styles.tile, fmClasses.mediaOption, attributes?.className)}
+                style={{ ...attributes?.style, top, gridColumn: `${column + 1} / span 1` }}
+                onClick={chain(attributes?.onClick, (event) => onPress(index, event))}
+                onDoubleClick={chain(attributes?.onDoubleClick, () => onActivate(index))}
+                onFocus={chain(attributes?.onFocus, () => onFocus(index))}
+                onKeyDown={chain(attributes?.onKeyDown, onKeyDown)}
             >
                 {drawn ? (
                     <div id={contentId} className={styles.content}>

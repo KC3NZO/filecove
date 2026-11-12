@@ -1,0 +1,42 @@
+/* The playground's own parts in the file manager's and the media manager's slots (`?slots`). */
+
+.empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+}
+
+.meter {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 8px 4px;
+    border-top: 1px solid var(--app-divider);
+}
+
+.track {
+    block-size: 4px;
+    border-radius: 2px;
+    background-color: var(--app-divider);
+    overflow: hidden;
+}
+
+.fill {
+    block-size: 100%;
+    background-color: var(--app-primary);
+
+    &[data-full="true"] {
+        background-color: var(--app-error);
+    }
+
+    @media (forced-colors: active) {
+        background-color: Highlight;
+    }
+}
+
+/* Each dotfile's row or tile, by the class `slotProps.entry` gives it. */
+.dotfile {
+    font-style: italic;
+}

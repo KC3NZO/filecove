@@ -4,6 +4,7 @@ import type { ReactNode, Ref } from "react";
 import { useDragHold } from "../../../hooks/use-drop-target";
 import { useLocale } from "../../../hooks/use-locale";
 import { useLongPress } from "../../../hooks/use-long-press";
+import ToolbarActions from "../../buttons/toolbar-actions";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 import { fmClasses } from "../../../styles/classes";
@@ -12,7 +13,16 @@ import styles from "./header-bar.module.css";
 import HistoryMenu from "./history-menu";
 import ViewMenu from "./view-menu";
 
-import type { HistoryStop, SearchScope, SortOrder, ViewMode, ViewZoom, ZoomStep } from "../../../types";
+import type {
+    HistoryStop,
+    SearchScope,
+    SlotAttributes,
+    SortOrder,
+    ToolbarGroup,
+    ViewMode,
+    ViewZoom,
+    ZoomStep,
+} from "../../../types";
 
 type HistoryDirection = "back" | "forward";
 
@@ -78,7 +88,14 @@ interface HeaderBarProps {
     onOpenProperties: (opener: HTMLElement | null) => void;
     /** The button that shows the sidebar, which takes the focus back when the overlay closes. */
     sidebarButtonRef?: Ref<HTMLButtonElement>;
+    /** The app's `headerActions`, bound to the content's selection or the open folder. */
+    actions: readonly ToolbarGroup[];
+    /** The app's attributes for the header (`slotProps.header`). */
+    attributes?: SlotAttributes;
 }
+
+/** How many of the app's actions with an icon show as buttons, where the header has room for them. */
+const INLINE_ACTIONS = 2;
 
 const HeaderBar = ({
     pathBar,
@@ -114,6 +131,8 @@ const HeaderBar = ({
     onToggleProperties,
     onOpenProperties,
     sidebarButtonRef,
+    actions,
+    attributes,
 }: HeaderBarProps) => {
     const { text } = useLocale();
     const sidebarHold = useDragHold(onDragShowSidebar);
@@ -148,7 +167,7 @@ const HeaderBar = ({
     });
 
     return (
-        <div className={cx(styles.header, fmClasses.header)}>
+        <div {...attributes} className={cx(styles.header, fmClasses.header, attributes?.className)}>
             <div className={styles.startGroup} {...historyPress}>
                 <TooltipIconButton
                     ref={sidebarButtonRef}
@@ -214,6 +233,8 @@ const HeaderBar = ({
                 </TooltipIconButton>
             </div>
             <div className={styles.endGroup}>
+                {/* The app's own, before the view's buttons; all in "More actions" while it's narrow. */}
+                <ToolbarActions groups={actions} moreLabel={text.moreActions} inline={INLINE_ACTIONS} collapses />
                 <TooltipIconButton
                     label={selecting ? text.doneSelecting : text.select}
                     aria-pressed={selecting}

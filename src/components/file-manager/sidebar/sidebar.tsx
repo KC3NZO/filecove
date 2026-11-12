@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { CSSProperties, DragEvent, FocusEvent, KeyboardEvent, Ref } from "react";
+import type { CSSProperties, DragEvent, FocusEvent, KeyboardEvent, ReactNode, Ref } from "react";
 
 import { DragContext } from "../../../contexts/drag-context";
 import { useForkRef } from "../../../hooks/use-fork-ref";
@@ -26,6 +26,7 @@ import TreeRowItem, { GuideLine } from "./location-item";
 import MainMenu from "./main-menu";
 import { fmClasses } from "../../../styles/classes";
 import { cx } from "../../../utils/cx";
+import { chain } from "../../../utils/slots";
 import styles from "./sidebar.module.css";
 
 import type {
@@ -38,6 +39,7 @@ import type {
     SearchScope,
     Section,
     SectionGroup,
+    SlotAttributes,
     StatusRow,
     TreeItemRow,
     TreeReveal,
@@ -99,6 +101,10 @@ interface SidebarProps {
     onShortcut: RunShortcut;
     onPasteFiles: PasteFiles;
     onClose: () => void;
+    /** The app's attributes for the sidebar (`slotProps.sidebar`). */
+    attributes?: SlotAttributes;
+    /** The app's own part under the tree (`slots.sidebarFooter`), drawn already. */
+    footer?: ReactNode;
 }
 
 const placeStyle = (row: TreeRow): CSSProperties => ({ top: row.top, height: row.height });
@@ -163,6 +169,8 @@ const Sidebar = ({
     mainMenu,
     undoItems,
     onShowShortcuts,
+    attributes,
+    footer,
 }: SidebarProps) => {
     // The sidebar's own selection; the content's lives in its folder view, and neither sees the other.
     const { selection, selecting, select, startSelecting, selectKeys, selectSection, reset } =
@@ -527,16 +535,17 @@ const Sidebar = ({
         // the keys work anywhere in the file manager, F6 goes on to the content, and the overlay
         // stays open.
         <div
+            {...attributes}
             ref={forkedRef}
             id={sidebarId}
             tabIndex={-1}
-            className={cx(styles.sidebar, fmClasses.sidebar)}
-            style={{ "--sidebar-width": `${asked}px` } as CSSProperties}
+            className={cx(styles.sidebar, fmClasses.sidebar, attributes?.className)}
+            style={{ ...attributes?.style, "--sidebar-width": `${asked}px` } as CSSProperties}
             data-open={open}
             data-hidden={hidden}
             data-peek={peek}
-            onKeyDown={handleKeyDown}
-            onBlur={handleBlur}
+            onKeyDown={chain(attributes?.onKeyDown, handleKeyDown)}
+            onBlur={chain(attributes?.onBlur, handleBlur)}
         >
             <div className={cx(styles.header, fmClasses.sidebarHeader)}>
                 {/* Keeps the focus in an open search's field as it's pressed, which it closes or
@@ -640,6 +649,7 @@ const Sidebar = ({
                     </div>
                 </div>
             </nav>
+            {footer && <div className={cx(styles.footer, fmClasses.sidebarFooter)}>{footer}</div>}
             {selecting && (
                 <SelectionBar
                     count={selectedFolders.length}

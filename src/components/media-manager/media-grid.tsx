@@ -27,6 +27,9 @@ import type {
     MediaGridHandle,
     MediaKind,
     MediaLayout,
+    MediaPickerSlotProps,
+    MediaPickerSlots,
+    MediaSection,
 } from "../../types";
 
 interface MediaGridProps {
@@ -84,6 +87,18 @@ interface MediaGridProps {
     onSelectAll: () => void;
     /** Takes an asset or group to focus, by its index, wherever it is in the grid. */
     ref?: Ref<MediaGridHandle>;
+    /** The library shown, which the app's states and attributes are handed. */
+    section: MediaSection;
+    /** The group open, or null at the library's root. */
+    group: FileEntry | null;
+    /** What's typed in the search field, for the app's `noResults`. */
+    query: string;
+    /** Uploads into the level as its Upload button does, for the app's `empty`; missing where it takes no files. */
+    onUpload?: () => void;
+    /** The app's own states, drawn in their boxes in place of the media manager's (`slots`). */
+    slots: MediaPickerSlots;
+    /** The app's attributes for each asset (`slotProps.asset`). */
+    assetSlot: MediaPickerSlotProps["asset"];
 }
 
 /**
@@ -160,6 +175,12 @@ const MediaGrid = ({
     onOpen,
     onSelectAll,
     ref,
+    section,
+    group,
+    query,
+    onUpload,
+    slots,
+    assetSlot,
 }: MediaGridProps) => {
     const { text } = useLocale();
     const row = layout === "list";
@@ -331,38 +352,62 @@ const MediaGrid = ({
     );
 
     if (status === "error") {
+        const Failed = slots.error;
+
         return (
             <div className={cx(styles.root, fmClasses.mediaGrid)}>
                 {header}
                 <div role="alert" className={cx(styles.state, fmClasses.state)}>
-                    <Icon name={KIND_ICONS[kind]} />
-                    <Text variant="body1">{error ?? text.mediaLoadFailed}</Text>
-                    <Button color="inherit" variant="outlined" onClick={onRetry}>
-                        {text.tryAgain}
-                    </Button>
+                    {Failed ? (
+                        <Failed section={section} group={group} message={error} retry={onRetry} />
+                    ) : (
+                        <>
+                            <Icon name={KIND_ICONS[kind]} />
+                            <Text variant="body1">{error ?? text.mediaLoadFailed}</Text>
+                            <Button color="inherit" variant="outlined" onClick={onRetry}>
+                                {text.tryAgain}
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
         );
     }
 
     if (status === "loading" && entries.length === 0 && uploads.length === 0) {
+        const Loading = slots.loading;
+
         return (
             <div className={cx(styles.root, fmClasses.mediaGrid)}>
                 {header}
                 <div className={cx(styles.state, fmClasses.state)}>
-                    <CircularProgress aria-label={text.loading} />
+                    {Loading ? <Loading label={text.loading} /> : <CircularProgress aria-label={text.loading} />}
                 </div>
             </div>
         );
     }
 
     if (entries.length === 0 && uploads.length === 0) {
+        const NoResults = slots.noResults;
+        const Empty = slots.empty;
+        let drawn: ReactNode = null;
+
+        if (hasMedia && NoResults) {
+            drawn = <NoResults section={section} group={group} query={query} />;
+        } else if (!hasMedia && Empty) {
+            drawn = <Empty section={section} group={group} upload={onUpload} />;
+        }
+
         return (
             <div className={cx(styles.root, fmClasses.mediaGrid)}>
                 {header}
                 <div role="status" className={cx(styles.state, fmClasses.state)}>
-                    <Icon name={hasMedia ? "search" : KIND_ICONS[kind]} />
-                    <Text variant="body1">{hasMedia ? text.mediaNoMatches : text.mediaEmpty}</Text>
+                    {drawn ?? (
+                        <>
+                            <Icon name={hasMedia ? "search" : KIND_ICONS[kind]} />
+                            <Text variant="body1">{hasMedia ? text.mediaNoMatches : text.mediaEmpty}</Text>
+                        </>
+                    )}
                 </div>
             </div>
         );
@@ -427,6 +472,8 @@ const MediaGrid = ({
                                 onOpen={onOpen}
                                 onFocus={setFocusIndex}
                                 onKeyDown={handleKeyDown}
+                                section={section}
+                                assetSlot={assetSlot}
                             />
                         );
                     })}

@@ -135,6 +135,28 @@ export type {
 export type { FileManagerSearch, SearchHit, SearchScope, SearchTarget, SectionSearch } from "./search";
 export type { FolderRef, Section, SectionFolder, SectionGroup, SectionImports } from "./section";
 export type {
+    FileManagerEmptyProps,
+    FileManagerEntrySlotParams,
+    FileManagerErrorProps,
+    FileManagerNoResultsProps,
+    FileManagerSidebarFooterProps,
+    FileManagerSlotPlace,
+    FileManagerSlotProps,
+    FileManagerSlots,
+    MediaAssetSlotParams,
+    MediaEmptyProps,
+    MediaErrorProps,
+    MediaManagerSlotProps,
+    MediaManagerSlots,
+    MediaNoResultsProps,
+    MediaPickerSlotProps,
+    MediaPickerSlots,
+    MediaSlotPlace,
+    SlotAttributes,
+    SlotAttributesOf,
+    SlotLoadingProps,
+} from "./slots";
+export type {
     MovingIds,
     MovingKind,
     MovingKinds,

@@ -47,6 +47,8 @@ import type {
     EntrySelection,
     FileEntry,
     FileManagerLocation,
+    FileManagerSlotProps,
+    FileManagerSlots,
     MenuPosition,
     MenuRequest,
     OpenMenu,
@@ -84,6 +86,10 @@ interface SearchResultsProps {
     onShortcut: RunShortcut;
     /** Told the selected results as they change, which the properties show. */
     onSelectionChange: (hits: SearchHit[]) => void;
+    /** The app's own states, drawn in their boxes in place of the file manager's (`slots`). */
+    slots: FileManagerSlots;
+    /** The app's attributes for each result's row and tile (`slotProps.entry`). */
+    entrySlot: FileManagerSlotProps["entry"];
 }
 
 /** Where the view's focus is among the results: the result's key, and where it was listed. */
@@ -134,6 +140,8 @@ const SearchResults = ({
     onOpenMenu,
     onShortcut,
     onSelectionChange,
+    slots,
+    entrySlot,
 }: SearchResultsProps) => {
     const { searches, retry } = useSearch(targets, query, showHidden, version, delay);
     const cut = useContext(CutContext);
@@ -792,12 +800,15 @@ const SearchResults = ({
                 onOpen={handleOpen}
                 onMenu={handleEntryMenu}
                 onSortChange={onSortChange}
+                entrySlot={entrySlot}
             />
         );
     } else if (searching) {
+        const Loading = slots.loading;
+
         content = (
             <div id={stateId} className={cx(styles.state, fmClasses.state)}>
-                <CircularProgress size={28} aria-label={text.loading} />
+                {Loading ? <Loading label={text.loading} /> : <CircularProgress size={28} aria-label={text.loading} />}
             </div>
         );
     } else if (failed.length > 0) {
@@ -832,11 +843,19 @@ const SearchResults = ({
             </div>
         );
     } else {
+        const NoResults = slots.noResults;
+
         content = (
             <div id={stateId} className={cx(styles.state, fmClasses.state)}>
-                <Icon name="search" className={styles.stateIcon} />
-                <Text className={styles.stateTitle}>{text.searchNoResults}</Text>
-                <Text variant="body2">{text.searchNoResultsHint}</Text>
+                {NoResults ? (
+                    <NoResults query={query} scope="everywhere" />
+                ) : (
+                    <>
+                        <Icon name="search" className={styles.stateIcon} />
+                        <Text className={styles.stateTitle}>{text.searchNoResults}</Text>
+                        <Text variant="body2">{text.searchNoResultsHint}</Text>
+                    </>
+                )}
             </div>
         );
     }

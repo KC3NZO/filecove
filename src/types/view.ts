@@ -1,6 +1,7 @@
 import type { FileAdapter, FileEntry } from "./adapter";
 import type { MenuPosition } from "./menu";
 import type { SelectModifiers } from "./selection";
+import type { FileManagerEntrySlotParams, SlotAttributesOf } from "./slots";
 import type { MovingKinds } from "./transfer";
 
 export type ViewMode = "list" | "grid";
@@ -202,4 +203,6 @@ export interface FileViewProps {
     onOpen: (entry: FileEntry) => void;
     onMenu: (position: MenuPosition, entry: FileEntry) => boolean;
     onSortChange: (sort: SortOrder) => void;
+    /** The app's attributes for each row or tile (`slotProps.entry`), handed the entry itself among a search's results. */
+    entrySlot?: SlotAttributesOf<FileManagerEntrySlotParams>;
 }

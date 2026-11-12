@@ -5,6 +5,7 @@ import { useLocale } from "../../hooks/use-locale";
 import { useThumbnail } from "../../hooks/use-thumbnail";
 import { fmClasses } from "../../styles/classes";
 import { cx } from "../../utils/cx";
+import { chain } from "../../utils/slots";
 import util from "../../styles/util.module.css";
 import { isolate } from "../../utils/bidi";
 import { focusLost } from "../../utils/dom";
@@ -18,7 +19,7 @@ import { HoldLine } from "./asset-hold";
 import ChoiceList, { choiceKey } from "./choice-list";
 import styles from "./choices-pane.module.css";
 
-import type { AssetHold, FileAdapter, MediaChoice } from "../../types";
+import type { AssetHold, FileAdapter, MediaChoice, SlotAttributes } from "../../types";
 
 interface ChoicesPaneProps {
     /** What's selected, in every library, in the order it's handed over in. */
@@ -56,6 +57,8 @@ interface ChoicesPaneProps {
     onShowInLibrary: ((choice: MediaChoice) => void) | undefined;
     /** Closes the column where it's an overlay over the library. */
     onClose: () => void;
+    /** The app's attributes for the column (`slotProps.chosen`). */
+    attributes?: SlotAttributes;
 }
 
 interface ChoiceDetailsProps {
@@ -130,6 +133,7 @@ const ChoicesPane = ({
     onChoose,
     onShowInLibrary,
     onClose,
+    attributes,
 }: ChoicesPaneProps) => {
     const { text } = useLocale();
     const titleId = useId();
@@ -184,17 +188,18 @@ const ChoicesPane = ({
 
     return (
         <section
+            {...attributes}
             ref={paneRef}
             tabIndex={-1}
             aria-labelledby={titleId}
-            className={cx(styles.pane, fmClasses.mediaChosen)}
-            onKeyDown={(event) => {
+            className={cx(styles.pane, fmClasses.mediaChosen, attributes?.className)}
+            onKeyDown={chain(attributes?.onKeyDown, (event) => {
                 if (event.key === "Escape" && open && !event.defaultPrevented) {
                     event.preventDefault();
                     event.stopPropagation();
                     closeDetails();
                 }
-            }}
+            })}
         >
             {open && renderDetails ? (
                 <>

@@ -66,6 +66,8 @@ import type {
     MediaLayout,
     MediaPickerValue,
     MediaPickForm,
+    MediaPickerSlotProps,
+    MediaPickerSlots,
     MediaSection,
     MediaUploadCheck,
     MediaUploadForm,
@@ -98,6 +100,10 @@ export interface PickerFrameProps {
     uploadLimit: number | undefined;
     /** How long the typing stops before the adapter's `search` is asked, from `limits`, or the default. */
     searchDelay: number | undefined;
+    /** The app's own states, drawn in their boxes in place of the picker's (`slots`). */
+    slots: MediaPickerSlots;
+    /** The app's attributes for the picker's parts (`slotProps`). */
+    slotProps: MediaPickerSlotProps;
 }
 
 /**
@@ -206,6 +212,8 @@ const PickerFrame = ({
     onChange,
     uploadLimit,
     searchDelay,
+    slots,
+    slotProps,
 }: PickerFrameProps) => {
     const { text, foldLetters, compareNames, formatNumber, formatPercent } = useLocale();
     const { store } = useData();
@@ -1164,6 +1172,7 @@ const PickerFrame = ({
                         newGroupRef={null}
                         onUpload={takesFiles ? () => pickerRef.current?.click() : undefined}
                         uploadRef={uploadButtonRef}
+                        attributes={slotProps.header}
                     />
                     {takesFiles && (
                         <input
@@ -1229,6 +1238,12 @@ const PickerFrame = ({
                                 onLevelUp={inGroup ? levelUp : undefined}
                                 onOpen={ignore}
                                 onSelectAll={selectAll}
+                                section={section}
+                                group={openGroup ?? null}
+                                query={query}
+                                onUpload={takesFiles ? () => pickerRef.current?.click() : undefined}
+                                slots={slots}
+                                assetSlot={slotProps.asset}
                             />
                         </div>
                         {uploadStep && (
@@ -1298,6 +1313,7 @@ const PickerFrame = ({
                                 onChoose={undefined}
                                 onShowInLibrary={undefined}
                                 onClose={closeChosen}
+                                attributes={slotProps.chosen}
                             />
                         </div>
                     </>

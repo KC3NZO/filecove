@@ -43,12 +43,15 @@ import FileList from "./file-list";
 import styles from "./folder-view.module.css";
 
 import type {
+    ActionContext,
     Arrival,
     DropTarget,
     EntryOrigin,
     EntrySelection,
     FileEntry,
     FileManagerLocation,
+    FileManagerSlotProps,
+    FileManagerSlots,
     FolderRef,
     MenuPosition,
     MenuRequest,
@@ -128,6 +131,12 @@ interface FolderViewProps {
      * the location column.
      */
     trashLocation?: (info: TrashInfo) => string;
+    /** The app's own states, drawn in their boxes in place of the file manager's (`slots`). */
+    slots: FileManagerSlots;
+    /** The app's attributes for each row and tile (`slotProps.entry`). */
+    entrySlot: FileManagerSlotProps["entry"];
+    /** What the context menu's actions get for a folder, as `FileManagerApi.actionContext` returns it. */
+    folderContext: (entries?: readonly FileEntry[], location?: FileManagerLocation) => ActionContext | null;
 }
 
 /** Where the view's focus is among the entries: the entry, and where it was listed. */
@@ -187,6 +196,9 @@ const FolderView = ({
     onRevealUnmatched,
     onArrived,
     trashLocation,
+    slots,
+    entrySlot,
+    folderContext,
 }: FolderViewProps) => {
     const folder = folderOf(section, trail);
     const { state, reload } = useFolder(section, folder.id, true, true);
@@ -1105,51 +1117,89 @@ const FolderView = ({
                 onOpen={handleDoubleOpen}
                 onMenu={handleEntryMenu}
                 onSortChange={onSortChange}
+                entrySlot={entrySlot}
             />
         );
     } else if (shownSoFar && searching) {
-        content = (
-            <div id={stateId} className={cx(styles.state, fmClasses.state)}>
-                <Icon name="search" className={styles.stateIcon} />
-                <Text className={styles.stateTitle}>{text.searchNoResults}</Text>
-                <Text variant="body2">{text.searchNoResultsHint}</Text>
-            </div>
-        );
-    } else if (shownSoFar) {
-        const trashRoot = section.trash && trail.length === 0;
+        const NoResults = slots.noResults;
 
         content = (
             <div id={stateId} className={cx(styles.state, fmClasses.state)}>
-                <Icon name={trashRoot ? "delete" : "folderOpen"} className={styles.stateIcon} />
-                <Text className={styles.stateTitle}>{trashRoot ? text.trashEmpty : text.folderEmpty}</Text>
+                {NoResults ? (
+                    <NoResults query={query} scope="folder" />
+                ) : (
+                    <>
+                        <Icon name="search" className={styles.stateIcon} />
+                        <Text className={styles.stateTitle}>{text.searchNoResults}</Text>
+                        <Text variant="body2">{text.searchNoResultsHint}</Text>
+                    </>
+                )}
+            </div>
+        );
+    } else if (shownSoFar) {
+        const trashRoot = !!section.trash && trail.length === 0;
+        const Empty = slots.empty;
+
+        content = (
+            <div id={stateId} className={cx(styles.state, fmClasses.state)}>
+                {Empty ? (
+                    <Empty
+                        section={section}
+                        location={{ sectionId: section.id, trail }}
+                        folder={folder}
+                        trash={trashRoot}
+                        context={folderContext([], { sectionId: section.id, trail })}
+                    />
+                ) : (
+                    <>
+                        <Icon name={trashRoot ? "delete" : "folderOpen"} className={styles.stateIcon} />
+                        <Text className={styles.stateTitle}>{trashRoot ? text.trashEmpty : text.folderEmpty}</Text>
+                    </>
+                )}
             </div>
         );
     } else if (state?.status === "error") {
+        const Failed = slots.error;
+
         content = (
             <div id={stateId} className={cx(styles.state, fmClasses.state)} role="alert">
-                <Icon name="info" className={styles.stateIcon} />
-                <Text className={styles.stateTitle}>{text.folderOpenFailed}</Text>
-                {state.error instanceof Error && (
-                    <Text variant="body2">
-                        <bdi>{state.error.message}</bdi>
-                    </Text>
+                {Failed ? (
+                    <Failed
+                        section={section}
+                        location={{ sectionId: section.id, trail }}
+                        folder={folder}
+                        error={state.error}
+                        retry={reload}
+                    />
+                ) : (
+                    <>
+                        <Icon name="info" className={styles.stateIcon} />
+                        <Text className={styles.stateTitle}>{text.folderOpenFailed}</Text>
+                        {state.error instanceof Error && (
+                            <Text variant="body2">
+                                <bdi>{state.error.message}</bdi>
+                            </Text>
+                        )}
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                reload();
+                            }}
+                        >
+                            {text.tryAgain}
+                        </Button>
+                    </>
                 )}
-                <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        reload();
-                    }}
-                >
-                    {text.tryAgain}
-                </Button>
             </div>
         );
     } else {
+        const Loading = slots.loading;
+
         content = (
             <div id={stateId} className={cx(styles.state, fmClasses.state)}>
-                <CircularProgress size={28} aria-label={text.loading} />
+                {Loading ? <Loading label={text.loading} /> : <CircularProgress size={28} aria-label={text.loading} />}
             </div>
         );
     }

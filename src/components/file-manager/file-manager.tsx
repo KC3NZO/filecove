@@ -29,7 +29,7 @@ import { createThumbnailCache } from "../../store/thumbnail-cache";
 import { PROPERTIES_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_WIDTH } from "../../styles/layout";
 import { fmClasses } from "../../styles/classes";
 import theme from "../../styles/theme.module.css";
-import { toolbarGroups, visibleActionGroups } from "../../utils/action-groups";
+import { runToolbarShortcut, toolbarGroups, visibleActionGroups } from "../../utils/action-groups";
 import { isolate } from "../../utils/bidi";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
 import { cx } from "../../utils/cx";
@@ -44,7 +44,7 @@ import {
     takesUploads,
     uploadPatterns,
 } from "../../utils/files";
-import { groupedEntries, requestGroups, selectionRequest } from "../../utils/groups";
+import { groupByFolder, groupedEntries, requestGroups, selectionRequest } from "../../utils/groups";
 import { isHidden } from "../../utils/hidden";
 import { countLimit, delayLimit } from "../../utils/limits";
 import { folderLeft, folderOf, outsideDeleted, placeName, renameInPlace, samePlace } from "../../utils/navigation";
@@ -139,6 +139,8 @@ import type {
     FileManagerLocaleText,
     FileManagerLocation,
     FileManagerSearch,
+    FileManagerSlotProps,
+    FileManagerSlots,
     FilePreviewer,
     FolderRef,
     FolderUpload,
@@ -245,6 +247,33 @@ interface BaseProps extends RootAttributes {
     mainMenu?: MainMenuGroup[];
     /** Shown at the top of the sidebar; `localeText.sidebarTitle`, "Files" in English, when omitted. */
     title?: string;
+    /**
+     * Actions in the header bar, in groups, for the content's selection, or with nothing selected,
+     * the open folder itself (`target` "folder"), as an `ActionContext`, as the context menu's
+     * actions get it: so an Upload or New folder button shows by `visible: (context) =>
+     * context.target === "folder"`, and a Share button only for a selection. Those with an icon show
+     * as buttons, two at most, before the view's own buttons, while the file manager is 900px wide or
+     * more, and the rest in a "More actions" menu, as do all of them below that. A search
+     * everywhere's results show them for their selection, and none with nothing selected, as they
+     * have no folder of their own. A `shortcut` works anywhere in the file manager outside a field,
+     * after the content's and the tree's own shortcuts, as a main menu item's does, and shows in the
+     * keyboard shortcuts window. The same action objects can be in `actions` too.
+     */
+    headerActions?: ActionGroup[];
+    /**
+     * Parts of the app's own, drawn in place of the file manager's or where it keeps room for them:
+     * the content's states (`empty`, `noResults`, `error`, `loading`, `noSections`) and a
+     * `sidebarFooter`. Each is a component; keep them outside the app's own component, as one made
+     * while rendering starts over every time. See `FileManagerSlots`.
+     */
+    slots?: FileManagerSlots;
+    /**
+     * Attributes for the file manager's parts, `sidebar`, `header`, `content`, `properties`, and
+     * `entry`, each row and tile, or a function giving each its own: utility classes, `data-*` for
+     * tests, handlers. What a part sets itself stays its own (see `SlotAttributes`). Keep the object
+     * outside the app's component, or memoized: a new `entry` draws every row and tile again.
+     */
+    slotProps?: FileManagerSlotProps;
     /**
      * How old, in ms, a folder's listing may be before opening the folder lists it again. Listings
      * are saved, so a folder opened again, in the content, the sidebar tree or the "Move to…" and
@@ -686,6 +715,8 @@ const NO_ACTIONS: ActionGroup[] = [];
 const NO_PREVIEWERS: FilePreviewer[] = [];
 const NO_TOOLBAR: ToolbarGroup[] = [];
 const NO_MAIN_MENU: MainMenuGroup[] = [];
+const NO_SLOTS: FileManagerSlots = {};
+const NO_SLOT_PROPS: FileManagerSlotProps = {};
 const NO_TRAIL: FolderRef[] = [];
 const NO_IDS: ReadonlySet<string> = new Set();
 const NO_ENTRIES: FileEntry[] = [];
@@ -769,6 +800,9 @@ const FileManager = ({
     previewers = NO_PREVIEWERS,
     mainMenu = NO_MAIN_MENU,
     title,
+    headerActions = NO_ACTIONS,
+    slots = NO_SLOTS,
+    slotProps = NO_SLOT_PROPS,
     relistAfter = 0,
     limits,
     location: locationProp,
@@ -2406,7 +2440,8 @@ const FileManager = ({
             return;
         }
 
-        if (runMenuShortcut(event)) {
+        // The header's actions' shortcuts, after the main menu's, as anywhere in the file manager.
+        if (runMenuShortcut(event) || (!typesInField(event) && runToolbarShortcut(event, headerToolbar))) {
             event.preventDefault();
 
             return;
@@ -5627,6 +5662,46 @@ const FileManager = ({
         return { kind: "folder", section, trail: place.trail };
     }, [pinned, sectionsById, showsResults, resultSelection, section, shownSelection, openKey, place.trail]);
 
+    // The header's actions, bound to what the content has selected, or with nothing selected to the
+    // open folder itself, as the context menu's are; while a search everywhere's results show, to their
+    // selection, by folder, and to nothing with nothing selected, as they have no folder of their own.
+    const headerToolbar = useMemo((): ToolbarGroup[] => {
+        if (headerActions.length === 0) {
+            return NO_TOOLBAR;
+        }
+
+        if (showsResults) {
+            if (resultSelection.length === 0) {
+                return NO_TOOLBAR;
+            }
+
+            const byFolder = groupByFolder(
+                resultSelection.map(({ entry, section: shown, adapter: found, trail }) => ({
+                    section: shown,
+                    adapter: found,
+                    trail,
+                    entry,
+                })),
+            );
+
+            return toolbarGroups(headerActions, contextFor({ ...selectionRequest(byFolder), inResults: true }));
+        }
+
+        if (!section) {
+            return NO_TOOLBAR;
+        }
+
+        const entries = shownSelection.key === openKey ? shownSelection.entries : [];
+
+        return toolbarGroups(
+            headerActions,
+            contextFor({ target: entries.length > 0 ? "selection" : "folder", section, trail: place.trail, entries }),
+        );
+    }, [headerActions, showsResults, resultSelection, section, shownSelection, openKey, place.trail, contextFor]);
+
+    const SidebarFooter = slots.sidebarFooter;
+    const contentAttributes = slotProps.content;
+
     useImperativeHandle(
         apiRef,
         (): FileManagerApi => ({
@@ -5751,6 +5826,15 @@ const FileManager = ({
                                             mainMenu={mainMenu}
                                             undoItems={undoItems}
                                             onShowShortcuts={showShortcuts}
+                                            attributes={slotProps.sidebar}
+                                            footer={
+                                                SidebarFooter && (
+                                                    <SidebarFooter
+                                                        section={section ?? null}
+                                                        location={section ? place : null}
+                                                    />
+                                                )
+                                            }
                                         />
                                         <div className={styles.main} data-properties-shown={propertiesOpen}>
                                             <HeaderBar
@@ -5822,10 +5906,20 @@ const FileManager = ({
                                                 onToggleProperties={toggleDockedProperties}
                                                 onOpenProperties={openPropertiesOverlay}
                                                 sidebarButtonRef={sidebarButtonRef}
+                                                actions={headerToolbar}
+                                                attributes={slotProps.header}
                                             />
                                             <div className={styles.body}>
                                                 <div ref={columnRef} className={styles.column}>
-                                                    <div ref={panelRef} className={cx(styles.panel, fmClasses.content)}>
+                                                    <div
+                                                        {...contentAttributes}
+                                                        ref={panelRef}
+                                                        className={cx(
+                                                            styles.panel,
+                                                            fmClasses.content,
+                                                            contentAttributes?.className,
+                                                        )}
+                                                    >
                                                         {/* A search everywhere's results show in the folder's place
                                                             while something is typed. The folder stays mounted
                                                             under them, hidden, so it comes back as it was, its
@@ -5848,6 +5942,8 @@ const FileManager = ({
                                                                 onOpenMenu={openMenu}
                                                                 onShortcut={runShortcut}
                                                                 onSelectionChange={handleResultSelection}
+                                                                slots={slots}
+                                                                entrySlot={slotProps.entry}
                                                             />
                                                         )}
                                                         {trashOpen && !showsResults && (
@@ -5863,7 +5959,7 @@ const FileManager = ({
                                                             className={styles.view}
                                                             hidden={showsResults}
                                                         >
-                                                            {!section && <NoSections />}
+                                                            {!section && <NoSections slot={slots.noSections} />}
                                                             {section && (
                                                                 <FolderView
                                                                     section={section}
@@ -5900,6 +5996,9 @@ const FileManager = ({
                                                                     onRevealUnmatched={closeSearch}
                                                                     onArrived={handleArrived}
                                                                     trashLocation={trashOpen ? locateTrashed : undefined}
+                                                                    slots={slots}
+                                                                    entrySlot={slotProps.entry}
+                                                                    folderContext={actionContextAt}
                                                                 />
                                                             )}
                                                         </div>
@@ -5973,6 +6072,7 @@ const FileManager = ({
                                                     onEscape={handlePropertiesEscape}
                                                     onFocusOut={handlePropertiesFocusOut}
                                                     onDockedChange={handlePropertiesDocking}
+                                                    attributes={slotProps.properties}
                                                 />
                                             </div>
                                         </div>
@@ -6056,6 +6156,7 @@ const FileManager = ({
                                     <ShortcutsDialog
                                         open={shortcutsOpen}
                                         actions={actions}
+                                        headerActions={headerActions}
                                         previewActions={previewActions}
                                         propertiesActions={propertiesActions}
                                         mainMenu={mainMenu}

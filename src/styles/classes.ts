@@ -61,6 +61,8 @@ export const fmClasses = {
     sidebar: "fm-sidebar",
     /** The sidebar's top, with its title and buttons. */
     sidebarHeader: "fm-sidebar-header",
+    /** The sidebar's bottom, under its tree, holding the app's `slots.sidebarFooter`; only there with one. */
+    sidebarFooter: "fm-sidebar-footer",
     /** The sidebar's tree of sections and folders. */
     tree: "fm-tree",
     /**

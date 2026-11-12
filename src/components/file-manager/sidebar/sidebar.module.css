@@ -101,6 +101,12 @@
     padding-bottom: 8px;
 }
 
+/* The app's own part under the tree, which scrolls above it (`slots.sidebarFooter`). */
+.footer {
+    flex-shrink: 0;
+    padding: 4px 8px 8px;
+}
+
 /* Placed by the tree, like the rows. */
 .groupTitle {
     position: absolute;

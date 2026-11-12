@@ -33,6 +33,8 @@ import type {
     MediaManagerApi,
     MediaManagerLimits,
     MediaManagerLocaleText,
+    MediaManagerSlotProps,
+    MediaManagerSlots,
     MediaPickForm,
     MediaSearch,
     MediaSection,
@@ -153,6 +155,20 @@ interface BaseProps<V> extends RootAttributes {
      * of their own. See `MediaSection.groupHeader`.
      */
     groupHeader?: (group: FileEntry, section: MediaSection) => ReactNode;
+    /**
+     * The library's states drawn as the app's own components (`empty`, `noResults`, `error`,
+     * `loading`, and `noSections` with no library), each in the box the media manager's own takes.
+     * Keep them outside the app's component, as one made while rendering starts over every time.
+     * See `MediaManagerSlots`.
+     */
+    slots?: MediaManagerSlots;
+    /**
+     * Attributes for the media manager's parts, `libraries`, `header`, `chosen`, and `asset`, each
+     * asset's and group's option, or a function giving each its own: utility classes, `data-*` for
+     * tests, handlers. What a part sets itself stays its own (see `SlotAttributes`). Keep the object
+     * outside the app's component, or memoized: a new `asset` draws every asset again.
+     */
+    slotProps?: MediaManagerSlotProps;
     /**
      * The layout each library is shown in, of those it offers (`MediaSection.layouts`), by its `id`, for
      * an app keeping what the user switched to across visits. Change it in `onLayoutChange`; leave it
@@ -311,6 +327,8 @@ interface SingleSectionProps<V> extends BaseProps<V> {
 export type MediaManagerProps<V = Record<string, unknown>> = MultiSectionProps<V> | SingleSectionProps<V>;
 
 const NO_GROUPS: MediaSectionGroup[] = [];
+const NO_SLOTS: MediaManagerSlots = {};
+const NO_SLOT_PROPS: MediaManagerSlotProps = {};
 
 /**
  * Libraries of media to look through and choose from, each holding one kind of asset: pictures as
@@ -339,6 +357,8 @@ const MediaManager = <V,>({
     renderAsset,
     renderGroup,
     groupHeader,
+    slots = NO_SLOTS,
+    slotProps = NO_SLOT_PROPS,
     layout,
     defaultLayout,
     onLayoutChange,
@@ -440,6 +460,8 @@ const MediaManager = <V,>({
                             errors={errors}
                             choiceErrorKey={choiceErrorKey}
                             propertiesCache={propertiesCache}
+                            slots={slots}
+                            slotProps={slotProps}
                         />
                     </div>
                 </DataContext>

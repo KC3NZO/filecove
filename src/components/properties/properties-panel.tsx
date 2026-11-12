@@ -36,6 +36,7 @@ import type {
     PropertyDefinitionGroup,
     PropertyField,
     Requested,
+    SlotAttributes,
     ToolbarGroup,
 } from "../../types";
 
@@ -71,6 +72,8 @@ interface PropertiesPanelProps {
     definitions?: readonly PropertyDefinitionGroup[];
     /** Closes the panel, from its header's ✕; not shown while `embedded`. */
     onClose?: () => void;
+    /** The host app's attributes for the panel (the file manager's `slotProps.properties`). */
+    attributes?: SlotAttributes;
 }
 
 interface RowProps {
@@ -331,6 +334,7 @@ const PropertiesPanel = ({
     ownRows = true,
     definitions,
     onClose,
+    attributes,
 }: PropertiesPanelProps) => {
     const locale = useLocale();
     const { text, formatDate, formatNumber, formatDuration, formatSize } = locale;
@@ -868,11 +872,12 @@ const PropertiesPanel = ({
 
     return (
         <aside
+            {...attributes}
             ref={rootRef}
             tabIndex={-1}
             aria-labelledby={embedded ? undefined : titleId}
             aria-label={embedded ? text.properties : undefined}
-            className={cx(embedded ? styles.embedded : styles.root, fmClasses.properties)}
+            className={cx(embedded ? styles.embedded : styles.root, fmClasses.properties, attributes?.className)}
         >
             {!embedded && (
                 <div className={cx(styles.header, fmClasses.propertiesHeader)}>

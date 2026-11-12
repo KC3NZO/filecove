@@ -17,6 +17,8 @@ import type { ActionGroup, FileManagerLocaleText, MainMenuGroup } from "../../..
 interface ShortcutsDialogProps {
     open: boolean;
     actions: ActionGroup[];
+    /** The app's actions in the header bar, whose shortcuts work anywhere, as the main menu's do. */
+    headerActions: ActionGroup[];
     /** The app's actions in the preview's header, whose shortcuts work there, after its own keys. */
     previewActions: ActionGroup[];
     /** The app's actions in the properties panel's header, whose shortcuts work in the panel. */
@@ -245,6 +247,7 @@ const Key = ({ name, text }: { name: string; text: FileManagerLocaleText }) =>
 const ShortcutsDialog = ({
     open,
     actions,
+    headerActions,
     previewActions,
     propertiesActions,
     mainMenu,
@@ -274,10 +277,12 @@ const ShortcutsDialog = ({
             canEditProperties,
             canUndo,
         });
-        // Only the content's and the tree's shortcuts, and the main menu's, come before keys of the
-        // file manager's own; the preview's and the panel's work there alone.
-        const theirs = consumerRows([actions, previewActions, propertiesActions], mainMenu);
-        const taken = new Set(consumerRows([actions], mainMenu).flatMap((row) => row.combos.map(comboId)));
+        // Only the content's and the tree's shortcuts, the header's and the main menu's, come before keys
+        // of the file manager's own; the preview's and the panel's work there alone.
+        const theirs = consumerRows([actions, headerActions, previewActions, propertiesActions], mainMenu);
+        const taken = new Set(
+            consumerRows([actions, headerActions], mainMenu).flatMap((row) => row.combos.map(comboId)),
+        );
         const shown = own.flatMap((section) => {
             const rows = section.yields
                 ? section.rows.flatMap((row) => {
@@ -305,6 +310,7 @@ const ShortcutsDialog = ({
         canEditProperties,
         canUndo,
         actions,
+        headerActions,
         previewActions,
         propertiesActions,
         mainMenu,

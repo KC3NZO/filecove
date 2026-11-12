@@ -13,7 +13,7 @@ import Text from "../ui/text";
 import GroupPath from "./group-path";
 import styles from "./media-header.module.css";
 
-import type { FileEntry, MediaLayout, MediaSection, ToolbarGroup } from "../../types";
+import type { FileEntry, MediaLayout, MediaSection, SlotAttributes, ToolbarGroup } from "../../types";
 
 interface MediaHeaderProps {
     section: MediaSection | undefined;
@@ -64,6 +64,8 @@ interface MediaHeaderProps {
     /** Picks files to upload into the level open; missing while it takes none. */
     onUpload: (() => void) | undefined;
     uploadRef: Ref<HTMLButtonElement>;
+    /** The app's attributes for the header (`slotProps.header`). */
+    attributes?: SlotAttributes;
 }
 
 /** How many of the app's actions with icons show as buttons, where there's room for any. */
@@ -107,6 +109,7 @@ const MediaHeader = ({
     actions = NO_ACTIONS,
     onUpload,
     uploadRef,
+    attributes,
 }: MediaHeaderProps) => {
     const { text } = useLocale();
     const inGroup = trail.length > 0;
@@ -147,7 +150,7 @@ const MediaHeader = ({
     };
 
     return (
-        <header className={cx(styles.header, fmClasses.mediaHeader)}>
+        <header {...attributes} className={cx(styles.header, fmClasses.mediaHeader, attributes?.className)}>
             <div className={styles.bar}>
                 {several && (
                     <TooltipIconButton

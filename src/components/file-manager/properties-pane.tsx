@@ -29,6 +29,7 @@ import type {
     PropertiesItem,
     PropertiesSubject,
     Section,
+    SlotAttributes,
     ToolbarGroup,
     TrashInfo,
 } from "../../types";
@@ -71,6 +72,8 @@ interface PropertiesPaneProps {
     onFocusOut: (to: Node) => void;
     /** It docked, or no longer does, as the space it's in changed size. */
     onDockedChange: (docked: boolean) => void;
+    /** The app's attributes for the panel (`slotProps.properties`). */
+    attributes?: SlotAttributes;
 }
 
 const NO_ITEMS: PropertiesItem[] = [];
@@ -131,6 +134,7 @@ const PropertiesPane = ({
     onEscape,
     onFocusOut,
     onDockedChange,
+    attributes,
 }: PropertiesPaneProps) => {
     const { store, adapter } = useData();
     const { text } = useLocale();
@@ -379,6 +383,7 @@ const PropertiesPane = ({
                         takeFocus={takeFocus}
                         actions={headerActions}
                         onClose={onClose}
+                        attributes={attributes}
                     />
                 </div>
             )}

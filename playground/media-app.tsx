@@ -26,8 +26,10 @@ import {
     relistAfter,
     selectGroups,
     single,
+    slots,
     uncontrolled,
 } from "./options";
+import { mediaManagerSlots } from "./slots";
 import { Button, Snackbar, Text } from "./ui";
 import styles from "./media-app.module.css";
 
@@ -264,6 +266,7 @@ const MediaApp = () => {
         canSelect: oneVideo ? oneVideoAtMost : noOverlap ? noOverlapping : undefined,
         selectGroups,
         actions,
+        slots: slots ? mediaManagerSlots : undefined,
         ...(uncontrolled
             ? { defaultLayout: layout, defaultLocation: startedAt }
             : {

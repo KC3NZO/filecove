@@ -17,6 +17,16 @@
     padding-inline: 8px;
     padding-bottom: 6px;
 
+    /* The app's actions show as buttons from rootWide, and all in "More actions" below it, where the
+       path bar has less room (read by the shared ToolbarActions). */
+    --toolbar-buttons: none;
+    --toolbar-more: inline-flex;
+
+    @container file-manager (min-width: 900px) {
+        --toolbar-buttons: flex;
+        --toolbar-more: none;
+    }
+
     @container file-manager (min-width: 600px) {
         grid-template-areas: "start path end";
         grid-template-columns: minmax(max-content, 1fr) minmax(0, 48rem) minmax(max-content, 1fr);

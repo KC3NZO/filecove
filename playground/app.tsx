@@ -13,7 +13,8 @@ import {
     serverAdapter,
 } from "./mocks/mock-data";
 import { previewers } from "./mocks/mock-previewers";
-import { lateSections, limits, locale, relistAfter, single, uncontrolled } from "./options";
+import { lateSections, limits, locale, relistAfter, single, slots, uncontrolled } from "./options";
+import { createHeaderActions, fileManagerSlotProps, fileManagerSlots } from "./slots";
 import { Button, Snackbar, Text } from "./ui";
 import styles from "./app.module.css";
 
@@ -83,6 +84,10 @@ const App = () => {
     const [previewActions] = useState(() => createPreviewActions((message) => setNotice({ open: true, message })));
     const [propertiesActions] = useState(() =>
         createPropertiesActions((message) => setNotice({ open: true, message })),
+    );
+    // `?slots`: the header's buttons, and parts of the playground's own.
+    const [headerActions] = useState(() =>
+        slots ? createHeaderActions((message) => setNotice({ open: true, message })) : undefined,
     );
     const apiRef = useRef<FileManagerApi>(null);
     const [location, setLocation] = useHashLocation(shownSections);
@@ -254,6 +259,9 @@ const App = () => {
         actions,
         previewActions,
         propertiesActions,
+        headerActions,
+        slots: slots ? fileManagerSlots : undefined,
+        slotProps: slots ? fileManagerSlotProps : undefined,
         previewers,
         mainMenu,
         locale,

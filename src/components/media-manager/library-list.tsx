@@ -9,9 +9,10 @@ import ButtonBase from "../ui/button-base";
 import Text from "../ui/text";
 import { fmClasses } from "../../styles/classes";
 import { cx } from "../../utils/cx";
+import { chain } from "../../utils/slots";
 import styles from "./library-list.module.css";
 
-import type { MediaSectionGroup } from "../../types";
+import type { MediaSectionGroup, SlotAttributes } from "../../types";
 
 interface LibraryListProps {
     ref: Ref<HTMLElement>;
@@ -23,28 +24,31 @@ interface LibraryListProps {
     onOpen: (sectionId: string) => void;
     /** Closes the drawer. */
     onClose: () => void;
+    /** The app's attributes for the list (`slotProps.libraries`). */
+    attributes?: SlotAttributes;
 }
 
 /**
  * The libraries, the sections in their groups, as a list of places the library shows one of:
  * docked beside it where there's room, or a drawer over it.
  */
-const LibraryList = ({ ref, groups, openId, open, onOpen, onClose }: LibraryListProps) => {
+const LibraryList = ({ ref, groups, openId, open, onOpen, onClose, attributes }: LibraryListProps) => {
     const { text } = useLocale();
 
     return (
         <nav
+            {...attributes}
             ref={ref}
             tabIndex={-1}
             aria-label={text.mediaLibraries}
-            className={cx(styles.list, fmClasses.mediaLibraries)}
+            className={cx(styles.list, fmClasses.mediaLibraries, attributes?.className)}
             data-open={open}
-            onKeyDown={(event) => {
+            onKeyDown={chain(attributes?.onKeyDown, (event) => {
                 if (event.key === "Escape" && open && !event.defaultPrevented) {
                     event.preventDefault();
                     onClose();
                 }
-            }}
+            })}
         >
             <div className={styles.header}>
                 <Text component="h2" noWrap className={styles.title}>
