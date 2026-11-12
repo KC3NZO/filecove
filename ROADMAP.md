@@ -242,11 +242,13 @@ None.
 ### Packaging (before any release)
 
 #### Necessary
-- [ ] `package.json` is private and uses the repo's name, which the layer's name (`fm`) and the import paths follow. Choosing a name is the user's.
+- [x] `package.json` is private and uses the repo's name, which the layer's name (`fm`) and the import paths follow. Choosing a name is the user's. *Done 2026-11-12: `filecove`, the user's pick, free on npm, so an app imports `filecove`, `filecove/icons/rounded` and `filecove/styles.css`. The `fm` layer and the `fm-` class names stay, as "file manager" whatever the package is called. `private` stays until the day it's published, so nothing goes out by mistake; the repo's own name is the user's to change.*
 - [ ] **new:** The declarations are a `.d.ts` per module, imported without extensions, which an app resolves with `moduleResolution` `bundler` (Vite's, Next.js's) but not `node16`/`nodenext`; bundling them into one file would cover both (see `packaging.md`).
 - [x] **new:** `icon-sets/registry.ts` imports all five icon styles, so every app ships five copies of every icon, whichever style it uses. *Done 2026-11-12: each style is its own module, exported as `icons/<style>` (`roundedIcons`…), and `IconProvider` takes the set (`icons`) in place of a name (`variant`), Outlined the default; an app ships only what it imports (see "The Material icons' styles" in `icons.md`).*
 - [x] The size of `@react-symbols/icons` hasn't been checked. *Done 2026-11-12: measured at 540 KB minified, about 210 KB gzipped, a third of the playground's bundle, as picking icons by name keeps them all. It's loaded with a dynamic `import()` as a root mounts, the plain file and folder icons standing in until it comes, and `IconProvider`'s `typeIcons={false}` never loads it; the playground's first download went from 492 KB to 330 KB gzipped (see "The coloured file and folder icons" in `icons.md`).*
-- [ ] The README is still Vite's template, there's no LICENSE or CHANGELOG, `index.html` still has the repo name as its title, and the repo name mentions Pigment.
+- [ ] The README is still Vite's template, `index.html` still has the repo name as its title, and the repo name mentions Pigment.
+- [ ] A CHANGELOG, started on the day of the first release, its first entry that release (0.1.0, as below 1.0 says the API may still change), not a history of the work before it: the user's call, 2026-11-12.
+- [x] There's no LICENSE. *Done 2026-11-12: MIT, as the user wanted anyone free to clone, change and use it, the license React, Base UI and `@react-symbols/icons` have too; `LICENSE` at the root, `"license": "MIT"` in `package.json`. The Material icons' Apache License stays in `THIRD_PARTY_NOTICES.md` beside it.*
 
 #### Optional
 - Nothing left.

@@ -31,7 +31,7 @@ paths:
 The code doesn't put its CSS in the page: an app imports one of two files itself, once, as Mantine's are.
 
 - **`styles.css`**, the default: no cascade layer, so an app's resets and element rules (`* { margin: 0 }`, `button { … }`) can't break the component, its class rules being stronger; an app's own rule for a part wins by loading after it, or with one more class or attribute (see "Stable class names" in `component-styling.md`).
-- **`styles.layer.css`**: the same, inside `@layer fm` (`LAYER` in `vite.lib.config.ts`), made by the build's `fm-layered-stylesheet` plugin wrapping the built stylesheet, after Vite's own adds it to the bundle (`enforce` and `order` "post"). For an app that orders its styles by layers: `@layer reset, fm, app;`, then any rule of the app's wins. The user chose both files on 2026-11-12. The layer's name is to be settled with the package's.
+- **`styles.layer.css`**: the same, inside `@layer fm` (`LAYER` in `vite.lib.config.ts`), made by the build's `fm-layered-stylesheet` plugin wrapping the built stylesheet, after Vite's own adds it to the bundle (`enforce` and `order` "post"). For an app that orders its styles by layers: `@layer reset, fm, app;`, then any rule of the app's wins. The user chose both files on 2026-11-12. The layer keeps the name `fm`, as the `fm-` class names do, whatever the package is called (`filecove`, chosen 2026-11-12).
 - **The order** inside both is the one `styles/order.ts` sets, as `src/index.ts` imports it first: the theme, the kit, the shared stylesheets, then each part's (see "CSS Modules" in `ui-kit.md`).
 - **Only at-rules that work inside a layer**: the stylesheets use `@container`, `@media` and `@keyframes`. One adding `@import`, `@font-face`, `@property` or `@charset` has to be checked against the layered copy, as some can't go inside `@layer { }`.
 - Class names are Vite's hashed ones (`_row_1cep9_12`), unique to the file; the stable `fm-…` names are beside them.
@@ -40,8 +40,8 @@ The code doesn't put its CSS in the page: an app imports one of two files itself
 
 - `exports`: `"."` (`types` first, then `import`), `"./icons/filled"`, `"./icons/outlined"`, `"./icons/rounded"`, `"./icons/sharp"` and `"./icons/two-tone"` (each `dist/icon-sets/<style>`, `types` first), `"./styles.css"`, `"./styles.layer.css"` and `"./package.json"`. Listed one by one rather than as `"./icons/*"`, so no other path under `dist/icon-sets/` is reachable. ESM only, with `module` and `types` for older tools.
 - `sideEffects: ["**/*.css"]`, so a bundler keeps the stylesheet an app imports and shakes the rest.
-- `files`: `dist` and `THIRD_PARTY_NOTICES.md` (the Material Icons' license; see `icons.md`). `package.json` and the README go anyway.
-- Still `private`, with the repo's name, until a name is chosen: it can be packed and installed, not published.
+- `files`: `dist` and `THIRD_PARTY_NOTICES.md` (the Material Icons' license; see `icons.md`). `package.json`, the README and `LICENSE` (MIT) go anyway.
+- Named `filecove` (the user's pick, 2026-11-12), so an app imports `filecove`, `filecove/icons/<style>` and `filecove/styles.css`. Still `private` until the day it's published: it can be packed and installed, not published by mistake.
 
 ## Server rendering
 
@@ -52,7 +52,7 @@ An app rendering on a server (Next.js, Remix, Astro) renders each root once ther
 What an app gets is the packed package, so that's what's tried, in a scratch app outside the repo:
 
 1. `bun run build:lib`, then `bun pm pack --destination <folder>`, which packs what `files` names, as publishing would.
-2. In a scratch app, `bun add <folder>/checking-material-ui-pigment-css-0.0.0.tgz react react-dom`, and check that the package has no `node_modules` of its own (one React).
+2. In a scratch app, `bun add <folder>/filecove-0.0.0.tgz react react-dom`, and check that the package has no `node_modules` of its own (one React).
 3. Type-check an app importing `FileManager`, a type and both stylesheets with `strict`, `skipLibCheck: false` and `noUncheckedSideEffectImports`, and build it with Vite.
 4. Render `FileManager`, `MediaManager` and `MediaPicker` with `renderToString` under Bun, in development and production, for server rendering.
 

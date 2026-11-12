@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A client-side file manager React component built with React 19, TypeScript, Vite 8, Base UI (`@base-ui/react`, unstyled) and CSS Modules. It will later be extracted and published as a package, so write components with that in mind: self-contained, with no app-specific assumptions baked in. `src/` is the component and nothing else, laid out as it will be published. The Vite app in `playground/` is its development host and is never published.
+A client-side file manager React component built with React 19, TypeScript, Vite 8, Base UI (`@base-ui/react`, unstyled) and CSS Modules. It will later be published as a package named `filecove` (`package.json`'s name, chosen 2026-11-12; still `private` until then), so write components with that in mind: self-contained, with no app-specific assumptions baked in. `src/` is the component and nothing else, laid out as it will be published. The Vite app in `playground/` is its development host and is never published.
 
 A published component shouldn't force a global reset or a theme provider on consumers. It brings its own look, scoped to its roots and what they portal out, and an app changes it through the `--fm-*` custom properties (see "Theming" in `component-styling.md`). The page's own reset and colours stay in the playground.
 
