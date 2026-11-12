@@ -1,17 +1,14 @@
 import type { SVGProps } from "react";
 
 import { useIconConfig } from "../../hooks/use-icon-config";
-import iconSets from "../../icon-sets/registry";
 import { cx } from "../../utils/cx";
 import { fmClasses } from "../../styles/classes";
 import styles from "./icon.module.css";
 
-import type { IconName, IconVariant } from "../../types";
+import type { IconName } from "../../types";
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name" | "fontSize"> {
     name: IconName;
-    /** Overrides the variant from `IconProvider` for this icon only. */
-    variant?: IconVariant;
     /** `medium` is 1.5rem, `small` 1.25rem, and `inherit` the size of the text around it. */
     fontSize?: "small" | "medium" | "inherit";
     /**
@@ -38,14 +35,14 @@ const MIRRORED: ReadonlySet<IconName> = new Set<IconName>([
 const SIZES = { small: styles.small, medium: undefined, inherit: styles.inherit };
 
 /**
- * An icon by its name, from the variant's set or the consumer's override of it. Its size and its
+ * An icon by its name, from `IconProvider`'s set or the consumer's override of it. Its size and its
  * mirroring are classes, the icon's own `className` after them so it can still override them, so a
  * consumer's icon needs to take no more than an `svg`'s own props.
  */
-const Icon = ({ name, variant, fontSize = "medium", label, className, ...props }: IconProps) => {
+const Icon = ({ name, fontSize = "medium", label, className, ...props }: IconProps) => {
     const config = useIconConfig();
 
-    const Component = config.overrides[name] ?? iconSets[variant ?? config.variant][name];
+    const Component = config.overrides[name] ?? config.icons[name];
 
     return (
         <Component

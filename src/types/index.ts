@@ -41,7 +41,7 @@ export type { AdapterIds, Clipboard, ClipboardLookup, ClipboardPart } from "./cl
 export type { DownloadItem, DownloadStatus, PreparedDownload } from "./download";
 export type { DraggedEntries, DragSource, Drop, DropEffect, DropInto, DropKeys, DropTarget, HeldPress } from "./drag";
 export type { Clash, EntryClash, FolderState } from "./folder";
-export type { IconComponent, IconName, IconOverrides, IconSet, IconSource, IconVariant } from "./icon";
+export type { IconComponent, IconName, IconOverrides, IconSet, IconSource } from "./icon";
 export type {
     DownloadLocaleText,
     FileManagerLocaleText,

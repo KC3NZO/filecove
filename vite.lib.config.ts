@@ -16,6 +16,11 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 const external = [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.peerDependencies ?? {})]
 const isExternal = (id: string) => external.some((name) => id === name || id.startsWith(`${name}/`))
 
+// The Material icons' styles, each a module of its own beside the entry, which an app imports as
+// `icons/<style>` (package.json's `exports`), so it ships only the ones it uses. Outlined is the
+// default, so the entry imports it too, and its file is the one the entry reads.
+const ICON_STYLES = ['filled', 'outlined', 'rounded', 'sharp', 'two-tone']
+
 // The cascade layer the layered stylesheet puts every rule in.
 const LAYER = 'fm'
 
@@ -58,9 +63,12 @@ export default defineConfig({
     minify: false,
     sourcemap: true,
     lib: {
-      entry: 'src/index.ts',
+      entry: {
+        index: 'src/index.ts',
+        ...Object.fromEntries(ICON_STYLES.map((style) => [`icon-sets/${style}`, `src/icon-sets/${style}.ts`])),
+      },
       formats: ['es'],
-      fileName: 'index',
+      fileName: (_format, name) => `${name}.js`,
       cssFileName: 'styles',
     },
     rolldownOptions: {

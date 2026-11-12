@@ -14,6 +14,26 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./icons/filled": {
+      "types": "./dist/icon-sets/filled.d.ts",
+      "import": "./dist/icon-sets/filled.js"
+    },
+    "./icons/outlined": {
+      "types": "./dist/icon-sets/outlined.d.ts",
+      "import": "./dist/icon-sets/outlined.js"
+    },
+    "./icons/rounded": {
+      "types": "./dist/icon-sets/rounded.d.ts",
+      "import": "./dist/icon-sets/rounded.js"
+    },
+    "./icons/sharp": {
+      "types": "./dist/icon-sets/sharp.d.ts",
+      "import": "./dist/icon-sets/sharp.js"
+    },
+    "./icons/two-tone": {
+      "types": "./dist/icon-sets/two-tone.d.ts",
+      "import": "./dist/icon-sets/two-tone.js"
+    },
     "./styles.css": "./dist/styles.css",
     "./styles.layer.css": "./dist/styles.layer.css",
     "./package.json": "./package.json"

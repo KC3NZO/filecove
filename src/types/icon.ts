@@ -7,8 +7,6 @@ import type { ComponentType, ReactElement, SVGProps } from "react";
  */
 export type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
-export type IconVariant = "filled" | "outlined" | "rounded" | "sharp" | "twoTone";
-
 export type IconName =
     | "add"
     | "arrowBack"
@@ -71,14 +69,17 @@ export type IconName =
     | "zoomIn"
     | "zoomOut";
 
-/** One icon component per semantic name; every variant must provide all of them. */
+/**
+ * One icon component per semantic name, all of them: a Material style the package ships (`outlinedIcons`
+ * by default, the others imported from `icons/<style>`), or a set of the app's own.
+ */
 export type IconSet = Record<IconName, IconComponent>;
 
-/** Consumer-supplied replacements for individual icons, applied on top of any variant. */
+/** Consumer-supplied replacements for individual icons, applied on top of the set. */
 export type IconOverrides = Partial<IconSet>;
 
 /**
- * A semantic name from the icon set, which follows the consumer's icon variant, or any element
+ * A semantic name from the icon set, which follows the set `IconProvider` gives, or any element
  * such as an `<svg>` of the app's own, which is fitted to the same box.
  */
 export type IconSource = IconName | ReactElement;

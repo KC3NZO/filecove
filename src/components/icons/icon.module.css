@@ -18,6 +18,11 @@
     font-size: inherit;
 }
 
+/* A file or folder's plain icon, in place of its coloured one (`file-icon.tsx`). */
+.plain {
+    color: var(--_fm-icon);
+}
+
 /*
  * `scale` rather than `transform`, so a part that rotates an icon, as the tree's chevrons do, still
  * can, and `:dir()` follows the `dir` the page or an ancestor sets.

@@ -141,3 +141,15 @@ export const push = params.has("push");
  * an empty library or group offering to upload into it.
  */
 export const slots = params.has("slots");
+
+/**
+ * `?icons=rounded`: the Material icons' style, `filled`, `outlined` (the default), `rounded`, `sharp`
+ * or `two-tone`, given to `IconProvider` as an app would, from the package's `icons/<style>`.
+ */
+export const iconStyle = params.get("icons") || undefined;
+
+/**
+ * `?plainIcons`: `IconProvider`'s `typeIcons` off, so files and folders keep the icon set's plain
+ * icons and `@react-symbols/icons` is never loaded, as for an app whose look is monochrome.
+ */
+export const plainIcons = params.has("plainIcons");

@@ -1,20 +1,24 @@
 import { createContext } from "react";
 
-import type { IconOverrides, IconVariant } from "../types";
+import { outlinedIcons } from "../icon-sets/outlined";
+
+import type { IconOverrides, IconSet } from "../types";
 
 export interface IconConfig {
-    variant: IconVariant;
+    /** The set the icons are drawn from: Outlined unless `IconProvider` gives another. */
+    icons: IconSet;
     overrides: IconOverrides;
+    /** Whether files and folders get `@react-symbols/icons`' coloured icons, chosen by name. */
+    typeIcons: boolean;
 }
-
-export const DEFAULT_ICON_VARIANT: IconVariant = "outlined";
 
 // Stable reference so consumers of the default context never see a new object.
 export const EMPTY_ICON_OVERRIDES: IconOverrides = {};
 
 const defaultConfig: IconConfig = {
-    variant: DEFAULT_ICON_VARIANT,
+    icons: outlinedIcons,
     overrides: EMPTY_ICON_OVERRIDES,
+    typeIcons: true,
 };
 
 export const IconContext = createContext<IconConfig>(defaultConfig);

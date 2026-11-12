@@ -5,7 +5,12 @@ import type { IconSet } from "../types";
 // Material Icons, Rounded, as Google publishes them under the Apache License 2.0: each icon's
 // shapes on a 24 by 24 grid, drawn by `createIcon`. Source: https://github.com/google/material-design-icons.
 // The license and notice are in THIRD_PARTY_NOTICES.md at the package root.
-const rounded: IconSet = {
+
+/**
+ * The Material icons in their Rounded style, for `<IconProvider icons={roundedIcons}>`. Each style is
+ * a module of its own, the package's `icons/rounded`, so an app ships only the styles it imports.
+ */
+export const roundedIcons: IconSet = {
     add: createIcon(
         "M18 13h-5v5c0 .55-.45 1-1 1s-1-.45-1-1v-5H6c-.55 0-1-.45-1-1s.45-1 1-1h5V6c0-.55.45-1 1-1s1 .45 1 1v5h5c.55 0 1 .45 1 1s-.45 1-1 1",
     ),
@@ -187,5 +192,3 @@ const rounded: IconSet = {
         "M15.5 14h-.79l-.28-.27c1.2-1.4 1.82-3.31 1.48-5.34-.47-2.78-2.79-5-5.59-5.34-4.23-.52-7.79 3.04-7.27 7.27.34 2.8 2.56 5.12 5.34 5.59 2.03.34 3.94-.28 5.34-1.48l.27.28v.79l4.26 4.25c.41.41 1.07.41 1.48 0l.01-.01c.41-.41.41-1.07 0-1.48zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14m-2-5h4c.28 0 .5.22.5.5s-.22.5-.5.5h-4c-.28 0-.5-.22-.5-.5s.22-.5.5-.5",
     ),
 };
-
-export default rounded;
