@@ -40,8 +40,17 @@ The code doesn't put its CSS in the page: an app imports one of two files itself
 
 - `exports`: `"."` (`types` first, then `import`), `"./icons/filled"`, `"./icons/outlined"`, `"./icons/rounded"`, `"./icons/sharp"` and `"./icons/two-tone"` (each `dist/icon-sets/<style>`, `types` first), `"./styles.css"`, `"./styles.layer.css"` and `"./package.json"`. Listed one by one rather than as `"./icons/*"`, so no other path under `dist/icon-sets/` is reachable. ESM only, with `module` and `types` for older tools.
 - `sideEffects: ["**/*.css"]`, so a bundler keeps the stylesheet an app imports and shakes the rest.
-- `files`: `dist` and `THIRD_PARTY_NOTICES.md` (the Material Icons' license; see `icons.md`). `package.json`, the README and `LICENSE` (MIT) go anyway.
-- Named `filecove` (the user's pick, 2026-11-12), so an app imports `filecove`, `filecove/icons/<style>` and `filecove/styles.css`. Still `private` until the day it's published: it can be packed and installed, not published by mistake.
+- `files`: `dist`, `docs` (the consumer docs, so an app's `node_modules/filecove/docs/` matches the version it installed; see "The consumer docs") and `THIRD_PARTY_NOTICES.md` (the Material Icons' license; see `icons.md`). `package.json`, the README and `LICENSE` (MIT) go anyway.
+- Named `filecove` (the user's pick, 2026-11-12), so an app imports `filecove`, `filecove/icons/<style>` and `filecove/styles.css`. `private` came off for 0.1.0 (2026-11-12), with a `description`, `keywords`, `CHANGELOG.md` in `files`, and `prepublishOnly` running `build:lib`, so a stale `dist/` never goes out. `repository`, `homepage` and `bugs` wait for the repo's new name.
+- **Publishing** is `bun publish` (npm is broken on the user's machine), signed in by a granular token in `~/.npmrc` and the account's two-factor code; `bun publish --dry-run` lists what goes. Later releases are planned from CI with npm's trusted publishing.
+
+## The consumer docs
+
+`docs/` at the root is the documentation for apps using the package, written 2026-11-12: plain Markdown with relative links, so it reads on GitHub, in `node_modules` and as a site's source later, and guides with examples rather than a prop reference, which the `.d.ts` comments are. `docs/README.md` is its index, with a section for AI coding assistants. The README at the root is short and links into it.
+
+- **Not the rules.** `.claude/rules/` are notes for working on the component; `docs/` is for using it, in plain English, with nothing internal (no hook, store or file names but the public ones).
+- **Kept current.** A change to public behaviour updates the page in `docs/` that covers it, as well as its rule (see the checklist in `props.md`). Out-of-date docs mislead an agent more than none.
+- Code in it is checked against the public types by eye, not compiled.
 
 ## Server rendering
 
@@ -56,9 +65,9 @@ What an app gets is the packed package, so that's what's tried, in a scratch app
 3. Type-check an app importing `FileManager`, a type and both stylesheets with `strict`, `skipLibCheck: false` and `noUncheckedSideEffectImports`, and build it with Vite.
 4. Render `FileManager`, `MediaManager` and `MediaPicker` with `renderToString` under Bun, in development and production, for server rendering.
 
-Done 2026-11-12, all passing. An app linking the repo instead (`bun link`, a `file:` path) resolves `react` from the repo's own `node_modules`, two copies of React in the page; the packed file doesn't, which is why it's the way to try it, and what the user is told to install.
+Done 2026-11-12, all passing, and again for 0.1.0 the same day with slots, `slotProps`, `headerActions` and the icon styles in the app. An app linking the repo instead (`bun link`, a `file:` path) resolves `react` from the repo's own `node_modules`, two copies of React in the page; the packed file doesn't, which is why it's the way to try it, and what the user is told to install.
 
 ## Not yet
 
 - The declarations are one file per module, imported without extensions, which an app's TypeScript resolves with `moduleResolution` `bundler` (Vite's and Next.js's own) but not `node16` or `nodenext`; bundling them into one `index.d.ts` would cover both.
-- The rest of the roadmap's packaging: the name, the README, LICENSE and CHANGELOG.
+- The rest of the roadmap's packaging: `index.html`'s title, the repo's name with `repository` and `homepage`, and development warnings.
