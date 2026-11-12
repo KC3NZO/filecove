@@ -1,7 +1,8 @@
 {
-  "name": "checking-material-ui-pigment-css",
+  "name": "filecove",
   "private": true,
   "version": "0.0.0",
+  "license": "MIT",
   "type": "module",
   "files": [
     "dist",

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "checking-material-ui-pigment-css",
+      "name": "filecove",
       "dependencies": {
         "@base-ui/react": "^1.9.0",
         "@react-symbols/icons": "^1.4.1",
