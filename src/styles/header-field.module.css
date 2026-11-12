@@ -1,0 +1,52 @@
+/*
+ * The pill that takes the path bar's place in the header, for the search field and the path field,
+ * in the path bar's shape so the header doesn't move as one swaps for another.
+ */
+.field {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 34px;
+    padding-inline: 10px 2px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-hover);
+    color: var(--_fm-text-secondary);
+
+    &:has(input:focus) {
+        outline: 2px solid var(--_fm-primary);
+        outline-offset: -2px;
+    }
+}
+
+/*
+ * The text typed in either field. Each line runs the way its own letters do, or else the way the
+ * page does. The browser's own clear button of a search input is left out, for the ✕ beside it.
+ */
+.input {
+    flex: 1;
+    box-sizing: content-box;
+    min-width: 0;
+    height: 1.4375em;
+    margin: 0;
+    padding: 4px 0 5px;
+    border: 0;
+    outline: 0;
+    background: none;
+    color: var(--_fm-text);
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.4375em;
+    unicode-bidi: plaintext;
+
+    &::placeholder {
+        color: currentColor;
+        opacity: 0.42;
+    }
+
+    &::-webkit-search-cancel-button,
+    &::-webkit-search-decoration {
+        appearance: none;
+    }
+}

@@ -1,11 +1,10 @@
 import { useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, RefObject } from "react";
 
-import Box from "@mui/material/Box";
-import InputBase from "@mui/material/InputBase";
-
 import { useLocale } from "../../../hooks/use-locale";
-import { headerFieldSx, headerInputSx } from "../../../styles/header-field";
+import { fmClasses } from "../../../styles/classes";
+import { cx } from "../../../utils/cx";
+import headerField from "../../../styles/header-field.module.css";
 import { isolate } from "../../../utils/bidi";
 import { isRtl } from "../../../utils/dom";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
@@ -139,17 +138,17 @@ const SearchField = ({
     };
 
     return (
-        <Box role="search" sx={headerFieldSx} onKeyDown={handleFieldKeyDown} onBlur={handleBlur}>
+        <div role="search" className={cx(headerField.field, fmClasses.searchField)} onKeyDown={handleFieldKeyDown} onBlur={handleBlur}>
             <Icon name={scope === "folder" ? "searchFolder" : "search"} fontSize="small" />
-            <InputBase
-                inputRef={inputRef}
+            <input
+                ref={inputRef}
                 type="search"
                 value={query}
                 placeholder={placeholder}
                 autoComplete="off"
                 spellCheck={false}
-                sx={headerInputSx}
-                slotProps={{ input: { "aria-label": text.search } }}
+                className={headerField.input}
+                aria-label={text.search}
                 onChange={(event) => onQueryChange(event.target.value)}
                 onKeyDown={handleKeyDown}
             />
@@ -181,7 +180,7 @@ const SearchField = ({
             >
                 <Icon name="close" fontSize="small" />
             </TooltipIconButton>
-        </Box>
+        </div>
     );
 };
 

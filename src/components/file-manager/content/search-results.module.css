@@ -1,0 +1,77 @@
+/*
+ * The content panel's scrolling view, as the folder view has it, with the container queries the
+ * list's columns follow.
+ */
+.scroll {
+    container-type: inline-size;
+    container-name: file-manager-view;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/*
+ * As the folder view's surface: it fills the panel, so its empty space takes clicks and marquee
+ * drags, and it's positioned for the marquee.
+ */
+.surface {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    outline: none;
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+        border-radius: calc(var(--_fm-radius) * 3);
+    }
+}
+
+.marquee {
+    display: none;
+    position: absolute;
+    z-index: 3;
+    border: 1px solid;
+    border-color: var(--_fm-primary);
+    border-radius: calc(var(--_fm-radius) * 0.5);
+    background-color: var(--_fm-row-selected);
+    pointer-events: none;
+
+    &[data-active="true"] {
+        display: block;
+    }
+}
+
+.progress {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin-bottom: -4px;
+}
+
+.state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    text-align: center;
+    color: var(--_fm-text-secondary);
+}
+
+.stateIcon {
+    font-size: 3rem;
+    opacity: 0.6;
+}
+
+.stateTitle {
+    color: var(--_fm-text);
+    font-weight: 600;
+}

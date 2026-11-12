@@ -1,0 +1,35 @@
+/* Under the view's header, across it, as what's said of the asset's processing is. */
+.root {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding-inline: 16px;
+    padding-block: 8px;
+    border-bottom: 1px solid;
+    border-color: var(--_fm-divider);
+}
+
+.text {
+    flex: 1 1 14rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+}
+
+.warning {
+    color: var(--_fm-text-secondary);
+    font-size: 0.8125rem;
+}
+
+.buttons {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-inline-start: auto;
+}

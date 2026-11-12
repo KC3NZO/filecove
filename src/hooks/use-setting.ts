@@ -1,9 +1,9 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 
-import { useControlled } from "@mui/material/utils";
+import { useControlled } from "./use-controlled";
 
 interface SettingOptions<T> {
-    /** Names the setting in MUI's warnings about switching between controlled and not. */
+    /** Names the setting in the warnings about switching between controlled and not. */
     name: string;
     /** Names the component in those warnings; `FileManager` when omitted. */
     component?: string;
@@ -16,7 +16,7 @@ interface SettingOptions<T> {
 }
 
 /**
- * A setting of the file manager the consumer may control, as MUI's controlled props are: `value`
+ * A setting of the file manager the consumer may control, as a controlled prop is: `value`
  * while they pass it, or else one kept here, starting at `defaultValue`. Setting it tells them
  * through `onChange` either way, and changes it here only when they don't pass `value`. Setting
  * it to what it is does nothing. It's set to a value, or with a function of the value as of the

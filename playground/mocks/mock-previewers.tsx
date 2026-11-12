@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import FolderOutlined from "@mui/icons-material/FolderOutlined";
-import InsertDriveFileOutlined from "@mui/icons-material/InsertDriveFileOutlined";
-import Box from "@mui/material/Box";
-import CircularProgress from "@mui/material/CircularProgress";
-import Link from "@mui/material/Link";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
+import { FolderOutlined, InsertDriveFileOutlined } from "../icons";
+import { Link, Spinner, Text } from "../ui";
+import styles from "./mock-previewers.module.css";
 
 import type { FileEntry, FilePreviewer, PreviewerProps } from "../../src";
 
@@ -140,66 +136,24 @@ const inline = (text: string): ReactNode[] => {
     return parts;
 };
 
-// Each block runs the way its own letters do, so a Hebrew note reads right to left.
-const documentSx: SxProps<Theme> = {
-    width: "100%",
-    maxWidth: "48rem",
-    mx: "auto",
-    px: 4,
-    py: 3,
-    lineHeight: 1.65,
-    "& > *": { unicodeBidi: "plaintext" },
-    "& code": {
-        px: 0.5,
-        borderRadius: 0.5,
-        bgcolor: "action.hover",
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-        fontSize: "0.875em",
-    },
-    "& pre": {
-        p: 1.5,
-        borderRadius: 1,
-        bgcolor: "action.hover",
-        overflowX: "auto",
-        "& code": { p: 0, bgcolor: "transparent" },
-    },
-    "& blockquote": {
-        m: 0,
-        paddingInlineStart: 2,
-        borderInlineStart: 4,
-        borderColor: "divider",
-        color: "text.secondary",
-    },
-};
-
-const headingSx: SxProps<Theme> = {
-    mt: 2,
-    mb: 1,
-    fontWeight: 600,
-};
-
-const paragraphSx: SxProps<Theme> = {
-    mb: 2,
-};
-
 const MarkdownPreview = ({ text }: PreviewerProps) => {
     const blocks = useMemo(() => parseMarkdown(text ?? ""), [text]);
 
     return (
-        <Box sx={documentSx}>
+        <div className={styles.document}>
             {blocks.map((block, index) => {
                 switch (block.kind) {
                     case "heading":
                         return (
-                            <Typography
+                            <Text
                                 key={index}
                                 dir="auto"
                                 component={`h${block.level}` as "h1"}
                                 variant={block.level === 1 ? "h4" : block.level === 2 ? "h5" : "h6"}
-                                sx={headingSx}
+                                className={styles.heading}
                             >
                                 {inline(block.text)}
-                            </Typography>
+                            </Text>
                         );
                     case "list": {
                         const List = block.ordered ? "ol" : "ul";
@@ -227,13 +181,13 @@ const MarkdownPreview = ({ text }: PreviewerProps) => {
                         );
                     default:
                         return (
-                            <Typography key={index} dir="auto" component="p" sx={paragraphSx}>
+                            <Text key={index} dir="auto" component="p" className={styles.paragraph}>
                                 {inline(block.text)}
-                            </Typography>
+                            </Text>
                         );
                 }
             })}
-        </Box>
+        </div>
     );
 };
 
@@ -283,46 +237,13 @@ const parseCsv = (source: string, limit: number) => {
     return rows;
 };
 
-// Wide tables scroll sideways themselves, so a swipe there doesn't step to another file.
-const tableBoxSx: SxProps<Theme> = {
-    flex: 1,
-    minHeight: 0,
-    overflow: "auto",
-};
-
-const tableSx: SxProps<Theme> = {
-    borderCollapse: "collapse",
-    fontSize: "0.8125rem",
-    fontVariantNumeric: "tabular-nums",
-    "& th, & td": {
-        px: 1.5,
-        py: 0.75,
-        borderBottom: 1,
-        borderColor: "divider",
-        textAlign: "start",
-        whiteSpace: "nowrap",
-    },
-    "& th": {
-        position: "sticky",
-        top: 0,
-        bgcolor: "background.paper",
-        fontWeight: 600,
-    },
-};
-
-const captionSx: SxProps<Theme> = {
-    px: 1.5,
-    py: 0.75,
-    color: "text.secondary",
-};
-
 const CsvPreview = ({ text }: PreviewerProps) => {
     const rows = useMemo(() => parseCsv(text ?? "", MAX_ROWS + 1), [text]);
     const [head, ...body] = rows;
 
     return (
-        <Box sx={tableBoxSx} data-no-swipe>
-            <Box component="table" sx={tableSx}>
+        <div className={styles.tableBox} data-no-swipe>
+            <table className={styles.table}>
                 <thead>
                     <tr>{head?.map((cell, index) => <th key={index}>{cell}</th>)}</tr>
                 </thead>
@@ -335,13 +256,13 @@ const CsvPreview = ({ text }: PreviewerProps) => {
                         </tr>
                     ))}
                 </tbody>
-            </Box>
+            </table>
             {body.length > MAX_ROWS && (
-                <Typography variant="caption" component="p" sx={captionSx}>
+                <Text variant="caption" component="p" className={styles.caption}>
                     Showing the first {MAX_ROWS.toLocaleString()} rows
-                </Typography>
+                </Text>
             )}
-        </Box>
+        </div>
     );
 };
 
@@ -401,41 +322,6 @@ const readZip = (buffer: ArrayBuffer) => {
     return entries.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
 };
 
-const zipListSx: SxProps<Theme> = {
-    m: 0,
-    p: 1,
-    listStyle: "none",
-};
-
-const zipRowSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1,
-    px: 1.5,
-    py: 0.5,
-    borderRadius: 1,
-    fontSize: "0.875rem",
-    "&:hover": { bgcolor: "action.hover" },
-};
-
-const zipNameSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-};
-
-const zipMetaSx: SxProps<Theme> = {
-    flexShrink: 0,
-    color: "text.secondary",
-    fontVariantNumeric: "tabular-nums",
-};
-
-const loadingSx: SxProps<Theme> = {
-    m: "auto",
-};
-
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 const formatSize = (bytes: number) => {
@@ -486,26 +372,26 @@ const ZipPreview = ({ content, onError }: PreviewerProps) => {
     }, [content]);
 
     if (!entries) {
-        return <CircularProgress size={28} aria-label="Reading the archive" sx={loadingSx} />;
+        return <Spinner size={28} aria-label="Reading the archive" className={styles.loading} />;
     }
 
     return (
-        <Box component="ul" sx={zipListSx} aria-label="Contents">
+        <ul className={styles.zipList} aria-label="Contents">
             {entries.map((entry) => (
-                <Box component="li" key={entry.path} sx={zipRowSx}>
+                <li key={entry.path} className={styles.zipRow}>
                     {entry.folder ? (
-                        <FolderOutlined fontSize="small" color="action" />
+                        <FolderOutlined className={styles.rowIcon} />
                     ) : (
-                        <InsertDriveFileOutlined fontSize="small" color="action" />
+                        <InsertDriveFileOutlined className={styles.rowIcon} />
                     )}
-                    <Box component="bdi" sx={zipNameSx}>
+                    <bdi className={styles.zipName}>
                         {entry.path}
-                    </Box>
-                    {!entry.folder && <Box sx={zipMetaSx}>{formatSize(entry.size)}</Box>}
-                    <Box sx={zipMetaSx}>{dateFormat.format(entry.modified)}</Box>
-                </Box>
+                    </bdi>
+                    {!entry.folder && <div className={styles.zipMeta}>{formatSize(entry.size)}</div>}
+                    <div className={styles.zipMeta}>{dateFormat.format(entry.modified)}</div>
+                </li>
             ))}
-        </Box>
+        </ul>
     );
 };
 

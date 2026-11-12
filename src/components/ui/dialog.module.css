@@ -1,0 +1,103 @@
+.backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--_fm-z-popup);
+    background-color: var(--_fm-backdrop);
+    transition: opacity 225ms;
+    -webkit-tap-highlight-color: transparent;
+
+    &[data-starting-style],
+    &[data-ending-style] {
+        opacity: 0;
+    }
+}
+
+/* Centres the dialog in the viewport. A press on it, around the dialog, is one outside the dialog. */
+.viewport {
+    position: fixed;
+    inset: 0;
+    z-index: var(--_fm-z-popup);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/*
+ * The dialog itself. It takes the window's own surface, and an outline marks its edge where a
+ * shadow doesn't show against a dark backdrop. A view inside it sits on the surface of the content,
+ * so a dialog is laid out like the window: chrome on the background, view on the surface.
+ */
+.popup {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    max-height: calc(100% - 64px);
+    margin: 32px;
+    overflow-y: auto;
+    border: 1px solid var(--_fm-divider);
+    border-radius: calc(var(--_fm-radius) * 3);
+    outline: 0;
+    background-color: var(--_fm-background);
+    color: var(--_fm-text);
+    font-family: var(--_fm-font-family);
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    letter-spacing: 0.00938em;
+    box-shadow: var(--_fm-shadow-24);
+    transition: opacity 225ms;
+
+    &[data-starting-style],
+    &[data-ending-style] {
+        opacity: 0;
+    }
+}
+
+.fullWidth {
+    width: calc(100% - 64px);
+}
+
+.xs {
+    max-width: 444px;
+}
+
+.sm {
+    max-width: 600px;
+}
+
+.md {
+    max-width: 900px;
+}
+
+.lg {
+    max-width: 1200px;
+}
+
+.title {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 16px 24px;
+    font-size: 1.25rem;
+    font-weight: 500;
+    line-height: 1.6;
+    letter-spacing: 0.0075em;
+}
+
+.content {
+    flex: 1 1 auto;
+    padding: 20px 24px;
+    overflow-y: auto;
+
+    .title + & {
+        padding-top: 0;
+    }
+}
+
+.actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 8px;
+}

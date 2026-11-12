@@ -1,11 +1,11 @@
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
 import Icon from "../../icons/icon";
+import Button from "../../ui/button";
+import Text from "../../ui/text";
+import { fmClasses } from "../../../styles/classes";
+import { cx } from "../../../utils/cx";
+import styles from "./trash-bar.module.css";
 
 import type { Section } from "../../../types";
 
@@ -15,35 +15,6 @@ interface TrashBarProps {
     /** Asks to confirm emptying the trash; missing when its adapter can't delete. */
     onEmpty?: () => void;
 }
-
-// Above the scrolling view, so it never scrolls away, along the content panel's top, as Finder's
-// and GNOME's trash bars are. The button keeps its line, and the text wraps beside it.
-const barSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1.5,
-    flexShrink: 0,
-    minHeight: 48,
-    px: 2,
-    py: 0.75,
-    borderBottom: 1,
-    borderColor: "divider",
-    color: "text.secondary",
-};
-
-const iconSx: SxProps<Theme> = {
-    flexShrink: 0,
-};
-
-const hintSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-};
-
-const buttonSx: SxProps<Theme> = {
-    flexShrink: 0,
-    whiteSpace: "nowrap",
-};
 
 /**
  * Says what the trash is for, with its own button emptying it, disabled while its listing is empty,
@@ -56,17 +27,17 @@ const TrashBar = ({ section, onEmpty }: TrashBarProps) => {
     const empty = state?.status === "ready" && !state.partial && state.entries?.length === 0;
 
     return (
-        <Box sx={barSx}>
-            <Icon name="delete" fontSize="small" sx={iconSx} />
-            <Typography variant="body2" sx={hintSx}>
+        <div className={cx(styles.bar, fmClasses.trashBar)}>
+            <Icon name="delete" fontSize="small" className={styles.icon} />
+            <Text variant="body2" className={styles.hint}>
                 {text.trashHint}
-            </Typography>
+            </Text>
             {onEmpty && (
-                <Button size="small" color="error" disabled={empty} sx={buttonSx} onClick={onEmpty}>
+                <Button size="small" color="error" disabled={empty} className={styles.button} onClick={onEmpty}>
                     {text.trashEmptyButton}
                 </Button>
             )}
-        </Box>
+        </div>
     );
 };
 

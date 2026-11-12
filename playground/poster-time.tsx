@@ -1,47 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Slider from "@mui/material/Slider";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
+import { Button, Slider, Text } from "./ui";
+import styles from "./poster-time.module.css";
 
 import type { PropertyDefinition, PropertyEditParams } from "../src";
-
-// A field of the playground's own, as an app would draw one: the media manager only lays it out and
-// hands what it holds to the adapter's `process`, and what's made of it is the backend's.
-
-const rootSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0.5,
-};
-
-const stageSx: SxProps<Theme> = {
-    position: "relative",
-    aspectRatio: "16 / 9",
-    overflow: "hidden",
-    borderRadius: 1,
-    bgcolor: "common.black",
-    "& > video, & > img": {
-        position: "absolute",
-        inset: 0,
-        display: "block",
-        width: "100%",
-        height: "100%",
-        objectFit: "contain",
-    },
-};
-
-// The time runs from the start on the left, as a video's does, whichever way the page reads.
-const timeSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 1,
-    minHeight: 32,
-    fontVariantNumeric: "tabular-nums",
-};
 
 /** A moment of a video, as "1:05", with tenths for a short one, whose frames are that close. */
 const formatTime = (seconds: number, tenths: boolean) => {
@@ -112,8 +73,8 @@ const PosterTime = ({ value, entry, adapter, labelId, onChange, disabled }: Prop
     }, [at, length]);
 
     return (
-        <Box sx={rootSx}>
-            <Box sx={stageSx}>
+        <div className={styles.root}>
+            <div className={styles.stage}>
                 {source && (
                     <video
                         ref={videoRef}
@@ -126,9 +87,8 @@ const PosterTime = ({ value, entry, adapter, labelId, onChange, disabled }: Prop
                     />
                 )}
                 {chosen === undefined && poster && <img src={poster} alt="" draggable={false} />}
-            </Box>
+            </div>
             <Slider
-                size="small"
                 aria-labelledby={labelId}
                 aria-valuetext={formatTime(at, tenths)}
                 min={0}
@@ -136,21 +96,21 @@ const PosterTime = ({ value, entry, adapter, labelId, onChange, disabled }: Prop
                 step={tenths ? 0.1 : 1}
                 value={at}
                 disabled={disabled || length === undefined}
-                onChange={(_, next) => onChange(next as number)}
+                onChange={onChange}
             />
-            <Box sx={timeSx}>
-                <Typography variant="body2" color="text.secondary">
+            <div className={styles.time}>
+                <Text variant="body2" color="secondary">
                     {chosen === undefined
                         ? "The poster in use"
                         : `From ${formatTime(at, tenths)} of ${formatTime(length ?? 0, tenths)}`}
-                </Typography>
+                </Text>
                 {chosen !== undefined && (
                     <Button size="small" color="inherit" onClick={() => onChange(undefined)}>
                         Keep the poster in use
                     </Button>
                 )}
-            </Box>
-        </Box>
+            </div>
+        </div>
     );
 };
 

@@ -1,9 +1,8 @@
-import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../../hooks/use-locale";
 import { isolate } from "../../../utils/bidi";
+import Button from "../../ui/button";
+import Text from "../../ui/text";
+import styles from "./conflict-step.module.css";
 
 import type { Clash, ConflictPolicy } from "../../../types";
 
@@ -22,11 +21,6 @@ interface ConflictChoicesProps {
     pending: ConflictPolicy | null;
     onChoose: (conflict: ConflictPolicy) => void;
 }
-
-const messageSx: SxProps<Theme> = {
-    color: "text.primary",
-    fontWeight: 600,
-};
 
 /**
  * What Replace would do to the clashes: replace a file with a file, merge a folder into a folder,
@@ -84,29 +78,29 @@ export const ConflictMessage = ({ clashes, folderName }: ConflictMessageProps) =
 
     return (
         <>
-            <Typography sx={messageSx}>{message}</Typography>
+            <Text className={styles.message}>{message}</Text>
             {there.length > 0 && shared.length > 0 && (
-                <Typography variant="body2" color="text.secondary">
+                <Text variant="body2" color="secondary">
                     {text.conflictSharedToo(shared.length, isolate(shared[0].name))}
-                </Typography>
+                </Text>
             )}
-            <Typography variant="body2" color="text.secondary">
+            <Text variant="body2" color="secondary">
                 {hint}
-            </Typography>
+            </Text>
             {replacing > 0 && merging > 0 && (
-                <Typography variant="body2" color="text.secondary">
+                <Text variant="body2" color="secondary">
                     {text.conflictReplaceMerges(merging)}
-                </Typography>
+                </Text>
             )}
             {replaces && otherKind.length > 0 && (
-                <Typography variant="body2" color="text.secondary">
+                <Text variant="body2" color="secondary">
                     {text.conflictKindKept(otherKind.length, isolate(otherKind[0].name))}
-                </Typography>
+                </Text>
             )}
             {replaces && locked.length > 0 && (
-                <Typography variant="body2" color="text.secondary">
+                <Text variant="body2" color="secondary">
                     {text.conflictLockedKept(locked.length, isolate(locked[0].name))}
-                </Typography>
+                </Text>
             )}
         </>
     );

@@ -1,0 +1,12 @@
+.tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.links {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}

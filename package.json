@@ -10,24 +10,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.1",
-    "@mui/icons-material": "^9.5.0",
-    "@mui/material": "^9.5.0",
+    "@base-ui/react": "^1.9.0",
     "@react-symbols/icons": "^1.4.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@emotion/cache": "^11.14.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
-    "@types/stylis": "^4.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
-    "stylis": "^4.2.0",
-    "stylis-plugin-rtl": "^2.1.1",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   }

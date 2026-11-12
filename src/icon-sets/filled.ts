@@ -1,127 +1,142 @@
-import Add from "@mui/icons-material/Add";
-import ArrowBack from "@mui/icons-material/ArrowBack";
-import ArrowDownward from "@mui/icons-material/ArrowDownward";
-import ArrowForward from "@mui/icons-material/ArrowForward";
-import ArrowUpward from "@mui/icons-material/ArrowUpward";
-import Check from "@mui/icons-material/Check";
-import ChevronLeft from "@mui/icons-material/ChevronLeft";
-import ChevronRight from "@mui/icons-material/ChevronRight";
-import Close from "@mui/icons-material/Close";
-import ContentCopy from "@mui/icons-material/ContentCopy";
-import ContentCut from "@mui/icons-material/ContentCut";
-import Delete from "@mui/icons-material/Delete";
-import DeleteForever from "@mui/icons-material/DeleteForever";
-import DesktopWindows from "@mui/icons-material/DesktopWindows";
-import Description from "@mui/icons-material/Description";
-import Download from "@mui/icons-material/Download";
-import DriveFolderUpload from "@mui/icons-material/DriveFolderUpload";
-import Storage from "@mui/icons-material/Storage";
-import Edit from "@mui/icons-material/Edit";
-import ExpandMore from "@mui/icons-material/ExpandMore";
-import InsertDriveFile from "@mui/icons-material/InsertDriveFile";
-import FilterList from "@mui/icons-material/FilterList";
-import Folder from "@mui/icons-material/Folder";
-import FolderOpen from "@mui/icons-material/FolderOpen";
-import Fullscreen from "@mui/icons-material/Fullscreen";
-import FullscreenExit from "@mui/icons-material/FullscreenExit";
-import GridView from "@mui/icons-material/GridView";
-import Home from "@mui/icons-material/Home";
-import Info from "@mui/icons-material/Info";
-import ViewList from "@mui/icons-material/ViewList";
-import Lock from "@mui/icons-material/Lock";
-import Menu from "@mui/icons-material/Menu";
-import MoreVert from "@mui/icons-material/MoreVert";
-import DriveFileMove from "@mui/icons-material/DriveFileMove";
-import MusicNote from "@mui/icons-material/MusicNote";
-import Dns from "@mui/icons-material/Dns";
-import CreateNewFolder from "@mui/icons-material/CreateNewFolder";
-import ContentPaste from "@mui/icons-material/ContentPaste";
-import Image from "@mui/icons-material/Image";
-import Visibility from "@mui/icons-material/Visibility";
-import History from "@mui/icons-material/History";
-import Refresh from "@mui/icons-material/Refresh";
-import DriveFileRenameOutline from "@mui/icons-material/DriveFileRenameOutline";
-import RestoreFromTrash from "@mui/icons-material/RestoreFromTrash";
-import RotateLeft from "@mui/icons-material/RotateLeft";
-import RotateRight from "@mui/icons-material/RotateRight";
-import Search from "@mui/icons-material/Search";
-import ManageSearch from "@mui/icons-material/ManageSearch";
-import SelectAll from "@mui/icons-material/SelectAll";
-import Checklist from "@mui/icons-material/Checklist";
-import Settings from "@mui/icons-material/Settings";
-import Share from "@mui/icons-material/Share";
-import Sort from "@mui/icons-material/Sort";
-import Star from "@mui/icons-material/Star";
-import StarBorder from "@mui/icons-material/StarBorder";
-import Upload from "@mui/icons-material/Upload";
-import Movie from "@mui/icons-material/Movie";
-import FitScreen from "@mui/icons-material/FitScreen";
-import ZoomIn from "@mui/icons-material/ZoomIn";
-import ZoomOut from "@mui/icons-material/ZoomOut";
+import { createIcon } from "../components/icons/create-icon";
 
 import type { IconSet } from "../types";
 
+// Material Icons, Filled, as Google publishes them under the Apache License 2.0: each icon's
+// shapes on a 24 by 24 grid, drawn by `createIcon`. Source: https://github.com/google/material-design-icons.
+// The license and notice are in THIRD_PARTY_NOTICES.md at the package root.
 const filled: IconSet = {
-    add: Add,
-    arrowBack: ArrowBack,
-    arrowDown: ArrowDownward,
-    arrowForward: ArrowForward,
-    arrowUp: ArrowUpward,
-    check: Check,
-    chevronLeft: ChevronLeft,
-    chevronRight: ChevronRight,
-    close: Close,
-    copy: ContentCopy,
-    cut: ContentCut,
-    delete: Delete,
-    deleteForever: DeleteForever,
-    desktop: DesktopWindows,
-    documents: Description,
-    download: Download,
-    drive: Storage,
-    edit: Edit,
-    expand: ExpandMore,
-    file: InsertDriveFile,
-    filter: FilterList,
-    folder: Folder,
-    folderOpen: FolderOpen,
-    fullScreen: Fullscreen,
-    fullScreenExit: FullscreenExit,
-    gridView: GridView,
-    home: Home,
-    info: Info,
-    listView: ViewList,
-    lock: Lock,
-    menu: Menu,
-    more: MoreVert,
-    move: DriveFileMove,
-    music: MusicNote,
-    network: Dns,
-    newFolder: CreateNewFolder,
-    paste: ContentPaste,
-    pictures: Image,
-    preview: Visibility,
-    recent: History,
-    refresh: Refresh,
-    rename: DriveFileRenameOutline,
-    restore: RestoreFromTrash,
-    rotateLeft: RotateLeft,
-    rotateRight: RotateRight,
-    search: Search,
-    searchFolder: ManageSearch,
-    selectAll: SelectAll,
-    selectMode: Checklist,
-    settings: Settings,
-    share: Share,
-    sort: Sort,
-    star: Star,
-    starBorder: StarBorder,
-    upload: Upload,
-    uploadFolder: DriveFolderUpload,
-    videos: Movie,
-    zoomFit: FitScreen,
-    zoomIn: ZoomIn,
-    zoomOut: ZoomOut,
+    add: createIcon("M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"),
+    arrowBack: createIcon("M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"),
+    arrowDown: createIcon("m20 12-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8z"),
+    arrowForward: createIcon("m12 4-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"),
+    arrowUp: createIcon("m4 12 1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8z"),
+    check: createIcon("M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"),
+    chevronLeft: createIcon("M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"),
+    chevronRight: createIcon("M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"),
+    close: createIcon(
+        "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+    ),
+    copy: createIcon(
+        "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2m0 16H8V7h11z",
+    ),
+    cut: createIcon(
+        "M9.64 7.64c.23-.5.36-1.05.36-1.64 0-2.21-1.79-4-4-4S2 3.79 2 6s1.79 4 4 4c.59 0 1.14-.13 1.64-.36L10 12l-2.36 2.36C7.14 14.13 6.59 14 6 14c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4c0-.59-.13-1.14-.36-1.64L12 14l7 7h3v-1zM6 8c-1.1 0-2-.89-2-2s.9-2 2-2 2 .89 2 2-.9 2-2 2m0 12c-1.1 0-2-.89-2-2s.9-2 2-2 2 .89 2 2-.9 2-2 2m6-7.5c-.28 0-.5-.22-.5-.5s.22-.5.5-.5.5.22.5.5-.22.5-.5.5M19 3l-6 6 2 2 7-7V3z",
+    ),
+    delete: createIcon("M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z"),
+    deleteForever: createIcon(
+        "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zm2.46-7.12 1.41-1.41L12 12.59l2.12-2.12 1.41 1.41L13.41 14l2.12 2.12-1.41 1.41L12 15.41l-2.12 2.12-1.41-1.41L10.59 14zM15.5 4l-1-1h-5l-1 1H5v2h14V4z",
+    ),
+    desktop: createIcon(
+        "M20 3H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h6v2H8v2h8v-2h-2v-2h6c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2",
+    ),
+    documents: createIcon(
+        "M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8zm2 16H8v-2h8zm0-4H8v-2h8zm-3-5V3.5L18.5 9z",
+    ),
+    download: createIcon("M5 20h14v-2H5zM19 9h-4V3H9v6H5l7 7z"),
+    drive: createIcon("M2 20h20v-4H2zm2-3h2v2H4zM2 4v4h20V4zm4 3H4V5h2zm-4 7h20v-4H2zm2-3h2v2H4z"),
+    edit: createIcon(
+        "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z",
+    ),
+    expand: createIcon("M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z"),
+    file: createIcon("M6 2c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm7 7V3.5L18.5 9z"),
+    filter: createIcon("M10 18h4v-2h-4zM3 6v2h18V6zm3 7h12v-2H6z"),
+    folder: createIcon("M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8z"),
+    folderOpen: createIcon(
+        "M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2m0 12H4V8h16z",
+    ),
+    fullScreen: createIcon("M7 14H5v5h5v-2H7zm-2-4h2V7h3V5H5zm12 7h-3v2h5v-5h-2zM14 5v2h3v3h2V5z"),
+    fullScreenExit: createIcon("M5 16h3v3h2v-5H5zm3-8H5v2h5V5H8zm6 11h2v-3h3v-2h-5zm2-11V5h-2v5h5V8z"),
+    gridView: createIcon(
+        { d: "M3 3v8h8V3zm6 6H5V5h4zm-6 4v8h8v-8zm6 6H5v-4h4zm4-16v8h8V3zm6 6h-4V5h4zm-6 4v8h8v-8zm6 6h-4v-4h4z", evenOdd: true },
+    ),
+    home: createIcon("M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"),
+    info: createIcon("M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m1 15h-2v-6h2zm0-8h-2V7h2z"),
+    listView: createIcon("M3 14h4v-4H3zm0 5h4v-4H3zM3 9h4V5H3zm5 5h13v-4H8zm0 5h13v-4H8zM8 5v4h13V5z"),
+    lock: createIcon(
+        "M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2m-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2m3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1z",
+    ),
+    menu: createIcon("M3 18h18v-2H3zm0-5h18v-2H3zm0-7v2h18V6z"),
+    more: createIcon(
+        "M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2m0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2",
+    ),
+    move: createIcon(
+        "M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2m-6 12v-3h-4v-4h4V8l5 5z",
+    ),
+    music: createIcon("M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3z"),
+    network: createIcon(
+        "M20 13H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-6c0-.55-.45-1-1-1M7 19c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2M20 3H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1M7 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2",
+    ),
+    newFolder: createIcon(
+        "M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2m-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3z",
+    ),
+    paste: createIcon(
+        "M19 2h-4.18C14.4.84 13.3 0 12 0S9.6.84 9.18 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1m7 18H5V4h2v3h10V4h2z",
+    ),
+    pictures: createIcon(
+        "M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2M8.5 13.5l2.5 3.01L14.5 12l4.5 6H5z",
+    ),
+    preview: createIcon(
+        "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5M12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5m0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3",
+    ),
+    recent: createIcon(
+        "M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9m-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8z",
+    ),
+    refresh: createIcon(
+        "M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z",
+    ),
+    rename: createIcon(
+        "M18.41 5.8 17.2 4.59c-.78-.78-2.05-.78-2.83 0l-2.68 2.68L3 15.96V20h4.04l8.74-8.74 2.63-2.63c.79-.78.79-2.05 0-2.83M6.21 18H5v-1.21l8.66-8.66 1.21 1.21zM11 20l4-4h6v4z",
+    ),
+    restore: createIcon(
+        "M19 4h-3.5l-1-1h-5l-1 1H5v2h14zM6 7v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7zm8 7v4h-4v-4H8l4-4 4 4z",
+    ),
+    rotateLeft: createIcon(
+        "M7.11 8.53 5.7 7.11C4.8 8.27 4.24 9.61 4.07 11h2.02c.14-.87.49-1.72 1.02-2.47M6.09 13H4.07c.17 1.39.72 2.73 1.62 3.89l1.41-1.42c-.52-.75-.87-1.59-1.01-2.47m1.01 5.32c1.16.9 2.51 1.44 3.9 1.61V17.9c-.87-.15-1.71-.49-2.46-1.03zM13 4.07V1L8.45 5.55 13 10V6.09c2.84.48 5 2.94 5 5.91s-2.16 5.43-5 5.91v2.02c3.95-.49 7-3.85 7-7.93s-3.05-7.44-7-7.93",
+    ),
+    rotateRight: createIcon(
+        "M15.55 5.55 11 1v3.07C7.06 4.56 4 7.92 4 12s3.05 7.44 7 7.93v-2.02c-2.84-.48-5-2.94-5-5.91s2.16-5.43 5-5.91V10zM19.93 11c-.17-1.39-.72-2.73-1.62-3.89l-1.42 1.42c.54.75.88 1.6 1.02 2.47zM13 17.9v2.02c1.39-.17 2.74-.71 3.9-1.61l-1.44-1.44c-.75.54-1.59.89-2.46 1.03m3.89-2.42 1.42 1.41c.9-1.16 1.45-2.5 1.62-3.89h-2.02c-.14.87-.48 1.72-1.02 2.48",
+    ),
+    search: createIcon(
+        "M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14",
+    ),
+    searchFolder: createIcon(
+        "M7 9H2V7h5zm0 3H2v2h5zm13.59 7-3.83-3.83c-.8.52-1.74.83-2.76.83-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5c0 1.02-.31 1.96-.83 2.75L22 17.59zM17 11c0-1.65-1.35-3-3-3s-3 1.35-3 3 1.35 3 3 3 3-1.35 3-3M2 19h10v-2H2z",
+    ),
+    selectAll: createIcon(
+        "M3 5h2V3c-1.1 0-2 .9-2 2m0 8h2v-2H3zm4 8h2v-2H7zM3 9h2V7H3zm10-6h-2v2h2zm6 0v2h2c0-1.1-.9-2-2-2M5 21v-2H3c0 1.1.9 2 2 2m-2-4h2v-2H3zM9 3H7v2h2zm2 18h2v-2h-2zm8-8h2v-2h-2zm0 8c1.1 0 2-.9 2-2h-2zm0-12h2V7h-2zm0 8h2v-2h-2zm-4 4h2v-2h-2zm0-16h2V3h-2zM7 17h10V7H7zm2-8h6v6H9z",
+    ),
+    selectMode: createIcon(
+        "M22 7h-9v2h9zm0 8h-9v2h9zM5.54 11 2 7.46l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41zm0 8L2 15.46l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41z",
+    ),
+    settings: createIcon(
+        "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6",
+    ),
+    share: createIcon(
+        "M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92",
+    ),
+    sort: createIcon("M3 18h6v-2H3zM3 6v2h18V6zm0 7h12v-2H3z"),
+    star: createIcon("M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"),
+    starBorder: createIcon(
+        "m22 9.24-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28z",
+    ),
+    upload: createIcon("M5 20h14v-2H5zm0-10h4v6h6v-6h4l-7-7z"),
+    uploadFolder: createIcon(
+        "M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2m0 12H4V8h16zM8 13.01l1.41 1.41L11 12.84V17h2v-4.16l1.59 1.59L16 13.01 12.01 9z",
+    ),
+    videos: createIcon(
+        "m18 4 2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4z",
+    ),
+    zoomFit: createIcon(
+        "M17 4h3c1.1 0 2 .9 2 2v2h-2V6h-3zM4 8V6h3V4H4c-1.1 0-2 .9-2 2v2zm16 8v2h-3v2h3c1.1 0 2-.9 2-2v-2zM7 18H4v-2H2v2c0 1.1.9 2 2 2h3zM18 8H6v8h12z",
+    ),
+    zoomIn: createIcon(
+        "M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14",
+        "M12 10h-2v2H9v-2H7V9h2V7h1v2h2z",
+    ),
+    zoomOut: createIcon(
+        "M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14M7 9h5v1H7z",
+    ),
 };
 
 export default filled;

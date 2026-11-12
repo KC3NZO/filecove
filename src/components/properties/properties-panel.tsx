@@ -1,20 +1,13 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Checkbox from "@mui/material/Checkbox";
-import Chip from "@mui/material/Chip";
-import CircularProgress from "@mui/material/CircularProgress";
-import Link from "@mui/material/Link";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
 import { useProperties } from "../../hooks/use-properties";
 import { useThumbnail } from "../../hooks/use-thumbnail";
 import { createPropertiesCache } from "../../store/properties-cache";
-import { focusOutline, visuallyHiddenSx } from "../../styles/mixins";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import util from "../../styles/util.module.css";
 import { isolate, joinIsolated } from "../../utils/bidi";
 import { NO_ERRORS } from "../../utils/field-errors";
 import { formatValue, hasEditor, isEmptyValue, readValue } from "../../utils/property-value";
@@ -22,6 +15,13 @@ import ToolbarActions from "../buttons/toolbar-actions";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon, FolderTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
+import Button from "../ui/button";
+import Checkbox from "../ui/checkbox";
+import Chip from "../ui/chip";
+import CircularProgress from "../ui/circular-progress";
+import Link from "../ui/link";
+import Text from "../ui/text";
+import styles from "./properties-panel.module.css";
 import PropertyDisplay from "./property-display";
 import PropertyEditor from "./property-editor";
 
@@ -167,188 +167,11 @@ const definitionOf = (field: EditableField): PropertyDefinition =>
           }
         : { field: field.id, label: field.label, type: "string", multiple: true, editable: true };
 
-const rootSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    minHeight: 0,
-    outline: "none",
-    "&:focus-visible": { ...focusOutline, borderRadius: "inherit" },
-};
-
-// Inside a host's view, which scrolls it with the rest: as tall as what it holds, its first group's
-// rule left out, as the host's own heading sets it apart.
-const embeddedSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    outline: "none",
-    "& > div:first-of-type": { overflowY: "visible", px: 0 },
-    "& > div:first-of-type > div:first-of-type": { borderTop: 0, pt: 0 },
-};
-
-const headerSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1,
-    flexShrink: 0,
-    minHeight: 52,
-    paddingInlineStart: 2,
-    paddingInlineEnd: 1,
-};
-
-const titleSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    fontSize: "0.9375rem",
-    fontWeight: 700,
-};
-
-const bodySx: SxProps<Theme> = {
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-    px: 2,
-    pb: 2,
-};
-
-const emptySx: SxProps<Theme> = {
-    py: 4,
-    textAlign: "center",
-    color: "text.secondary",
-};
-
-const heroSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 1,
-    pt: 1,
-    pb: 2,
-    textAlign: "center",
-};
-
-// The picture fills the panel's width, and is never taller than it is wide, shrunk to fit. A
-// smaller thumbnail standing in while the larger loads is drawn at the same size, so the swap
-// changes only its sharpness.
-const pictureSx: SxProps<Theme> = {
-    alignSelf: "stretch",
-    containerType: "inline-size",
-    "& > img": {
-        display: "block",
-        width: "100%",
-        height: "auto",
-        maxHeight: "100cqi",
-        objectFit: "contain",
-        borderRadius: 1,
-    },
-};
-
-const severalSx: SxProps<Theme> = {
-    fontSize: "3.5rem",
-};
-
-const nameSx: SxProps<Theme> = {
-    maxWidth: "100%",
-    fontWeight: 600,
-    overflowWrap: "anywhere",
-};
-
-const buttonsSx: SxProps<Theme> = {
-    display: "flex",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 1,
-};
-
-const fieldsSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1.5,
-    m: 0,
-};
-
-// Each group of rows is set apart by a rule above it.
-const groupSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1.5,
-    py: 2,
-    borderTop: 1,
-    borderColor: "divider",
-};
-
-const groupTitleSx: SxProps<Theme> = {
-    fontSize: "0.8125rem",
-    fontWeight: 600,
-};
-
-const rowSx: SxProps<Theme> = {
-    minWidth: 0,
-    "& > dt": {
-        color: "text.secondary",
-        fontSize: "0.75rem",
-    },
-    // A property with no label is its value alone, as the app's own `render` may draw it.
-    "& > dt:empty": { display: "none" },
-    "& > dd": {
-        display: "flex",
-        alignItems: "center",
-        flexWrap: "wrap",
-        gap: 1,
-        m: 0,
-        fontSize: "0.875rem",
-        overflowWrap: "anywhere",
-    },
-};
-
-const tagsSx: SxProps<Theme> = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 0.5,
-};
-
-const notSetSx: SxProps<Theme> = {
-    color: "text.secondary",
-};
-
-// The app's own `render` takes the row's whole width, below its label.
-const customSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0.75,
-    width: "100%",
-    minWidth: 0,
-};
-
-const saveErrorSx: SxProps<Theme> = {
-    width: "100%",
-    color: "error.main",
-    fontSize: "0.75rem",
-};
-
-// The checkbox's own padding, kept small, so it sits in the row as a value does.
-const toggleSx: SxProps<Theme> = {
-    p: 0.5,
-    marginInlineStart: "-4px",
-};
-
-const stateSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 1,
-    py: 2,
-    borderTop: 1,
-    borderColor: "divider",
-    color: "text.secondary",
-    fontSize: "0.875rem",
-};
-
 const Row = ({ label, labelId, children }: RowProps) => (
-    <Box sx={rowSx}>
+    <div className={cx(styles.row, fmClasses.property)}>
         <dt id={labelId}>{label}</dt>
         <dd>{children}</dd>
-    </Box>
+    </div>
 );
 
 /** The file's thumbnail, large, once it has loaded, or else its type icon. */
@@ -357,9 +180,9 @@ const Picture = ({ item, size }: PictureProps) => {
 
     if (thumbnail) {
         return (
-            <Box sx={pictureSx}>
+            <div className={styles.picture}>
                 <img src={thumbnail} alt="" draggable={false} />
-            </Box>
+            </div>
         );
     }
 
@@ -420,11 +243,11 @@ const FieldText = ({ field, onCopy }: FieldValueProps) => {
             );
         case "tags":
             return (
-                <Box sx={tagsSx}>
+                <div className={styles.tags}>
                     {field.value.map((tag) => (
-                        <Chip key={tag} size="small" label={<bdi>{tag}</bdi>} />
+                        <Chip key={tag} label={<bdi>{tag}</bdi>} />
                     ))}
-                </Box>
+                </div>
             );
     }
 };
@@ -445,9 +268,9 @@ const FieldValue = ({ field, onCopy, onEdit, editRef }: FieldValueProps) => {
     return (
         <>
             {empty ? (
-                <Box component="span" sx={notSetSx}>
+                <span className={styles.notSet}>
                     {text.propertiesNotSet}
-                </Box>
+                </span>
             ) : (
                 <FieldText field={field} onCopy={onCopy} />
             )}
@@ -711,7 +534,7 @@ const PropertiesPanel = ({
         if (definition.render) {
             shown = (
                 // Keyed by the entry, so what it holds of its own is that entry's, not the next one's.
-                <Box key={single.entry.id} sx={customSx}>
+                <div key={single.entry.id} className={styles.custom}>
                     {definition.render({
                         definition,
                         value,
@@ -723,24 +546,23 @@ const PropertiesPanel = ({
                         save: editable ? (next: unknown) => saveValue(key, definition.label, next, false) : undefined,
                         saving,
                     })}
-                </Box>
+                </div>
             );
         } else if (toggles) {
             shown = (
                 <Checkbox
-                    size="small"
                     checked={save?.status === "saving" ? save.value === true : value === true}
                     disabled={saving}
-                    slotProps={{ input: { "aria-labelledby": labelId } }}
-                    sx={toggleSx}
-                    onChange={(event) => saveValue(key, definition.label, event.target.checked, false)}
+                    aria-labelledby={labelId}
+                    className={styles.toggle}
+                    onCheckedChange={(checked) => saveValue(key, definition.label, checked, false)}
                 />
             );
         } else if (isEmptyValue(value)) {
             shown = (
-                <Box component="span" sx={notSetSx}>
+                <span className={styles.notSet}>
                     {text.propertiesNotSet}
-                </Box>
+                </span>
             );
         } else {
             shown = <PropertyDisplay definition={definition} value={value} formattedValue={formattedValue} />;
@@ -763,9 +585,9 @@ const PropertiesPanel = ({
                     </TooltipIconButton>
                 )}
                 {failed && (definition.render || toggles) && (
-                    <Box role="alert" sx={saveErrorSx}>
+                    <div role="alert" className={styles.saveError}>
                         <bdi>{messageOf(failed.error) ?? text.propertiesSaveFailed(definition.label)}</bdi>
-                    </Box>
+                    </div>
                 )}
             </Row>
         );
@@ -775,9 +597,9 @@ const PropertiesPanel = ({
 
     if (items.length === 0) {
         body = (
-            <Typography variant="body2" sx={emptySx}>
+            <Text variant="body2" className={styles.empty}>
                 {text.propertiesNothingSelected}
-            </Typography>
+            </Text>
         );
     } else {
         const files = items.filter((item) => item.entry.kind === "file");
@@ -908,18 +730,18 @@ const PropertiesPanel = ({
 
         if (details?.status === "loading" && !handed) {
             backendGroups = (
-                <Box sx={stateSx}>
+                <div className={cx(styles.state, fmClasses.state)}>
                     <Spinner label={text.propertiesLoading} />
-                </Box>
+                </div>
             );
         } else if (details?.status === "error") {
             backendGroups = (
-                <Box sx={stateSx} role="alert">
+                <div className={cx(styles.state, fmClasses.state)} role="alert">
                     <bdi>{messageOf(details.error) ?? text.propertiesFailed}</bdi>
                     <Button size="small" onClick={retryDetails}>
                         {text.propertiesTryAgain}
                     </Button>
-                </Box>
+                </div>
             );
         } else if (definitions && single && entry) {
             backendGroups = definitions.map((group, groupIndex) => {
@@ -932,28 +754,28 @@ const PropertiesPanel = ({
 
                 return (
                     rows.length > 0 && (
-                        <Box key={group.id} sx={groupSx}>
+                        <div key={group.id} className={cx(styles.group, fmClasses.propertiesGroup)}>
                             {group.title && (
-                                <Typography component="h3" sx={groupTitleSx}>
+                                <Text component="h3" className={styles.groupTitle}>
                                     {group.title}
-                                </Typography>
+                                </Text>
                             )}
-                            <Box component="dl" sx={fieldsSx}>
+                            <dl className={styles.fields}>
                                 {rows}
-                            </Box>
-                        </Box>
+                            </dl>
+                        </div>
                     )
                 );
             });
         } else if (handed) {
             backendGroups = handed.groups?.map((group, groupIndex) => (
-                <Box key={group.id} sx={groupSx}>
+                <div key={group.id} className={cx(styles.group, fmClasses.propertiesGroup)}>
                     {group.title && (
-                        <Typography component="h3" sx={groupTitleSx}>
+                        <Text component="h3" className={styles.groupTitle}>
                             {group.title}
-                        </Typography>
+                        </Text>
                     )}
-                    <Box component="dl" sx={fieldsSx}>
+                    <dl className={styles.fields}>
                         {group.fields.map((field, index) => {
                             const editable = single && canEdit && isEditable(field) ? field : undefined;
                             const save = single && editable && cache.save(single.entry, single.adapter, field.id);
@@ -991,28 +813,28 @@ const PropertiesPanel = ({
                                 </Row>
                             );
                         })}
-                    </Box>
-                </Box>
+                    </dl>
+                </div>
             ));
         }
 
         body = (
             <>
                 {(!embedded || single?.rename || single?.openLocation || single?.openOrigin) && (
-                    <Box sx={heroSx}>
+                    <div className={styles.hero}>
                         {!embedded &&
                             (single ? (
                                 <Picture item={single} size={pictureSize} />
                             ) : (
-                                <Icon name="copy" color="action" sx={severalSx} />
+                                <Icon name="copy" color="action" className={styles.several} />
                             ))}
                         {!embedded && (
-                            <Typography component="p" sx={nameSx}>
+                            <Text component="p" className={styles.name}>
                                 {entry ? <bdi>{entry.name}</bdi> : text.propertiesItems(items.length)}
-                            </Typography>
+                            </Text>
                         )}
                         {(single?.rename || single?.openLocation || single?.openOrigin) && (
-                            <Box sx={buttonsSx}>
+                            <div className={styles.buttons}>
                                 {single.openLocation && (
                                     <Button size="small" color="inherit" variant="outlined" onClick={single.openLocation}>
                                         {text.propertiesOpenLocation}
@@ -1028,16 +850,16 @@ const PropertiesPanel = ({
                                         {text.propertiesRename}
                                     </Button>
                                 )}
-                            </Box>
+                            </div>
                         )}
-                    </Box>
+                    </div>
                 )}
                 {ownRows && (
-                    <Box sx={groupSx}>
-                        <Box component="dl" sx={fieldsSx}>
+                    <div className={cx(styles.group, fmClasses.propertiesGroup)}>
+                        <dl className={styles.fields}>
                             {rows}
-                        </Box>
-                    </Box>
+                        </dl>
+                    </div>
                 )}
                 {backendGroups}
             </>
@@ -1045,34 +867,33 @@ const PropertiesPanel = ({
     }
 
     return (
-        <Box
-            component="aside"
+        <aside
             ref={rootRef}
             tabIndex={-1}
             aria-labelledby={embedded ? undefined : titleId}
             aria-label={embedded ? text.properties : undefined}
-            sx={embedded ? embeddedSx : rootSx}
+            className={cx(embedded ? styles.embedded : styles.root, fmClasses.properties)}
         >
             {!embedded && (
-                <Box sx={headerSx}>
-                    <Typography id={titleId} component="h2" noWrap sx={titleSx}>
+                <div className={cx(styles.header, fmClasses.propertiesHeader)}>
+                    <Text id={titleId} component="h2" noWrap className={styles.title}>
                         {text.properties}
-                    </Typography>
+                    </Text>
                     <ToolbarActions groups={actions} moreLabel={text.propertiesMoreActions} inline={INLINE_ACTIONS} />
                     {onClose && (
                         <TooltipIconButton label={text.propertiesClose} onClick={onClose}>
                             <Icon name="close" fontSize="small" />
                         </TooltipIconButton>
                     )}
-                </Box>
+                </div>
             )}
-            <Box ref={bodyRef} sx={bodySx}>
+            <div ref={bodyRef} className={styles.body}>
                 {body}
-            </Box>
-            <Box role="status" sx={visuallyHiddenSx}>
+            </div>
+            <div role="status" className={util.visuallyHidden}>
                 {said && <span key={said.id}>{said.message}</span>}
-            </Box>
-        </Box>
+            </div>
+        </aside>
     );
 };
 

@@ -1,0 +1,53 @@
+.pathRow {
+    display: flex;
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+.level {
+    outline: none;
+}
+
+.list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    padding-inline: 8px;
+    padding-block: 6px;
+    border-radius: calc(var(--_fm-radius) * 1.5);
+    text-align: start;
+
+    &:hover {
+        background-color: var(--_fm-hover);
+    }
+}
+
+.rowName {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.875rem;
+}
+
+.rowIcon {
+    flex-shrink: 0;
+    color: var(--_fm-text-secondary);
+}
+
+.state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-block: 24px;
+    color: var(--_fm-text-secondary);
+    font-size: 0.875rem;
+    text-align: center;
+}

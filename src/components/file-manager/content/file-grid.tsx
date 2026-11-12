@@ -1,31 +1,18 @@
 import { memo } from "react";
 import type { CSSProperties } from "react";
 
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../../hooks/use-locale";
-import { viewMedium } from "../../../styles/layout";
-import {
-    arrivedMarker,
-    cutMarker,
-    dragMarkers,
-    focusVisibleRing,
-    forcedArrived,
-    forcedColors,
-    forcedSelected,
-    hoverBackground,
-    movingMarker,
-    selectedBackground,
-    selectedHoverBackground,
-} from "../../../styles/mixins";
+import { fmClasses } from "../../../styles/classes";
+import marks from "../../../styles/entry.module.css";
+import { cx } from "../../../utils/cx";
 import { pointerPosition } from "../../../utils/menu-position";
 import { drawnState } from "../../../utils/permissions";
 import { selectModifiers } from "../../../utils/selection";
 import { gridSize } from "../../../utils/zoom";
 import Icon from "../../icons/icon";
+import Text from "../../ui/text";
 import { DrawnName } from "../find-layer";
+import styles from "./file-grid.module.css";
 import ItemIcon from "./item-icon";
 
 import type { EntryOrigin, FileEntry, FileViewProps, MovingKind } from "../../../types";
@@ -62,106 +49,6 @@ interface FileTileProps extends Pick<FileViewProps, "adapter" | "draggable" | "o
     dropTarget: boolean;
 }
 
-// Text can't be selected anywhere in the grid, or Shift-click would select it across tiles.
-// Clipped down its length, as the list is, so a tile kept rendered far from view in a squeezed
-// listbox doesn't lengthen what the panel scrolls.
-const gridSx: SxProps<Theme> = {
-    userSelect: "none",
-    overflowY: "clip",
-    p: 1,
-    [viewMedium]: { p: 3 },
-};
-
-// Only the tiles in or near view are rendered, each placed at its line and in its column, and the
-// listbox is as tall as all the lines (`useVirtualLines`). The columns are still the grid's own,
-// as many as fit, which the hook reads, as narrow as the zoom lets them be (`--column` and
-// `--wide-column`, set in `style`).
-const tilesSx: SxProps<Theme> = {
-    position: "relative",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(var(--column), 1fr))",
-    gap: 0.5,
-    [viewMedium]: {
-        gridTemplateColumns: "repeat(auto-fill, minmax(var(--wide-column), 1fr))",
-        gap: 1,
-    },
-};
-
-// Placed by `top` and `gridColumn`, set in `style`: an absolutely positioned child of a grid takes
-// the grid area it's placed in as its box, so it fills its column's width.
-const tileSx: SxProps<Theme> = (theme) => ({
-    position: "absolute",
-    insetInline: 0,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 1,
-    px: 1,
-    pt: 1.5,
-    pb: 1,
-    borderRadius: 2,
-    textAlign: "center",
-    cursor: "default",
-    "&:hover": { bgcolor: hoverBackground(theme) },
-    '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
-    '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
-    "& > svg": { flexShrink: 0 },
-    ...cutMarker,
-    ...movingMarker,
-    ...arrivedMarker(theme),
-    ...focusVisibleRing,
-    ...dragMarkers(theme),
-    [forcedColors]: { ...forcedSelected, ...forcedArrived },
-});
-
-// Two lines tall even for a short name, so every tile is as tall, since the grid measures one for
-// them all.
-const nameSx: SxProps<Theme> = {
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical",
-    overflow: "hidden",
-    overflowWrap: "anywhere",
-    fontSize: "0.8125rem",
-    lineHeight: 1.35,
-    minHeight: "2.7em",
-};
-
-// A search everywhere's result says where it is in an outlined pill under its name, a folder icon
-// and the location in smaller, fainter text, so it reads as where the entry is rather than as more
-// of its name. The text takes two lines as the name does, and the pill is as tall with one, so
-// every tile is still as tall. An outline rather than a fill, which forced colors would drop.
-const locationSx: SxProps<Theme> = {
-    boxSizing: "border-box",
-    display: "flex",
-    alignItems: "center",
-    gap: 0.5,
-    maxWidth: "100%",
-    minHeight: "calc(2.6em + 10px)",
-    px: 1,
-    py: 0.5,
-    border: 1,
-    borderColor: "divider",
-    borderRadius: 2,
-    color: "text.secondary",
-    fontSize: "0.6875rem",
-    lineHeight: 1.3,
-};
-
-const locationIconSx: SxProps<Theme> = {
-    flexShrink: 0,
-    fontSize: "0.875rem",
-};
-
-const locationTextSx: SxProps<Theme> = {
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical",
-    overflow: "hidden",
-    overflowWrap: "anywhere",
-    minWidth: 0,
-};
-
 /**
  * One entry's tile. Memoized, so scrolling only renders the tiles coming into view.
  */
@@ -191,8 +78,17 @@ const FileTile = memo(
         const { text } = useLocale();
 
         return (
-            <Box
-                sx={tileSx}
+            <div
+                className={cx(
+                    fmClasses.gridTile,
+                    styles.tile,
+                    marks.cut,
+                    marks.moving,
+                    marks.arrived,
+                    marks.focusRing,
+                    marks.drag,
+                    marks.forcedSelected,
+                )}
                 // The span ends the tile's box at its column's far side, not at the grid's.
                 style={{ top, gridColumn: `${column + 1} / span 1` }}
                 role="option"
@@ -232,18 +128,18 @@ const FileTile = memo(
                     adapter={origin?.adapter ?? adapter}
                     view="grid"
                 />
-                <Typography variant="body2" sx={nameSx}>
+                <Text variant="body2" className={cx(styles.name, fmClasses.entryName)}>
                     <DrawnName name={entry.name} />
-                </Typography>
+                </Text>
                 {origin && (
-                    <Box sx={locationSx}>
-                        <Icon name="folder" sx={locationIconSx} />
-                        <Box component="span" sx={locationTextSx}>
+                    <div className={styles.location}>
+                        <Icon name="folder" className={styles.locationIcon} />
+                        <span className={styles.locationText}>
                             {origin.location}
-                        </Box>
-                    </Box>
+                        </span>
+                    </div>
                 )}
-            </Box>
+            </div>
         );
     },
 );
@@ -281,8 +177,8 @@ const FileGrid = ({
     } as CSSProperties;
 
     return (
-        <Box sx={gridSx}>
-            <Box ref={lines.ref} sx={tilesSx} style={style} role="listbox" aria-label={label} aria-multiselectable>
+        <div className={cx(styles.grid, fmClasses.grid)}>
+            <div ref={lines.ref} className={styles.tiles} style={style} role="listbox" aria-label={label} aria-multiselectable>
                 {lines.indexes.map((index) => {
                     const entry = entries[index];
 
@@ -312,8 +208,8 @@ const FileGrid = ({
                         />
                     );
                 })}
-            </Box>
-        </Box>
+            </div>
+        </div>
     );
 };
 

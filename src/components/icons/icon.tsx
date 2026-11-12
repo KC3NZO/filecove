@@ -1,16 +1,24 @@
-import type { SvgIconProps } from "@mui/material/SvgIcon";
-import type { SxProps, Theme } from "@mui/material/styles";
+import type { SVGProps } from "react";
 
 import { useIconConfig } from "../../hooks/use-icon-config";
 import iconSets from "../../icon-sets/registry";
-import { withSx } from "../../styles/sx";
+import { cx } from "../../utils/cx";
+import { fmClasses } from "../../styles/classes";
+import styles from "./icon.module.css";
 
 import type { IconName, IconVariant } from "../../types";
 
-interface IconProps extends SvgIconProps {
+export interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name" | "fontSize"> {
     name: IconName;
     /** Overrides the variant from `IconProvider` for this icon only. */
     variant?: IconVariant;
+    /** `medium` is 1.5rem, `small` 1.25rem, and `inherit` the size of the text around it. */
+    fontSize?: "small" | "medium" | "inherit";
+    /**
+     * Names the icon for screen readers, and shows as its tooltip, for one that says something by
+     * itself. Without it an icon is drawn only, and what it's in says what it means.
+     */
+    label?: string;
 }
 
 /**
@@ -27,19 +35,27 @@ const MIRRORED: ReadonlySet<IconName> = new Set<IconName>([
     "selectMode",
 ]);
 
-// `scale` rather than `transform`, so a part that rotates an icon, as the tree's chevrons do, still
-// can, and `:dir()` follows the `dir` the page or an ancestor sets.
-const mirroredSx = {
-    "&:dir(rtl)": { scale: "-1 1" },
-} satisfies SxProps<Theme>;
+const SIZES = { small: styles.small, medium: undefined, inherit: styles.inherit };
 
-const Icon = ({ name, variant, sx, ...props }: IconProps) => {
+/**
+ * An icon by its name, from the variant's set or the consumer's override of it. Its size and its
+ * mirroring are classes, the icon's own `className` after them so it can still override them, so a
+ * consumer's icon needs to take no more than an `svg`'s own props.
+ */
+const Icon = ({ name, variant, fontSize = "medium", label, className, ...props }: IconProps) => {
     const config = useIconConfig();
 
     const Component = config.overrides[name] ?? iconSets[variant ?? config.variant][name];
 
-    // The mirroring goes first, so the icon's own `sx` can still override it.
-    return <Component {...props} sx={MIRRORED.has(name) ? withSx(mirroredSx, sx) : sx} />;
+    return (
+        <Component
+            {...(label === undefined ? undefined : { role: "img", "aria-label": label, "aria-hidden": undefined })}
+            {...props}
+            className={cx(fmClasses.icon, styles.icon, SIZES[fontSize], MIRRORED.has(name) && styles.mirrored, className)}
+        >
+            {label === undefined ? undefined : <title>{label}</title>}
+        </Component>
+    );
 };
 
 export default Icon;

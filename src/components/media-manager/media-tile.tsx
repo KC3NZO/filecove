@@ -1,120 +1,31 @@
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
+import type { CSSProperties } from "react";
 
 import { useAssetLook } from "../../hooks/use-asset-look";
 import { useLocale } from "../../hooks/use-locale";
 import { TILE_LAYOUTS } from "../../styles/media-layout";
-import { forcedColors, visuallyHiddenSx } from "../../styles/mixins";
-import { withSx } from "../../styles/sx";
+import { fmClasses } from "../../styles/classes";
+import util from "../../styles/util.module.css";
+import { cx } from "../../utils/cx";
 import { KIND_ICONS } from "../../utils/media";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
+import Text from "../ui/text";
 import { HoldBar, HoldLine } from "./asset-hold";
 import AssetTrail, { TrailRoom } from "./asset-trail";
+import styles from "./media-tile.module.css";
 
 import type { MediaAssetLookProps, MediaKind } from "../../types";
 
-const rootSx = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    gap: 0.75,
-    minWidth: 0,
-} as const;
-
-// The picture, or the file's icon, in a box the tile's width and the kind's shape, its own corners
-// rounded within the tile's. A selected tile rings it in `primary`, so a picture filling it still
-// shows the selection.
-const frameSx = (ratio: string): SxProps<Theme> => ({
-    position: "relative",
-    aspectRatio: ratio,
-    borderRadius: 2,
-    overflow: "hidden",
-    bgcolor: "action.hover",
-    "[role='option'][aria-selected='true'] &": {
-        outline: "3px solid",
-        outlineColor: "primary.main",
-        outlineOffset: "-3px",
-    },
-    // An asset that can't be chosen now is faded, as a file being uploaded is.
-    "[data-held='true'] & > [data-part='picture']": { opacity: 0.55 },
-    // One there's no room for is only dimmed, as taking another out makes room.
-    "[data-limited='true'] & > [data-part='picture']": { opacity: 0.7 },
-    [forcedColors]: { "[role='option'][aria-selected='true'] &": { outlineColor: "HighlightText" } },
-});
-
-const FRAME_SX: Record<MediaKind, SxProps<Theme>> = {
-    image: frameSx(TILE_LAYOUTS.image.ratio),
-    video: frameSx(TILE_LAYOUTS.video.ratio),
-    document: frameSx(TILE_LAYOUTS.document.ratio),
-    audio: frameSx(TILE_LAYOUTS.audio.ratio),
-};
-
-const pictureBoxSx: SxProps<Theme> = {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-};
-
-const pictureSx: SxProps<Theme> = {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    // A page shows from its top, where its title is.
-    '[data-kind="document"] &': { objectPosition: "top" },
-};
-
-// A video's or a piece of audio's length, when the listing says it, or the app's own badge, at the frame's bottom start
-// corner, on the panel's own surface, so it reads over any picture.
-const badgeSx: SxProps<Theme> = {
-    position: "absolute",
-    bottom: 6,
-    insetInlineStart: 6,
-    display: "flex",
-    alignItems: "center",
-    gap: 0.25,
-    px: 0.5,
-    borderRadius: 1,
-    bgcolor: "background.paper",
-    color: "text.primary",
-    boxShadow: 1,
-    fontSize: "0.6875rem",
-    fontWeight: 600,
-    lineHeight: "18px",
-    "& > svg": { fontSize: 14 },
-    [forcedColors]: { bgcolor: "Canvas", color: "CanvasText", outline: "1px solid CanvasText" },
-};
-
-const textSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    minWidth: 0,
-    px: 0.25,
-    textAlign: "center",
-};
-
-const nameSx: SxProps<Theme> = {
-    fontSize: "0.8125rem",
-};
-
-const groupIconSx: SxProps<Theme> = {
-    fontSize: "3rem",
-    color: "text.secondary",
-};
-
-const detailSx: SxProps<Theme> = {
-    color: "text.secondary",
-    fontSize: "0.75rem",
-};
+// The frame's shape, the kind's own (`TILE_LAYOUTS`), handed to its stylesheet as `--ratio`.
+const FRAME_STYLES = Object.fromEntries(
+    (Object.keys(TILE_LAYOUTS) as MediaKind[]).map((kind) => [kind, { "--ratio": TILE_LAYOUTS[kind].ratio } as CSSProperties]),
+) as Record<MediaKind, CSSProperties>;
 
 // The line under the name, empty, so a tile with nothing to say there is as tall as the others.
 const emptyDetail = (
-    <Typography variant="caption" sx={detailSx} aria-hidden>
+    <Text variant="caption" className={styles.detail} aria-hidden>
         {"\u00a0"}
-    </Typography>
+    </Text>
 );
 
 /**
@@ -129,7 +40,7 @@ const emptyDetail = (
  * Every tile is as tall: the line under the name is kept, empty or not, and so is a trail's while the
  * grid shows results with them.
  */
-const MediaTile = ({ asset, kind, thumbnail, hold, trail, title, detail, badge, picture, sx }: MediaAssetLookProps) => {
+const MediaTile = ({ asset, kind, thumbnail, hold, trail, title, detail, badge, picture, className }: MediaAssetLookProps) => {
     const { formatDuration, formatNumber, formatSize, text } = useLocale();
     const group = asset.kind === "folder";
     const duration =
@@ -143,85 +54,85 @@ const MediaTile = ({ asset, kind, thumbnail, hold, trail, title, detail, badge, 
     useAssetLook();
 
     return (
-        <Box data-kind={kind} sx={withSx(rootSx, sx)}>
-            <Box sx={FRAME_SX[kind]}>
-                <Box data-part="picture" sx={pictureBoxSx}>
+        <div data-kind={kind} className={cx(styles.root, fmClasses.mediaTile, className)}>
+            <div className={styles.frame} style={FRAME_STYLES[kind]}>
+                <div data-part="picture" className={styles.pictureBox}>
                     {picture !== undefined ? (
                         picture
                     ) : thumbnail ? (
-                        <Box component="img" src={thumbnail} alt="" draggable={false} sx={pictureSx} />
+                        <img src={thumbnail} alt="" draggable={false} className={styles.picture} />
                     ) : group ? (
-                        <Icon name="folder" sx={groupIconSx} />
+                        <Icon name="folder" className={styles.groupIcon} />
                     ) : (
                         <FileTypeIcon fileName={asset.name} size={kind === "video" ? "30%" : "42%"} />
                     )}
-                </Box>
+                </div>
                 {shownBadge !== undefined && shownBadge !== null && (
-                    <Box component="span" sx={badgeSx}>
+                    <span className={styles.badge}>
                         {shownBadge}
-                    </Box>
+                    </span>
                 )}
                 {duration !== undefined && (
-                    <Box component="span" sx={badgeSx} aria-hidden>
+                    <span className={styles.badge} aria-hidden>
                         <Icon name={KIND_ICONS[kind]} />
                         <bdi>{formatDuration(duration)}</bdi>
-                    </Box>
+                    </span>
                 )}
                 {hold && <HoldBar hold={hold} place="frame" />}
-            </Box>
-            <Box sx={textSx}>
-                <Typography variant="body2" noWrap sx={nameSx}>
+            </div>
+            <div className={styles.text}>
+                <Text variant="body2" noWrap className={styles.name}>
                     {title ?? asset.name}
-                </Typography>
+                </Text>
                 {hold ? (
                     <HoldLine hold={hold} />
                 ) : detail !== undefined ? (
                     detail !== null ? (
-                        <Typography variant="caption" noWrap sx={detailSx}>
+                        <Text variant="caption" noWrap className={styles.detail}>
                             <bdi>{detail}</bdi>
-                        </Typography>
+                        </Text>
                     ) : (
                         emptyDetail
                     )
                 ) : group ? (
                     asset.childCount !== undefined ? (
-                        <Typography variant="caption" noWrap sx={detailSx}>
+                        <Text variant="caption" noWrap className={styles.detail}>
                             <bdi>{text.itemCount(asset.childCount)}</bdi>
-                        </Typography>
+                        </Text>
                     ) : (
                         emptyDetail
                     )
                 ) : measured ? (
-                    <Typography variant="caption" noWrap sx={detailSx} aria-hidden>
+                    <Text variant="caption" noWrap className={styles.detail} aria-hidden>
                         <bdi>{`${formatNumber(width)} × ${formatNumber(height)}`}</bdi>
-                    </Typography>
+                    </Text>
                 ) : (
                     (kind === "document" || kind === "audio") && asset.size !== undefined ? (
-                        <Typography variant="caption" noWrap sx={detailSx}>
+                        <Text variant="caption" noWrap className={styles.detail}>
                             <bdi>{formatSize(asset.size)}</bdi>
-                        </Typography>
+                        </Text>
                     ) : (
                         emptyDetail
                     )
                 )}
                 {trail && trail.length > 0 ? <AssetTrail trail={trail} /> : <TrailRoom />}
-            </Box>
+            </div>
             {group && (
-                <Box component="span" sx={visuallyHiddenSx}>
+                <span className={util.visuallyHidden}>
                     {text.mediaGroup}
-                </Box>
+                </span>
             )}
             {measured && (
-                <Box component="span" sx={visuallyHiddenSx}>
+                <span className={util.visuallyHidden}>
                     {text.mediaDimensions(formatNumber(width), formatNumber(height))}
-                </Box>
+                </span>
             )}
             {duration !== undefined && (
-                <Box component="span" sx={visuallyHiddenSx}>
+                <span className={util.visuallyHidden}>
                     {text.mediaDuration(formatDuration(duration))}
-                </Box>
+                </span>
             )}
-        </Box>
+        </div>
     );
 };
 

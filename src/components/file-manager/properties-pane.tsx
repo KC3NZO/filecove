@@ -1,20 +1,11 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, FocusEvent, KeyboardEvent, Ref } from "react";
 
-import Box from "@mui/material/Box";
-import type { SxProps, Theme } from "@mui/material/styles";
-import { useForkRef } from "@mui/material/utils";
-
 import { useData } from "../../hooks/use-folder";
+import { useForkRef } from "../../hooks/use-fork-ref";
 import { useLocale } from "../../hooks/use-locale";
 import { folderKey } from "../../store/folder-store";
-import {
-    PROPERTIES_MAX_WIDTH,
-    PROPERTIES_MIN_WIDTH,
-    PROPERTIES_WIDTH,
-    RESIZE_STEP,
-    rootExtraWide,
-} from "../../styles/layout";
+import { PROPERTIES_MAX_WIDTH, PROPERTIES_MIN_WIDTH, RESIZE_STEP } from "../../styles/layout";
 import { runToolbarShortcut, toolbarGroups } from "../../utils/action-groups";
 import { groupByFolder, selectionRequest } from "../../utils/groups";
 import { joinIsolated } from "../../utils/bidi";
@@ -24,6 +15,7 @@ import { sectionLocked } from "../../utils/sections";
 import { typesInField } from "../../utils/shortcut";
 import { inTrashRoot } from "../../utils/trash";
 import PropertiesPanel from "../properties/properties-panel";
+import styles from "./properties-pane.module.css";
 import ResizeEdge from "./resize-edge";
 
 import type { PropertiesCache } from "../../store/properties-cache";
@@ -86,66 +78,6 @@ const NO_TOOLBAR: ToolbarGroup[] = [];
 
 /** How many made-up entries of folders are kept, for folders no listing holds, such as a section's root. */
 const MAX_BARE = 50;
-
-// Collapsed: an overlay over the content from the end side, as the sidebar's comes from the start,
-// staying inside the file manager. Docked: an inset panel on the content's end side, as the content
-// is one, under the header bar.
-const paneSx: SxProps<Theme> = (theme) => ({
-    display: "flex",
-    flexDirection: "column",
-    bgcolor: "background.paper",
-    outline: "none",
-
-    position: "absolute",
-    zIndex: 2,
-    top: 0,
-    bottom: 0,
-    insetInlineEnd: 0,
-    width: `min(${PROPERTIES_WIDTH + 20}px, 85%)`,
-    boxShadow: 8,
-    "--closed-shift": "100%",
-    "&:dir(rtl)": { "--closed-shift": "-100%" },
-    translate: "var(--closed-shift)",
-    // Hidden, not just off-screen, so its buttons drop out of the tab order while closed.
-    visibility: "hidden",
-    transition: theme.transitions.create(["translate", "visibility"], {
-        duration: theme.transitions.duration.enteringScreen,
-        easing: theme.transitions.easing.easeOut,
-    }),
-    '&[data-open="true"]': {
-        translate: "none",
-        visibility: "visible",
-    },
-
-    // Docked, it's as wide as the user made it (`--properties-width`), and narrower, down to its
-    // least width, while the content beside it needs the room (its `min-width`).
-    [rootExtraWide]: {
-        position: "relative",
-        zIndex: "auto",
-        flexShrink: 1,
-        width: `var(--properties-width, ${PROPERTIES_WIDTH}px)`,
-        minWidth: PROPERTIES_MIN_WIDTH,
-        marginInlineEnd: 0.75,
-        mb: 0.75,
-        borderRadius: 3,
-        boxShadow: "none",
-        translate: "none",
-        visibility: "visible",
-        transition: "none",
-        '&[data-shown="false"]': { display: "none" },
-    },
-});
-
-// Clips the panel to the docked pane's rounded corners, leaving the pane itself unclipped, so its
-// edge can reach out over the gap beside it.
-const clipSx: SxProps<Theme> = {
-    flex: 1,
-    minHeight: 0,
-    display: "flex",
-    flexDirection: "column",
-    borderRadius: "inherit",
-    overflow: "hidden",
-};
 
 /**
  * How wide the docked pane can be made: what its row leaves it beside the least width of what else
@@ -411,10 +343,10 @@ const PropertiesPane = ({
     };
 
     return (
-        <Box
+        <div
             ref={forkedRef}
             id={paneId}
-            sx={paneSx}
+            className={styles.pane}
             style={{ "--properties-width": `${asked}px` } as CSSProperties}
             data-open={open}
             data-shown={shown}
@@ -438,7 +370,7 @@ const PropertiesPane = ({
                 />
             )}
             {visible && (
-                <Box sx={clipSx}>
+                <div className={styles.clip}>
                     <PropertiesPanel
                         items={items}
                         changes={changes}
@@ -448,9 +380,9 @@ const PropertiesPane = ({
                         actions={headerActions}
                         onClose={onClose}
                     />
-                </Box>
+                </div>
             )}
-        </Box>
+        </div>
     );
 };
 

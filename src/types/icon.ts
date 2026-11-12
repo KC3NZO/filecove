@@ -1,8 +1,11 @@
-import type { ReactElement } from "react";
+import type { ComponentType, ReactElement, SVGProps } from "react";
 
-import type SvgIcon from "@mui/material/SvgIcon";
-
-export type IconComponent = typeof SvgIcon;
+/**
+ * A component drawing one icon as an `svg`. It's given a `className` that sizes it, colours it as
+ * the text around it and mirrors it right to left where the icon points the way the text runs, so
+ * it has to put that on its `svg`, with the other props it's handed.
+ */
+export type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
 export type IconVariant = "filled" | "outlined" | "rounded" | "sharp" | "twoTone";
 
@@ -76,6 +79,6 @@ export type IconOverrides = Partial<IconSet>;
 
 /**
  * A semantic name from the icon set, which follows the consumer's icon variant, or any element
- * such as `<CloudOutlined />`, which is fitted to the same box.
+ * such as an `<svg>` of the app's own, which is fitted to the same box.
  */
 export type IconSource = IconName | ReactElement;

@@ -1,0 +1,278 @@
+/* A container, so its buttons fit the room the dialog has. */
+/*
+ * As large as the page allows, up to a size that still reads as a dialog, or all of it while it
+ * fills the screen (`data-maximized`).
+ */
+.dialog {
+    width: min(72rem, 100% - 2rem);
+    height: min(54rem, 100% - 2rem);
+    max-width: none;
+    max-height: none;
+    margin: 16px;
+
+    &[data-maximized="true"] {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+    }
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding-block: 8px;
+    padding-inline-start: 16px;
+    padding-inline-end: 8px;
+    container-type: inline-size;
+    container-name: file-manager-preview-header;
+}
+
+.title {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.name {
+    font-weight: 600;
+}
+
+.stepper {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.counter {
+    display: none;
+    min-width: 4.5em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+
+    @container file-manager-preview-header (min-width: 480px) {
+        display: block;
+    }
+}
+
+/*
+ * The header's own buttons and the app's actions. Below `previewHeaderWide` the actions don't show
+ * as buttons, and "More actions" holds them all (see `ToolbarActions`).
+ */
+.buttons {
+    --toolbar-buttons: none;
+    --toolbar-more: inline-flex;
+
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+
+    @container file-manager-preview-header (min-width: 640px) {
+        --toolbar-buttons: flex;
+        --toolbar-more: none;
+    }
+}
+
+/*
+ * The file sits on the content panel's surface, as the window lays out the folder view: chrome on
+ * the window's background, the view on paper. Sideways moves of a finger are left to the page, to
+ * swipe to another file.
+ */
+.body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    margin-inline: 8px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    border: 1px solid;
+    border-color: var(--_fm-divider);
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-surface);
+    touch-action: pan-y pinch-zoom;
+}
+
+/* What follows the finger as it swipes. */
+.slide {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Shrunk to fit, never stretched past its own size. */
+.media {
+    display: block;
+    max-width: calc(100% - 2rem);
+    max-height: calc(100% - 2rem);
+    object-fit: contain;
+}
+
+.frame {
+    align-self: stretch;
+    flex: 1;
+    min-width: 0;
+    border: 0;
+}
+
+.column {
+    align-self: stretch;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* A previewer of the app's own fills the body, scrolling as it needs to. */
+.custom {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+/* Long lines wrap, so Left and Right, and a sideways swipe, stay free for stepping between files. */
+.text {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    padding: 16px;
+    overflow: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    unicode-bidi: plaintext;
+    tab-size: 4;
+    touch-action: pan-y pinch-zoom;
+    outline: none;
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+    }
+}
+
+.note {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-inline: 16px;
+    padding-block: 4px;
+    border-top: 1px solid;
+    border-color: var(--_fm-divider);
+    color: var(--_fm-text-secondary);
+}
+
+/* A font's characters and its sample at several sizes, each line running the way its letters do. */
+.specimen {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    touch-action: pan-y pinch-zoom;
+    outline: none;
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+    }
+}
+
+.characters {
+    font-size: 2rem;
+    line-height: 1.35;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    unicode-bidi: plaintext;
+}
+
+.sample {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.sampleText {
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    unicode-bidi: plaintext;
+}
+
+.state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    text-align: center;
+    color: var(--_fm-text-secondary);
+}
+
+.stateIcon {
+    font-size: 3rem;
+    opacity: 0.6;
+}
+
+.stateTitle {
+    color: var(--_fm-text);
+    font-weight: 600;
+}
+
+/* The file's thumbnail, larger than the grid shows it, for a file there's nothing else to show of. */
+.picture {
+    display: block;
+    width: 16rem;
+    height: 16rem;
+    max-width: 100%;
+    object-fit: contain;
+    border-radius: var(--_fm-radius);
+}
+
+/* While a file loads, its thumbnail stands where it will be, with the spinner over it. */
+.loading {
+    position: relative;
+    align-self: stretch;
+    flex: 1;
+    min-width: 0;
+}
+
+.placeholder {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 100%;
+    height: 100%;
+    max-width: calc(100% - 2rem);
+    max-height: calc(100% - 2rem);
+    object-fit: contain;
+    pointer-events: none;
+}
+
+.spinner {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+}
+
+.audio {
+    width: min(100%, 28rem);
+    margin-top: 16px;
+}

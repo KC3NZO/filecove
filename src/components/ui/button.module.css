@@ -1,0 +1,298 @@
+/*
+ * A button with nothing of the browser's own look, for a part to style: the path bar's segments,
+ * a search tab, a row that takes a press.
+ */
+.base {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: 0;
+    background-color: transparent;
+    color: inherit;
+    font: inherit;
+    text-decoration: none;
+    vertical-align: middle;
+    cursor: pointer;
+    user-select: none;
+    appearance: none;
+    -webkit-tap-highlight-color: transparent;
+
+    &:disabled {
+        cursor: default;
+        pointer-events: none;
+    }
+
+    /* Keyboard focus, drawn inside the edge so a clipping parent doesn't cut it. */
+    &:focus-visible {
+        outline: 2px solid var(--_fm-primary);
+        outline-offset: -2px;
+    }
+}
+
+/* A button with a label: plain text, outlined, or filled for the one that does the work. */
+.button {
+    --button-color: var(--_fm-primary);
+    --button-strong: var(--_fm-primary-hover);
+    --button-contrast: var(--_fm-primary-contrast);
+
+    min-width: 64px;
+    padding: 6px 8px;
+    border-radius: var(--_fm-radius);
+    color: var(--button-color);
+    font-family: var(--_fm-font-family);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.75;
+    letter-spacing: 0.02857em;
+    transition:
+        background-color 250ms,
+        border-color 250ms,
+        box-shadow 250ms,
+        color 250ms;
+
+    &:hover {
+        background-color: light-dark(
+            color-mix(in srgb, var(--button-color) 4%, transparent),
+            color-mix(in srgb, var(--button-color) 8%, transparent)
+        );
+    }
+
+    &:disabled {
+        color: var(--_fm-disabled);
+    }
+}
+
+.error {
+    --button-color: var(--_fm-error);
+    --button-strong: var(--_fm-error-hover);
+    --button-contrast: var(--_fm-error-contrast);
+}
+
+/* The colour of the text around it, for every button of a dialog but its main one. */
+.inherit {
+    --button-color: currentColor;
+    --button-strong: var(--_fm-pressed);
+    --button-contrast: inherit;
+
+    color: inherit;
+}
+
+.small {
+    padding: 4px 5px;
+    font-size: 0.8125rem;
+}
+
+.outlined {
+    padding: 5px 15px;
+    border: 1px solid color-mix(in srgb, var(--button-color) 50%, transparent);
+
+    &:hover {
+        border-color: var(--button-color);
+    }
+
+    &:disabled {
+        border-color: var(--_fm-disabled-background);
+    }
+
+    &.small {
+        padding: 3px 9px;
+    }
+}
+
+.contained {
+    padding: 6px 16px;
+    background-color: var(--button-color);
+    color: var(--button-contrast);
+    box-shadow: var(--_fm-shadow-2);
+
+    &:hover {
+        background-color: var(--button-strong);
+        box-shadow: var(--_fm-shadow-3);
+    }
+
+    &:disabled {
+        background-color: var(--_fm-disabled-background);
+        color: var(--_fm-disabled);
+        box-shadow: none;
+    }
+
+    /* Outside the edge, where a ring in the button's own colour would be lost inside it. */
+    &:focus-visible {
+        outline-offset: 2px;
+    }
+
+    &.small {
+        padding: 4px 10px;
+    }
+
+    &.inherit {
+        background-color: var(--_fm-chip);
+        color: inherit;
+    }
+
+    &.flat,
+    &.flat:hover {
+        box-shadow: none;
+    }
+}
+
+.fullWidth {
+    width: 100%;
+}
+
+/* An icon before the label, or after it, pulled a little towards the button's edge. */
+.startIcon,
+.endIcon {
+    display: inherit;
+
+    & > svg {
+        font-size: 1.25rem;
+    }
+
+    .small > & > svg {
+        font-size: 1.125rem;
+    }
+}
+
+.startIcon {
+    margin-inline: -4px 8px;
+
+    .small > & {
+        margin-inline-start: -2px;
+    }
+}
+
+.endIcon {
+    margin-inline: 8px -4px;
+
+    .small > & {
+        margin-inline-end: -2px;
+    }
+}
+
+/* While it works, a spinner takes the label's place without changing the button's width. */
+.loading {
+    color: transparent;
+
+    &:disabled {
+        color: transparent;
+    }
+}
+
+.spinner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--_fm-disabled);
+}
+
+/* A round button holding an icon alone. */
+.iconButton {
+    flex: 0 0 auto;
+    padding: 8px;
+    border-radius: 50%;
+    color: var(--_fm-icon);
+    font-size: 1.5rem;
+    text-align: center;
+    transition: background-color 150ms;
+
+    &:hover {
+        background-color: var(--_fm-hover);
+    }
+
+    &:disabled {
+        color: var(--_fm-disabled);
+    }
+}
+
+.iconSmall {
+    padding: 5px;
+    font-size: 1.125rem;
+}
+
+.iconInherit {
+    color: inherit;
+
+    &:hover {
+        background-color: color-mix(in srgb, currentColor 8%, transparent);
+    }
+}
+
+.iconPrimary {
+    color: var(--_fm-primary);
+
+    &:hover {
+        background-color: color-mix(in srgb, var(--_fm-primary) 8%, transparent);
+    }
+}
+
+/* What an icon button is called, shown beside it on hover or keyboard focus. */
+.tooltipPositioner {
+    z-index: var(--_fm-z-tooltip);
+    pointer-events: none;
+}
+
+.tooltip {
+    max-width: 300px;
+    padding: 4px 8px;
+    border-radius: var(--_fm-radius);
+    background-color: var(--_fm-tooltip);
+    color: var(--_fm-tooltip-text);
+    font-family: var(--_fm-font-family);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.4;
+    overflow-wrap: break-word;
+    transform-origin: var(--transform-origin);
+    transition:
+        opacity 150ms,
+        transform 150ms;
+
+    &[data-starting-style],
+    &[data-ending-style] {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+
+    /* Shown at once while moving along a row of buttons. */
+    &[data-instant] {
+        transition: none;
+    }
+
+    /* Forced colors drop its background, which would leave its text floating over the page. */
+    @media (forced-colors: active) {
+        outline: 1px solid CanvasText;
+    }
+}
+
+/* A square turned on its corner, half of it under the tooltip. */
+.tooltipArrow {
+    width: 8px;
+    height: 8px;
+    background-color: var(--_fm-tooltip);
+    rotate: 45deg;
+
+    &[data-side="bottom"] {
+        top: -4px;
+    }
+
+    &[data-side="top"] {
+        bottom: -4px;
+    }
+
+    &[data-side="left"] {
+        right: -4px;
+    }
+
+    &[data-side="right"] {
+        left: -4px;
+    }
+}

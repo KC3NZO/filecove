@@ -1,0 +1,53 @@
+/* The backdrop behind the selected column while it's an overlay. */
+.chosenBackdrop {
+    position: absolute;
+    z-index: 2;
+
+    @container media-manager (min-width: 1040px) {
+        display: none;
+    }
+}
+
+/*
+ * The selected column's box. Below `mediaWide`, an overlay at the end side while it's opened
+ * (`data-overlay`); from it, docked beside the library, from the top, as a sidebar. Its widths are
+ * `CHOICES_WIDTH` (`media-layout.ts`), and 40px more as an overlay.
+ */
+.chosenColumn {
+    display: none;
+    flex-direction: column;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    inset-inline-end: 0;
+    z-index: 3;
+    width: min(360px, 90%);
+    overflow: hidden;
+    background-color: var(--_fm-surface);
+    box-shadow: var(--_fm-shadow-8);
+
+    &[data-overlay="true"] {
+        display: flex;
+    }
+
+    /* One at a time with nothing selected, there's nothing to show, so it isn't there. */
+    &[data-empty="true"] {
+        display: none;
+    }
+
+    @container media-manager (min-width: 1040px) {
+        display: flex;
+        position: relative;
+        z-index: auto;
+        flex-shrink: 0;
+        width: 320px;
+        margin-block: 6px;
+        margin-inline-end: 6px;
+        border-radius: calc(var(--_fm-radius) * 3);
+        box-shadow: none;
+
+        &[data-empty="true"] {
+            display: none;
+        }
+    }
+}

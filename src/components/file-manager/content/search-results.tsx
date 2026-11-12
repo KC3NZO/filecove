@@ -1,13 +1,6 @@
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { DragEvent, FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
-import LinearProgress from "@mui/material/LinearProgress";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { CutContext } from "../../../contexts/cut-context";
 import { DragContext } from "../../../contexts/drag-context";
 import { MovingContext } from "../../../contexts/moving-context";
@@ -20,9 +13,9 @@ import { useSearch } from "../../../hooks/use-search";
 import { useSelection } from "../../../hooks/use-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
-import { mirroredBarSx } from "../../../styles/direction";
-import { VIEW_CONTAINER } from "../../../styles/layout";
-import { focusOutline, forcedBarSx, selectedBackground, visuallyHiddenSx } from "../../../styles/mixins";
+import { fmClasses } from "../../../styles/classes";
+import { cx } from "../../../utils/cx";
+import util from "../../../styles/util.module.css";
 import { isolate, joinIsolated } from "../../../utils/bidi";
 import { focusLost, isRtl } from "../../../utils/dom";
 import { groupByFolder, selectionRequest } from "../../../utils/groups";
@@ -37,9 +30,14 @@ import { relevanceOf, resultKey, searchTerms } from "../../../utils/search";
 import { entryComparator } from "../../../utils/sort";
 import { canCarry, movingThrough } from "../../../utils/transfer";
 import Icon from "../../icons/icon";
+import Button from "../../ui/button";
+import CircularProgress from "../../ui/circular-progress";
+import LinearProgress from "../../ui/linear-progress";
+import Text from "../../ui/text";
 import FindLayer from "../find-layer";
 import FileGrid from "./file-grid";
 import FileList from "./file-list";
+import styles from "./search-results.module.css";
 import SearchTabs, { tabId } from "./search-tabs";
 
 import type {
@@ -111,66 +109,6 @@ const resultElement = (surface: HTMLElement, key: string) =>
 
 /** The key of the folder a result is in, to tell whether results share one. */
 const folderOfHit = (hit: SearchHit) => resultKey(hit.section.id, folderOf(hit.section, hit.trail).id);
-
-// The content panel's scrolling view, as the folder view has it, with the container queries the
-// list's columns follow.
-const scrollSx: SxProps<Theme> = {
-    containerType: "inline-size",
-    containerName: VIEW_CONTAINER,
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-};
-
-// As the folder view's surface: it fills the panel, so its empty space takes clicks and marquee
-// drags, and it's positioned for the marquee.
-const surfaceSx: SxProps<Theme> = {
-    position: "relative",
-    display: "flex",
-    flexDirection: "column",
-    minHeight: "100%",
-    WebkitTouchCallout: "none",
-    WebkitTapHighlightColor: "transparent",
-    touchAction: "manipulation",
-    outline: "none",
-    "&:focus-visible": { ...focusOutline, borderRadius: 3 },
-};
-
-const marqueeSx: SxProps<Theme> = (theme) => ({
-    display: "none",
-    position: "absolute",
-    zIndex: 3,
-    border: "1px solid",
-    borderColor: "primary.main",
-    borderRadius: 0.5,
-    bgcolor: selectedBackground(theme),
-    pointerEvents: "none",
-    '&[data-active="true"]': { display: "block" },
-});
-
-const progressSx: SxProps<Theme> = [{ position: "sticky", top: 0, zIndex: 2, mb: "-4px" }, mirroredBarSx, forcedBarSx];
-
-const stateSx: SxProps<Theme> = {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 1,
-    p: 3,
-    textAlign: "center",
-    color: "text.secondary",
-};
-
-const stateIconSx: SxProps<Theme> = {
-    fontSize: "3rem",
-    opacity: 0.6,
-};
-
-const stateTitleSx: SxProps<Theme> = {
-    color: "text.primary",
-    fontWeight: 600,
-};
 
 /**
  * A search everywhere's results, in the content panel in place of the open folder: every section's
@@ -858,9 +796,9 @@ const SearchResults = ({
         );
     } else if (searching) {
         content = (
-            <Box id={stateId} sx={stateSx}>
+            <div id={stateId} className={cx(styles.state, fmClasses.state)}>
                 <CircularProgress size={28} aria-label={text.loading} />
-            </Box>
+            </div>
         );
     } else if (failed.length > 0) {
         // One section that failed says so, with the adapter's message; several, or some among
@@ -869,17 +807,17 @@ const SearchResults = ({
         const error = failed.length === 1 ? searches.get(only.section.id)?.error : undefined;
 
         content = (
-            <Box id={stateId} sx={stateSx} role="alert">
-                <Icon name="info" sx={stateIconSx} />
-                <Typography sx={stateTitleSx}>
+            <div id={stateId} className={cx(styles.state, fmClasses.state)} role="alert">
+                <Icon name="info" className={styles.stateIcon} />
+                <Text className={styles.stateTitle}>
                     {failed.length === 1 && shownTargets.length === 1
                         ? text.searchFailed(isolate(only.section.label))
                         : text.searchSomeFailed}
-                </Typography>
+                </Text>
                 {error instanceof Error && (
-                    <Typography variant="body2">
+                    <Text variant="body2">
                         <bdi>{error.message}</bdi>
-                    </Typography>
+                    </Text>
                 )}
                 <Button
                     size="small"
@@ -891,15 +829,15 @@ const SearchResults = ({
                 >
                     {text.tryAgain}
                 </Button>
-            </Box>
+            </div>
         );
     } else {
         content = (
-            <Box id={stateId} sx={stateSx}>
-                <Icon name="search" sx={stateIconSx} />
-                <Typography sx={stateTitleSx}>{text.searchNoResults}</Typography>
-                <Typography variant="body2">{text.searchNoResultsHint}</Typography>
-            </Box>
+            <div id={stateId} className={cx(styles.state, fmClasses.state)}>
+                <Icon name="search" className={styles.stateIcon} />
+                <Text className={styles.stateTitle}>{text.searchNoResults}</Text>
+                <Text variant="body2">{text.searchNoResultsHint}</Text>
+            </div>
         );
     }
 
@@ -918,15 +856,15 @@ const SearchResults = ({
                     onChange={setTab}
                 />
             )}
-            <Box
+            <div
                 id={panelId}
-                sx={scrollSx}
+                className={styles.scroll}
                 role={tabbed ? "tabpanel" : undefined}
                 aria-labelledby={tabbed ? tabId(idPrefix, Math.max(openTab, 0)) : undefined}
             >
-                <Box
+                <div
                     ref={marquee.surfaceRef}
-                    sx={surfaceSx}
+                    className={styles.surface}
                     tabIndex={listed ? -1 : 0}
                     role={listed ? undefined : "group"}
                     aria-label={listed ? undefined : text.searchResults}
@@ -945,17 +883,17 @@ const SearchResults = ({
                     {...drop.handlers}
                 >
                     {listed && <FindLayer names={names} onFound={handleFound} />}
-                    {searching && listed && <LinearProgress sx={progressSx} aria-label={text.loading} />}
+                    {searching && listed && <LinearProgress className={styles.progress} aria-label={text.loading} />}
                     {content}
-                    <Box ref={marquee.marqueeRef} sx={marqueeSx} />
-                    <Box sx={visuallyHiddenSx} role="status">
+                    <div ref={marquee.marqueeRef} className={cx(styles.marquee, fmClasses.marquee)} />
+                    <div className={util.visuallyHidden} role="status">
                         {status}
-                    </Box>
-                    <Box sx={visuallyHiddenSx} role="status">
+                    </div>
+                    <div className={util.visuallyHidden} role="status">
                         {results}
-                    </Box>
-                </Box>
-            </Box>
+                    </div>
+                </div>
+            </div>
         </>
     );
 };

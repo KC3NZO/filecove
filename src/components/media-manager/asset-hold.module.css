@@ -1,0 +1,50 @@
+/* Processing is said as a detail is, a failure in `error.main`. */
+.line {
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+
+    &[data-status="failed"] {
+        color: var(--_fm-error);
+    }
+}
+
+/*
+ * Under what an app drew: only while the grid holds an asset that can't be chosen (`data-holds`), or
+ * this one can't, so every asset in it is as tall.
+ */
+.slot {
+    display: none;
+    flex-direction: column;
+
+    &[data-standing="true"],
+    [data-holds="true"] & {
+        display: flex;
+    }
+}
+
+/* As much room as a row's bar takes. */
+.barRoom {
+    margin-top: 4px;
+    height: 3px;
+}
+
+/* The bar of an asset being processed: along the bottom of a tile's picture or of the asset view's, or under a row's text. */
+.barFrame {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    height: 4px;
+}
+
+.barRow {
+    height: 3px;
+    margin-top: 4px;
+    border-radius: calc(var(--_fm-radius) * 1.5);
+}
+
+.barView {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    height: 3px;
+}

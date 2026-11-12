@@ -1,23 +1,22 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
 
-import Box from "@mui/material/Box";
-import type { SxProps, Theme } from "@mui/material/styles";
-import { useForkRef } from "@mui/material/utils";
-
 import { DataContext } from "../../contexts/data-context";
-import { DirectionContext } from "../../contexts/direction-context";
 import { LocaleContext } from "../../contexts/locale-context";
+import { useForkRef } from "../../hooks/use-fork-ref";
 import { useLocaleValue } from "../../hooks/use-locale";
 import { useTextDirection } from "../../hooks/use-text-direction";
 import { createFolderStore } from "../../store/folder-store";
 import { createPropertiesCache } from "../../store/properties-cache";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
-import { MEDIA_CONTAINER } from "../../styles/media-layout";
-import { withSx } from "../../styles/sx";
+import { fmClasses } from "../../styles/classes";
+import theme from "../../styles/theme.module.css";
+import { cx } from "../../utils/cx";
 import { NO_ERRORS } from "../../utils/field-errors";
 import { countLimit, delayLimit } from "../../utils/limits";
+import RootProviders from "../ui/root-providers";
 import MediaFrame from "./media-frame";
+import styles from "./media-manager.module.css";
 import type { MediaFrameProps } from "./media-frame";
 
 import type {
@@ -25,6 +24,7 @@ import type {
     FileAdapter,
     FileEntry,
     FilePreviewer,
+    MediaActionGroup,
     MediaAssetParams,
     MediaChoice,
     MediaLayouts,
@@ -42,7 +42,7 @@ import type {
     PropertyErrorKeyParams,
 } from "../../types";
 
-// The root element's own attributes, which go on it as they do on a MUI component's root.
+// The root element's own attributes, which go on it as they are.
 type RootAttributes = Omit<ComponentPropsWithoutRef<"div">, "children" | "defaultValue" | "onChange">;
 
 interface BaseProps<V> extends RootAttributes {
@@ -283,7 +283,7 @@ interface BaseProps<V> extends RootAttributes {
      * Styles the root element, over its own, e.g. to size it. It fills its container by default,
      * and lays itself out by its own width (container queries), not the viewport's.
      */
-    sx?: SxProps<Theme>;
+    className?: string;
 }
 
 interface MultiSectionProps<V> extends BaseProps<V> {
@@ -311,17 +311,6 @@ interface SingleSectionProps<V> extends BaseProps<V> {
 export type MediaManagerProps<V = Record<string, unknown>> = MultiSectionProps<V> | SingleSectionProps<V>;
 
 const NO_GROUPS: MediaSectionGroup[] = [];
-
-// The root only establishes the container; a container can't match its own queries, so the
-// visible frame is the child below it. The consumer's `sx` goes over it.
-const rootSx = {
-    containerType: "inline-size",
-    containerName: MEDIA_CONTAINER,
-    position: "relative",
-    width: "100%",
-    height: "100%",
-    overflow: "hidden",
-} satisfies SxProps<Theme>;
 
 /**
  * Libraries of media to look through and choose from, each holding one kind of asset: pictures as
@@ -373,7 +362,7 @@ const MediaManager = <V,>({
     localeText,
     locale,
     ref,
-    sx,
+    className,
     ...rootAttributes
 }: MediaManagerProps<V>) => {
     const localeValue = useLocaleValue(localeText, locale);
@@ -393,7 +382,6 @@ const MediaManager = <V,>({
     const rootRef = useRef<HTMLDivElement>(null);
     const handleRootRef = useForkRef(rootRef, ref);
     const direction = useTextDirection(rootRef);
-    const rootStyle = useMemo(() => withSx(rootSx, sx), [sx]);
 
     // Set before the parts' own effects ask for anything as they mount.
     useLayoutEffect(() => store.setMaxKept(keptEntries), [store, keptEntries]);
@@ -411,9 +399,9 @@ const MediaManager = <V,>({
 
     return (
         <LocaleContext value={localeValue}>
-            <DirectionContext value={direction}>
+            <RootProviders direction={direction}>
                 <DataContext value={data}>
-                    <Box {...rootAttributes} ref={handleRootRef} sx={rootStyle}>
+                    <div {...rootAttributes} ref={handleRootRef} className={cx(theme.theme, theme.root, styles.root, fmClasses.mediaManager, className)}>
                         <MediaFrame
                             groups={groups}
                             adapter={adapter}
@@ -453,9 +441,9 @@ const MediaManager = <V,>({
                             choiceErrorKey={choiceErrorKey}
                             propertiesCache={propertiesCache}
                         />
-                    </Box>
+                    </div>
                 </DataContext>
-            </DirectionContext>
+            </RootProviders>
         </LocaleContext>
     );
 };

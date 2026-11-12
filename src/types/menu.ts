@@ -7,7 +7,7 @@ import type { FileEntry } from "./adapter";
 import type { IconSource } from "./icon";
 import type { FolderRef, Section } from "./section";
 
-/** A point on the page the menu hangs from, as `Popover`'s `anchorPosition` takes it. */
+/** A point of the viewport the menu opens at. */
 export interface MenuPosition {
     top: number;
     left: number;

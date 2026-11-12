@@ -1,0 +1,35 @@
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+}
+
+/* The file manager fills its container by default; here it shares the page with the footer. */
+.fileManager {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+}
+
+.footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding-inline: 16px;
+    border-top: 1px solid;
+    border-color: var(--app-divider);
+    background-color: var(--app-background);
+}
+
+.summary {
+    flex: 1;
+    min-width: 0;
+    color: var(--app-text-secondary);
+}
+
+.fileManager {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+}

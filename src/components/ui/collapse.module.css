@@ -1,0 +1,25 @@
+/*
+ * Folds its content away by its height. A grid row going from all of the content to none of it
+ * can be animated where a height of `auto` can't, and follows the content as it grows.
+ */
+.collapse {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition:
+        grid-template-rows 300ms,
+        visibility 0s;
+
+    /* Hidden once folded, so nothing in it is tabbed to or read. */
+    &[data-open="false"] {
+        grid-template-rows: 0fr;
+        visibility: hidden;
+        transition:
+            grid-template-rows 300ms,
+            visibility 0s 300ms;
+    }
+
+    & > div {
+        min-height: 0;
+        overflow: hidden;
+    }
+}

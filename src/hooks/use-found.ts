@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ARRIVED_FOR } from "../styles/mixins";
+import { ARRIVED_FOR } from "../styles/arrived";
 
 /**
  * The row the browser's find in page last came to in a view, by id, highlighted for

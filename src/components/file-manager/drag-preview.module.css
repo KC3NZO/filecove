@@ -1,0 +1,113 @@
+/*
+ * At the page's top corner rather than off screen, since Safari cancels a drag whose image is
+ * wholly off screen; it's gone before the page is painted. The pointer holds it by its top corner
+ * on the start side (`useEntryDrag`), the left or, right to left, the right. The transparent
+ * padding there keeps the pointer just outside the picture, off the folder it's dropped onto, and
+ * on the other sides makes room for the deepest card, so the whole stack is inside the element the
+ * picture is taken of.
+ */
+.root {
+    position: fixed;
+    top: 0;
+    inset-inline-start: 0;
+    padding-top: 12px;
+    padding-inline-start: 12px;
+    padding-inline-end: 16px;
+    padding-bottom: 16px;
+    pointer-events: none;
+}
+
+/*
+ * A touch drag's follows the finger, placed by `useEntryDrag` through its `transform` from the
+ * viewport's top left, physical as measured geometry is (`TOUCH_STYLE`), over the dialogs and
+ * tooltips, and hidden until it's first placed. It fades where letting go would do nothing.
+ */
+.touchRoot {
+    position: fixed;
+    top: 0;
+    z-index: calc(var(--_fm-z-tooltip) + 1);
+    padding-top: 12px;
+    padding-inline-start: 12px;
+    padding-inline-end: 16px;
+    padding-bottom: 16px;
+    pointer-events: none;
+    visibility: hidden;
+    transition: opacity 120ms;
+
+    &[data-effect="none"] {
+        opacity: 0.5;
+    }
+}
+
+.stack {
+    position: relative;
+}
+
+/*
+ * A card under the top one, the size of it, shifted down and towards the end by 4px per `--layer`
+ * and fading the deeper it is.
+ */
+.layer {
+    position: absolute;
+    top: calc(var(--layer) * 4px);
+    inset-inline-start: calc(var(--layer) * 4px);
+    inset-inline-end: calc(var(--layer) * -4px);
+    bottom: calc(var(--layer) * -4px);
+    opacity: calc(1 - var(--layer) * 0.15);
+    border-radius: calc(var(--_fm-radius) * 2);
+    border: 1px solid;
+    border-color: var(--_fm-divider);
+    background-color: var(--_fm-surface);
+}
+
+/* Positioned so it paints over the cards before it. */
+.pill {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 16rem;
+    padding-block: 6px;
+    padding-inline-start: 8px;
+    padding-inline-end: 10px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    border: 1px solid;
+    border-color: var(--_fm-divider);
+    background-color: var(--_fm-surface);
+    color: var(--_fm-text);
+}
+
+.name {
+    min-width: 0;
+}
+
+.count {
+    flex-shrink: 0;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding-inline: 4px;
+    border-radius: 0.625rem;
+    background-color: var(--_fm-primary);
+    color: var(--_fm-primary-contrast);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    text-align: center;
+}
+
+/* A "+" where letting go would copy, as the Finder shows it. */
+.copy {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    background-color: var(--_fm-success);
+    color: var(--_fm-success-contrast);
+
+    & > svg {
+        font-size: 1rem;
+    }
+}

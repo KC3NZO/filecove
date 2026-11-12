@@ -1,0 +1,141 @@
+/* Where a menu is placed: over everything, and no nearer the viewport's edges than it has to be. */
+.positioner {
+    z-index: var(--_fm-z-popup);
+    outline: 0;
+}
+
+.popup {
+    box-sizing: border-box;
+    min-width: 220px;
+    max-width: calc(100vw - 32px);
+    max-height: min(var(--available-height), calc(100vh - 32px));
+    padding-block: 8px;
+    overflow-y: auto;
+    border-radius: calc(var(--_fm-radius) * 2);
+    outline: 0;
+    background-color: var(--_fm-menu);
+    color: var(--_fm-text);
+    font-family: var(--_fm-font-family);
+    box-shadow: var(--_fm-shadow-8);
+    transform-origin: var(--transform-origin);
+    transition:
+        opacity 150ms,
+        transform 150ms;
+
+    &[data-starting-style],
+    &[data-ending-style] {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+
+    /* Forced colors drop its shadow and its background, so an edge sets it apart. */
+    @media (forced-colors: active) {
+        outline: 1px solid CanvasText;
+    }
+}
+
+.item {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 32px;
+    padding: 4px 16px;
+    outline: 0;
+    font-size: 0.875rem;
+    line-height: 1.43;
+    letter-spacing: 0.01071em;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+
+    &[data-highlighted] {
+        background-color: var(--_fm-hover);
+    }
+
+    &[data-highlighted]:focus-visible {
+        background-color: var(--_fm-pressed);
+    }
+
+    &[data-disabled] {
+        opacity: 0.38;
+        cursor: default;
+    }
+
+    &[data-destructive="true"] {
+        color: var(--_fm-error);
+
+        & .icon {
+            color: inherit;
+        }
+    }
+
+    @media (forced-colors: active) {
+        &[data-highlighted] {
+            background-color: Highlight;
+            color: HighlightText;
+            forced-color-adjust: none;
+        }
+    }
+}
+
+/* A rule under an item that isn't the last, where every item is a place of its own. */
+.divided {
+    border-bottom: 1px solid var(--_fm-divider);
+}
+
+/* The column of the items' icons, which the labels line up after. */
+.icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    min-width: 36px;
+    color: var(--_fm-icon);
+}
+
+.text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* A label with no icon, inset to line up with those that have one. */
+.inset {
+    padding-inline-start: 36px;
+}
+
+.primary,
+.secondary {
+    display: block;
+}
+
+.secondary {
+    color: var(--_fm-text-secondary);
+}
+
+.noWrap {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* An item's keys, after its label. */
+.shortcut {
+    margin-inline-start: 24px;
+    color: var(--_fm-text-secondary);
+}
+
+.separator {
+    height: 0;
+    margin: 8px 0;
+    border: 0;
+    border-bottom: 1px solid var(--_fm-divider);
+}
+
+/* What a group of items is, over them. */
+.label {
+    box-sizing: border-box;
+    padding-inline: 16px;
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 2rem;
+}

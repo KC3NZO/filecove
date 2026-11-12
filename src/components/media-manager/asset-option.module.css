@@ -1,0 +1,328 @@
+/*
+ * Placed by `top` and `gridColumn`, set in `style`: an absolutely positioned child of a grid takes the
+ * grid area it's placed in as its box, so it fills its column's width (see `virtualization.md`).
+ */
+.tile {
+    position: absolute;
+    inset-inline: 0;
+    display: flex;
+    flex-direction: column;
+    /* The room between a tile's edge and what's in it, which the check and the Open button go by. */
+    --tile-padding: 6px;
+
+    min-width: 0;
+    padding: var(--tile-padding);
+    border-radius: calc(var(--_fm-radius) * 3);
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+
+    &:hover {
+        background-color: var(--_fm-row-hover);
+    }
+
+    &[aria-selected="true"] {
+        background-color: var(--_fm-row-selected);
+    }
+
+    &[aria-selected="true"]:hover {
+        background-color: var(--_fm-row-selected-hover);
+    }
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+    }
+
+    &[aria-disabled="true"] {
+        cursor: default;
+    }
+
+    @media (forced-colors: active) {
+        &[aria-selected="true"] {
+            background-color: Highlight;
+            color: HighlightText;
+        }
+    }
+}
+
+.row {
+    position: absolute;
+    inset-inline: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding-inline: 8px;
+    padding-block: 6px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+
+    &:hover {
+        background-color: var(--_fm-row-hover);
+    }
+
+    &[aria-selected="true"] {
+        background-color: var(--_fm-row-selected);
+    }
+
+    &[aria-selected="true"]:hover {
+        background-color: var(--_fm-row-selected-hover);
+    }
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+    }
+
+    &[aria-disabled="true"] {
+        cursor: default;
+    }
+
+    @media (forced-colors: active) {
+        &[aria-selected="true"] {
+            background-color: Highlight;
+            color: HighlightText;
+        }
+    }
+}
+
+/* What the app drew, and under it why it can't be chosen now, as nothing it drew says so. */
+.content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 4px;
+    min-width: 0;
+
+    [data-layout='tile'] > & > [data-status],
+    [data-layout='tile'] > & > [data-part='hold'] > * {
+        text-align: center;
+    }
+}
+
+/*
+ * What the app drew entirely itself is faded as the media manager's own pictures are, which fade
+ * themselves, by the same marks.
+ */
+.drawn {
+    flex: 1;
+    min-width: 0;
+
+    [data-held="true"] > * > &[data-own="true"] {
+        opacity: 0.55;
+    }
+
+    [data-limited="true"] > * > &[data-own="true"] {
+        opacity: 0.7;
+    }
+}
+
+/* The check at a tile's top end corner, over its picture's, shown while it's selected. */
+.tileCheck {
+    position: absolute;
+    top: calc(var(--tile-padding) + 6px);
+    inset-inline-end: calc(var(--tile-padding) + 6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background-color: var(--_fm-primary);
+    color: var(--_fm-primary-contrast);
+    box-shadow: var(--_fm-shadow-1);
+
+    & > svg {
+        font-size: 16px;
+    }
+
+    [aria-selected='true'] > & {
+        display: flex;
+    }
+
+    @media (forced-colors: active) {
+        background-color: Highlight;
+        color: HighlightText;
+        outline: 1px solid HighlightText;
+    }
+}
+
+/* The check at a row's end, shown while it's selected. */
+.rowCheck {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background-color: var(--_fm-primary);
+    color: var(--_fm-primary-contrast);
+    visibility: hidden;
+
+    & > svg {
+        font-size: 16px;
+    }
+
+    [aria-selected='true'] > & {
+        visibility: visible;
+    }
+
+    @media (forced-colors: active) {
+        background-color: Highlight;
+        color: HighlightText;
+        outline: 1px solid HighlightText;
+    }
+}
+
+/*
+ * A group's own check, always shown, as it's the one way a pointer selects it: empty on the panel's
+ * surface, filled while it's selected.
+ */
+.tileGroupCheck {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background-color: var(--_fm-surface);
+    color: transparent;
+    outline: 2px solid;
+    outline-color: var(--_fm-text-secondary);
+    outline-offset: -2px;
+    position: absolute;
+    top: calc(var(--tile-padding) + 6px);
+    inset-inline-end: calc(var(--tile-padding) + 6px);
+    box-shadow: var(--_fm-shadow-1);
+
+    & svg {
+        font-size: 16px;
+    }
+
+    &:hover {
+        background-color: var(--_fm-surface);
+        outline-color: var(--_fm-primary);
+    }
+
+    [aria-selected='true'] > &,
+    [aria-selected='true'] > &:hover {
+        background-color: var(--_fm-primary);
+        color: var(--_fm-primary-contrast);
+        outline-color: var(--_fm-primary);
+    }
+
+    @media (forced-colors: active) {
+        outline-color: CanvasText;
+
+        [aria-selected='true'] > &,
+        [aria-selected='true'] > &:hover {
+            background-color: Highlight;
+            color: HighlightText;
+            outline-color: HighlightText;
+        }
+    }
+}
+
+.rowGroupCheck {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background-color: var(--_fm-surface);
+    color: transparent;
+    outline: 2px solid;
+    outline-color: var(--_fm-text-secondary);
+    outline-offset: -2px;
+    flex-shrink: 0;
+
+    & svg {
+        font-size: 16px;
+    }
+
+    &:hover {
+        background-color: var(--_fm-surface);
+        outline-color: var(--_fm-primary);
+    }
+
+    [aria-selected='true'] > &,
+    [aria-selected='true'] > &:hover {
+        background-color: var(--_fm-primary);
+        color: var(--_fm-primary-contrast);
+        outline-color: var(--_fm-primary);
+    }
+
+    @media (forced-colors: active) {
+        outline-color: CanvasText;
+
+        [aria-selected='true'] > &,
+        [aria-selected='true'] > &:hover {
+            background-color: Highlight;
+            color: HighlightText;
+            outline-color: HighlightText;
+        }
+    }
+}
+
+/*
+ * The button opening the asset, at a tile's top start corner, on the panel's own surface, shown as
+ * the pointer is over it or the focus is on it, and always on a touch screen.
+ */
+.tileOpen {
+    position: absolute;
+    top: calc(var(--tile-padding) + 4px);
+    inset-inline-start: calc(var(--tile-padding) + 4px);
+    width: 28px;
+    height: 28px;
+    background-color: var(--_fm-surface);
+    box-shadow: var(--_fm-shadow-1);
+    opacity: 0;
+
+    & svg {
+        font-size: 18px;
+    }
+
+    &:hover {
+        background-color: var(--_fm-surface);
+    }
+
+    [role='option']:hover > &,
+    [role='option']:focus-visible > & {
+        opacity: 1;
+    }
+
+    @media (hover: none) {
+        opacity: 1;
+    }
+
+    @media (forced-colors: active) {
+        opacity: 1;
+        outline: 1px solid CanvasText;
+    }
+}
+
+/* The button opening it, before a row's check, shown the same way. */
+.rowOpen {
+    flex-shrink: 0;
+    opacity: 0;
+
+    & svg {
+        font-size: 18px;
+    }
+
+    [role='option']:hover > &,
+    [role='option']:focus-visible > & {
+        opacity: 1;
+    }
+
+    @media (hover: none) {
+        opacity: 1;
+    }
+
+    @media (forced-colors: active) {
+        opacity: 1;
+    }
+}

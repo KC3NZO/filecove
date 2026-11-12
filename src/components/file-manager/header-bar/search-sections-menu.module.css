@@ -1,0 +1,23 @@
+.button {
+    flex-shrink: 0;
+    gap: 2px;
+    height: 26px;
+    padding-inline-start: 8px;
+    padding-inline-end: 4px;
+    border-radius: calc(var(--_fm-radius) * 1.5);
+    color: var(--_fm-text-secondary);
+    font-size: 0.8125rem;
+    white-space: nowrap;
+
+    &:hover,
+    &[aria-expanded="true"] {
+        background-color: var(--_fm-hover);
+        color: var(--_fm-text);
+    }
+}
+
+.sectionIcon {
+    display: inline-flex;
+    margin-inline-end: 12px;
+    color: var(--_fm-text-secondary);
+}

@@ -1,22 +1,17 @@
 import { useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { SubmitEvent } from "react";
 
-import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import TextField from "@mui/material/TextField";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
-import { dialogActionsSx } from "../../../styles/direction";
-import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { nameProblem, newFolderName, stemLength } from "../../../utils/names";
 import { folderOf } from "../../../utils/navigation";
+import Button from "../../ui/button";
+import Dialog, { DialogActions, DialogContent, DialogTitle } from "../../ui/dialog";
+import TextField from "../../ui/text-field";
+import { fmClasses } from "../../../styles/classes";
+import styles from "./name-dialog.module.css";
 
 import type { FileAdapter, FileEntry, FolderRef, Section } from "../../../types";
 
@@ -51,30 +46,6 @@ interface NameDialogProps {
     /** Called with the entry as the adapter returned it, once created or renamed. */
     onDone: (request: NameRequest, entry: FileEntry) => void;
 }
-
-// Outlined labels sit on the field's top edge, so the field needs room below the title.
-//
-// MUI places that label with `left`, a pixel shift and `transform-origin: top left`, and aligns the
-// border's notch and the error text with `text-align: left`. Only its RTL plugin flips those, so on
-// a page that sets just `dir` they would sit on the wrong side. Here they're placed logically, with
-// the shift and the origin as custom properties of lengths and percentages, since the plugin would
-// swap a `left` or `right` written in a custom property's value.
-const fieldSx: SxProps<Theme> = {
-    mt: 1,
-    "--label-shift": "14px",
-    "--label-origin": "0%",
-    "&:dir(rtl)": { "--label-shift": "-14px", "--label-origin": "100%" },
-    "& .MuiInputLabel-root": {
-        left: "auto",
-        insetInlineStart: 0,
-        transformOrigin: "var(--label-origin) top",
-        transform: "translate(var(--label-shift), 16px) scale(1)",
-    },
-    "& .MuiInputLabel-root.MuiInputLabel-shrink": {
-        transform: "translate(var(--label-shift), -9px) scale(0.75)",
-    },
-    "& fieldset, & .MuiFormHelperText-root": { textAlign: "start" },
-};
 
 const run = (request: NameRequest, parentId: string, name: string, signal: AbortSignal) => {
     const { adapter } = request;
@@ -135,30 +106,22 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
 
     // Read-only rather than disabled while the adapter works, so the field keeps focus. The name
     // runs the way its own letters do (`dir="auto"`), so ".bashrc" keeps its dot in front right to left.
-    const fieldSlotProps = useMemo(
-        () => ({ htmlInput: { readOnly: pending, spellCheck: false, autoComplete: "off", dir: "auto" } }),
+    const fieldProps = useMemo(
+        () => ({ readOnly: pending, spellCheck: false, autoComplete: "off", dir: "auto" }),
         [pending],
     );
 
     // The field is focused with the name selected (a file's up to its extension), so typing
     // replaces it. This waits until the dialog has faded in: the context menu hands focus back to
-    // where it was opened from as it closes, which would win over `autoFocus`.
-    const slotProps = useMemo(
-        () => ({
-            paper: { sx: dialogPaperSx },
-            transition: {
-                onEntered: () => {
-                    const input = inputRef.current;
+    // where it was opened from as it closes, which would win over anything sooner.
+    const handleEntered = () => {
+        const input = inputRef.current;
 
-                    if (input) {
-                        input.focus();
-                        input.setSelectionRange(0, entry ? stemLength(entry.name, entry.kind) : input.value.length);
-                    }
-                },
-            },
-        }),
-        [entry],
-    );
+        if (input) {
+            input.focus();
+            input.setSelectionRange(0, entry ? stemLength(entry.name, entry.kind) : input.value.length);
+        }
+    };
 
     // A suggested name that changes while the field has the focus is selected again, so typing
     // still replaces it.
@@ -233,7 +196,7 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
     };
 
     return (
-        <Dialog dir={dir} open={open} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
+        <Dialog dir={dir} open={open} fullWidth maxWidth="xs" className={fmClasses.nameDialog} onClose={close} onEntered={handleEntered}>
             <DialogTitle>{entry ? text.renameTitle(kind) : text.newFolder}</DialogTitle>
             <DialogContent>
                 <form id={formId} onSubmit={submit}>
@@ -245,8 +208,8 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
                         // A blank line is kept while there is no message, so the dialog doesn't jump when one shows.
                         helperText={message ?? " "}
                         inputRef={inputRef}
-                        slotProps={fieldSlotProps}
-                        sx={fieldSx}
+                        inputProps={fieldProps}
+                        className={styles.field}
                         onChange={(event) => {
                             setTyped(event.target.value);
                             setFailure(null);
@@ -254,7 +217,7 @@ const NameDialog = ({ open, request, onClose, onChanged, onDone }: NameDialogPro
                     />
                 </form>
             </DialogContent>
-            <DialogActions sx={dialogActionsSx}>
+            <DialogActions>
                 <Button color="inherit" onClick={close}>
                     {text.cancel}
                 </Button>

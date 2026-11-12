@@ -1,24 +1,18 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useData, useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
-import { dialogActionsSx } from "../../../styles/direction";
-import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { groupedEntries } from "../../../utils/groups";
 import { folderOf } from "../../../utils/navigation";
 import { replaceable } from "../../../utils/permissions";
 import { entryClashes, mergedFolders } from "../../../utils/transfer";
+import Button from "../../ui/button";
+import Dialog, { DialogActions, DialogContent, DialogTitle } from "../../ui/dialog";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
+import { fmClasses } from "../../../styles/classes";
+import styles from "./paste-dialog.module.css";
 
 import type { Clash, Clipboard, ConflictPolicy, EntryClash, FileEntry, FolderRef, Section } from "../../../types";
 
@@ -53,20 +47,6 @@ interface PasteDialogProps {
      */
     onStart: (request: PasteRequest, conflict: ConflictPolicy, skipped: FileEntry[], mergedIds: string[]) => void;
 }
-
-const slotProps = {
-    paper: { sx: dialogPaperSx },
-};
-
-const contentSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-};
-
-const spacerSx: SxProps<Theme> = {
-    flex: 1,
-};
 
 const NO_CLASHES: EntryClash[] = [];
 const NO_NAMES: Clash[] = [];
@@ -143,16 +123,16 @@ const PasteDialog = ({ open, request, onClose, onStart }: PasteDialogProps) => {
     const title = (kind === "move" ? text.moveTitle : text.copyTitle)(entries.length, isolate(entries[0].name));
 
     return (
-        <Dialog dir={dir} open={open && !!conflicts} fullWidth maxWidth="xs" slotProps={slotProps} onClose={onClose}>
+        <Dialog dir={dir} open={open && !!conflicts} fullWidth maxWidth="xs" className={fmClasses.pasteDialog} onClose={onClose}>
             <DialogTitle>{title}</DialogTitle>
-            <DialogContent sx={contentSx}>
+            <DialogContent className={styles.content}>
                 {conflicts && <ConflictMessage clashes={clashes} folderName={target.name} />}
             </DialogContent>
-            <DialogActions sx={dialogActionsSx}>
+            <DialogActions>
                 <Button color="inherit" onClick={onClose}>
                     {text.cancel}
                 </Button>
-                <Box sx={spacerSx} />
+                <div className={styles.spacer} />
                 {conflicts && (
                     <ConflictChoices
                         clashes={clashes}

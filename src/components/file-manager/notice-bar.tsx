@@ -1,24 +1,16 @@
-import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, MouseEvent } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Grow from "@mui/material/Grow";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
-import Menu from "@mui/material/Menu";
-import type { MenuProps } from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
-import SnackbarContent from "@mui/material/SnackbarContent";
-import type { SxProps, Theme } from "@mui/material/styles";
-
-import { DirectionContext } from "../../contexts/direction-context";
 import { useLocale } from "../../hooks/use-locale";
-import { forcedColors, forcedEdge, menuPaperSx } from "../../styles/mixins";
 import { isRtl } from "../../utils/dom";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import Icon from "../icons/icon";
 import IconSlot from "../icons/icon-slot";
+import Button from "../ui/button";
+import Menu, { MenuIcon, MenuItem, MenuText } from "../ui/menu";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import styles from "./notice-bar.module.css";
 
 import type { PlaceName } from "../../types";
 
@@ -53,63 +45,8 @@ interface NoticeBarProps {
 /** How long a notice shows, in ms, counted while the pointer isn't over it and the focus isn't in it. */
 const SHOW_FOR = 8000;
 
-// Over the bottom of the content, in the middle, clear of the touch selection bar while that shows,
-// letting presses through beside it.
-const areaSx: SxProps<Theme> = {
-    position: "absolute",
-    insetInline: 0,
-    bottom: 12,
-    zIndex: 3,
-    display: "flex",
-    justifyContent: "center",
-    px: 1.5,
-    pointerEvents: "none",
-    '&[data-raised="true"]': { bottom: 72 },
-};
-
-// MUI spaces the action with physical margins and a padding, which only its RTL plugin flips, and
-// sizes the notice by the viewport, not the content.
-const contentSx: SxProps<Theme> = {
-    pointerEvents: "auto",
-    flexWrap: "nowrap",
-    flexGrow: 0,
-    minWidth: "min(288px, 100%)",
-    maxWidth: "36rem",
-    borderRadius: 2,
-    "& .MuiSnackbarContent-message": { minWidth: 0 },
-    "& .MuiSnackbarContent-action": {
-        flexShrink: 0,
-        marginLeft: 0,
-        marginRight: 0,
-        paddingLeft: 0,
-        marginInlineStart: "auto",
-        marginInlineEnd: -1,
-        paddingInlineStart: 2,
-        gap: 0.5,
-    },
-    [forcedColors]: forcedEdge,
-};
-
-const detailSx: SxProps<Theme> = {
-    opacity: 0.8,
-};
-
-// Long names are cut short rather than widening the list.
-const placeSx: SxProps<Theme> = { maxWidth: "min(24rem, 90vw)" };
-
-const placeTextSx: SxProps<Theme> = { minWidth: 0 };
-
-// Above the notice, which sits at the bottom of the content, hanging from Show's end edge.
-const ORIGINS: Record<"ltr" | "rtl", Pick<MenuProps, "anchorOrigin" | "transformOrigin">> = {
-    ltr: {
-        anchorOrigin: { vertical: "top", horizontal: "right" },
-        transformOrigin: { vertical: "bottom", horizontal: "right" },
-    },
-    rtl: {
-        anchorOrigin: { vertical: "top", horizontal: "left" },
-        transformOrigin: { vertical: "bottom", horizontal: "left" },
-    },
-};
+/** How long a notice takes to shrink away, in ms, as its stylesheet has it (`.content`). */
+const LEAVE_FOR = 195;
 
 /**
  * A notice over the bottom of the content, as a snackbar is: what a change did, with Undo, and Show
@@ -130,7 +67,6 @@ const NoticeBar = ({
     onFocusLost,
 }: NoticeBarProps) => {
     const { text } = useLocale();
-    const dir = useContext(DirectionContext);
     // A notice going keeps saying what it said while it shrinks away.
     const [shown, setShown] = useState(notice);
     const [hovered, setHovered] = useState(false);
@@ -194,12 +130,21 @@ const NoticeBar = ({
         }
     };
 
-    // Gone, it's no longer under the pointer, which leaves no `mouseleave` behind.
-    const handleExited = () => {
-        setShown(null);
-        setHovered(false);
-        setFocused(false);
-    };
+    // Once it has shrunk away it's gone, and no longer under the pointer, which leaves no
+    // `mouseleave` behind. Timed rather than waited for, so it goes where nothing animates too.
+    useEffect(() => {
+        if (notice || !shown) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            setShown(null);
+            setHovered(false);
+            setFocused(false);
+        }, LEAVE_FOR);
+
+        return () => window.clearTimeout(timer);
+    }, [notice, shown]);
 
     // With one folder, Show opens it; with several, it lists them.
     const handleShow = (event: MouseEvent<HTMLElement>) => {
@@ -231,88 +176,73 @@ const NoticeBar = ({
     }
 
     return (
-        <Box sx={areaSx} data-raised={raised}>
-            <Grow in={!!notice} appear onExited={handleExited}>
-                <SnackbarContent
-                    ref={rootRef}
-                    role="none"
-                    sx={contentSx}
-                    message={
-                        <>
-                            <div>{shown.message}</div>
-                            {shown.detail && <Box sx={detailSx}>{shown.detail}</Box>}
-                        </>
-                    }
-                    action={
-                        <>
-                            {showLabel && (
-                                <Button
-                                    color="inherit"
-                                    size="small"
-                                    aria-haspopup={showPlaces ? "menu" : undefined}
-                                    aria-expanded={showPlaces ? listOpen : undefined}
-                                    onClick={handleShow}
-                                >
-                                    {showLabel}
-                                </Button>
-                            )}
-                            {actionLabel && (
-                                <Button color="inherit" size="small" onClick={onAction}>
-                                    {actionLabel}
-                                </Button>
-                            )}
-                            <TooltipIconButton
-                                ref={closeRef}
-                                label={text.close}
-                                color="inherit"
-                                size="small"
-                                onClick={onClose}
-                            >
-                                <Icon name="close" fontSize="small" />
-                            </TooltipIconButton>
-                        </>
-                    }
-                    onMouseEnter={() => setHovered(true)}
-                    onMouseLeave={() => setHovered(false)}
-                    onFocus={handleFocus}
-                    onBlur={handleBlur}
-                    onKeyDown={handleKeyDown}
-                />
-            </Grow>
+        <div className={styles.area} data-raised={raised}>
+            <div
+                ref={rootRef}
+                className={cx(styles.content, fmClasses.notice)}
+                data-leaving={!notice}
+                onMouseEnter={() => setHovered(true)}
+                onMouseLeave={() => setHovered(false)}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                onKeyDown={handleKeyDown}
+            >
+                <div className={styles.message}>
+                    <div>{shown.message}</div>
+                    {shown.detail && <div className={styles.detail}>{shown.detail}</div>}
+                </div>
+                <div className={styles.action}>
+                    {showLabel && (
+                        <Button
+                            color="inherit"
+                            size="small"
+                            aria-haspopup={showPlaces ? "menu" : undefined}
+                            aria-expanded={showPlaces ? listOpen : undefined}
+                            onClick={handleShow}
+                        >
+                            {showLabel}
+                        </Button>
+                    )}
+                    {actionLabel && (
+                        <Button color="inherit" size="small" onClick={onAction}>
+                            {actionLabel}
+                        </Button>
+                    )}
+                    <TooltipIconButton ref={closeRef} label={text.close} color="inherit" size="small" onClick={onClose}>
+                        <Icon name="close" fontSize="small" />
+                    </TooltipIconButton>
+                </div>
+            </div>
+            {/* Above the notice, which sits at the bottom of the content, hanging from Show's end edge. */}
             {showPlaces && list && (
                 <Menu
-                    dir={dir}
                     open={listOpen}
-                    anchorEl={list.from}
-                    {...ORIGINS[isRtl(list.from) ? "rtl" : "ltr"]}
-                    slotProps={{
-                        paper: { sx: menuPaperSx },
-                        list: { dense: true, "aria-label": showLabel },
-                        transition: { onExited: () => setList(null) },
-                    }}
+                    anchor={list.from}
+                    rtl={isRtl(list.from)}
+                    side="top"
+                    align="end"
+                    label={showLabel}
                     onClose={closeList}
+                    onExited={() => setList(null)}
                 >
                     {showPlaces.map(({ label, location, icon }, index) => (
                         <MenuItem
                             key={index}
-                            sx={placeSx}
+                            className={styles.place}
                             divider={index < showPlaces.length - 1}
                             onClick={() => showPlace(index)}
                         >
-                            <ListItemIcon>
+                            <MenuIcon>
                                 <IconSlot icon={icon} />
-                            </ListItemIcon>
-                            <ListItemText
-                                sx={placeTextSx}
-                                primary={<bdi>{label}</bdi>}
-                                secondary={location ? <bdi>{location}</bdi> : undefined}
-                                slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
-                            />
+                            </MenuIcon>
+                            <MenuText noWrap secondary={location ? <bdi>{location}</bdi> : undefined}>
+                                <bdi>{label}</bdi>
+                            </MenuText>
                         </MenuItem>
                     ))}
                 </Menu>
             )}
-        </Box>
+        </div>
     );
 };
 

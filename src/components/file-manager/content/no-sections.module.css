@@ -1,0 +1,23 @@
+/* Fills the scrolling view, as a folder's empty state does. */
+.state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-sizing: border-box;
+    min-height: 100%;
+    padding: 24px;
+    text-align: center;
+    color: var(--_fm-text-secondary);
+}
+
+.stateIcon {
+    font-size: 3rem;
+    opacity: 0.6;
+}
+
+.stateTitle {
+    color: var(--_fm-text);
+    font-weight: 600;
+}

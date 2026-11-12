@@ -1,0 +1,116 @@
+/* An icon as tall as a line of 1.5rem text, drawn in the text's colour. */
+.icon {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
+    font-size: 1.5rem;
+    fill: currentColor;
+    user-select: none;
+}
+
+.small {
+    font-size: 1.25rem;
+}
+
+/* As large as the text around it. */
+.inherit {
+    font-size: inherit;
+}
+
+/*
+ * `scale` rather than `transform`, so a part that rotates an icon, as the tree's chevrons do, still
+ * can, and `:dir()` follows the `dir` the page or an ancestor sets.
+ */
+.mirrored:dir(rtl) {
+    scale: -1 1;
+}
+
+/* A consumer's element is fitted to the same 1.25rem box as the built-in icons. */
+.slot {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+
+    & > svg {
+        width: 100%;
+        height: 100%;
+    }
+}
+
+/*
+ * The check badge of touch selection mode. Only shown while `data-selecting` is set on the folder
+ * view or the sidebar tree: an empty ring at the icon's bottom end corner, filled with a check once
+ * the item's row or tile is `data-selected`. The icon's wrapper places it.
+ */
+.badge {
+    display: none;
+    position: absolute;
+    inset-inline-end: -2px;
+    bottom: -2px;
+    box-sizing: border-box;
+    width: max(0.875rem, 36%);
+    aspect-ratio: 1;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--_fm-text-secondary);
+    border-radius: 50%;
+    background-color: var(--_fm-surface);
+    color: var(--_fm-primary-contrast);
+    pointer-events: none;
+
+    & > svg {
+        width: 80%;
+        height: 80%;
+        visibility: hidden;
+    }
+
+    [data-selecting="true"] & {
+        display: flex;
+    }
+
+    [data-selected="true"] & {
+        border-color: var(--_fm-primary);
+        background-color: var(--_fm-primary);
+    }
+
+    [data-selected="true"] & > svg {
+        visibility: visible;
+    }
+}
+
+.locked {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+}
+
+/*
+ * A lock on a disc at the icon's bottom end corner, as GNOME Files marks what can't be written,
+ * sized with the icon. It gives way to the check badge of touch selection mode, which takes the
+ * same corner. Screen readers hear it from the item's own description.
+ */
+.emblem {
+    position: absolute;
+    inset-inline-end: -10%;
+    bottom: -6%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: max(0.625rem, 50%);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background-color: var(--_fm-surface);
+    color: var(--_fm-text-secondary);
+    pointer-events: none;
+
+    & > svg {
+        width: 75%;
+        height: 75%;
+    }
+
+    [data-selecting="true"] & {
+        display: none;
+    }
+}

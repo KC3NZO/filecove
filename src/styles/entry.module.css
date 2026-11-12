@@ -1,0 +1,111 @@
+/*
+ * What rows, tiles and tree rows share: how one shows it's cut, being moved, dragged, dropped on,
+ * just arrived or focused from the keyboard. Each is a class of its own, keyed off a `data-`
+ * attribute the element sets, and put on the element beside its own class.
+ *
+ * This stylesheet comes before the parts' own (`order.ts`), so a rule here that has to win over a
+ * row's own hover or selection repeats its class to outweigh it.
+ */
+
+/*
+ * An entry that's cut, until it's pasted: its contents fade, as in desktop file managers, and a
+ * dashed outline traces it. Only the children fade, so its hover and selection backgrounds keep
+ * their strength. Keyed off `data-cut`.
+ */
+.cut {
+    & > * {
+        transition: opacity 150ms;
+    }
+
+    &[data-cut="true"] {
+        outline: 1px dashed var(--_fm-text-secondary);
+        outline-offset: -1px;
+
+        & > * {
+            opacity: 0.45;
+        }
+    }
+}
+
+/*
+ * An entry a move under way is moving, itself or with a folder it's in, until the move ends: its
+ * contents fade, as a cut entry's do, without the outline, and the pointer over it shows it's
+ * busy. Keyed off `data-moving`. Opacity survives forced colors, so it needs no rule there.
+ */
+.moving[data-moving="true"] {
+    cursor: progress;
+
+    & > * {
+        opacity: 0.45;
+    }
+}
+
+/*
+ * An entry just uploaded, keyed off `data-arrived`, or that the browser's find in page just came
+ * to, keyed off `data-found`, each set for `ARRIVED_FOR` (`arrived.ts`), which the animation lasts:
+ * an accent tint held for a moment, then faded away. A shadow inside the edge rather than a
+ * background, so it lies over the row's own stripe, hover or selection, under its contents, and
+ * never changes the selection.
+ */
+.arrived[data-arrived="true"],
+.arrived[data-found="true"] {
+    animation: arrived 2500ms ease-out;
+}
+
+@keyframes arrived {
+    0%,
+    40% {
+        box-shadow: inset 0 0 0 100vmax var(--_fm-row-arrived);
+    }
+
+    100% {
+        box-shadow: inset 0 0 0 100vmax transparent;
+    }
+}
+
+/*
+ * Keyboard focus on a row or a tile: an accent outline inside its edge. After the cut outline,
+ * which it wins over, and before the drop target's, which wins over it.
+ */
+.focusRing:focus-visible {
+    outline: 2px solid var(--_fm-primary);
+    outline-offset: -2px;
+}
+
+/*
+ * While entries are dragged: the dragged ones fade, as cut ones do, and the folder they'd be
+ * dropped into takes the selection's colour inside an accent outline. Keyed off `data-dragged`
+ * and `data-drop-target`. The drop target wins over hover, selection and the cut outline.
+ */
+.drag[data-dragged="true"] > * {
+    opacity: 0.45;
+}
+
+.drag.drag.drag[data-drop-target="true"] {
+    outline: 2px solid var(--_fm-primary);
+    outline-offset: -2px;
+    background-color: var(--_fm-row-selected-hover);
+}
+
+/*
+ * Windows' High Contrast themes, and any other forced colors mode, drop every background colour
+ * and box shadow and put the user's own colours in place of text, border and outline colours. What
+ * a background alone shows would vanish, so it's shown in system colours, which the mode keeps.
+ */
+@media (forced-colors: active) {
+    /*
+     * A selected row, tile or tree row (`data-selected`) in the system's selection colours, as a
+     * native list shows it. Text inside inherits `HighlightText`.
+     */
+    .forcedSelected.forcedSelected.forcedSelected[data-selected="true"] {
+        background-color: Highlight;
+        color: HighlightText;
+    }
+
+    /* The tint of one just uploaded or found is a shadow, so it's outlined for as long instead. */
+    .arrived[data-arrived="true"],
+    .arrived[data-found="true"] {
+        outline: 2px solid Highlight;
+        outline-offset: -2px;
+    }
+}

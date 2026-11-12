@@ -1,17 +1,15 @@
 import { useId, useState } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useFormSend } from "../../hooks/use-form-send";
 import { useLocale } from "../../hooks/use-locale";
 import { isolate } from "../../utils/bidi";
 import { uploadPatterns } from "../../utils/files";
 import { FileTypeIcon } from "../icons/file-icon";
+import Button from "../ui/button";
+import Text from "../ui/text";
 import { FormFailure, MediaFormBody } from "./media-form";
 import MediaStep, { StepSend } from "./media-step";
+import styles from "./media-upload.module.css";
 
 import type { FileAdapter, MediaSection, MediaUploadCheck, MediaUploadForm } from "../../types";
 
@@ -29,47 +27,6 @@ interface MediaUploadProps {
     /** Sends the files, with what the upload form holds; with no form, nothing. */
     onUpload: (values: Readonly<Record<string, unknown>> | undefined) => void;
 }
-
-const notesSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-};
-
-const listSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    m: 0,
-    p: 0,
-    listStyle: "none",
-};
-
-const fileSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1.5,
-    minWidth: 0,
-    py: 0.75,
-};
-
-const fileNameSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    fontSize: "0.875rem",
-};
-
-const fileSizeSx: SxProps<Theme> = {
-    flexShrink: 0,
-    color: "text.secondary",
-    fontSize: "0.8125rem",
-};
-
-// The form under the files, set apart by a rule, as a pick's form is under its heading.
-const fieldsSx: SxProps<Theme> = {
-    pt: 2,
-    borderTop: 1,
-    borderColor: "divider",
-};
 
 /**
  * The step before files are uploaded into a library, in its place, as the asset view is: what's
@@ -155,33 +112,33 @@ const MediaUpload = ({ section, levelName, adapter, check, form, onCancel, onUpl
         >
             {failure && <FormFailure message={failure} />}
             {notes.length > 0 && (
-                <Box sx={notesSx}>
+                <div className={styles.notes}>
                     {notes.map((note) => (
-                        <Typography key={note} variant="body2" color="text.secondary">
+                        <Text key={note} variant="body2" color="secondary">
                             {note}
-                        </Typography>
+                        </Text>
                     ))}
-                </Box>
+                </div>
             )}
             {sending && (
-                <Box component="ul" aria-label={text.mediaUploadFiles} sx={listSx}>
+                <ul aria-label={text.mediaUploadFiles} className={styles.list}>
                     {files.map((file, index) => (
-                        <Box component="li" key={index} sx={fileSx}>
+                        <li key={index} className={styles.file}>
                             <FileTypeIcon fileName={file.name} size={24} />
-                            <Typography noWrap sx={fileNameSx}>
+                            <Text noWrap className={styles.fileName}>
                                 {file.name}
-                            </Typography>
-                            <Typography component="span" sx={fileSizeSx}>
+                            </Text>
+                            <Text component="span" className={styles.fileSize}>
                                 <bdi>{formatSize(file.size)}</bdi>
-                            </Typography>
-                        </Box>
+                            </Text>
+                        </li>
                     ))}
-                </Box>
+                </ul>
             )}
             {sending && form && (
-                <Box sx={fieldsSx}>
+                <div className={styles.fields}>
                     <MediaFormBody form={form} params={params} />
-                </Box>
+                </div>
             )}
         </MediaStep>
     );

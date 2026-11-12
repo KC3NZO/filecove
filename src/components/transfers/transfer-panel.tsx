@@ -1,28 +1,18 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import CircularProgress from "@mui/material/CircularProgress";
-import Collapse from "@mui/material/Collapse";
-import LinearProgress from "@mui/material/LinearProgress";
-import Typography from "@mui/material/Typography";
-
 import { useLocale } from "../../hooks/use-locale";
-import {
-    panelBarSx,
-    panelHeaderSx,
-    panelListSx,
-    panelRowSx,
-    panelSlotSx,
-    panelSx,
-    panelTextSx,
-    panelTitleSx,
-    panelToggleIconSx,
-} from "../../styles/panel";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import panel from "../../styles/panel.module.css";
 import { isolate, joinIsolated } from "../../utils/bidi";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon, FolderTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
+import CircularProgress from "../ui/circular-progress";
+import Collapse from "../ui/collapse";
+import LinearProgress from "../ui/linear-progress";
+import Text from "../ui/text";
 
 import type { Locale, TransferItem } from "../../types";
 
@@ -179,25 +169,25 @@ const TransferRow = ({ item, onCancel, onRetry }: TransferRowProps) => {
     }
 
     return (
-        <Box component="li" sx={panelRowSx}>
-            <Box sx={panelSlotSx}>{icon}</Box>
-            <Box sx={panelTextSx}>
-                <Typography variant="body2" noWrap>
+        <li className={cx(panel.row, fmClasses.taskRow)}>
+            <div className={panel.slot}>{icon}</div>
+            <div className={panel.text}>
+                <Text variant="body2" noWrap>
                     {count > 1 ? text.transferItems(count) : <bdi>{only.name}</bdi>}
-                </Typography>
+                </Text>
                 {status === "running" && (
                     <LinearProgress
                         variant={filled === null ? "indeterminate" : "determinate"}
                         value={(filled ?? 0) * 100}
-                        sx={panelBarSx}
+                        className={panel.bar}
                     />
                 )}
-                <Typography variant="caption" color={status === "failed" ? "error" : "text.secondary"} noWrap>
+                <Text variant="caption" color={status === "failed" ? "error" : "secondary"} noWrap>
                     {describeRow(item, locale)}
-                </Typography>
-            </Box>
+                </Text>
+            </div>
             {action}
-        </Box>
+        </li>
     );
 };
 
@@ -239,25 +229,25 @@ const TransferPanel = ({ items, onCancel, onRetry, canRetry, onCancelAll, onClea
     );
 
     return (
-        <Box component="section" sx={panelSx} aria-label={text.transfers}>
-            <Box sx={panelHeaderSx}>
-                <Box sx={panelSlotSx}>{status}</Box>
-                <Box sx={panelTextSx}>
-                    <Typography variant="body2" noWrap sx={panelTitleSx} aria-live="polite">
+        <section className={cx(panel.panel, fmClasses.taskPanel, fmClasses.transferPanel)} aria-label={text.transfers}>
+            <div className={panel.header}>
+                <div className={panel.slot}>{status}</div>
+                <div className={panel.text}>
+                    <Text variant="body2" noWrap className={panel.title} aria-live="polite">
                         {title}
-                    </Typography>
+                    </Text>
                     {detail && (
-                        <Typography variant="caption" color="text.secondary" noWrap>
+                        <Text variant="caption" color="secondary" noWrap>
                             {detail}
-                        </Typography>
+                        </Text>
                     )}
-                </Box>
+                </div>
                 <TooltipIconButton
                     label={expanded ? text.transfersHide : text.transfersShow}
                     aria-expanded={expanded}
                     onClick={() => setExpanded((prev) => !prev)}
                 >
-                    <Icon name="expand" fontSize="small" sx={panelToggleIconSx} />
+                    <Icon name="expand" fontSize="small" className={panel.toggleIcon} />
                 </TooltipIconButton>
                 <TooltipIconButton
                     label={busy ? text.transfersCancelAll : text.transfersClose}
@@ -265,9 +255,9 @@ const TransferPanel = ({ items, onCancel, onRetry, canRetry, onCancelAll, onClea
                 >
                     <Icon name="close" fontSize="small" />
                 </TooltipIconButton>
-            </Box>
+            </div>
             <Collapse in={expanded}>
-                <Box component="ul" sx={panelListSx}>
+                <ul className={panel.list}>
                     {items.map((item) => (
                         <TransferRow
                             key={item.id}
@@ -276,9 +266,9 @@ const TransferPanel = ({ items, onCancel, onRetry, canRetry, onCancelAll, onClea
                             onRetry={item.status === "failed" && (!canRetry || canRetry(item)) ? onRetry : undefined}
                         />
                     ))}
-                </Box>
+                </ul>
             </Collapse>
-        </Box>
+        </section>
     );
 };
 

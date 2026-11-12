@@ -1,0 +1,45 @@
+/* The sizes of text, a paragraph's two and a caption's, without the margins a `p` comes with. */
+.body1,
+.body2,
+.caption {
+    margin: 0;
+    font-family: var(--_fm-font-family);
+    font-weight: 400;
+}
+
+.body1 {
+    font-size: 1rem;
+    line-height: 1.5;
+    letter-spacing: 0.00938em;
+}
+
+.body2 {
+    font-size: 0.875rem;
+    line-height: 1.43;
+    letter-spacing: 0.01071em;
+}
+
+.caption {
+    font-size: 0.75rem;
+    line-height: 1.66;
+    letter-spacing: 0.03333em;
+}
+
+.secondary {
+    color: var(--_fm-text-secondary);
+}
+
+.error {
+    color: var(--_fm-error);
+}
+
+.disabled {
+    color: var(--_fm-text-disabled);
+}
+
+/* One line, cut short with an ellipsis. */
+.noWrap {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

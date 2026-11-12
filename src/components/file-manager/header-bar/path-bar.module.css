@@ -1,0 +1,109 @@
+.bar {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: 34px;
+    padding-inline: 4px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-hover);
+}
+
+/* Its empty space edits the path, as the address bars of Windows' and KDE's file managers do. */
+.editableBar {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: 34px;
+    padding-inline: 4px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-hover);
+    cursor: text;
+}
+
+/*
+ * The track sits in a reversed flex row, which lines it up with the scroller's end and starts
+ * scrolled there, so a path too long to fit shows its last segments and scrolls back towards the
+ * root, with no JavaScript measuring. That holds both ways the text runs, as `direction` tricks
+ * wouldn't: the path still reads from the root at the start, on the right right to left.
+ */
+.scroller {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: row-reverse;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+/* At least as wide as the scroller, so a short path starts at its start rather than its end. */
+.track {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    width: max-content;
+    min-width: 100%;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.item {
+    display: flex;
+    align-items: center;
+}
+
+.separator {
+    padding-inline: 2px;
+    color: var(--_fm-text-disabled);
+    font-size: 0.875rem;
+    user-select: none;
+}
+
+/* A folder the dragged entries would go into is marked as the tree's and the content's are. */
+.segment {
+    gap: 6px;
+    height: 28px;
+    max-width: 14rem;
+    padding-inline: 8px;
+    border-radius: calc(var(--_fm-radius) * 1.5);
+    color: var(--_fm-text-secondary);
+    font-size: 0.875rem;
+    white-space: nowrap;
+
+    &:hover {
+        background-color: var(--_fm-hover);
+        color: var(--_fm-text);
+    }
+
+    &[aria-current="location"] {
+        color: var(--_fm-text);
+        font-weight: 700;
+    }
+}
+
+.label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.menuButton {
+    margin-inline-start: 2px;
+}
+
+/*
+ * Touch screens only, which have no Ctrl+L. This asks what the input can do, not how wide the
+ * screen is, so it is a media query rather than a container one, as the header's Select button is.
+ */
+.editButton {
+    display: none;
+    margin-inline-start: 2px;
+
+    @media (hover: none) {
+        display: inline-flex;
+    }
+}

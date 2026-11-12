@@ -1,0 +1,52 @@
+/* The box or the ring that shows a state, drawn only: an item or a button around it takes the press. */
+.mark {
+    display: block;
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: currentColor;
+    color: var(--_fm-text-secondary);
+
+    &[data-on="true"] {
+        color: var(--_fm-primary);
+    }
+
+    @media (forced-colors: active) {
+        &[data-on="true"] {
+            color: Highlight;
+        }
+    }
+}
+
+/* A checkbox that takes the press itself. */
+.checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    padding: 9px;
+    border-radius: 50%;
+    outline: 0;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+
+    &:hover {
+        background-color: var(--_fm-hover);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--_fm-primary);
+        outline-offset: -2px;
+    }
+
+    &[data-disabled] {
+        cursor: default;
+        pointer-events: none;
+
+        & > .mark {
+            color: var(--_fm-disabled);
+        }
+    }
+}

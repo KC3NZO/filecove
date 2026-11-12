@@ -1,11 +1,5 @@
 import { useCallback, useRef, useState } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Snackbar from "@mui/material/Snackbar";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { MediaManager } from "../src";
 import { createMediaActions } from "./media-actions";
 import { renderAudio, renderGroup, renderGroupHeader, renderStock } from "./media-assets";
@@ -34,6 +28,8 @@ import {
     single,
     uncontrolled,
 } from "./options";
+import { Button, Snackbar, Text } from "./ui";
+import styles from "./media-app.module.css";
 
 import type {
     FieldErrors,
@@ -175,35 +171,6 @@ const assetTarget: { entry: FileEntry; location: MediaLocation } = single
           location: { sectionId: "videos", trail: [] },
       };
 
-const appSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    height: "100dvh",
-};
-
-const mediaManagerSx: SxProps<Theme> = {
-    flex: 1,
-    minHeight: 0,
-    height: "auto",
-};
-
-const footerSx: SxProps<Theme> = {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    columnGap: 2,
-    minHeight: 40,
-    px: 2,
-    borderTop: 1,
-    borderColor: "divider",
-    bgcolor: "background.default",
-    color: "text.secondary",
-};
-
-const footerTextSx: SxProps<Theme> = { flex: "1 1 16rem", minWidth: 0 };
-
-const footerButtonsSx: SxProps<Theme> = { display: "flex", flexWrap: "wrap" };
-
 /** Where a pick's own errors are, as the playground's backend names them: `media.0`, `media.0.id`. */
 const choiceErrorKey = ({ index }: PropertyErrorKeyParams) => [`media.${index}`, `media.${index}.id`];
 
@@ -325,18 +292,18 @@ const MediaApp = () => {
     };
 
     return (
-        <Box sx={appSx}>
+        <div className={styles.app}>
             {single ? (
-                <MediaManager {...shared} section={libraries[0].sections[0]} sx={mediaManagerSx} />
+                <MediaManager {...shared} section={libraries[0].sections[0]} className={styles.mediaManager} />
             ) : (
-                <MediaManager {...shared} sections={libraries} sx={mediaManagerSx} />
+                <MediaManager {...shared} sections={libraries} className={styles.mediaManager} />
             )}
-            <Box component="footer" sx={footerSx}>
-                <Typography variant="body2" noWrap sx={footerTextSx}>
+            <footer className={styles.footer}>
+                <Text variant="body2" noWrap className={styles.footerText}>
                     {describe(chosen, picked, saving)}
-                </Typography>
+                </Text>
                 {/* The app's own toolbar, driving the media manager through `apiRef`. */}
-                <Box sx={footerButtonsSx}>
+                <div className={styles.footerButtons}>
                     <Button
                         size="small"
                         color="inherit"
@@ -383,15 +350,15 @@ const MediaApp = () => {
                     <Button size="small" color="inherit" onClick={() => api.current?.focus()}>
                         Focus
                     </Button>
-                </Box>
-            </Box>
+                </div>
+            </footer>
             <Snackbar
                 open={notice.open}
                 message={notice.message}
                 autoHideDuration={4000}
                 onClose={() => setNotice((previous) => ({ ...previous, open: false }))}
             />
-        </Box>
+        </div>
     );
 };
 

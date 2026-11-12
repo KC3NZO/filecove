@@ -2,21 +2,17 @@ import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, 
 import type { ChangeEvent, ComponentPropsWithoutRef, CSSProperties, DragEvent, KeyboardEvent, Ref } from "react";
 import { createPortal, flushSync } from "react-dom";
 
-import Backdrop from "@mui/material/Backdrop";
-import Box from "@mui/material/Box";
-import type { SxProps, Theme } from "@mui/material/styles";
-import { useControlled, useForkRef } from "@mui/material/utils";
-
 import { CutContext } from "../../contexts/cut-context";
 import { DataContext } from "../../contexts/data-context";
-import { DirectionContext } from "../../contexts/direction-context";
 import { DragContext } from "../../contexts/drag-context";
 import { LocaleContext } from "../../contexts/locale-context";
 import { MovingContext } from "../../contexts/moving-context";
 import { useAnnouncer } from "../../hooks/use-announcer";
 import { useClipboardFollow } from "../../hooks/use-clipboard-follow";
+import { useControlled } from "../../hooks/use-controlled";
 import { useDownloadQueue } from "../../hooks/use-download-queue";
 import { useEntryDrag } from "../../hooks/use-entry-drag";
+import { useForkRef } from "../../hooks/use-fork-ref";
 import { useLocaleValue } from "../../hooks/use-locale";
 import { useLocationHistory } from "../../hooks/use-location-history";
 import type { ReviseLocation } from "../../hooks/use-location-history";
@@ -30,22 +26,13 @@ import { createFolderStore, folderKey, keyFolder, listingOf } from "../../store/
 import { watchKeyboardLayout } from "../../store/keyboard-layout";
 import { createPropertiesCache } from "../../store/properties-cache";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
-import {
-    CONTENT_ROOM,
-    PROPERTIES_MIN_WIDTH,
-    PROPERTIES_WIDTH,
-    ROOT_CONTAINER,
-    SIDEBAR_MAX_WIDTH,
-    SIDEBAR_MIN_WIDTH,
-    SIDEBAR_WIDTH,
-    VIEW_CONTAINER,
-    rootExtraWide,
-    rootWide,
-} from "../../styles/layout";
-import { withSx } from "../../styles/sx";
+import { PROPERTIES_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_WIDTH } from "../../styles/layout";
+import { fmClasses } from "../../styles/classes";
+import theme from "../../styles/theme.module.css";
 import { toolbarGroups, visibleActionGroups } from "../../utils/action-groups";
 import { isolate } from "../../utils/bidi";
 import { canPaste, withRenamed, withoutEntries } from "../../utils/clipboard";
+import { cx } from "../../utils/cx";
 import { canDownload, downloadedEntries } from "../../utils/download";
 import {
     acceptsFile,
@@ -104,8 +91,10 @@ import {
     wentPairs,
 } from "../../utils/undo";
 import { DEFAULT_ZOOM, canZoom, sameZoom, zoomScale, zoomedBy } from "../../utils/zoom";
+import RootProviders from "../ui/root-providers";
 import DownloadPanel from "../downloads/download-panel";
 import TransferPanel from "../transfers/transfer-panel";
+import Backdrop from "../ui/backdrop";
 import UploadPanel from "../uploads/upload-panel";
 import Announcer from "./announcer";
 import FolderView from "./content/folder-view";
@@ -122,6 +111,7 @@ import ShortcutsDialog from "./dialogs/shortcuts-dialog";
 import TransferDialog from "./dialogs/transfer-dialog";
 import UploadDialog from "./dialogs/upload-dialog";
 import DragPreview from "./drag-preview";
+import styles from "./file-manager.module.css";
 import HeaderBar from "./header-bar/header-bar";
 import PathBar from "./header-bar/path-bar";
 import PathField from "./header-bar/path-field";
@@ -205,15 +195,15 @@ import type { UploadDialogState, UploadRequest } from "./dialogs/upload-dialog";
 import type { Notice } from "./notice-bar";
 import type { UndoItems } from "./sidebar/main-menu";
 
-// The root element's own attributes, which go on it as they do on a MUI component's root, so an
-// `id`, an `aria-label`, a `data-` attribute or a handler can be set there. `title` is the sidebar's.
+// The root element's own attributes, which go on it as on a component library's root, so an `id`,
+// an `aria-label`, a `data-` attribute or a handler can be set there. `title` is the sidebar's.
 type RootAttributes = Omit<ComponentPropsWithoutRef<"div">, "title" | "children">;
 
 /*
  * The location, the view settings, the tree's expanded folders, the search and the selection below
  * can each be controlled, as MUI's props are: pass the value and change it in its `on…Change`
  * callback, or leave it to the file manager, starting from its `default…` prop. Which one is decided on
- * mounting, and MUI warns in development about switching later. Controlled, the user's changes are
+ * mounting, and a warning in development says so when it switches later. Controlled, the user's changes are
  * only asked for through the callback, and made once they're passed back.
  */
 interface BaseProps extends RootAttributes {
@@ -481,7 +471,7 @@ interface BaseProps extends RootAttributes {
      * Styles the root element, over its own, e.g. to size it. It fills its container by default,
      * and lays itself out by its own width (container queries), not the viewport's.
      */
-    sx?: SxProps<Theme>;
+    className?: string;
 }
 
 interface MultiSectionProps extends BaseProps {
@@ -761,144 +751,6 @@ const refuseFiles = (event: DragEvent) => {
     }
 };
 
-// The root only establishes the container; a container can't match its own queries, so the
-// visible frame is the child below it. The consumer's `sx` goes over it.
-const rootSx = {
-    containerType: "inline-size",
-    containerName: ROOT_CONTAINER,
-    position: "relative",
-    width: "100%",
-    height: "100%",
-    overflow: "hidden",
-    // It takes the focus only from a press on nothing focusable, never by Tab.
-    outline: "none",
-    // While a touch or pen presses, the browser drags nothing by itself, as some do on a long-press,
-    // so the file manager's own touch drag is the only one (`useEntryDrag`).
-    '&[data-touch-press] [draggable="true"]': { WebkitUserDrag: "none" },
-} satisfies SxProps<Theme>;
-
-const frameSx: SxProps<Theme> = {
-    display: "flex",
-    height: "100%",
-    bgcolor: "background.default",
-    color: "text.primary",
-};
-
-const backdropSx: SxProps<Theme> = {
-    position: "absolute",
-    zIndex: 1,
-    [rootWide]: { display: "none" },
-};
-
-// Behind the properties' overlay, which docks from `rootExtraWide`.
-const propertiesBackdropSx: SxProps<Theme> = {
-    position: "absolute",
-    zIndex: 1,
-    [rootExtraWide]: { display: "none" },
-};
-
-// What the content keeps beside the docked panels, with the margins around it: its own end margin,
-// and the start one too while the sidebar doesn't dock beside it, which takes it otherwise.
-const contentRoom = (theme: Theme, sidebarHidden: boolean) =>
-    `calc(${CONTENT_ROOM}px + ${theme.spacing(sidebarHidden ? 1.5 : 0.75)})`;
-
-// The main part is where the docked panels give way: the sidebar shrinks, down to its least width,
-// before the content has less than it needs, and with the properties docked beside it, before
-// they have less than theirs. The properties give way first, inside it (`columnSx`, and the
-// properties' own `min-width`), so whichever of the two was made wider, both can't reach their
-// widest unless there's room for them and the content. The pane's margin is its end one.
-const mainSx: SxProps<Theme> = (theme) => ({
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minWidth: 0,
-    [rootWide]: {
-        minWidth: contentRoom(theme, false),
-        '[data-sidebar-hidden="true"] &': { minWidth: contentRoom(theme, true) },
-    },
-    [rootExtraWide]: {
-        '&[data-properties-shown="true"]': {
-            minWidth: `calc(${contentRoom(theme, false)} + ${PROPERTIES_MIN_WIDTH}px + ${theme.spacing(0.75)})`,
-            '[data-sidebar-hidden="true"] &': {
-                minWidth: `calc(${contentRoom(theme, true)} + ${PROPERTIES_MIN_WIDTH}px + ${theme.spacing(0.75)})`,
-            },
-        },
-    },
-});
-
-// Under the header bar: the content with the panels under it, and the docked properties beside
-// them. Not positioned, so the properties' overlay covers the file manager from top to bottom, as
-// the sidebar's does.
-const bodySx: SxProps<Theme> = {
-    display: "flex",
-    flex: 1,
-    minHeight: 0,
-};
-
-// Beside the docked panels, the content keeps room for the list's size and date columns, with its
-// margins: the properties narrow first, and the panes read how far from this `min-width` they can go.
-const columnSx: SxProps<Theme> = (theme) => ({
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minWidth: 0,
-    [rootWide]: {
-        minWidth: contentRoom(theme, false),
-        '[data-sidebar-hidden="true"] &': { minWidth: contentRoom(theme, true) },
-    },
-});
-
-// Docked, the sidebar takes the panels' margin on its side, the start; hidden, they take it back.
-const besideSidebar = {
-    [rootWide]: {
-        marginInlineStart: 0,
-        '[data-sidebar-hidden="true"] &': { marginInlineStart: 0.75 },
-    },
-};
-
-// The content sits as an inset, rounded panel on the window background, as in GNOME Files. The
-// panel itself doesn't scroll, so the outline it shows while the open folder would take a drop
-// stays put over the content scrolling under it, sticky column header included.
-const panelSx: SxProps<Theme> = {
-    position: "relative",
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    marginInline: 0.75,
-    mb: 0.75,
-    borderRadius: 3,
-    overflow: "hidden",
-    bgcolor: "background.paper",
-    ...besideSidebar,
-    // The folder view marks itself, inside the scrolling view, with `data-drop-target`.
-    '&:has(> * > [data-drop-target="true"])::after': {
-        content: '""',
-        position: "absolute",
-        inset: 0,
-        border: "2px solid",
-        borderColor: "primary.main",
-        borderRadius: "inherit",
-        pointerEvents: "none",
-    },
-};
-
-const viewSx: SxProps<Theme> = {
-    containerType: "inline-size",
-    containerName: VIEW_CONTAINER,
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-};
-
-// The transfer, download and upload panels are further inset panels under the content, so they
-// never cover the files.
-const taskPanelSx: SxProps<Theme> = {
-    marginInline: 0.75,
-    mb: 0.75,
-    ...besideSidebar,
-};
-
 const pickerStyle: CSSProperties = { display: "none" };
 
 // Below `rootWide` the sidebar overlays the content. Container queries decide that, so it's read
@@ -963,7 +815,7 @@ const FileManager = ({
     locale,
     apiRef,
     ref,
-    sx,
+    className,
     onKeyDown,
     onDragEnter,
     onDragOver,
@@ -1021,7 +873,7 @@ const FileManager = ({
         [firstSection],
     );
 
-    // The location and the selection are kept by their own hooks, which can't use MUI's
+    // The location and the selection are kept by their own hooks, which can't use
     // `useControlled`, so it's called for its development warnings alone: about switching between
     // controlled and not, and about a default changing after mounting.
     useControlled({ controlled: locationProp, default: defaultLocation, name: "FileManager", state: "location" });
@@ -1498,7 +1350,6 @@ const FileManager = ({
     const selecting = openKey !== null && selectingKey === openKey;
     const rootRef = useRef<HTMLDivElement>(null);
     const rootElementRef = useForkRef(rootRef, ref);
-    const rootStyle = useMemo(() => withSx(rootSx, sx), [sx]);
     // Handed to what portals out of the file manager, so it runs the same way (`DirectionContext`).
     const direction = useTextDirection(rootRef);
     const panelRef = useRef<HTMLDivElement>(null);
@@ -3078,7 +2929,6 @@ const FileManager = ({
     const uploads = useUploadQueue(relist, localeValue.text.keptBothName);
 
     useLayoutEffect(() => uploads.queue.setMaxActive(uploadLimit), [uploads.queue, uploadLimit]);
-
 
     // What uploads just put in folders, for the folder view to highlight once it shows them.
     const [arrivals, setArrivals] = useState(NO_ARRIVALS);
@@ -5801,7 +5651,7 @@ const FileManager = ({
 
     return (
         <LocaleContext value={localeValue}>
-            <DirectionContext value={direction}>
+            <RootProviders direction={direction}>
                 <DataContext value={data}>
                     <CutContext value={cut}>
                         <MovingContext value={moving}>
@@ -5811,11 +5661,11 @@ const FileManager = ({
                                 {/* Focusable but not tabbable, so a press on its empty space, such as the
                                     header's, keeps the focus in here rather than dropping it to the page,
                                     where the keys handled below would never come. */}
-                                <Box
+                                <div
                                     tabIndex={-1}
                                     {...rootAttributes}
                                     ref={rootElementRef}
-                                    sx={rootStyle}
+                                    className={cx(theme.theme, theme.root, styles.root, fmClasses.fileManager, className)}
                                     onPointerDownCapture={(event) => {
                                         onPointerDownCapture?.(event);
                                         drag.onPointerDownCapture(event);
@@ -5858,16 +5708,16 @@ const FileManager = ({
                                         handleKeyDown(event);
                                     }}
                                 >
-                                    <Box sx={frameSx} data-sidebar-hidden={sidebarHidden}>
+                                    <div className={styles.frame} data-sidebar-hidden={sidebarHidden}>
                                         <Backdrop
                                             open={sidebarOpen}
-                                            sx={backdropSx}
+                                            className={styles.backdrop}
                                             style={dragging || sidebarForDrag ? PASS_THROUGH : undefined}
                                             onClick={closeSidebar}
                                         />
                                         <Backdrop
                                             open={propertiesOverlay}
-                                            sx={propertiesBackdropSx}
+                                            className={styles.propertiesBackdrop}
                                             onClick={closePropertiesOverlay}
                                         />
                                         <Sidebar
@@ -5902,7 +5752,7 @@ const FileManager = ({
                                             undoItems={undoItems}
                                             onShowShortcuts={showShortcuts}
                                         />
-                                        <Box sx={mainSx} data-properties-shown={propertiesOpen}>
+                                        <div className={styles.main} data-properties-shown={propertiesOpen}>
                                             <HeaderBar
                                                 pathBar={
                                                     section && searchScope ? (
@@ -5973,9 +5823,9 @@ const FileManager = ({
                                                 onOpenProperties={openPropertiesOverlay}
                                                 sidebarButtonRef={sidebarButtonRef}
                                             />
-                                            <Box sx={bodySx}>
-                                                <Box ref={columnRef} sx={columnSx}>
-                                                    <Box ref={panelRef} sx={panelSx}>
+                                            <div className={styles.body}>
+                                                <div ref={columnRef} className={styles.column}>
+                                                    <div ref={panelRef} className={cx(styles.panel, fmClasses.content)}>
                                                         {/* A search everywhere's results show in the folder's place
                                                             while something is typed. The folder stays mounted
                                                             under them, hidden, so it comes back as it was, its
@@ -6008,9 +5858,9 @@ const FileManager = ({
                                                         )}
                                                         {/* Keyed by folder, so each opens at the top with nothing
                                                             selected. */}
-                                                        <Box
+                                                        <div
                                                             key={openKey ?? undefined}
-                                                            sx={viewSx}
+                                                            className={styles.view}
                                                             hidden={showsResults}
                                                         >
                                                             {!section && <NoSections />}
@@ -6052,7 +5902,7 @@ const FileManager = ({
                                                                     trashLocation={trashOpen ? locateTrashed : undefined}
                                                                 />
                                                             )}
-                                                        </Box>
+                                                        </div>
                                                         <NoticeBar
                                                             notice={shownNotice}
                                                             actionLabel={noticeAction}
@@ -6064,9 +5914,9 @@ const FileManager = ({
                                                             onClose={closeNotice}
                                                             onFocusLost={focusFromNotice}
                                                         />
-                                                    </Box>
+                                                    </div>
                                                     {shownTransfers.length > 0 && (
-                                                        <Box sx={taskPanelSx}>
+                                                        <div className={styles.taskPanel}>
                                                             <TransferPanel
                                                                 items={shownTransfers}
                                                                 onCancel={transfers.queue.cancel}
@@ -6075,10 +5925,10 @@ const FileManager = ({
                                                                 onCancelAll={transfers.queue.cancelAll}
                                                                 onClear={clearTransfers}
                                                             />
-                                                        </Box>
+                                                        </div>
                                                     )}
                                                     {shownDownloads.length > 0 && (
-                                                        <Box sx={taskPanelSx}>
+                                                        <div className={styles.taskPanel}>
                                                             <DownloadPanel
                                                                 items={shownDownloads}
                                                                 onCancel={downloads.queue.cancel}
@@ -6087,10 +5937,10 @@ const FileManager = ({
                                                                 onCancelAll={downloads.queue.cancelAll}
                                                                 onClear={downloads.queue.clear}
                                                             />
-                                                        </Box>
+                                                        </div>
                                                     )}
                                                     {uploads.items.length > 0 && (
-                                                        <Box sx={taskPanelSx}>
+                                                        <div className={styles.taskPanel}>
                                                             <UploadPanel
                                                                 items={uploads.items}
                                                                 onCancel={uploads.queue.cancel}
@@ -6100,9 +5950,9 @@ const FileManager = ({
                                                                 onCancelAll={uploads.queue.cancelAll}
                                                                 onClear={clearUploads}
                                                             />
-                                                        </Box>
+                                                        </div>
                                                     )}
-                                                </Box>
+                                                </div>
                                                 <PropertiesPane
                                                     ref={paneRef}
                                                     subject={propertiesSubject}
@@ -6124,9 +5974,9 @@ const FileManager = ({
                                                     onFocusOut={handlePropertiesFocusOut}
                                                     onDockedChange={handlePropertiesDocking}
                                                 />
-                                            </Box>
-                                        </Box>
-                                    </Box>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <Announcer announcement={announcement?.region === "root" ? announcement : null} />
                                     <ContextMenu menu={menu} onClose={closeMenu} />
                                     {naming && (
@@ -6236,12 +6086,12 @@ const FileManager = ({
                                             />,
                                             document.body,
                                         )}
-                                </Box>
+                                </div>
                             </DragContext>
                         </MovingContext>
                     </CutContext>
                 </DataContext>
-            </DirectionContext>
+            </RootProviders>
         </LocaleContext>
     );
 };

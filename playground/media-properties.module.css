@@ -1,0 +1,107 @@
+/*
+ * What the playground's assets show as one is opened, as an app would define it: the values its
+ * backend hands over, each shown as a type of the media manager's, a little changed by a formatter,
+ * or drawn entirely the playground's own way. The media manager only lays them out.
+ */
+.format {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.job {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.jobHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.875rem;
+}
+
+.status {
+    font-size: 0.75rem;
+    font-weight: 600;
+
+    &[data-status="done"] {
+        color: light-dark(#2e7d32, #66bb6a);
+    }
+
+    &[data-status="processing"] {
+        color: var(--app-primary);
+    }
+
+    &[data-status="queued"] {
+        color: var(--app-text-secondary);
+    }
+
+    &[data-status="failed"] {
+        color: var(--app-error);
+    }
+}
+
+.bar {
+    height: 4px;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: color-mix(in srgb, var(--app-text) 8%, transparent);
+
+    & > div {
+        height: 100%;
+        background-color: var(--app-primary);
+        transition: width 0.3s;
+    }
+}
+
+.error {
+    color: var(--app-error);
+    font-size: 0.75rem;
+}
+
+.track {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+}
+
+.frames {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.frame {
+    aspect-ratio: 16 / 9;
+    border-radius: 4px;
+    overflow: hidden;
+    outline: 2px solid transparent;
+    outline-offset: 1px;
+
+    & > img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    &[aria-checked='true'] {
+        outline-color: var(--app-primary);
+    }
+
+    &:focus-visible {
+        outline-color: var(--app-text);
+    }
+}

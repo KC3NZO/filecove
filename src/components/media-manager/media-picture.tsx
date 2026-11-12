@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import type { ComponentPropsWithoutRef, Ref } from "react";
 
-import Box from "@mui/material/Box";
-import type { SxProps, Theme } from "@mui/material/styles";
-
-import { withSx } from "../../styles/sx";
+import { fmClasses } from "../../styles/classes";
+import theme from "../../styles/theme.module.css";
+import { cx } from "../../utils/cx";
 import { devicePixels } from "../../utils/dom";
 import { FileTypeIcon, FolderTypeIcon } from "../icons/file-icon";
+import styles from "./media-picture.module.css";
 
 import type { FileAdapter, FileEntry, ViewMode } from "../../types";
 
@@ -24,7 +24,7 @@ export interface MediaPictureProps extends Omit<ComponentPropsWithoutRef<"div">,
     /** The root element. */
     ref?: Ref<HTMLDivElement>;
     /** Styles the root element, over its own: its size and shape, `{ width: 72, aspectRatio: "16 / 9" }`. */
-    sx?: SxProps<Theme>;
+    className?: string;
 }
 
 interface Loaded {
@@ -33,26 +33,13 @@ interface Loaded {
     url: string | undefined;
 }
 
-const rootSx = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    width: "6rem",
-    aspectRatio: "1",
-    borderRadius: 1,
-    overflow: "hidden",
-    bgcolor: "action.hover",
-    "& > img": { display: "block", width: "100%", height: "100%", objectFit: "cover" },
-} satisfies SxProps<Theme>;
-
 /**
  * An asset's or a group's small picture, asked of the adapter's `thumbnail`, for showing one outside a
  * library, such as in a field pointing at it (`MediaPicker`): filling a box the app sizes and shapes
- * with `sx`, cut to fit, or its type's icon when it has none or it fails. It needs no provider around
+ * with its `className` or `style`, cut to fit, or its type's icon when it has none or it fails. It needs no provider around
  * it, and keeps nothing once it's gone.
  */
-const MediaPicture = ({ entry, adapter, view = "list", size = 6, alt = "", ref, sx, ...rest }: MediaPictureProps) => {
+const MediaPicture = ({ entry, adapter, view = "list", size = 6, alt = "", ref, className, ...rest }: MediaPictureProps) => {
     const key = `${entry.id}/${entry.modifiedAt?.getTime() ?? ""}`;
     const [loaded, setLoaded] = useState<Loaded | null>(null);
     const url = loaded?.key === key ? loaded.url : undefined;
@@ -89,7 +76,7 @@ const MediaPicture = ({ entry, adapter, view = "list", size = 6, alt = "", ref, 
     }, [adapter, key, view, size]);
 
     return (
-        <Box {...rest} ref={ref} sx={withSx(rootSx, sx)}>
+        <div {...rest} ref={ref} className={cx(theme.theme, styles.root, fmClasses.mediaPicture, className)}>
             {url ? (
                 <img src={url} alt={alt} draggable={false} onError={() => setLoaded({ key, url: undefined })} />
             ) : entry.kind === "folder" ? (
@@ -97,7 +84,7 @@ const MediaPicture = ({ entry, adapter, view = "list", size = 6, alt = "", ref, 
             ) : (
                 <FileTypeIcon fileName={entry.name} size="60%" />
             )}
-        </Box>
+        </div>
     );
 };
 

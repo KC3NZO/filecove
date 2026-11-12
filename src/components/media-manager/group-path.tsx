@@ -1,11 +1,10 @@
-import Box from "@mui/material/Box";
-import ButtonBase from "@mui/material/ButtonBase";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
-import { focusRing } from "../../styles/mixins";
 import Icon from "../icons/icon";
+import ButtonBase from "../ui/button-base";
+import Text from "../ui/text";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import styles from "./group-path.module.css";
 
 import type { FileEntry } from "../../types";
 
@@ -20,60 +19,6 @@ interface GroupPathProps {
     heading?: boolean;
 }
 
-const pathSx: SxProps<Theme> = {
-    display: "flex",
-    flex: 1,
-    minWidth: 0,
-    overflow: "hidden",
-};
-
-const listSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    minWidth: 0,
-    m: 0,
-    p: 0,
-    listStyle: "none",
-};
-
-// Those before the one open give way long before it does, a few letters of each staying.
-const itemSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    flex: "0 100 auto",
-    minWidth: "3.5rem",
-    "&:last-of-type": { flex: "0 1 auto", minWidth: 0 },
-};
-
-const crumbSx: SxProps<Theme> = {
-    display: "block",
-    minWidth: 0,
-    height: 28,
-    px: 1,
-    borderRadius: 1.5,
-    color: "text.secondary",
-    fontSize: "0.875rem",
-    lineHeight: "28px",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    "&:hover": { bgcolor: "action.hover", color: "text.primary" },
-    ...focusRing,
-};
-
-const currentSx: SxProps<Theme> = {
-    minWidth: 0,
-    px: 1,
-    fontSize: "0.9375rem",
-    fontWeight: 700,
-};
-
-const separatorSx: SxProps<Theme> = {
-    flexShrink: 0,
-    fontSize: "1rem",
-    color: "text.disabled",
-};
-
 /**
  * Where the group open is, as it was walked to, as it's only ever listed a level at a time: the
  * library's name and the groups on the way, each going back there, and the one open, which names
@@ -84,23 +29,23 @@ const GroupPath = ({ label, trail, onGoToLevel, heading = true }: GroupPathProps
     const before = trail.length > 0 ? [label, ...trail.slice(0, -1).map(({ name }) => name)] : [];
 
     return (
-        <Box component="nav" aria-label={text.mediaGroupPath} sx={pathSx}>
-            <Box component="ol" sx={listSx}>
+        <nav aria-label={text.mediaGroupPath} className={cx(styles.path, fmClasses.mediaGroupPath)}>
+            <ol className={styles.list}>
                 {before.map((name, depth) => (
-                    <Box component="li" key={trail[depth - 1]?.id ?? ""} sx={itemSx}>
-                        <ButtonBase title={name} sx={crumbSx} onClick={() => onGoToLevel(depth)}>
+                    <li key={trail[depth - 1]?.id ?? ""} className={styles.item}>
+                        <ButtonBase title={name} className={styles.crumb} onClick={() => onGoToLevel(depth)}>
                             <bdi>{name}</bdi>
                         </ButtonBase>
-                        <Icon name="chevronRight" sx={separatorSx} aria-hidden />
-                    </Box>
+                        <Icon name="chevronRight" className={styles.separator} aria-hidden />
+                    </li>
                 ))}
-                <Box component="li" sx={itemSx}>
-                    <Typography component={heading ? "h2" : "span"} noWrap aria-current="page" sx={currentSx}>
+                <li className={styles.item}>
+                    <Text component={heading ? "h2" : "span"} noWrap aria-current="page" className={styles.current}>
                         <bdi>{trail.at(-1)?.name ?? label}</bdi>
-                    </Typography>
-                </Box>
-            </Box>
-        </Box>
+                    </Text>
+                </li>
+            </ol>
+        </nav>
     );
 };
 

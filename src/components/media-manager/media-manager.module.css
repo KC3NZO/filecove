@@ -1,0 +1,12 @@
+/*
+ * The root only establishes the container; a container can't match its own queries, so the
+ * visible frame is the child below it. The consumer's `className` goes after it.
+ */
+.root {
+    container-type: inline-size;
+    container-name: media-manager;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}

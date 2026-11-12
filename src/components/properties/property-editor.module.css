@@ -1,0 +1,17 @@
+.editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.error {
+    color: var(--_fm-error);
+    font-size: 0.75rem;
+}
+
+.buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}

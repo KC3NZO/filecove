@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useThumbnail } from "../../../hooks/use-thumbnail";
 import { lockedFolder } from "../../../utils/permissions";
 import CheckBadge from "../../icons/check-badge";
 import { FileTypeIcon, FolderTypeIcon } from "../../icons/file-icon";
 import LockedIcon from "../../icons/locked-icon";
+import { fmClasses } from "../../../styles/classes";
+import { cx } from "../../../utils/cx";
+import styles from "./item-icon.module.css";
 
 import type { FileAdapter, FileEntry, ViewMode } from "../../../types";
 
@@ -21,27 +21,6 @@ interface ItemIconProps {
     view?: ViewMode;
 }
 
-const wrapperSx: SxProps<Theme> = {
-    position: "relative",
-    display: "inline-flex",
-    flexShrink: 0,
-};
-
-// The picture fits the icon's square, shrunk but never stretched. The row or tile takes presses,
-// right-clicks and drags, not the picture.
-const thumbnailSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    "& > img": {
-        display: "block",
-        maxWidth: "100%",
-        maxHeight: "100%",
-        borderRadius: 0.5,
-        pointerEvents: "none",
-    },
-};
-
 /**
  * An entry's type icon, or its file's thumbnail once one has loaded, with the check badge of touch
  * selection, and a lock on a folder nothing can be put in.
@@ -53,9 +32,9 @@ const ItemIcon = ({ entry, size, adapter, view }: ItemIconProps) => {
 
     if (thumbnail) {
         icon = (
-            <Box sx={thumbnailSx} style={{ width: length, height: length }}>
+            <div className={styles.thumbnail} style={{ width: length, height: length }}>
                 <img src={thumbnail} alt="" draggable={false} />
-            </Box>
+            </div>
         );
     } else if (entry.kind === "folder") {
         icon = (
@@ -68,10 +47,10 @@ const ItemIcon = ({ entry, size, adapter, view }: ItemIconProps) => {
     }
 
     return (
-        <Box sx={wrapperSx}>
+        <div className={cx(styles.wrapper, fmClasses.entryIcon)}>
             {icon}
             <CheckBadge />
-        </Box>
+        </div>
     );
 };
 

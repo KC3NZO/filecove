@@ -12,14 +12,6 @@ import {
 } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
-import Dialog, { dialogClasses } from "@mui/material/Dialog";
-import type { DialogProps } from "@mui/material/Dialog";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useData } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
@@ -27,14 +19,10 @@ import { usePreviewContents } from "../../../hooks/use-preview-contents";
 import { useSwipe } from "../../../hooks/use-swipe";
 import { useThumbnail } from "../../../hooks/use-thumbnail";
 import { folderKey } from "../../../store/folder-store";
-import {
-    GRID_SIZES,
-    GRID_START,
-    PREVIEW_HEADER_CONTAINER,
-    previewHeaderMedium,
-    previewHeaderWide,
-} from "../../../styles/layout";
-import { dialogPaperSx, focusOutline, visuallyHiddenSx } from "../../../styles/mixins";
+import { GRID_SIZES, GRID_START } from "../../../styles/layout";
+import { fmClasses } from "../../../styles/classes";
+import { cx } from "../../../utils/cx";
+import util from "../../../styles/util.module.css";
 import { runToolbarShortcut } from "../../../utils/action-groups";
 import { isolate, joinIsolated } from "../../../utils/bidi";
 import {
@@ -53,8 +41,14 @@ import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import ToolbarActions from "../../buttons/toolbar-actions";
 import { FileTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
+import Button from "../../ui/button";
+import CircularProgress from "../../ui/circular-progress";
+import Dialog from "../../ui/dialog";
+import type { DialogCloseReason } from "../../ui/dialog";
+import Text from "../../ui/text";
 import Announcer from "../announcer";
 import ImageViewer from "./image-viewer";
+import styles from "./preview-dialog.module.css";
 
 import type { Announcement } from "../../../hooks/use-announcer";
 import type {
@@ -210,259 +204,6 @@ const sameFiles = (a: PreviewFile[], b: PreviewFile[]) =>
 
 /** The store's key of the folder a file is in. */
 const folderKeyOf = ({ section, trail }: PreviewFile) => folderKey(section.id, folderOf(section, trail).id);
-
-// As large as the page allows, up to a size that still reads as a dialog, or all of it while it
-// fills the screen.
-const dialogSx: SxProps<Theme> = {
-    [`& .${dialogClasses.paper}`]: {
-        width: "min(72rem, 100% - 2rem)",
-        height: "min(54rem, 100% - 2rem)",
-        maxWidth: "none",
-        maxHeight: "none",
-        m: 2,
-    },
-    [`&[data-maximized="true"] .${dialogClasses.paper}`]: {
-        width: "100%",
-        height: "100%",
-        m: 0,
-        border: 0,
-        borderRadius: 0,
-    },
-};
-
-// A container, so its buttons fit the room the dialog has.
-const headerSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1.5,
-    minHeight: 56,
-    py: 1,
-    paddingInlineStart: 2,
-    paddingInlineEnd: 1,
-    containerType: "inline-size",
-    containerName: PREVIEW_HEADER_CONTAINER,
-};
-
-const titleSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minWidth: 0,
-};
-
-const nameSx: SxProps<Theme> = {
-    fontWeight: 600,
-};
-
-const stepperSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    flexShrink: 0,
-};
-
-const counterSx: SxProps<Theme> = {
-    display: "none",
-    minWidth: "4.5em",
-    textAlign: "center",
-    fontVariantNumeric: "tabular-nums",
-    [previewHeaderMedium]: { display: "block" },
-};
-
-const buttonsSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    flexShrink: 0,
-};
-
-// The file sits on the content panel's surface, as the window lays out the folder view: chrome on
-// the window's background, the view on paper. Sideways moves of a finger are left to the page, to
-// swipe to another file.
-const bodySx: SxProps<Theme> = {
-    flex: 1,
-    minHeight: 0,
-    display: "flex",
-    mx: 1,
-    mb: 1,
-    overflow: "hidden",
-    border: 1,
-    borderColor: "divider",
-    borderRadius: 2,
-    bgcolor: "background.paper",
-    touchAction: "pan-y pinch-zoom",
-};
-
-// What follows the finger as it swipes.
-const slideSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-};
-
-// Shrunk to fit, never stretched past its own size.
-const mediaSx: SxProps<Theme> = {
-    display: "block",
-    maxWidth: "calc(100% - 2rem)",
-    maxHeight: "calc(100% - 2rem)",
-    objectFit: "contain",
-};
-
-const frameSx: SxProps<Theme> = {
-    alignSelf: "stretch",
-    flex: 1,
-    minWidth: 0,
-    border: 0,
-};
-
-const columnSx: SxProps<Theme> = {
-    alignSelf: "stretch",
-    flex: 1,
-    minWidth: 0,
-    display: "flex",
-    flexDirection: "column",
-};
-
-// A previewer of the app's own fills the body, scrolling as it needs to.
-const customSx: SxProps<Theme> = {
-    position: "relative",
-    flex: 1,
-    minHeight: 0,
-    display: "flex",
-    flexDirection: "column",
-    overflow: "auto",
-};
-
-// Long lines wrap, so Left and Right, and a sideways swipe, stay free for stepping between files.
-const textSx: SxProps<Theme> = {
-    flex: 1,
-    minHeight: 0,
-    m: 0,
-    p: 2,
-    overflow: "auto",
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
-    fontSize: "0.8125rem",
-    lineHeight: 1.6,
-    whiteSpace: "pre-wrap",
-    overflowWrap: "anywhere",
-    // Each line runs, and lines up, the way its own letters do, as in a text editor, so code reads
-    // left to right in a right-to-left file manager, and Arabic or Hebrew lines right to left.
-    unicodeBidi: "plaintext",
-    tabSize: 4,
-    touchAction: "pan-y pinch-zoom",
-    outline: "none",
-    "&:focus-visible": focusOutline,
-};
-
-const noteSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 1,
-    px: 2,
-    py: 0.5,
-    borderTop: 1,
-    borderColor: "divider",
-    color: "text.secondary",
-};
-
-// A font's characters and its sample at several sizes, each line running the way its letters do.
-const specimenSx: SxProps<Theme> = {
-    flex: 1,
-    minHeight: 0,
-    overflow: "auto",
-    p: 3,
-    display: "flex",
-    flexDirection: "column",
-    gap: 2.5,
-    touchAction: "pan-y pinch-zoom",
-    outline: "none",
-    "&:focus-visible": focusOutline,
-};
-
-const charactersSx: SxProps<Theme> = {
-    fontSize: "2rem",
-    lineHeight: 1.35,
-    whiteSpace: "pre-line",
-    overflowWrap: "anywhere",
-    unicodeBidi: "plaintext",
-};
-
-const sampleSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0.25,
-    minWidth: 0,
-};
-
-const sampleTextSx: SxProps<Theme> = {
-    lineHeight: 1.25,
-    overflowWrap: "anywhere",
-    unicodeBidi: "plaintext",
-};
-
-const stateSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 1,
-    p: 3,
-    textAlign: "center",
-    color: "text.secondary",
-};
-
-const stateIconSx: SxProps<Theme> = {
-    fontSize: "3rem",
-    opacity: 0.6,
-};
-
-const stateTitleSx: SxProps<Theme> = {
-    color: "text.primary",
-    fontWeight: 600,
-};
-
-// The file's thumbnail, larger than the grid shows it, for a file there's nothing else to show of.
-const pictureSx: SxProps<Theme> = {
-    display: "block",
-    width: "16rem",
-    height: "16rem",
-    maxWidth: "100%",
-    objectFit: "contain",
-    borderRadius: 1,
-};
-
-// While a file loads, its thumbnail stands where it will be, with the spinner over it.
-const loadingSx: SxProps<Theme> = {
-    position: "relative",
-    alignSelf: "stretch",
-    flex: 1,
-    minWidth: 0,
-};
-
-const placeholderSx: SxProps<Theme> = {
-    position: "absolute",
-    inset: 0,
-    m: "auto",
-    width: "100%",
-    height: "100%",
-    maxWidth: "calc(100% - 2rem)",
-    maxHeight: "calc(100% - 2rem)",
-    objectFit: "contain",
-    pointerEvents: "none",
-};
-
-const spinnerSx: SxProps<Theme> = {
-    position: "absolute",
-    inset: 0,
-    m: "auto",
-};
-
-const audioSx: SxProps<Theme> = {
-    width: "min(100%, 28rem)",
-    mt: 2,
-};
 
 /**
  * The files to step through as their folders' listings have them now, once a listing of a folder
@@ -708,21 +449,13 @@ const PreviewDialog = ({
     }, [open]);
 
     // Escape first leaves full screen, as it does a browser's; a second one closes.
-    const handleClose: DialogProps["onClose"] = (_event, reason) => {
+    const handleClose = (reason: DialogCloseReason) => {
         if (reason === "escapeKeyDown" && maximizedRef.current) {
             toggleFullScreen();
         } else {
             onClose();
         }
     };
-
-    const slotProps = useMemo(
-        () => ({
-            paper: { sx: dialogPaperSx },
-            transition: { onExited: onClosed },
-        }),
-        [onClosed],
-    );
 
     const canStep = (delta: 1 | -1) => index + delta >= 0 && index + delta < count;
 
@@ -875,8 +608,8 @@ const PreviewDialog = ({
     // "Showing the first 256 kB", with Show more, under a text file cut short.
     const truncatedNote = (excerpt: { truncated: boolean; limit: number }, reading: boolean | undefined) =>
         excerpt.truncated && (
-            <Box sx={noteSx}>
-                <Typography variant="caption">{text.previewTruncated(isolate(formatSize(excerpt.limit)))}</Typography>
+            <div className={styles.note}>
+                <Text variant="caption">{text.previewTruncated(isolate(formatSize(excerpt.limit)))}</Text>
                 <Button
                     size="small"
                     color="inherit"
@@ -886,56 +619,56 @@ const PreviewDialog = ({
                     {text.previewShowMore}
                 </Button>
                 {reading && <CircularProgress size={14} aria-label={text.loading} />}
-            </Box>
+            </div>
         );
 
     const unavailable = (message = text.previewUnavailable, extra?: ReactNode) => (
-        <Box sx={stateSx}>
+        <div className={cx(styles.state, fmClasses.state)}>
             {thumbnail ? (
-                <Box component="img" src={thumbnail} alt="" draggable={false} sx={pictureSx} />
+                <img src={thumbnail} alt="" draggable={false} className={styles.picture} />
             ) : (
                 <FileTypeIcon fileName={entry.name} size="5rem" />
             )}
-            <Typography sx={stateTitleSx}>{message}</Typography>
+            <Text className={styles.stateTitle}>{message}</Text>
             {entry.modifiedAt && (
-                <Typography variant="body2">{text.modifiedOn(isolate(describeDate(entry)))}</Typography>
+                <Text variant="body2">{text.modifiedOn(isolate(describeDate(entry)))}</Text>
             )}
             {extra}
-        </Box>
+        </div>
     );
 
     let body: ReactNode;
 
     if (loaded?.status === "error") {
         body = (
-            <Box sx={stateSx} role="alert">
-                <Icon name="info" sx={stateIconSx} />
-                <Typography sx={stateTitleSx}>{text.previewFailed}</Typography>
-                <Typography variant="body2">{errorMessage(loaded.error, text)}</Typography>
+            <div className={cx(styles.state, fmClasses.state)} role="alert">
+                <Icon name="info" className={styles.stateIcon} />
+                <Text className={styles.stateTitle}>{text.previewFailed}</Text>
+                <Text variant="body2">{errorMessage(loaded.error, text)}</Text>
                 <Button size="small" variant="outlined" onClick={() => retry(entry)}>
                     {text.tryAgain}
                 </Button>
-            </Box>
+            </div>
         );
     } else if (kind === "none" || loaded?.status === "binary") {
         body = unavailable();
     } else if (!loaded && plan.reads !== "none") {
         body = (
-            <Box sx={loadingSx}>
+            <div className={styles.loading}>
                 {thumbnail && (
-                    <Box component="img" src={thumbnail} alt="" draggable={false} sx={placeholderSx} style={expected} />
+                    <img src={thumbnail} alt="" draggable={false} className={styles.placeholder} style={expected} />
                 )}
-                <CircularProgress size={28} aria-label={text.loading} sx={spinnerSx} />
-            </Box>
+                <CircularProgress size={28} aria-label={text.loading} className={styles.spinner} />
+            </div>
         );
     } else if (kind === "custom" && plan.previewer) {
         const excerpt = loaded?.status === "text" ? loaded.excerpt : undefined;
 
         body = (
-            <Box sx={columnSx}>
-                <Box sx={customSx}>
+            <div className={styles.column}>
+                <div className={styles.custom}>
                     <PreviewerBoundary key={`${previewKey(entry)}:${attempt}`} onError={failShown}>
-                        <Suspense fallback={<CircularProgress size={28} aria-label={text.loading} sx={spinnerSx} />}>
+                        <Suspense fallback={<CircularProgress size={28} aria-label={text.loading} className={styles.spinner} />}>
                             <PreviewerOutput
                                 previewer={plan.previewer}
                                 entry={entry}
@@ -947,47 +680,47 @@ const PreviewDialog = ({
                             />
                         </Suspense>
                     </PreviewerBoundary>
-                </Box>
+                </div>
                 {loaded?.status === "text" && truncatedNote(loaded.excerpt, loaded.more)}
-            </Box>
+            </div>
         );
     } else if (loaded?.status === "text") {
         body = loaded.excerpt.text ? (
-            <Box sx={columnSx}>
+            <div className={styles.column}>
                 {/* Tabbable, so it scrolls from the keyboard too. */}
-                <Box component="pre" sx={textSx} tabIndex={0} aria-label={entry.name} data-preview-scroll>
+                <pre className={styles.text} tabIndex={0} aria-label={entry.name} data-preview-scroll>
                     {loaded.excerpt.text}
-                </Box>
+                </pre>
                 {truncatedNote(loaded.excerpt, loaded.more)}
-            </Box>
+            </div>
         ) : (
-            <Box sx={stateSx}>
+            <div className={cx(styles.state, fmClasses.state)}>
                 <FileTypeIcon fileName={entry.name} size="5rem" />
-                <Typography sx={stateTitleSx}>{text.fileEmpty}</Typography>
-            </Box>
+                <Text className={styles.stateTitle}>{text.fileEmpty}</Text>
+            </div>
         );
     } else if (loaded?.status === "font") {
         const family = { fontFamily: `"${loaded.family}"` };
 
         body = (
-            <Box sx={columnSx}>
+            <div className={styles.column}>
                 {/* Tabbable, so it scrolls from the keyboard too. */}
-                <Box sx={specimenSx} tabIndex={0} aria-label={entry.name} data-preview-scroll>
-                    <Box sx={charactersSx} style={family}>
+                <div className={styles.specimen} tabIndex={0} aria-label={entry.name} data-preview-scroll>
+                    <div className={styles.characters} style={family}>
                         {text.previewFontCharacters}
-                    </Box>
+                    </div>
                     {FONT_SIZES.map((fontSize) => (
-                        <Box key={fontSize} sx={sampleSx}>
-                            <Typography variant="caption" color="text.secondary">
+                        <div key={fontSize} className={styles.sample}>
+                            <Text variant="caption" color="secondary">
                                 {text.previewFontSize(formatNumber(fontSize))}
-                            </Typography>
-                            <Box sx={sampleTextSx} style={{ ...family, fontSize }}>
+                            </Text>
+                            <div className={styles.sampleText} style={{ ...family, fontSize }}>
                                 {text.previewFontSample}
-                            </Box>
-                        </Box>
+                            </div>
+                        </div>
                     ))}
-                </Box>
-            </Box>
+                </div>
+            </div>
         );
     } else if (loaded?.status !== "url") {
         body = unavailable();
@@ -1006,32 +739,30 @@ const PreviewDialog = ({
         );
     } else if (kind === "video") {
         body = (
-            <Box
+            <video
                 key={previewKey(entry)}
-                component="video"
                 src={loaded.url}
                 poster={thumbnail ?? undefined}
                 controls
                 preload="metadata"
-                sx={mediaSx}
+                className={styles.media}
                 onLoadedMetadata={(event) => measure(event.currentTarget.videoWidth, event.currentTarget.videoHeight)}
                 onError={handleMediaError}
             />
         );
     } else if (kind === "audio") {
         body = (
-            <Box sx={stateSx}>
+            <div className={cx(styles.state, fmClasses.state)}>
                 <FileTypeIcon fileName={entry.name} size="5rem" />
-                <Box
+                <audio
                     key={previewKey(entry)}
-                    component="audio"
                     src={loaded.url}
                     controls
                     preload="metadata"
-                    sx={audioSx}
+                    className={styles.audio}
                     onError={handleMediaError}
                 />
-            </Box>
+            </div>
         );
     } else if (!showsPdf()) {
         // The browser has no viewer of its own to show it in a frame, so it's left to the browser
@@ -1047,7 +778,7 @@ const PreviewDialog = ({
             </Button>,
         );
     } else {
-        body = <Box key={previewKey(entry)} component="iframe" src={loaded.url} title={entry.name} sx={frameSx} />;
+        body = <iframe key={previewKey(entry)} src={loaded.url} title={entry.name} className={styles.frame} />;
     }
 
     return (
@@ -1055,58 +786,58 @@ const PreviewDialog = ({
             dir={dir}
             open={open}
             maxWidth={false}
-            sx={dialogSx}
-            slotProps={slotProps}
+            className={cx(styles.dialog, fmClasses.preview)}
             disableRestoreFocus={disableRestoreFocus}
             aria-labelledby={titleId}
             data-maximized={maximized}
             onClose={handleClose}
+            onExited={onClosed}
             onKeyDown={handleKeyDown}
         >
-            <Box sx={headerSx}>
+            <div className={cx(styles.header, fmClasses.previewHeader)}>
                 <FileTypeIcon fileName={entry.name} size="1.75rem" />
-                <Box sx={titleSx}>
-                    <Typography id={titleId} component="h2" variant="body1" noWrap sx={nameSx}>
+                <div className={styles.title}>
+                    <Text id={titleId} component="h2" variant="body1" noWrap className={styles.name}>
                         <bdi>{entry.name}</bdi>
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap>
+                    </Text>
+                    <Text variant="caption" color="secondary" noWrap>
                         {details}
-                    </Typography>
-                </Box>
+                    </Text>
+                </div>
                 {count > 1 && (
-                    <Box sx={stepperSx}>
+                    <div className={styles.stepper}>
                         <TooltipIconButton label={text.previous} disabled={index === 0} onClick={() => step(-1)}>
                             <Icon name="chevronLeft" />
                         </TooltipIconButton>
-                        <Typography variant="body2" color="text.secondary" sx={counterSx} aria-hidden>
+                        <Text variant="body2" color="secondary" className={styles.counter} aria-hidden>
                             {joinIsolated([formatNumber(index + 1), formatNumber(count)], " / ")}
-                        </Typography>
+                        </Text>
                         <TooltipIconButton label={text.next} disabled={index === count - 1} onClick={() => step(1)}>
                             <Icon name="chevronRight" />
                         </TooltipIconButton>
-                    </Box>
+                    </div>
                 )}
-                <Box sx={buttonsSx}>
+                <div className={styles.buttons}>
                     <ToolbarActions
                         groups={headerActions}
                         moreLabel={text.moreActions}
                         inline={INLINE_ACTIONS}
-                        wide={previewHeaderWide}
+                        collapses
                     />
                     <TooltipIconButton label={text.close} onClick={onClose}>
                         <Icon name="close" />
                     </TooltipIconButton>
-                </Box>
-            </Box>
-            <Box sx={bodySx} {...swipe.handlers}>
-                <Box ref={slideRef} sx={slideSx}>
+                </div>
+            </div>
+            <div className={styles.body} {...swipe.handlers}>
+                <div ref={slideRef} className={styles.slide}>
                     {body}
-                </Box>
-            </Box>
+                </div>
+            </div>
             {/* Screen readers hear which file the arrows stepped to. */}
-            <Box sx={visuallyHiddenSx} role="status">
+            <div className={util.visuallyHidden} role="status">
                 {count > 1 ? text.previewPosition(isolate(entry.name), index + 1, count) : ""}
-            </Box>
+            </div>
             <Announcer announcement={announcement} />
         </Dialog>
     );

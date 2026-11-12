@@ -1,21 +1,6 @@
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import List from "@mui/material/List";
-import ListItem from "@mui/material/ListItem";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useData, useFolder } from "../../../hooks/use-folder";
 import { useFound } from "../../../hooks/use-found";
@@ -23,17 +8,10 @@ import { useLocale } from "../../../hooks/use-locale";
 import { useMovingIds } from "../../../hooks/use-moving-ids";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualLines } from "../../../hooks/use-virtual-lines";
-import { dialogActionsSx } from "../../../styles/direction";
-import {
-    arrivedMarker,
-    dialogPaperSx,
-    focusOutline,
-    focusRing,
-    forcedArrived,
-    forcedColors,
-    hoverBackground,
-} from "../../../styles/mixins";
+import { fmClasses } from "../../../styles/classes";
+import marks from "../../../styles/entry.module.css";
 import { isolate } from "../../../utils/bidi";
+import { cx } from "../../../utils/cx";
 import { groupedEntries } from "../../../utils/groups";
 import { isHidden } from "../../../utils/hidden";
 import { isTypingKey, matchName, pageRows, stepIndex } from "../../../utils/keyboard";
@@ -51,12 +29,18 @@ import { entryClashes, mergedFolders } from "../../../utils/transfer";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
+import Button from "../../ui/button";
+import ButtonBase from "../../ui/button-base";
+import CircularProgress from "../../ui/circular-progress";
+import Dialog, { DialogActions, DialogContent, DialogTitle } from "../../ui/dialog";
+import Text from "../../ui/text";
 import PathBar from "../header-bar/path-bar";
 import IconSlot from "../../icons/icon-slot";
 import LockedIcon from "../../icons/locked-icon";
 import FindLayer, { DrawnName } from "../find-layer";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
 import NameDialog from "./name-dialog";
+import styles from "./transfer-dialog.module.css";
 
 import type {
     Clash,
@@ -152,120 +136,9 @@ const NO_MENU: OpenMenu = () => false;
 const NO_CLASHES: Clash[] = [];
 
 // Long names are cut short, since every row must be as tall for the list to place them.
-const TEXT_SLOTS = { primary: { noWrap: true } };
 
 // One column of rows, which never runs right to left, for `stepIndex`.
 const ROWS = { columns: 1, horizontal: false, rtl: false };
-
-const contentSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-    height: "min(24rem, 60vh)",
-};
-
-const toolbarSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 0.5,
-    minHeight: 34,
-};
-
-const locationSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-};
-
-// The bordered box the folders fill, shared by the list and its loading, empty and error states.
-// It takes the content panel's surface, as the dialog takes the window's, so it reads as the same view.
-const frame = {
-    flex: 1,
-    minHeight: 0,
-    border: 1,
-    borderColor: "divider",
-    borderRadius: 2,
-    bgcolor: "background.paper",
-};
-
-const scrollerSx: SxProps<Theme> = {
-    ...frame,
-    overflowY: "auto",
-    py: 0.5,
-};
-
-// Only the rows in or near view are rendered, each placed at its line, and the list is as tall as
-// all of them (`useVirtualLines`). It's a grid of one track for the hook to read. It only takes the
-// focus itself while no row can.
-const listSx: SxProps<Theme> = {
-    position: "relative",
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr)",
-    outline: "none",
-    "&:focus-visible": focusOutline,
-};
-
-// Clips the list down its length, so a row kept rendered far from view in a squeezed list, placed
-// in px of all the rows, doesn't lengthen what the box scrolls (see `virtualization.md`).
-const listClipSx: SxProps<Theme> = {
-    overflowY: "clip",
-};
-
-// Placed at its line by `top`, set in `style`. MUI aligns a list item's text with `text-align: left`.
-const itemSx: SxProps<Theme> = {
-    position: "absolute",
-    insetInline: 0,
-    textAlign: "start",
-};
-
-// Holds the focus in place of the list while the folder loads, or when it has no folders.
-const emptySx: SxProps<Theme> = {
-    ...frame,
-    display: "flex",
-    outline: "none",
-    "&:focus-visible": focusOutline,
-};
-
-const rowSx: SxProps<Theme> = (theme) => ({
-    mx: 0.5,
-    borderRadius: 1.5,
-    textAlign: "start",
-    "&:hover": { bgcolor: hoverBackground(theme) },
-    ...arrivedMarker(theme),
-    ...focusRing,
-    [forcedColors]: forcedArrived,
-});
-
-const rowIconSx: SxProps<Theme> = {
-    minWidth: 36,
-};
-
-const stateSx: SxProps<Theme> = {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 1,
-    p: 2,
-    textAlign: "center",
-    color: "text.secondary",
-};
-
-const spacerSx: SxProps<Theme> = {
-    flex: 1,
-};
-
-// Says why "Copy here" or "Move here" is disabled, in the actions' row, before the buttons.
-const readOnlySx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    paddingInlineStart: 1,
-    color: "text.secondary",
-};
-
-const locationsTitleSx: SxProps<Theme> = {
-    fontWeight: 600,
-};
 
 const isFolder = (entry: FileEntry) => entry.kind === "folder";
 
@@ -437,18 +310,10 @@ const TransferDialog = ({
     // The list takes the focus once the dialog has faded in, so the arrows work straight away. The
     // context menu hands the focus back to where it was opened from as it closes, which would win
     // over anything sooner.
-    const slotProps = useMemo(
-        () => ({
-            paper: { sx: dialogPaperSx },
-            transition: {
-                onEntered: () => {
-                    pendingFocus.current = true;
-                    settleFocus();
-                },
-            },
-        }),
-        [settleFocus],
-    );
+    const handleEntered = () => {
+        pendingFocus.current = true;
+        settleFocus();
+    };
 
     // Opening a folder from the list, or going up from it, takes the focused row away, so the list
     // takes the focus again. Going up, the folder left through gets the Tab stop and is scrolled
@@ -636,21 +501,19 @@ const TransferDialog = ({
 
     if (conflicts) {
         body = (
-            <Box sx={stateSx}>
+            <div className={cx(styles.state, fmClasses.state)}>
                 <ConflictMessage clashes={clashes} folderName={targetFolder.name} />
-            </Box>
+            </div>
         );
     } else if (items.length > 0) {
         // Keyed by place, so each folder opens scrolled to the top.
         body = (
-            <Box key={place ? targetFolder.id : ""} ref={scrollerRef} sx={scrollerSx}>
+            <div key={place ? targetFolder.id : ""} ref={scrollerRef} className={styles.scroller}>
                 <FindLayer names={names} onFound={handleFound} />
-                <Box sx={listClipSx}>
-                    <List
+                <div className={styles.listClip}>
+                    <ul
                         ref={listElement}
-                        dense
-                        disablePadding
-                        sx={listSx}
+                        className={styles.list}
                         style={{ height: lines.height }}
                         aria-label={listLabel}
                         tabIndex={tabStop === null ? 0 : -1}
@@ -661,17 +524,16 @@ const TransferDialog = ({
                             const item = items[index];
 
                             return (
-                                <ListItem
+                                <li
                                     key={item.id}
-                                    disablePadding
-                                    sx={itemSx}
+                                    className={styles.item}
                                     style={{ top: index * lines.pitch - lines.offset }}
                                     // Only some rows are rendered, so each says where it is among all of them.
                                     aria-setsize={items.length}
                                     aria-posinset={index + 1}
                                 >
-                                    <ListItemButton
-                                        sx={rowSx}
+                                    <ButtonBase
+                                        className={cx(styles.row, marks.arrived)}
                                         disabled={item.disabled}
                                         tabIndex={item.id === tabStop ? 0 : -1}
                                         aria-description={
@@ -686,7 +548,7 @@ const TransferDialog = ({
                                         data-found={item.id === foundId}
                                         onClick={() => openItem(item)}
                                     >
-                                        <ListItemIcon sx={rowIconSx}>
+                                        <span className={styles.rowIcon}>
                                             {item.section ? (
                                                 <IconSlot icon={item.section.icon ?? "folder"} />
                                             ) : (
@@ -694,21 +556,23 @@ const TransferDialog = ({
                                                     <FolderTypeIcon folderName={item.name} size="1.25rem" />
                                                 </LockedIcon>
                                             )}
-                                        </ListItemIcon>
-                                        <ListItemText primary={<DrawnName name={item.name} />} slotProps={TEXT_SLOTS} />
-                                    </ListItemButton>
-                                </ListItem>
+                                        </span>
+                                        <span className={styles.rowText}>
+                                            <DrawnName name={item.name} />
+                                        </span>
+                                    </ButtonBase>
+                                </li>
                             );
                         })}
-                    </List>
-                </Box>
-            </Box>
+                    </ul>
+                </div>
+            </div>
         );
     } else {
         body = (
-            <Box
+            <div
                 ref={frameRef}
-                sx={emptySx}
+                className={styles.empty}
                 tabIndex={0}
                 role="group"
                 aria-label={listLabel}
@@ -716,31 +580,31 @@ const TransferDialog = ({
                 aria-busy={!loaded}
                 onKeyDown={handleListKeyDown}
             >
-                <Box id={stateId} sx={stateSx}>
-                    {listed && <Typography variant="body2">{text.noFolders}</Typography>}
+                <div id={stateId} className={cx(styles.state, fmClasses.state)}>
+                    {listed && <Text variant="body2">{text.noFolders}</Text>}
                     {failed && (
-                        <Typography variant="body2">
+                        <Text variant="body2">
                             {text.folderOpenFailed}
                             {state.error instanceof Error && `: ${isolate(state.error.message)}`}
-                        </Typography>
+                        </Text>
                     )}
                     {!loaded && <CircularProgress size={24} aria-label={text.loading} />}
-                </Box>
-            </Box>
+                </div>
+            </div>
         );
     }
 
     return (
         <>
-            <Dialog dir={dir} open={open} fullWidth maxWidth="sm" slotProps={slotProps} onClose={onClose}>
+            <Dialog dir={dir} open={open} fullWidth maxWidth="sm" className={fmClasses.transferDialog} onClose={onClose} onEntered={handleEntered}>
                 <DialogTitle>{title}</DialogTitle>
-                <DialogContent sx={contentSx}>
+                <DialogContent className={styles.content}>
                     {!conflicts && (
-                        <Box sx={toolbarSx}>
+                        <div className={styles.toolbar}>
                             <TooltipIconButton size="small" label={text.back} disabled={!canGoUp} onClick={goUp}>
                                 <Icon name="arrowBack" fontSize="small" />
                             </TooltipIconButton>
-                            <Box sx={locationSx}>
+                            <div className={styles.location}>
                                 {place ? (
                                     <PathBar
                                         section={target}
@@ -750,11 +614,11 @@ const TransferDialog = ({
                                         onOpenMenu={NO_MENU}
                                     />
                                 ) : (
-                                    <Typography variant="body2" sx={locationsTitleSx}>
+                                    <Text variant="body2" className={styles.locationsTitle}>
                                         {text.pickerLocations}
-                                    </Typography>
+                                    </Text>
                                 )}
-                            </Box>
+                            </div>
                             {adapter.createFolder && (
                                 <TooltipIconButton
                                     size="small"
@@ -765,12 +629,12 @@ const TransferDialog = ({
                                     <Icon name="newFolder" fontSize="small" />
                                 </TooltipIconButton>
                             )}
-                        </Box>
+                        </div>
                     )}
                     {body}
                 </DialogContent>
                 {conflicts ? (
-                    <DialogActions sx={dialogActionsSx}>
+                    <DialogActions>
                         <Button
                             color="inherit"
                             onClick={() => {
@@ -781,15 +645,15 @@ const TransferDialog = ({
                         >
                             {text.back}
                         </Button>
-                        <Box sx={spacerSx} />
+                        <div className={styles.spacer} />
                         <ConflictChoices clashes={clashes} pending={null} onChoose={run} />
                     </DialogActions>
                 ) : (
-                    <DialogActions sx={dialogActionsSx}>
+                    <DialogActions>
                         {readOnly && (
-                            <Typography id={readOnlyId} variant="body2" sx={readOnlySx}>
+                            <Text id={readOnlyId} variant="body2" className={styles.readOnly}>
                                 {moving ? pickerHeldText(text, moving) : text.pickerReadOnly}
-                            </Typography>
+                            </Text>
                         )}
                         <Button color="inherit" onClick={onClose}>
                             {text.cancel}

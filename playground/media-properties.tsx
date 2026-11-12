@@ -1,14 +1,10 @@
 import { useEffect, useState } from "react";
 
-import Box from "@mui/material/Box";
-import ButtonBase from "@mui/material/ButtonBase";
-import Chip from "@mui/material/Chip";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { PropertyDisplay } from "../src";
 import { coverField, galleryField, posterField, teaserField } from "./media-relation";
 import { pollRenditions } from "./mocks/mock-media";
+import { ButtonBase, Chip, Text } from "./ui";
+import styles from "./media-properties.module.css";
 
 import type {
     FileEntry,
@@ -19,85 +15,6 @@ import type {
     PropertyRenderParams,
 } from "../src";
 import type { PosterChoice, RenditionJob, Track } from "./mocks/mock-media";
-
-// What the playground's assets show as one is opened, as an app would define it: the values its
-// backend hands over, each shown as a type of the media manager's, a little changed by a formatter,
-// or drawn entirely the playground's own way. The media manager only lays them out.
-
-const formatSx: SxProps<Theme> = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 1,
-};
-
-const listSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-    m: 0,
-    p: 0,
-    listStyle: "none",
-};
-
-const jobSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0.5,
-};
-
-const jobHeadSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    gap: 1,
-    fontSize: "0.875rem",
-};
-
-const statusSx: SxProps<Theme> = {
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    '&[data-status="done"]': { color: "success.main" },
-    '&[data-status="processing"]': { color: "primary.main" },
-    '&[data-status="queued"]': { color: "text.secondary" },
-    '&[data-status="failed"]': { color: "error.main" },
-};
-
-const barSx: SxProps<Theme> = {
-    height: 4,
-    borderRadius: 2,
-    overflow: "hidden",
-    bgcolor: "action.selected",
-    "& > div": { height: "100%", bgcolor: "primary.main", transition: "width 0.3s" },
-};
-
-const errorSx: SxProps<Theme> = {
-    color: "error.main",
-    fontSize: "0.75rem",
-};
-
-const trackSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 0.75,
-    fontSize: "0.875rem",
-};
-
-const framesSx: SxProps<Theme> = {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: 0.75,
-};
-
-const frameSx: SxProps<Theme> = {
-    aspectRatio: "16 / 9",
-    borderRadius: 1,
-    overflow: "hidden",
-    outline: "2px solid transparent",
-    outlineOffset: 1,
-    "& > img": { width: "100%", height: "100%", objectFit: "cover" },
-    "&[aria-checked='true']": { outlineColor: (theme) => theme.palette.primary.main },
-    "&.Mui-focusVisible": { outlineColor: (theme) => theme.palette.text.primary },
-};
 
 const statusText = (job: RenditionJob) => {
     switch (job.status) {
@@ -143,35 +60,35 @@ const JobList = ({ value, entry }: PropertyRenderParams) => {
     }, [entry, unfinished]);
 
     return (
-        <Box component="ul" sx={listSx}>
+        <ul className={styles.list}>
             {jobs.map((job) => {
                 const percent = Math.round((job.progress ?? 0) * 100);
 
                 return (
-                    <Box component="li" key={job.name} sx={jobSx}>
-                        <Box sx={jobHeadSx}>
+                    <li key={job.name} className={styles.job}>
+                        <div className={styles.jobHead}>
                             <span>{job.name}</span>
-                            <Box component="span" data-status={job.status} sx={statusSx}>
+                            <span data-status={job.status} className={styles.status}>
                                 {statusText(job)}
-                            </Box>
-                        </Box>
+                            </span>
+                        </div>
                         {job.status === "processing" && (
-                            <Box
+                            <div
                                 role="progressbar"
                                 aria-label={job.name}
                                 aria-valuemin={0}
                                 aria-valuemax={100}
                                 aria-valuenow={percent}
-                                sx={barSx}
+                                className={styles.bar}
                             >
                                 <div style={{ width: `${percent}%` }} />
-                            </Box>
+                            </div>
                         )}
-                        {job.status === "failed" && job.error && <Typography sx={errorSx}>{job.error}</Typography>}
-                    </Box>
+                        {job.status === "failed" && job.error && <Text className={styles.error}>{job.error}</Text>}
+                    </li>
                 );
             })}
-        </Box>
+        </ul>
     );
 };
 
@@ -180,15 +97,15 @@ const TrackList = ({ value }: PropertyRenderParams) => {
     const tracks = (value as Track[] | undefined) ?? [];
 
     return (
-        <Box component="ul" sx={listSx}>
+        <ul className={styles.list}>
             {tracks.map((track) => (
-                <Box component="li" key={track.language} sx={trackSx}>
+                <li key={track.language} className={styles.track}>
                     <span>{track.language}</span>
-                    {track.default && <Chip size="small" label="Default" />}
-                    {track.forced && <Chip size="small" variant="outlined" label="Forced" />}
-                </Box>
+                    {track.default && <Chip label="Default" />}
+                    {track.forced && <Chip variant="outlined" label="Forced" />}
+                </li>
             ))}
-        </Box>
+        </ul>
     );
 };
 
@@ -204,7 +121,7 @@ const PosterPicker = ({ value, labelId, save, saving }: PropertyRenderParams) =>
     }
 
     return (
-        <Box role="radiogroup" aria-labelledby={labelId} sx={framesSx}>
+        <div role="radiogroup" aria-labelledby={labelId} className={styles.frames}>
             {poster.frames.map((url, index) => (
                 <ButtonBase
                     key={url}
@@ -212,13 +129,13 @@ const PosterPicker = ({ value, labelId, save, saving }: PropertyRenderParams) =>
                     aria-checked={index === poster.current}
                     aria-label={`Frame ${index + 1}`}
                     disabled={!save || saving}
-                    sx={frameSx}
+                    className={styles.frame}
                     onClick={() => save?.({ ...poster, current: index })}
                 >
                     <img src={url} alt="" draggable={false} />
                 </ButtonBase>
             ))}
-        </Box>
+        </div>
     );
 };
 
@@ -248,10 +165,10 @@ const format: PropertyDefinition = {
     label: "Format",
     type: "string",
     render: (params) => (
-        <Box component="span" sx={formatSx}>
+        <span className={styles.format}>
             <PropertyDisplay {...params} />
-            {/\b(?:webp|avif|mp4|webm)\b/i.test(params.formattedValue) && <Chip size="small" label="Web-ready" />}
-        </Box>
+            {/\b(?:webp|avif|mp4|webm)\b/i.test(params.formattedValue) && <Chip label="Web-ready" />}
+        </span>
     ),
 };
 

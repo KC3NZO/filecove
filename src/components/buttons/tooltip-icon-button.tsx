@@ -1,22 +1,6 @@
-import { useContext } from "react";
-import IconButton from "@mui/material/IconButton";
-import type { IconButtonProps } from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
-
-import { DirectionContext } from "../../contexts/direction-context";
-import { forcedColors, forcedEdge } from "../../styles/mixins";
-
-// Keeps a tooltip clear of the viewport's edges, so a button at the edge of the screen (the header's
-// last, the sidebar's first) doesn't get one touching it. The arrow still points at the button.
-// At module scope, since the tooltip builds its options again whenever this changes.
-const popperOptions = {
-    modifiers: [{ name: "preventOverflow", options: { padding: 8 } }],
-};
-
-// Forced colors drop the tooltip's background, which would leave its text floating over the page.
-const tooltipSx = {
-    [forcedColors]: forcedEdge,
-};
+import IconButton from "../ui/icon-button";
+import type { IconButtonProps } from "../ui/icon-button";
+import Tooltip from "../ui/tooltip";
 
 interface TooltipIconButtonProps extends Omit<IconButtonProps, "aria-label" | "title"> {
     /** Names the button for screen readers and shows as its tooltip. */
@@ -28,21 +12,12 @@ interface TooltipIconButtonProps extends Omit<IconButtonProps, "aria-label" | "t
  * on hover or keyboard focus, after a desktop-like half second, and at once while moving along a
  * row of them, at least 8px from the viewport's edges.
  * The tooltip portals to `<body>`, so it takes the file manager's direction (`DirectionContext`).
- * A disabled button shows none, since it takes no pointer events.
+ * A disabled button shows none.
  */
-const TooltipIconButton = ({ label, ...props }: TooltipIconButtonProps) => {
-    const dir = useContext(DirectionContext);
-
-    return (
-        <Tooltip
-            title={label}
-            arrow
-            enterDelay={500}
-            slotProps={{ popper: { dir, popperOptions }, tooltip: { sx: tooltipSx } }}
-        >
-            <IconButton aria-label={label} {...props} />
-        </Tooltip>
-    );
-};
+const TooltipIconButton = ({ label, ...props }: TooltipIconButtonProps) => (
+    <Tooltip title={label} disabled={props.disabled}>
+        <IconButton aria-label={label} {...props} />
+    </Tooltip>
+);
 
 export default TooltipIconButton;

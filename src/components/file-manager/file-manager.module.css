@@ -1,0 +1,176 @@
+/*
+ * The root only establishes the container; a container can't match its own queries, so the
+ * visible frame is the child below it. The consumer's `className` goes after it.
+ */
+.root {
+    container-type: inline-size;
+    container-name: file-manager;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    outline: none;
+
+    &[data-touch-press] [draggable="true"] {
+        -webkit-user-drag: none;
+    }
+}
+
+.frame {
+    display: flex;
+    height: 100%;
+    background-color: var(--_fm-background);
+    color: var(--_fm-text);
+}
+
+.backdrop {
+    position: absolute;
+    z-index: 1;
+
+    @container file-manager (min-width: 900px) {
+        display: none;
+    }
+}
+
+/* Behind the properties' overlay, which docks from `rootExtraWide`. */
+.propertiesBackdrop {
+    position: absolute;
+    z-index: 1;
+
+    @container file-manager (min-width: 1100px) {
+        display: none;
+    }
+}
+
+/*
+ * Under the header bar: the content with the panels under it, and the docked properties beside
+ * them. Not positioned, so the properties' overlay covers the file manager from top to bottom, as
+ * the sidebar's does.
+ */
+.body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+/*
+ * The content sits as an inset, rounded panel on the window background, as in GNOME Files. The
+ * panel itself doesn't scroll, so the outline it shows while the open folder would take a drop
+ * stays put over the content scrolling under it, sticky column header included.
+ */
+.panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    margin-inline: 6px;
+    margin-bottom: 6px;
+    border-radius: calc(var(--_fm-radius) * 3);
+    overflow: hidden;
+    background-color: var(--_fm-surface);
+
+    @container file-manager (min-width: 900px) {
+        margin-inline-start: 0;
+
+        [data-sidebar-hidden="true"] & {
+            margin-inline-start: 6px;
+        }
+    }
+
+    &:has(> * > [data-drop-target="true"])::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border: 2px solid;
+        border-color: var(--_fm-primary);
+        border-radius: inherit;
+        pointer-events: none;
+    }
+}
+
+.view {
+    container-type: inline-size;
+    container-name: file-manager-view;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/*
+ * The transfer, download and upload panels are further inset panels under the content, so they
+ * never cover the files.
+ */
+.taskPanel {
+    margin-inline: 6px;
+    margin-bottom: 6px;
+
+    @container file-manager (min-width: 900px) {
+        margin-inline-start: 0;
+
+        [data-sidebar-hidden="true"] & {
+            margin-inline-start: 6px;
+        }
+    }
+}
+
+/*
+ * The main part is where the docked panels give way: the sidebar shrinks, down to its least width,
+ * before the content has less than it needs, and with the properties docked beside it, before
+ * they have less than theirs. The properties give way first, inside it (`.column`, and the
+ * properties' own `min-width`), so whichever of the two was made wider, both can't reach their
+ * widest unless there's room for them and the content.
+ *
+ * What the content keeps beside the docked panels is `CONTENT_ROOM` (540px, the styles' constants)
+ * with the margins around it: its own end margin, 6px, and the start one too, 12px in all, while
+ * the sidebar doesn't dock beside it, which takes it otherwise. Beside the docked properties, their
+ * least width (`PROPERTIES_MIN_WIDTH`, 240px) and their end margin, 6px, come on top.
+ */
+.main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+
+    @container file-manager (min-width: 900px) {
+        min-width: calc(540px + 6px);
+
+        [data-sidebar-hidden="true"] & {
+            min-width: calc(540px + 12px);
+        }
+    }
+
+    @container file-manager (min-width: 1100px) {
+        &[data-properties-shown="true"] {
+            min-width: calc(540px + 6px + 240px + 6px);
+
+            [data-sidebar-hidden="true"] & {
+                min-width: calc(540px + 12px + 240px + 6px);
+            }
+        }
+    }
+}
+
+/*
+ * Beside the docked panels, the content keeps room for the list's size and date columns, with its
+ * margins: the properties narrow first, and the panes read how far from this `min-width` they can go.
+ *
+ * Its own stacking context (`isolation`), so what it stacks inside (the list's sticky column header,
+ * the progress and selection bars, the notice) stays under the overlays' backdrop, which comes
+ * before it in the frame at the same `z-index` as the header.
+ */
+.column {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    isolation: isolate;
+
+    @container file-manager (min-width: 900px) {
+        min-width: calc(540px + 6px);
+
+        [data-sidebar-hidden="true"] & {
+            min-width: calc(540px + 12px);
+        }
+    }
+}

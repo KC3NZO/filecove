@@ -1,0 +1,57 @@
+.points {
+    display: grid;
+    grid-template-columns: repeat(3, 2rem);
+    gap: 4px;
+}
+
+.point {
+    height: 2rem;
+    border-radius: 4px;
+    border: 1px solid;
+    border-color: var(--app-divider);
+
+    &[aria-checked='true'] {
+        background-color: var(--app-primary);
+        border-color: var(--app-primary);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--app-primary);
+        outline-offset: 1px;
+    }
+
+    [aria-invalid='true'] > & {
+        border-color: var(--app-error);
+    }
+}
+
+.languages {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.language {
+    padding-inline: 8px;
+    padding-block: 2px;
+    border-radius: 4px;
+    border: 1px solid;
+    border-color: var(--app-divider);
+    color: var(--app-text-secondary);
+    font-size: 0.75rem;
+
+    &[aria-pressed='true'] {
+        background-color: color-mix(in srgb, var(--app-text) 8%, transparent);
+        color: var(--app-text);
+    }
+
+    &[data-error='true'] {
+        border-color: var(--app-error);
+        color: var(--app-error);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--app-primary);
+        outline-offset: 1px;
+    }
+}

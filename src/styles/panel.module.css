@@ -1,0 +1,72 @@
+/*
+ * The look the upload, download and transfer panels share: an inset card with a summary that folds
+ * a list of rows away, each row an icon, its text and an action.
+ */
+.panel {
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: calc(var(--_fm-radius) * 3);
+    background-color: var(--_fm-surface);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding-inline: 16px 8px;
+}
+
+/* Every status icon and row icon sits in the same column. */
+.slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 1.5rem;
+}
+
+.text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.title {
+    font-weight: 600;
+}
+
+/* Points down while the list shows, to fold it away, and up while it's folded. */
+.toggleIcon {
+    transition: transform 150ms;
+
+    [aria-expanded="false"] > & {
+        transform: rotate(180deg);
+    }
+}
+
+.list {
+    max-height: 15rem;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    border-top: 1px solid var(--_fm-divider);
+    list-style: none;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding-block: 4px;
+    padding-inline: 16px 8px;
+}
+
+/* A row's progress bar, which fills from the start side (`LinearProgress`). */
+.bar {
+    height: 3px;
+    margin-block: 4px;
+    border-radius: calc(var(--_fm-radius) * 1.5);
+}

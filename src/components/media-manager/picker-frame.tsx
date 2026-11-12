@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, SetStateAction } from "react";
 
-import Backdrop from "@mui/material/Backdrop";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useAnnouncer } from "../../hooks/use-announcer";
 import { useAssetStates } from "../../hooks/use-asset-states";
 import { useChosenColumn } from "../../hooks/use-chosen-column";
@@ -18,8 +12,10 @@ import { useLevelSearch } from "../../hooks/use-level-search";
 import { useMediaSearch } from "../../hooks/use-media-search";
 import { usePicks } from "../../hooks/use-picks";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
-import { chosenBackdropSx, chosenColumnSx, mediaWide } from "../../styles/media-layout";
-import { visuallyHiddenSx } from "../../styles/mixins";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import mediaLayout from "../../styles/media-layout.module.css";
+import util from "../../styles/util.module.css";
 import { isolate } from "../../utils/bidi";
 import { focusLost } from "../../utils/dom";
 import { NO_ERRORS } from "../../utils/field-errors";
@@ -29,12 +25,12 @@ import { countLimit } from "../../utils/limits";
 import {
     byDate,
     checkMediaUpload,
-    NO_GROUP_PICKS,
     chooseHeldBy,
     groupPicksOf,
     groupsOfTrail,
     holdOf,
     layoutsOf,
+    NO_GROUP_PICKS,
     pickFormOf,
     withState,
     workOf,
@@ -44,6 +40,9 @@ import { holdsTerms, searchTerms } from "../../utils/search";
 import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
 import { pressesKey } from "../../utils/shortcut";
 import Icon from "../icons/icon";
+import Backdrop from "../ui/backdrop";
+import Button from "../ui/button";
+import Text from "../ui/text";
 import UploadPanel from "../uploads/upload-panel";
 import { choiceKey } from "./choice-list";
 import ChoicesPane from "./choices-pane";
@@ -52,6 +51,7 @@ import { MediaFormBody } from "./media-form";
 import MediaGrid from "./media-grid";
 import MediaHeader from "./media-header";
 import MediaUpload from "./media-upload";
+import styles from "./picker-frame.module.css";
 
 import type {
     AssetHold,
@@ -188,88 +188,6 @@ const isGroup = (entry: FileEntry) => entry.kind === "folder";
 const GroupHeader = ({ draw, group, section }: GroupHeaderProps) => draw(group, section);
 
 const ignore = () => {};
-
-const frameSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    bgcolor: "background.default",
-    color: "text.primary",
-};
-
-// The library with the selected column beside it, or over it, placed by this so its foot stays
-// reachable under the overlay, Choose and Cancel staying where they are.
-const bodySx: SxProps<Theme> = {
-    position: "relative",
-    display: "flex",
-    flex: 1,
-    minHeight: 0,
-};
-
-const mainSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minWidth: 0,
-};
-
-// The library, an inset panel as the media manager's is. Positioned, so the upload step covers it.
-const panelSx: SxProps<Theme> = {
-    position: "relative",
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    marginInline: 0.75,
-    borderRadius: 3,
-    overflow: "hidden",
-    bgcolor: "background.paper",
-    [mediaWide]: { '[data-column="true"] &': { mb: 0.75 } },
-};
-
-const gridSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    '&[data-covered="true"]': { visibility: "hidden" },
-};
-
-const uploadsSx: SxProps<Theme> = {
-    flexShrink: 0,
-    marginInline: 0.75,
-    mt: 0.75,
-    [mediaWide]: { '[data-column="true"] &': { mt: 0, mb: 0.75 } },
-};
-
-const footSx: SxProps<Theme> = {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 1,
-    flexShrink: 0,
-    minHeight: 52,
-    px: 1.5,
-    py: 0.75,
-};
-
-const countSx: SxProps<Theme> = {
-    color: "text.secondary",
-    fontSize: "0.8125rem",
-};
-
-// Only where the selected column doesn't dock; beside it, there's nothing to open.
-const openerSx: SxProps<Theme> = {
-    [mediaWide]: { display: "none" },
-};
-
-// What holds Choose back, or that there's no room, pushing the buttons to the end side.
-const noteSx: SxProps<Theme> = {
-    flex: "1 1 8rem",
-    minWidth: 0,
-    color: "text.secondary",
-    fontSize: "0.75rem",
-};
 
 /** Everything inside the picker's root, below the contexts it provides. */
 const PickerFrame = ({
@@ -1171,9 +1089,9 @@ const PickerFrame = ({
                   : undefined;
 
     return (
-        <Box
+        <div
             ref={frameRef}
-            sx={frameSx}
+            className={styles.frame}
             data-column={asksPicks}
             onKeyDown={(event) => {
                 // Ctrl+F or ⌘F opens the search, in place of the browser's find, as the media manager's does.
@@ -1214,8 +1132,8 @@ const PickerFrame = ({
             }}
             onPaste={(event) => event.stopPropagation()}
         >
-            <Box sx={bodySx}>
-                <Box sx={mainSx}>
+            <div className={styles.body}>
+                <div className={styles.main}>
                     <MediaHeader
                         section={section}
                         trail={trail}
@@ -1264,16 +1182,16 @@ const PickerFrame = ({
                             }}
                         />
                     )}
-                    <Box
+                    <div
                         ref={panelRef}
-                        sx={panelSx}
+                        className={styles.panel}
                         onDragEnter={offerDrop}
                         onDragOver={offerDrop}
                         onDragLeave={leaveDrop}
                         onDrop={takeDrop}
                         onPaste={pasteFiles}
                     >
-                        <Box sx={gridSx} data-covered={!!uploadStep}>
+                        <div className={styles.grid} data-covered={!!uploadStep}>
                             <MediaGrid
                                 key={folderId}
                                 ref={gridRef}
@@ -1312,7 +1230,7 @@ const PickerFrame = ({
                                 onOpen={ignore}
                                 onSelectAll={selectAll}
                             />
-                        </Box>
+                        </div>
                         {uploadStep && (
                             <MediaUpload
                                 key={uploadStep.key}
@@ -1329,9 +1247,9 @@ const PickerFrame = ({
                             />
                         )}
                         {dropping && <DropZone label={text.mediaDropToUpload(isolate(levelName))} />}
-                    </Box>
+                    </div>
                     {uploads.items.length > 0 && (
-                        <Box sx={uploadsSx}>
+                        <div className={styles.uploads}>
                             <UploadPanel
                                 items={uploads.items}
                                 onCancel={uploads.queue.cancel}
@@ -1339,19 +1257,19 @@ const PickerFrame = ({
                                 onCancelAll={uploads.queue.cancelAll}
                                 onClear={clearUploads}
                             />
-                        </Box>
+                        </div>
                     )}
-                </Box>
+                </div>
                 {asksPicks && (
                     <>
                         <Backdrop
                             open={chosenOverlay && !docked && !chosenEmpty}
-                            sx={chosenBackdropSx}
+                            className={mediaLayout.chosenBackdrop}
                             onClick={closeChosen}
                         />
-                        <Box
+                        <div
                             ref={chosenRef}
-                            sx={chosenColumnSx}
+                            className={mediaLayout.chosenColumn}
                             data-overlay={chosenOverlay}
                             data-empty={chosenEmpty}
                             onKeyDown={(event) => {
@@ -1381,11 +1299,11 @@ const PickerFrame = ({
                                 onShowInLibrary={undefined}
                                 onClose={closeChosen}
                             />
-                        </Box>
+                        </div>
                     </>
                 )}
-            </Box>
-            <Box sx={footSx}>
+            </div>
+            <div className={cx(styles.foot, fmClasses.mediaPickerFooter)}>
                 {asksPicks ? (
                     !chosenEmpty && (
                         <Button
@@ -1393,7 +1311,7 @@ const PickerFrame = ({
                             color="inherit"
                             aria-expanded={chosenOverlay}
                             endIcon={<Icon name="expand" fontSize="small" />}
-                            sx={openerSx}
+                            className={styles.opener}
                             onClick={() => setChosenOverlay(true)}
                         >
                             {selectedText ?? text.mediaChosen}
@@ -1401,7 +1319,7 @@ const PickerFrame = ({
                     )
                 ) : (
                     <>
-                        {selectedText && <Typography sx={countSx}>{selectedText}</Typography>}
+                        {selectedText && <Text className={styles.count}>{selectedText}</Text>}
                         {multiple && count > 0 && (
                             <Button size="small" color="inherit" onClick={clearSelection}>
                                 {text.mediaClearSelection}
@@ -1409,9 +1327,9 @@ const PickerFrame = ({
                         )}
                     </>
                 )}
-                <Typography id={noteId} sx={noteSx}>
+                <Text id={noteId} className={styles.note}>
                     {note}
-                </Typography>
+                </Text>
                 {onCancel && (
                     <Button color="inherit" onClick={onCancel}>
                         {text.cancel}
@@ -1428,12 +1346,12 @@ const PickerFrame = ({
                         {text.mediaChoose}
                     </Button>
                 )}
-            </Box>
-            <Box role="status" sx={visuallyHiddenSx}>
+            </div>
+            <div role="status" className={util.visuallyHidden}>
                 {/* A space every other time, so the same message said again is heard again. */}
                 {announcement && `${announcement.message}${announcement.id % 2 === 0 ? " " : ""}`}
-            </Box>
-        </Box>
+            </div>
+        </div>
     );
 };
 

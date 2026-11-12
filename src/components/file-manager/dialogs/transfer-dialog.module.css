@@ -1,0 +1,154 @@
+.content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: min(24rem, 60vh);
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 34px;
+}
+
+.location {
+    flex: 1;
+    min-width: 0;
+}
+
+/*
+ * The bordered box the folders fill, shared by the list and its loading, empty and error states
+ * (`.empty`). It takes the content panel's surface, as the dialog takes the window's, so it reads
+ * as the same view.
+ */
+.scroller {
+    flex: 1;
+    min-height: 0;
+    border: 1px solid;
+    border-color: var(--_fm-divider);
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-surface);
+    overflow-y: auto;
+    padding-block: 4px;
+}
+
+/*
+ * Only the rows in or near view are rendered, each placed at its line, and the list is as tall as
+ * all of them (`useVirtualLines`). It's a grid of one track for the hook to read. It only takes the
+ * focus itself while no row can.
+ */
+.list {
+    position: relative;
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    grid-template-columns: minmax(0, 1fr);
+    outline: none;
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+    }
+}
+
+/*
+ * Clips the list down its length, so a row kept rendered far from view in a squeezed list, placed
+ * in px of all the rows, doesn't lengthen what the box scrolls (see `virtualization.md`).
+ */
+.listClip {
+    overflow-y: clip;
+}
+
+/* Placed at its line by `top`, set in `style`. */
+.item {
+    position: absolute;
+    inset-inline: 0;
+    display: flex;
+}
+
+/* Holds the focus in place of the list while the folder loads, or when it has no folders. */
+.empty {
+    flex: 1;
+    min-height: 0;
+    border: 1px solid;
+    border-color: var(--_fm-divider);
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-surface);
+    display: flex;
+    outline: none;
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+    }
+}
+
+/* A folder to open: a button across the list, its icon and then its name, cut short. */
+.row {
+    flex: 1;
+    justify-content: flex-start;
+    min-width: 0;
+    min-height: 36px;
+    margin-inline: 4px;
+    padding: 4px 16px;
+    border-radius: calc(var(--_fm-radius) * 1.5);
+    text-align: start;
+
+    &:disabled {
+        opacity: 0.38;
+    }
+
+    &:hover {
+        background-color: var(--_fm-row-hover);
+    }
+}
+
+.rowIcon {
+    display: inline-flex;
+    flex-shrink: 0;
+    min-width: 36px;
+    color: var(--_fm-icon);
+}
+
+.rowText {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.875rem;
+    line-height: 1.43;
+    letter-spacing: 0.01071em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    text-align: center;
+    color: var(--_fm-text-secondary);
+}
+
+.spacer {
+    flex: 1;
+}
+
+/* Says why "Copy here" or "Move here" is disabled, in the actions' row, before the buttons. */
+.readOnly {
+    flex: 1;
+    min-width: 0;
+    padding-inline-start: 8px;
+    color: var(--_fm-text-secondary);
+}
+
+.locationsTitle {
+    font-weight: 600;
+}

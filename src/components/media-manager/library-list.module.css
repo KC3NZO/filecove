@@ -1,0 +1,110 @@
+/*
+ * Below `mediaMedium`, a drawer that slides in over the library from the start side while it's
+ * open, as the file manager's sidebar does, inside the media manager rather than portalled. It
+ * slides by `translate`, the other way right to left (`--closed-shift`), and is hidden while
+ * closed, so its buttons drop out of the Tab order. From it, docked beside the library.
+ */
+/* Written out from LIBRARIES_WIDTH (the styles' constants), which it follows. */
+.list {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    bottom: 0;
+    inset-inline-start: 0;
+    width: min(260px, 85%);
+    overflow-y: auto;
+    padding-inline: 8px;
+    padding-bottom: 8px;
+    background-color: var(--_fm-background);
+    box-shadow: var(--_fm-shadow-8);
+    outline: none;
+    --closed-shift: -100%;
+    translate: var(--closed-shift);
+    visibility: hidden;
+    transition: translate 225ms cubic-bezier(0.0, 0, 0.2, 1), visibility 225ms cubic-bezier(0.0, 0, 0.2, 1);
+
+    &:dir(rtl) {
+        --closed-shift: 100%;
+    }
+
+    &[data-open="true"] {
+        translate: none;
+        visibility: visible;
+    }
+
+    @container media-manager (min-width: 720px) {
+        position: relative;
+        z-index: auto;
+        width: 220px;
+        box-shadow: none;
+        translate: none;
+        visibility: visible;
+        transition: none;
+    }
+}
+
+/* Only in the drawer: its title and its ✕. */
+/* Written out from HEADER_HEIGHT (the styles' constants), which it follows. */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    min-height: 52px;
+    padding-inline-start: 12px;
+
+    @container media-manager (min-width: 720px) {
+        display: none;
+    }
+}
+
+.title {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.9375rem;
+    font-weight: 700;
+}
+
+.groupTitle {
+    display: flex;
+    align-items: center;
+    min-height: 28px;
+    padding-inline: 12px;
+    margin-top: 8px;
+    color: var(--_fm-text-secondary);
+    font-weight: 600;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    width: 100%;
+    min-height: 36px;
+    padding-inline: 12px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    color: var(--_fm-text);
+    text-align: start;
+
+    &:hover {
+        background-color: var(--_fm-row-hover);
+    }
+
+    &[aria-current="page"] {
+        background-color: var(--_fm-row-selected);
+        color: var(--_fm-primary);
+    }
+
+    &[aria-current="page"]:hover {
+        background-color: var(--_fm-row-selected-hover);
+    }
+}
+
+.label {
+    flex: 1;
+    min-width: 0;
+}

@@ -1,0 +1,34 @@
+/*
+ * A pixel tall at the panel's top, however far it's scrolled, so what the browser finds in it is
+ * in view already and the browser doesn't scroll to it: the view scrolls to the row instead. The
+ * names in it are a pixel high, clipped and see-through, so nothing of them shows. It takes no room.
+ */
+.layer {
+    position: sticky;
+    top: 0;
+    flex-shrink: 0;
+    height: 1px;
+    margin-bottom: -1px;
+    overflow: hidden;
+    font-size: 1px;
+    line-height: 1px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+
+    & [hidden] {
+        display: block !important;
+    }
+}
+
+/*
+ * Written by CSS, which the browser's find doesn't look in, so each name is found once, in the
+ * find layer. It runs and lines up as its own letters do, as a `<bdi>` would.
+ */
+.drawn {
+    unicode-bidi: plaintext;
+
+    &::before {
+        content: attr(data-name);
+    }
+}

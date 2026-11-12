@@ -1,5 +1,3 @@
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
 import { isolate } from "../../utils/bidi";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
@@ -11,7 +9,7 @@ interface OpenButtonProps {
     group: boolean;
     index: number;
     onOpen: (index: number) => void;
-    sx?: SxProps<Theme>;
+    className?: string;
 }
 
 /**
@@ -19,7 +17,7 @@ interface OpenButtonProps {
  * hidden from screen readers, as the file manager's ⋮ is, since Alt+Enter on the asset does the
  * same; a click on it neither selects nor chooses.
  */
-const OpenButton = ({ name, group, index, onOpen, sx }: OpenButtonProps) => {
+const OpenButton = ({ name, group, index, onOpen, className }: OpenButtonProps) => {
     const { text } = useLocale();
 
     return (
@@ -28,7 +26,7 @@ const OpenButton = ({ name, group, index, onOpen, sx }: OpenButtonProps) => {
             tabIndex={-1}
             aria-hidden
             label={group ? text.mediaGroupDetails(isolate(name)) : text.mediaOpenAsset(isolate(name))}
-            sx={sx}
+            className={className}
             onClick={(event) => {
                 event.stopPropagation();
                 onOpen(index);

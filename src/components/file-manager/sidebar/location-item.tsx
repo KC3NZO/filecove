@@ -9,11 +9,6 @@ import type {
     ReactNode,
 } from "react";
 
-import Box from "@mui/material/Box";
-import CircularProgress from "@mui/material/CircularProgress";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { DataContext } from "../../../contexts/data-context";
 import { DragContext } from "../../../contexts/drag-context";
 import { useCutIds } from "../../../hooks/use-cut-ids";
@@ -24,19 +19,9 @@ import { useLocale } from "../../../hooks/use-locale";
 import { useLongPress } from "../../../hooks/use-long-press";
 import { useMovingIds } from "../../../hooks/use-moving-ids";
 import { folderKey } from "../../../store/folder-store";
-import {
-    arrivedMarker,
-    cutMarker,
-    dragMarkers,
-    focusOutline,
-    forcedArrived,
-    forcedColors,
-    forcedSelected,
-    hoverBackground,
-    movingMarker,
-    selectedBackground,
-    selectedHoverBackground,
-} from "../../../styles/mixins";
+import { fmClasses } from "../../../styles/classes";
+import marks from "../../../styles/entry.module.css";
+import { cx } from "../../../utils/cx";
 import { isRtl } from "../../../utils/dom";
 import { isMenuKey } from "../../../utils/keyboard";
 import { belowElement, pointerPosition, pressPosition } from "../../../utils/menu-position";
@@ -48,7 +33,10 @@ import { FolderTypeIcon } from "../../icons/file-icon";
 import Icon from "../../icons/icon";
 import IconSlot from "../../icons/icon-slot";
 import LockedIcon from "../../icons/locked-icon";
+import CircularProgress from "../../ui/circular-progress";
+import Text from "../../ui/text";
 import { DrawnName } from "../find-layer";
+import styles from "./location-item.module.css";
 
 import type {
     ErrorRow,
@@ -167,172 +155,11 @@ interface TreeItemProps {
     onPaste: (event: ClipboardEvent) => void;
 }
 
-/*
- * Tree geometry, in px. Each row and guide line sets `--depth`, and every offset below is derived
- * from it. A level's guide line runs through the centre of its parent's chevron, or through the
- * section icon for the first level, so the tree visibly hangs from the section it belongs to.
- */
-const INSET = 12;
-const INDENT = 16;
-const CHEVRON = 20;
-
 const ROOT_TRAIL: FolderRef[] = [];
-
-const indent = (extra: number) => `calc(${INSET + extra}px + var(--depth) * ${INDENT}px)`;
 
 // The tree places each row itself, since it only renders the rows in or near view.
 const placeStyle = (row: { top: number; height: number }, depth: number) =>
     ({ top: row.top, height: row.height, "--depth": depth }) as CSSProperties;
-
-// Placed by `placeStyle`. The item takes the focus, but the row inside it shows the ring.
-const itemSx: SxProps<Theme> = {
-    position: "absolute",
-    insetInline: 0,
-    listStyle: "none",
-    outline: "none",
-};
-
-const rowSx: SxProps<Theme> = (theme) => ({
-    position: "relative",
-    height: "100%",
-    borderRadius: 2,
-    color: "text.primary",
-    "&:hover": { bgcolor: hoverBackground(theme) },
-    '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
-    '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
-    // The open folder keeps its accent text when the selection moves to other folders.
-    '&[data-open="true"]': { color: "primary.main" },
-    ...cutMarker,
-    ...movingMarker,
-    ...arrivedMarker(theme),
-    '[role="treeitem"]:focus-visible > &': focusOutline,
-    ...dragMarkers(theme),
-    // The open folder's accent text, then the selection over it.
-    [forcedColors]: { '&[data-open="true"]': { color: "Highlight" }, ...forcedSelected, ...forcedArrived },
-});
-
-// The row's main part, which a click opens or selects. It's no button: the item around it takes
-// the focus and the keys.
-const mainPartSx = {
-    display: "flex",
-    alignItems: "center",
-    width: "100%",
-    height: "100%",
-    borderRadius: "inherit",
-    cursor: "pointer",
-    userSelect: "none",
-    WebkitTouchCallout: "none",
-    WebkitTapHighlightColor: "transparent",
-} as const;
-
-const sectionButtonSx: SxProps<Theme> = {
-    ...mainPartSx,
-    gap: 1.5,
-    paddingInlineStart: `${INSET}px`,
-    // Room for the expand toggle at the end.
-    paddingInlineEnd: 4.5,
-};
-
-const folderButtonSx: SxProps<Theme> = {
-    ...mainPartSx,
-    gap: 1,
-    paddingInlineStart: indent(CHEVRON + 4),
-    paddingInlineEnd: 1,
-    "& > svg": { flexShrink: 0 },
-};
-
-const sectionLabelSx: SxProps<Theme> = {
-    minWidth: 0,
-    fontSize: "0.875rem",
-};
-
-const folderLabelSx: SxProps<Theme> = {
-    minWidth: 0,
-    fontSize: "0.8125rem",
-};
-
-// The chevrons are for pointers; the keyboard expands and collapses with Right and Left. Expanded,
-// a chevron turns to point down: clockwise from pointing right, or anticlockwise right to left,
-// where the icon is mirrored to point left (`Icon`).
-const toggleSx = {
-    position: "absolute",
-    top: "50%",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    transform: "translateY(-50%)",
-    borderRadius: 1,
-    color: "text.secondary",
-    cursor: "pointer",
-    "--chevron-turn": "90deg",
-    "&:dir(rtl)": { "--chevron-turn": "-90deg" },
-    "&:hover": { bgcolor: "action.hover", color: "text.primary" },
-    '&[data-expanded="true"] > svg': { rotate: "var(--chevron-turn)" },
-} as const;
-
-// Sections keep the plain GNOME look, so their toggle only shows on hover, on keyboard focus,
-// while expanded, or always on touch screens where there is no hover.
-const sectionToggleSx: SxProps<Theme> = {
-    ...toggleSx,
-    insetInlineEnd: 6,
-    width: 24,
-    height: 24,
-    opacity: 0,
-    transition: "opacity 120ms",
-    '*:hover > &, [role="treeitem"]:focus-visible > * > &, &[data-expanded="true"]': { opacity: 1 },
-    "@media (hover: none)": { opacity: 1 },
-    "& > svg": { fontSize: "1.125rem", transition: "rotate 150ms" },
-};
-
-const folderToggleSx: SxProps<Theme> = {
-    ...toggleSx,
-    insetInlineStart: indent(0),
-    width: CHEVRON,
-    height: CHEVRON,
-    "& > svg": { fontSize: "1rem", transition: "rotate 150ms" },
-};
-
-// Holds a folder's icon and the check badge the touch selection mode puts at its corner.
-const folderIconSx: SxProps<Theme> = {
-    position: "relative",
-    display: "inline-flex",
-    flexShrink: 0,
-};
-
-// Along the folders below an expanded row, placed by the tree like a row, behind the rows.
-const guideSx: SxProps<Theme> = {
-    position: "absolute",
-    insetInlineStart: indent(CHEVRON / 2),
-    width: "1px",
-    bgcolor: "divider",
-    pointerEvents: "none",
-};
-
-// A row in place of folders: a load error, or the single section tree's loading and empty states.
-const statusRowSx: SxProps<Theme> = {
-    position: "absolute",
-    insetInline: 0,
-    listStyle: "none",
-    display: "flex",
-    alignItems: "center",
-    gap: 1,
-    paddingInlineStart: indent(CHEVRON + 4),
-    borderRadius: 2,
-    color: "text.secondary",
-    fontSize: "0.8125rem",
-    outline: "none",
-    '&[data-error="true"]': { color: "error.main" },
-    "&:focus-visible": focusOutline,
-};
-
-const retrySx: SxProps<Theme> = {
-    px: 0.75,
-    borderRadius: 1,
-    color: "text.secondary",
-    cursor: "pointer",
-    textDecoration: "underline",
-    "&:hover": { color: "text.primary" },
-};
 
 /**
  * A folder or section in the tree: a `treeitem` row, which says where it is among all of them,
@@ -436,9 +263,8 @@ const TreeItem = ({
     };
 
     return (
-        <Box
-            component="li"
-            sx={itemSx}
+        <li
+            className={styles.item}
             style={placeStyle(row, row.depth)}
             role="treeitem"
             tabIndex={-1}
@@ -455,9 +281,10 @@ const TreeItem = ({
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
         >
-            <Box
-                sx={rowSx}
+            <div
+                className={cx(fmClasses.treeRow, styles.row, marks.cut, marks.moving, marks.arrived, marks.drag, marks.forcedSelected)}
                 draggable={draggable}
+                data-kind={isSection ? "section" : "folder"}
                 data-selected={selected}
                 data-open={open}
                 data-found={found}
@@ -472,25 +299,24 @@ const TreeItem = ({
                 {...pressHandlers}
                 {...dragHandlers}
             >
-                <Box sx={isSection ? sectionButtonSx : folderButtonSx} onClick={onSelect}>
+                <div className={isSection ? styles.sectionButton : styles.folderButton} onClick={onSelect}>
                     {icon}
-                    <Typography component="span" noWrap sx={isSection ? sectionLabelSx : folderLabelSx}>
+                    <Text component="span" noWrap className={isSection ? styles.sectionLabel : styles.folderLabel}>
                         <DrawnName name={row.label} />
-                    </Typography>
-                </Box>
+                    </Text>
+                </div>
                 {expandable && (
-                    <Box
-                        component="span"
-                        sx={isSection ? sectionToggleSx : folderToggleSx}
+                    <span
+                        className={isSection ? styles.sectionToggle : styles.folderToggle}
                         aria-hidden
                         data-expanded={expanded}
                         onClick={onToggle}
                     >
                         {loading ? <CircularProgress size={12} color="inherit" /> : <Icon name="chevronRight" />}
-                    </Box>
+                    </span>
                 )}
-            </Box>
-        </Box>
+            </div>
+        </li>
     );
 };
 
@@ -510,9 +336,8 @@ const ErrorItem = ({ row }: ErrorItemProps) => {
     };
 
     return (
-        <Box
-            component="li"
-            sx={statusRowSx}
+        <li
+            className={styles.statusRow}
             style={placeStyle(row, row.depth)}
             role="treeitem"
             tabIndex={-1}
@@ -525,10 +350,10 @@ const ErrorItem = ({ row }: ErrorItemProps) => {
             onKeyDown={handleKeyDown}
         >
             {text.folderLoadFailed}
-            <Box component="span" sx={retrySx} onClick={retry}>
+            <span className={styles.retry} onClick={retry}>
                 {text.retry}
-            </Box>
-        </Box>
+            </span>
+        </li>
     );
 };
 
@@ -537,10 +362,10 @@ const StatusItem = ({ row }: StatusItemProps) => {
     const { text } = useLocale();
 
     return (
-        <Box component="li" role="none" sx={statusRowSx} style={placeStyle(row, 0)}>
+        <li role="none" className={styles.statusRow} style={placeStyle(row, 0)}>
             {row.loading && <CircularProgress size={12} color="inherit" />}
             {row.loading ? text.loading : text.noFolders}
-        </Box>
+        </li>
     );
 };
 
@@ -688,12 +513,12 @@ const FolderItem = memo(
                 variant="folder"
                 row={row}
                 icon={
-                    <Box component="span" sx={folderIconSx}>
+                    <span className={styles.folderIcon}>
                         <LockedIcon locked={locked}>
                             <FolderTypeIcon folderName={entry.name} size="1.125rem" />
                         </LockedIcon>
                         <CheckBadge />
-                    </Box>
+                    </span>
                 }
                 description={drawnState(text, entry, moving)}
                 selected={selected}
@@ -796,8 +621,8 @@ const SectionItem = memo(
 
 /** The guide line along the folders below an expanded row. */
 export const GuideLine = ({ guide }: GuideLineProps) => (
-    <Box
-        sx={guideSx}
+    <div
+        className={styles.guide}
         style={{ top: guide.top, height: guide.bottom - guide.top, "--depth": guide.depth } as CSSProperties}
         aria-hidden
     />

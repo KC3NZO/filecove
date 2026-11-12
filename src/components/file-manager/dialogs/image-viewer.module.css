@@ -1,0 +1,101 @@
+/* A container, so the toolbar fits its buttons to the room the image has. */
+.viewer {
+    position: relative;
+    align-self: stretch;
+    flex: 1;
+    min-width: 0;
+    container-type: inline-size;
+    container-name: file-manager-preview-image;
+}
+
+/* The browser's own touch gestures are off, so a pinch zooms the image rather than the page. */
+.stage {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+
+    &[data-zoomed="true"] {
+        cursor: grab;
+    }
+
+    &[data-zoomed="true"]:active {
+        cursor: grabbing;
+    }
+}
+
+/* Shrunk to fit, never stretched past its own size. */
+.fittedImage {
+    display: block;
+    max-width: calc(100% - 32px);
+    max-height: calc(100% - 32px);
+}
+
+/* Placed, sized, moved and turned through `style`, from the zoom. */
+.zoomedImage {
+    display: block;
+    position: absolute;
+    max-width: none;
+    max-height: none;
+}
+
+/*
+ * Where the image will be once it has loaded: fitted the same way, its own size when that's known,
+ * with the small picture drawn into that box, or else as large as the view allows.
+ */
+.placeholder {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 100%;
+    height: 100%;
+    max-width: calc(100% - 32px);
+    max-height: calc(100% - 32px);
+    object-fit: contain;
+    pointer-events: none;
+}
+
+.spinner {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+}
+
+.toolbar {
+    position: absolute;
+    bottom: 12px;
+    inset-inline-end: 12px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid;
+    border-color: var(--_fm-divider);
+    border-radius: 999px;
+    background-color: var(--_fm-background);
+    box-shadow: var(--_fm-shadow-2);
+}
+
+.rule {
+    align-self: stretch;
+    width: 1px;
+    margin-block: 4px;
+    margin-inline: 2px;
+    background-color: var(--_fm-divider);
+}
+
+/* Left out where the image has little room, so the buttons still fit on a phone. */
+.percent {
+    display: none;
+    min-width: 3.5em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+
+    @container file-manager-preview-image (min-width: 360px) {
+        display: block;
+    }
+}

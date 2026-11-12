@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, Ref, SetStateAction } from "react";
 
-import Backdrop from "@mui/material/Backdrop";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useAnnouncer } from "../../hooks/use-announcer";
 import { useAssetStates } from "../../hooks/use-asset-states";
 import { overlays, useChosenColumn } from "../../hooks/use-chosen-column";
@@ -20,8 +15,8 @@ import type { PicksState } from "../../hooks/use-picks";
 import { useTransferQueue } from "../../hooks/use-transfer-queue";
 import { useSetting } from "../../hooks/use-setting";
 import { useUploadQueue } from "../../hooks/use-upload-queue";
-import { chosenBackdropSx, chosenColumnSx, mediaMedium, mediaWide } from "../../styles/media-layout";
-import { visuallyHiddenSx } from "../../styles/mixins";
+import mediaLayout from "../../styles/media-layout.module.css";
+import util from "../../styles/util.module.css";
 import { runToolbarShortcut } from "../../utils/action-groups";
 import { isolate } from "../../utils/bidi";
 import { focusLost } from "../../utils/dom";
@@ -33,13 +28,13 @@ import {
     byDate,
     checkMediaUpload,
     chooseHeldBy,
-    NO_GROUP_PICKS,
     groupPicksOf,
     groupRule,
     groupsOfTrail,
     holdOf,
     layoutsOf,
     mediaToolbarGroups,
+    NO_GROUP_PICKS,
     pickFormOf,
     withState,
     workOf,
@@ -50,6 +45,8 @@ import { NO_MODIFIERS, nextSelection } from "../../utils/selection";
 import { pressesKey, typesInField } from "../../utils/shortcut";
 import Icon from "../icons/icon";
 import TransferPanel from "../transfers/transfer-panel";
+import Backdrop from "../ui/backdrop";
+import Text from "../ui/text";
 import UploadPanel from "../uploads/upload-panel";
 import { choiceKey } from "./choice-list";
 import ChoicesPane from "./choices-pane";
@@ -59,6 +56,7 @@ import GroupCreate from "./group-create";
 import LibraryList from "./library-list";
 import MediaAsset from "./media-asset";
 import { ChoiceMessages, MediaFormBody } from "./media-form";
+import styles from "./media-frame.module.css";
 import MediaGrid from "./media-grid";
 import MediaGroup from "./media-group";
 import MediaHeader from "./media-header";
@@ -391,79 +389,6 @@ const fullestTrail = (given: readonly FileEntry[], ...known: (readonly FileEntry
 
 /** What the app draws above a group's contents, as a component of its own, so it may use hooks. */
 const GroupHeader = ({ draw, group, section }: GroupHeaderProps) => draw(group, section);
-
-// Positioned, so the selected column's overlay and its backdrop are placed by it.
-const frameSx: SxProps<Theme> = {
-    position: "relative",
-    display: "flex",
-    height: "100%",
-    bgcolor: "background.default",
-    color: "text.primary",
-};
-
-const mainSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minWidth: 0,
-};
-
-// The library sits as an inset, rounded panel on the window background, as the file manager's
-// content does; beside the docked list of libraries, which has its own inset, it takes no margin.
-// Positioned, so the asset view covers it. Without the choose bar under it, as where the selected
-// column docks, it keeps a margin of its own below.
-const panelSx: SxProps<Theme> = {
-    position: "relative",
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    marginInline: 0.75,
-    borderRadius: 3,
-    overflow: "hidden",
-    bgcolor: "background.paper",
-    [mediaMedium]: { '[data-libraries="true"] &': { marginInlineStart: 0 } },
-    '[data-choosing="false"] &': { mb: 0.75 },
-    [mediaWide]: { mb: 0.75 },
-};
-
-// The grid stays under the asset view, hidden but laid out, so it's scrolled where it was and
-// keeps its Tab stop when the view goes back to it.
-const gridSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    '&[data-covered="true"]': { visibility: "hidden" },
-};
-
-// Under the library, an inset panel as it is, above the choose bar; where the library has no
-// margin of its own below, as above the choose bar, it takes one above.
-const uploadsSx: SxProps<Theme> = {
-    flexShrink: 0,
-    marginInline: 0.75,
-    mb: 0.75,
-    [mediaMedium]: { '[data-libraries="true"] &': { marginInlineStart: 0 } },
-    '[data-choosing="true"] &': { mt: 0.75 },
-    [mediaWide]: { '[data-choosing="true"] &': { mt: 0 } },
-};
-
-const librariesBackdropSx: SxProps<Theme> = {
-    position: "absolute",
-    zIndex: 2,
-    [mediaMedium]: { display: "none" },
-};
-
-const noLibrariesSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 1.5,
-    flex: 1,
-    color: "text.secondary",
-    "& > svg": { fontSize: 56, opacity: 0.6 },
-};
 
 /** Everything inside the media manager's root, below the contexts it provides. */
 const MediaFrame = ({
@@ -2826,9 +2751,9 @@ const MediaFrame = ({
                   : undefined;
 
     return (
-        <Box
+        <div
             ref={frameRef}
-            sx={frameSx}
+            className={styles.frame}
             data-libraries={several}
             // Whether there's something under the library where the column doesn't dock.
             data-choosing={!!onChoose || (choosing && !chosenEmpty)}
@@ -2879,7 +2804,7 @@ const MediaFrame = ({
         >
             {several && (
                 <>
-                    <Backdrop open={librariesOpen} sx={librariesBackdropSx} onClick={closeLibraries} />
+                    <Backdrop open={librariesOpen} className={styles.librariesBackdrop} onClick={closeLibraries} />
                     <LibraryList
                         ref={librariesRef}
                         groups={groups}
@@ -2890,7 +2815,7 @@ const MediaFrame = ({
                     />
                 </>
             )}
-            <Box sx={mainSx}>
+            <div className={styles.main}>
                 <MediaHeader
                     section={section}
                     trail={trail}
@@ -2946,16 +2871,16 @@ const MediaFrame = ({
                         askUpload({ files, folders: [] });
                     }}
                 />
-                <Box
+                <div
                     ref={panelRef}
-                    sx={panelSx}
+                    className={styles.panel}
                     onDragEnter={offerDrop}
                     onDragOver={offerDrop}
                     onDragLeave={leaveDrop}
                     onDrop={takeDrop}
                     onPaste={pasteFiles}
                 >
-                    <Box sx={gridSx} data-covered={!!viewed || !!shownStep || formingGroup}>
+                    <div className={styles.grid} data-covered={!!viewed || !!shownStep || formingGroup}>
                         {creatingGroup && !newGroupForm && (
                             <GroupCreate
                                 // Beside the grid, so it can't have the same key, which would leave it behind.
@@ -3006,12 +2931,12 @@ const MediaFrame = ({
                                 onSelectAll={selectAll}
                             />
                         ) : (
-                            <Box role="status" sx={noLibrariesSx}>
+                            <div role="status" className={styles.noLibraries}>
                                 <Icon name="pictures" />
-                                <Typography variant="body1">{text.mediaNoLibraries}</Typography>
-                            </Box>
+                                <Text variant="body1">{text.mediaNoLibraries}</Text>
+                            </div>
                         )}
-                    </Box>
+                    </div>
                     {viewed && section && (
                         <MediaAsset
                             entry={viewed.entry}
@@ -3136,9 +3061,9 @@ const MediaFrame = ({
                         />
                     )}
                     {dropping && section && <DropZone label={text.mediaDropToUpload(isolate(levelName))} />}
-                </Box>
+                </div>
                 {uploads.items.length > 0 && (
-                    <Box sx={uploadsSx}>
+                    <div className={styles.uploads}>
                         <UploadPanel
                             items={uploads.items}
                             onCancel={uploads.queue.cancel}
@@ -3146,10 +3071,10 @@ const MediaFrame = ({
                             onCancelAll={uploads.queue.cancelAll}
                             onClear={clearUploads}
                         />
-                    </Box>
+                    </div>
                 )}
                 {shownMoves.length > 0 && (
-                    <Box sx={uploadsSx}>
+                    <div className={styles.uploads}>
                         <TransferPanel
                             items={shownMoves}
                             onCancel={transfers.queue.cancel}
@@ -3157,7 +3082,7 @@ const MediaFrame = ({
                             onCancelAll={transfers.queue.cancelAll}
                             onClear={clearMoves}
                         />
-                    </Box>
+                    </div>
                 )}
                 {choosing && (
                     <ChooseBar
@@ -3172,13 +3097,13 @@ const MediaFrame = ({
                         onChoose={onChoose && (() => !chooseHeld && handOver(choices))}
                     />
                 )}
-            </Box>
+            </div>
             {choosing && (
                 <>
-                    <Backdrop open={chosenOverlay && !docked && !chosenEmpty} sx={chosenBackdropSx} onClick={closeChosen} />
-                    <Box
+                    <Backdrop open={chosenOverlay && !docked && !chosenEmpty} className={mediaLayout.chosenBackdrop} onClick={closeChosen} />
+                    <div
                         ref={chosenRef}
-                        sx={chosenColumnSx}
+                        className={mediaLayout.chosenColumn}
                         data-overlay={chosenOverlay}
                         data-empty={chosenEmpty}
                         onKeyDown={(event) => {
@@ -3206,14 +3131,14 @@ const MediaFrame = ({
                             onShowInLibrary={showInLibrary}
                             onClose={closeChosen}
                         />
-                    </Box>
+                    </div>
                 </>
             )}
-            <Box role="status" sx={visuallyHiddenSx}>
+            <div role="status" className={util.visuallyHidden}>
                 {/* A space every other time, so the same message said again is heard again. */}
                 {announcement && `${announcement.message}${announcement.id % 2 === 0 ? "\u00A0" : ""}`}
-            </Box>
-        </Box>
+            </div>
+        </div>
     );
 };
 

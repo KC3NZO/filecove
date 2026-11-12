@@ -12,7 +12,6 @@ import type {
     GroupPicks,
     IconName,
     Locale,
-    MediaAction,
     MediaActionContext,
     MediaActionGroup,
     MediaKind,

@@ -1,0 +1,93 @@
+/* A rule between two parts. */
+.divider {
+    flex-shrink: 0;
+    margin: 0;
+    border: 0;
+    border-bottom: 1px solid var(--_fm-divider);
+}
+
+/* A link out of the component, underlined faintly until it's hovered. */
+.link {
+    color: var(--_fm-primary);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--_fm-primary) 40%, transparent);
+
+    &:hover {
+        text-decoration-color: inherit;
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--_fm-primary);
+        outline-offset: 2px;
+        border-radius: 2px;
+    }
+}
+
+/* A small pill: a tag, or a value among several. */
+.chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    max-width: 100%;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 16px;
+    outline: 0;
+    background-color: var(--_fm-chip);
+    color: var(--_fm-text);
+    font-family: var(--_fm-font-family);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    white-space: nowrap;
+    vertical-align: middle;
+    cursor: default;
+    appearance: none;
+
+    &:disabled {
+        opacity: 0.38;
+        pointer-events: none;
+    }
+}
+
+.chipOutlined {
+    border: 1px solid var(--_fm-field-border);
+    background-color: transparent;
+}
+
+/* One that takes a press: it's removed, as its ✕ shows. */
+.chipButton {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 150ms;
+
+    &:hover {
+        background-color: color-mix(in srgb, var(--_fm-text) 12%, transparent);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--_fm-primary);
+        outline-offset: 1px;
+    }
+}
+
+.chipLabel {
+    overflow: hidden;
+    padding-inline: 8px;
+    text-overflow: ellipsis;
+}
+
+.chipRemove {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin-inline: -4px 4px;
+    fill: currentColor;
+    opacity: 0.26;
+
+    .chipButton:hover > & {
+        opacity: 0.4;
+    }
+}

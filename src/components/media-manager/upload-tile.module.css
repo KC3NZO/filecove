@@ -1,0 +1,104 @@
+.tile {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    padding: 6px;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding-inline: 8px;
+    padding-block: 6px;
+}
+
+/* Written out from ROW_PICTURE (the styles' constants), which it follows. */
+.cover {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: calc(var(--_fm-radius) * 1.5);
+    overflow: hidden;
+    background-color: var(--_fm-hover);
+    color: var(--_fm-text-secondary);
+
+    & > img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.55;
+    }
+
+    & > svg {
+        opacity: 0.55;
+    }
+}
+
+.frameBar {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    height: 4px;
+}
+
+.rowBar {
+    margin-top: 4px;
+    height: 3px;
+    border-radius: calc(var(--_fm-radius) * 1.5);
+}
+
+.text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding-inline: 2px;
+    text-align: center;
+}
+
+.rowText {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.name {
+    color: var(--_fm-text-secondary);
+    font-size: 0.8125rem;
+}
+
+.status {
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+}
+
+/* The picture being sent, or the file's icon, faded, in the kind's shape (`--ratio`), the bar along its foot. */
+.frame {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: var(--ratio);
+    overflow: hidden;
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-hover);
+
+    & > img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.55;
+    }
+
+    & > svg {
+        opacity: 0.55;
+    }
+}

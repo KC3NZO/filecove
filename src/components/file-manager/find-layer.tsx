@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import Box from "@mui/material/Box";
-import type { SxProps, Theme } from "@mui/material/styles";
+import styles from "./find-layer.module.css";
 
 interface FindLayerProps {
     /** The names to find, by the index of the row each is for: a folder's entries, the tree's rows. */
@@ -25,33 +24,6 @@ const BLOCK = 256;
 
 /** How long one go at building the layer runs before giving the page back, in ms. */
 const SLICE = 8;
-
-// A pixel tall at the panel's top, however far it's scrolled, so what the browser finds in it is
-// in view already and the browser doesn't scroll to it: the view scrolls to the row instead. The
-// names in it are a pixel high, clipped and see-through, so nothing of them shows. It takes no room.
-const layerSx: SxProps<Theme> = {
-    position: "sticky",
-    top: 0,
-    flexShrink: 0,
-    height: "1px",
-    mb: "-1px",
-    overflow: "hidden",
-    fontSize: "1px",
-    lineHeight: "1px",
-    whiteSpace: "nowrap",
-    opacity: 0,
-    pointerEvents: "none",
-    // A page's own styles hiding every `[hidden]`, as some resets do, would keep the names from
-    // the browser's find, which only looks in what's hidden until found.
-    "& [hidden]": { display: "block !important" },
-};
-
-// Written by CSS, which the browser's find doesn't look in, so each name is found once, in the
-// find layer. It runs and lines up as its own letters do, as a `<bdi>` would.
-const drawnSx: SxProps<Theme> = {
-    unicodeBidi: "plaintext",
-    "&::before": { content: "attr(data-name)" },
-};
 
 const hideUntilFound = (element: Element) => element.setAttribute("hidden", "until-found");
 
@@ -213,7 +185,7 @@ const FindLayer = ({ names, onFound }: FindLayerProps) => {
         return null;
     }
 
-    return <Box ref={layerRef} sx={layerSx} aria-hidden />;
+    return <div ref={layerRef} className={styles.layer} aria-hidden />;
 };
 
 /**
@@ -221,6 +193,6 @@ const FindLayer = ({ names, onFound }: FindLayerProps) => {
  * isn't found twice; screen readers still read it. Written in a `<bdi>` elsewhere.
  */
 export const DrawnName = ({ name }: DrawnNameProps) =>
-    FINDS_HIDDEN ? <Box component="span" sx={drawnSx} data-name={name} /> : <bdi>{name}</bdi>;
+    FINDS_HIDDEN ? <span className={styles.drawn} data-name={name} /> : <bdi>{name}</bdi>;
 
 export default FindLayer;

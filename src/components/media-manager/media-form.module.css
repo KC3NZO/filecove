@@ -1,0 +1,12 @@
+/* Each message on a line of its own, marked by a rule at their start side, which forced colors keep. */
+.ownMessages {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 16px;
+    padding-inline-start: 10px;
+    border-inline-start: 3px solid;
+    color: var(--_fm-error);
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
+}

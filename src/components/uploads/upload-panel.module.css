@@ -1,0 +1,47 @@
+/* The same width as a small IconButton, so a done row's check lines up with the other rows' buttons. */
+.done {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 30px;
+    color: var(--_fm-primary);
+}
+
+/* Points down while what failed is folded away, to unfold it, and up while it shows. */
+.failuresToggleIcon {
+    transition: transform 150ms;
+
+    [aria-expanded="true"] > & {
+        transform: rotate(180deg);
+    }
+}
+
+/* Laid out as a row is, with an empty slot for the icon, so the list lines up with the row's name. */
+.failureArea {
+    display: flex;
+    gap: 12px;
+    padding-inline-start: 16px;
+    padding-inline-end: 16px;
+    padding-block-end: 8px;
+}
+
+.failureList {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.failure {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-block: 2px;
+}
+
+.failureIcon {
+    display: flex;
+    flex-shrink: 0;
+}

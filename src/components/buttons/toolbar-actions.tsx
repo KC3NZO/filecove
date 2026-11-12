@@ -1,22 +1,13 @@
-import { useContext, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import Divider from "@mui/material/Divider";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
-import Menu from "@mui/material/Menu";
-import type { MenuProps } from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
-import { DirectionContext } from "../../contexts/direction-context";
-import { menuPaperSx } from "../../styles/mixins";
 import { isRtl } from "../../utils/dom";
+import { cx } from "../../utils/cx";
 import { ariaShortcut } from "../../utils/shortcut";
 import Icon from "../icons/icon";
 import IconSlot from "../icons/icon-slot";
+import Menu, { MenuDivider, MenuIcon, MenuItem, MenuShortcut, MenuText } from "../ui/menu";
+import styles from "./toolbar-actions.module.css";
 import TooltipIconButton from "./tooltip-icon-button";
 
 import type { ToolbarAction, ToolbarGroup } from "../../types";
@@ -31,10 +22,13 @@ interface ToolbarActionsProps {
      */
     inline: number;
     /**
-     * A container query (an `sx` key) from which the actions show as buttons; below it, every one
-     * is in "More actions". Without it, they always show as buttons.
+     * Whether the header it's in hides the buttons where it's narrow, every action going in "More
+     * actions" there. The header says where, by two custom properties its own stylesheet sets:
+     * `--toolbar-buttons: none` with `--toolbar-more: inline-flex` where it's narrow, and
+     * `--toolbar-buttons: flex` with `--toolbar-more: none` where it has the room. Without it,
+     * the actions always show as buttons.
      */
-    wide?: string;
+    collapses?: boolean;
     size?: "small" | "medium";
 }
 
@@ -52,60 +46,13 @@ interface MenuState {
     items: Placed[];
 }
 
-const slotProps: MenuProps["slotProps"] = {
-    paper: { sx: menuPaperSx },
-    list: { dense: true },
-};
-
-// Hangs from the button's end edge, as the header's other menus do: its right edge, or its left
-// edge right to left.
-const ORIGINS: Record<"ltr" | "rtl", Pick<MenuProps, "anchorOrigin" | "transformOrigin">> = {
-    ltr: {
-        anchorOrigin: { vertical: "bottom", horizontal: "right" },
-        transformOrigin: { vertical: "top", horizontal: "right" },
-    },
-    rtl: {
-        anchorOrigin: { vertical: "bottom", horizontal: "left" },
-        transformOrigin: { vertical: "top", horizontal: "left" },
-    },
-};
-
-const buttonsSx = {
-    display: "flex",
-    alignItems: "center",
-    flexShrink: 0,
-} satisfies SxProps<Theme>;
-
-const destructiveSx: SxProps<Theme> = {
-    '&[data-destructive="true"]': { color: "error.main" },
-};
-
-// A label without an icon is inset, which MUI does with a `padding-left`.
-const itemSx: SxProps<Theme> = {
-    "& .MuiListItemText-inset": { paddingLeft: 0, paddingInlineStart: "36px" },
-    '&[data-destructive="true"]': {
-        color: "error.main",
-        "& .MuiListItemIcon-root": { color: "inherit" },
-    },
-};
-
-const shortcutSx: SxProps<Theme> = {
-    marginInlineStart: 3,
-    color: "text.secondary",
-};
-
-// Hidden below `wide`, where the menu holds every action instead.
-const shownFrom = (wide: string | undefined): SxProps<Theme> =>
-    wide ? { ...buttonsSx, display: "none", [wide]: { display: "flex" } } : buttonsSx;
-
 /**
  * The app's actions in a header, the preview's, the properties panel's or the media manager's: those with an icon as icon
  * buttons, as many as `inline` says and the header has room for, and the rest in a "More actions"
  * menu, built as the context menu is. Each action runs on what the header shows, already bound. It
  * knows nothing of the file manager, so the media manager's panels can use it too.
  */
-const ToolbarActions = ({ groups, moreLabel, inline, wide, size = "medium" }: ToolbarActionsProps) => {
-    const dir = useContext(DirectionContext);
+const ToolbarActions = ({ groups, moreLabel, inline, collapses, size = "medium" }: ToolbarActionsProps) => {
     const buttonsRef = useRef<HTMLDivElement>(null);
     const [menu, setMenu] = useState<MenuState | null>(null);
     const placed = groups.flatMap((group) => group.actions.map((action) => ({ group: group.id, action })));
@@ -124,7 +71,7 @@ const ToolbarActions = ({ groups, moreLabel, inline, wide, size = "medium" }: To
 
     const close = () => setMenu((prev) => prev && { ...prev, open: false });
 
-    // Below `wide` the buttons don't show, so the menu holds every action, as read when it opens.
+    // Where the header is narrow the buttons don't show, so the menu holds every action, as read when it opens.
     const openMenu = (anchor: HTMLElement) => {
         const buttons = buttonsRef.current;
         const showing = !!buttons && getComputedStyle(buttons).display !== "none";
@@ -139,13 +86,12 @@ const ToolbarActions = ({ groups, moreLabel, inline, wide, size = "medium" }: To
 
         menu.items.forEach(({ group, action }, index) => {
             if (index > 0 && menu.items[index - 1].group !== group) {
-                items.push(<Divider key={`${group}:divider`} />);
+                items.push(<MenuDivider key={`${group}:divider`} />);
             }
 
             items.push(
                 <MenuItem
                     key={`${group}:${action.id}`}
-                    sx={itemSx}
                     data-destructive={action.destructive}
                     aria-keyshortcuts={action.shortcut && ariaShortcut(action.shortcut)}
                     disabled={action.disabled}
@@ -155,34 +101,27 @@ const ToolbarActions = ({ groups, moreLabel, inline, wide, size = "medium" }: To
                     }}
                 >
                     {action.icon && (
-                        <ListItemIcon>
+                        <MenuIcon>
                             <IconSlot icon={action.icon} />
-                        </ListItemIcon>
+                        </MenuIcon>
                     )}
-                    <ListItemText inset={hasIcons && !action.icon}>{action.label}</ListItemText>
-                    {action.shortcut && (
-                        <Typography variant="body2" sx={shortcutSx}>
-                            <bdi>{action.shortcut}</bdi>
-                        </Typography>
-                    )}
+                    <MenuText inset={hasIcons && !action.icon}>{action.label}</MenuText>
+                    {action.shortcut && <MenuShortcut>{action.shortcut}</MenuShortcut>}
                 </MenuItem>,
             );
         });
     }
 
-    // With nothing left over, "More actions" only shows where the buttons don't.
-    const moreSx: SxProps<Theme> | undefined = rest.length === 0 && wide ? { [wide]: { display: "none" } } : undefined;
-
     return (
         <>
             {asButtons.size > 0 && (
-                <Box ref={buttonsRef} sx={shownFrom(wide)}>
+                <div ref={buttonsRef} className={cx(styles.buttons, collapses && styles.collapsing)}>
                     {[...asButtons].map((action) => (
                         <TooltipIconButton
                             key={action.id}
                             size={size}
                             label={action.label}
-                            sx={destructiveSx}
+                            className={styles.destructive}
                             data-destructive={action.destructive}
                             aria-keyshortcuts={action.shortcut && ariaShortcut(action.shortcut)}
                             disabled={action.disabled}
@@ -191,13 +130,13 @@ const ToolbarActions = ({ groups, moreLabel, inline, wide, size = "medium" }: To
                             {action.icon && <IconSlot icon={action.icon} />}
                         </TooltipIconButton>
                     ))}
-                </Box>
+                </div>
             )}
-            {(rest.length > 0 || wide) && (
+            {(rest.length > 0 || collapses) && (
                 <TooltipIconButton
                     size={size}
                     label={moreLabel}
-                    sx={moreSx}
+                    className={rest.length === 0 ? styles.spare : undefined}
                     aria-haspopup="menu"
                     aria-expanded={!!menu?.open}
                     onClick={(event) => openMenu(event.currentTarget)}
@@ -206,11 +145,10 @@ const ToolbarActions = ({ groups, moreLabel, inline, wide, size = "medium" }: To
                 </TooltipIconButton>
             )}
             <Menu
-                dir={dir}
                 open={!!menu?.open}
-                anchorEl={menu?.anchor}
-                {...ORIGINS[menu?.rtl ? "rtl" : "ltr"]}
-                slotProps={slotProps}
+                anchor={menu?.anchor}
+                rtl={menu?.rtl}
+                align="end"
                 onClose={close}
             >
                 {items}

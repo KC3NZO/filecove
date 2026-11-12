@@ -1,0 +1,341 @@
+/*
+ * The dev host's own small set of controls, as an app would have its own: it uses none of the file
+ * manager's insides, and takes its colours from the page's custom properties (`styles/theme.css`).
+ */
+
+.body1,
+.body2,
+.caption,
+.h4,
+.h5,
+.h6 {
+    margin: 0;
+}
+
+.h4 {
+    font-size: 2.125rem;
+    font-weight: 400;
+    line-height: 1.235;
+}
+
+.h5 {
+    font-size: 1.5rem;
+    font-weight: 400;
+    line-height: 1.334;
+}
+
+.h6 {
+    font-size: 1.25rem;
+    font-weight: 500;
+    line-height: 1.6;
+}
+
+.body1 {
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.body2 {
+    font-size: 0.875rem;
+    line-height: 1.43;
+}
+
+.caption {
+    font-size: 0.75rem;
+    line-height: 1.66;
+}
+
+.secondary {
+    color: var(--app-text-secondary);
+}
+
+.error {
+    color: var(--app-error);
+}
+
+.noWrap {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A button with nothing of the browser's look, for a part to style. */
+.buttonBase {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    user-select: none;
+
+    &:disabled {
+        cursor: default;
+        pointer-events: none;
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--app-primary);
+        outline-offset: -2px;
+    }
+}
+
+.button {
+    --button-color: var(--app-primary);
+
+    min-width: 64px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    color: var(--button-color);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.75;
+    transition: background-color 250ms;
+
+    &:hover {
+        background-color: color-mix(in srgb, var(--button-color) 8%, transparent);
+    }
+
+    &:disabled {
+        color: color-mix(in srgb, var(--app-text) 38%, transparent);
+    }
+}
+
+.buttonInherit {
+    --button-color: currentColor;
+
+    color: inherit;
+}
+
+.buttonSmall {
+    padding: 4px 5px;
+    font-size: 0.8125rem;
+}
+
+.buttonOutlined {
+    padding: 5px 15px;
+    border: 1px solid color-mix(in srgb, var(--button-color) 50%, transparent);
+
+    &.buttonSmall {
+        padding: 3px 9px;
+    }
+
+    &:disabled {
+        border-color: var(--app-divider);
+    }
+}
+
+.buttonContained {
+    padding: 6px 16px;
+    background-color: var(--app-primary);
+    color: #fff;
+
+    &.buttonSmall {
+        padding: 4px 10px;
+    }
+
+    &:hover {
+        background-color: var(--app-primary-hover);
+    }
+
+    &:disabled {
+        background-color: var(--app-divider);
+    }
+
+    &:focus-visible {
+        outline-offset: 2px;
+    }
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    height: 24px;
+    padding-inline: 8px;
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: color-mix(in srgb, var(--app-text) 10%, transparent);
+    font-size: 0.8125rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chipOutlined {
+    border: 1px solid color-mix(in srgb, var(--app-text) 26%, transparent);
+    background-color: transparent;
+}
+
+.link {
+    color: var(--app-primary);
+    text-decoration-color: color-mix(in srgb, var(--app-primary) 40%, transparent);
+
+    &:hover {
+        text-decoration-color: inherit;
+    }
+}
+
+/* A field typed in, outlined, turning to the accent while it has the focus. */
+.field {
+    width: 100%;
+    margin: 0;
+    padding: 8.5px 14px;
+    border: 1px solid color-mix(in srgb, var(--app-text) 26%, transparent);
+    border-radius: 4px;
+    outline: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    line-height: 1.4375em;
+
+    &:hover {
+        border-color: var(--app-text);
+    }
+
+    &:focus {
+        border-color: var(--app-primary);
+        box-shadow: inset 0 0 0 1px var(--app-primary);
+    }
+
+    &[aria-invalid="true"] {
+        border-color: var(--app-error);
+
+        &:focus {
+            box-shadow: inset 0 0 0 1px var(--app-error);
+        }
+    }
+}
+
+.spinner {
+    display: inline-block;
+    flex-shrink: 0;
+    border: 3px solid color-mix(in srgb, var(--app-primary) 25%, transparent);
+    border-top-color: var(--app-primary);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        rotate: 360deg;
+    }
+}
+
+.backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    background-color: rgb(0 0 0 / 50%);
+    transition: opacity 200ms;
+
+    &[data-starting-style],
+    &[data-ending-style] {
+        opacity: 0;
+    }
+}
+
+.dialogViewport {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dialog {
+    display: flex;
+    flex-direction: column;
+    width: calc(100% - 64px);
+    max-height: calc(100% - 64px);
+    overflow: hidden;
+    border: 1px solid var(--app-divider);
+    border-radius: 12px;
+    outline: 0;
+    background-color: var(--app-background);
+    color: var(--app-text);
+    box-shadow: 0 11px 15px -7px rgb(0 0 0 / 20%), 0 24px 38px 3px rgb(0 0 0 / 14%);
+    transition: opacity 200ms;
+
+    &[data-starting-style],
+    &[data-ending-style] {
+        opacity: 0;
+    }
+}
+
+.dialogMd {
+    max-width: 900px;
+}
+
+.dialogLg {
+    max-width: 1200px;
+}
+
+/* A slider: a thin track, filled as far as its thumb. */
+.slider {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 28px;
+    touch-action: none;
+    user-select: none;
+
+    &[data-disabled] {
+        opacity: 0.38;
+    }
+}
+
+.sliderTrack {
+    position: relative;
+    width: 100%;
+    height: 2px;
+    border-radius: 2px;
+    background-color: color-mix(in srgb, var(--app-primary) 38%, transparent);
+}
+
+.sliderFill {
+    border-radius: 2px;
+    background-color: var(--app-primary);
+}
+
+.sliderThumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--app-primary);
+
+    &:has(:focus-visible) {
+        outline: 2px solid var(--app-primary);
+        outline-offset: 2px;
+    }
+}
+
+/* What the page says it did, at the bottom start corner, for a few seconds. */
+.snackbar {
+    position: fixed;
+    bottom: 24px;
+    inset-inline-start: 24px;
+    z-index: 1400;
+    min-width: 288px;
+    max-width: calc(100vw - 48px);
+    padding: 14px 16px;
+    border-radius: 4px;
+    background-color: light-dark(#323232, #fafafa);
+    color: light-dark(#fff, rgb(0 0 0 / 87%));
+    font-size: 0.875rem;
+    line-height: 1.43;
+    box-shadow: 0 3px 5px -1px rgb(0 0 0 / 20%), 0 6px 10px 0 rgb(0 0 0 / 14%);
+    animation: arrive 200ms ease-out;
+}
+
+@keyframes arrive {
+    from {
+        opacity: 0;
+        scale: 0.9;
+    }
+}

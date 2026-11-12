@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Snackbar from "@mui/material/Snackbar";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { FileManager } from "../src";
 import { useHashLocation } from "./hooks/use-hash-location";
 import { useStoredState } from "./hooks/use-stored-state";
@@ -20,6 +14,8 @@ import {
 } from "./mocks/mock-data";
 import { previewers } from "./mocks/mock-previewers";
 import { lateSections, limits, locale, relistAfter, single, uncontrolled } from "./options";
+import { Button, Snackbar, Text } from "./ui";
+import styles from "./app.module.css";
 
 import type {
     FileEntry,
@@ -67,36 +63,6 @@ const SHOWN: Shown = single
           location: { sectionId: "project-b", trail: [{ id: archiveId, name: "archive" }] },
           id: childId(archiveId, "record-07500.pdf"),
       };
-
-const appSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    height: "100dvh",
-};
-
-// The file manager fills its container by default; here it shares the page with the footer.
-const fileManagerSx: SxProps<Theme> = {
-    flex: 1,
-    minHeight: 0,
-    height: "auto",
-};
-
-const footerSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1,
-    minHeight: 40,
-    px: 2,
-    borderTop: 1,
-    borderColor: "divider",
-    bgcolor: "background.default",
-};
-
-const summarySx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    color: "text.secondary",
-};
 
 const describe = ({ ids, entries }: Selection) => {
     if (ids.length === 0) {
@@ -294,22 +260,22 @@ const App = () => {
         relistAfter,
         limits,
         apiRef,
-        sx: fileManagerSx,
+        className: styles.fileManager,
         onSelectionChange: handleSelectionChange,
         ...settings,
     };
 
     return (
-        <Box sx={appSx}>
+        <div className={styles.app}>
             {single ? (
                 <FileManager {...shared} section={singleSection} />
             ) : (
                 <FileManager {...shared} sections={shownGroups} />
             )}
-            <Box component="footer" sx={footerSx}>
-                <Typography variant="body2" noWrap sx={summarySx}>
+            <footer className={styles.footer}>
+                <Text variant="body2" noWrap className={styles.summary}>
                     {describe(selection)}
-                </Typography>
+                </Text>
                 <Button size="small" color="inherit" onClick={() => undo("undo")}>
                     Undo
                 </Button>
@@ -343,14 +309,14 @@ const App = () => {
                 <Button size="small" color="inherit" onClick={() => apiRef.current?.showShortcuts()}>
                     Shortcuts
                 </Button>
-            </Box>
+            </footer>
             <Snackbar
                 open={notice.open}
                 message={notice.message}
                 autoHideDuration={3000}
                 onClose={() => setNotice((prev) => ({ ...prev, open: false }))}
             />
-        </Box>
+        </div>
     );
 };
 

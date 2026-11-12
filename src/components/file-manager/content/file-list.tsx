@@ -1,38 +1,23 @@
 import { memo } from "react";
 import type { CSSProperties } from "react";
 
-import Box from "@mui/material/Box";
-import ButtonBase from "@mui/material/ButtonBase";
-import IconButton from "@mui/material/IconButton";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../../hooks/use-locale";
-import { viewMedium, viewWide } from "../../../styles/layout";
-import {
-    arrivedMarker,
-    cutMarker,
-    dragMarkers,
-    focusRing,
-    focusVisibleRing,
-    forcedArrived,
-    forcedColors,
-    forcedSelected,
-    hoverBackground,
-    movingMarker,
-    selectedBackground,
-    selectedHoverBackground,
-    stripeBackground,
-    visuallyHiddenSx,
-} from "../../../styles/mixins";
+import { fmClasses } from "../../../styles/classes";
+import marks from "../../../styles/entry.module.css";
+import util from "../../../styles/util.module.css";
 import { joinIsolated } from "../../../utils/bidi";
+import { cx } from "../../../utils/cx";
 import { drawnState } from "../../../utils/permissions";
 import { belowElement, pointerPosition } from "../../../utils/menu-position";
 import { selectModifiers } from "../../../utils/selection";
 import { SORT_LABELS, toggleSortKey } from "../../../utils/sort";
 import { listIconSize } from "../../../utils/zoom";
 import Icon from "../../icons/icon";
+import ButtonBase from "../../ui/button-base";
+import IconButton from "../../ui/icon-button";
+import Text from "../../ui/text";
 import { DrawnName } from "../find-layer";
+import styles from "./file-list.module.css";
 import ItemIcon from "./item-icon";
 
 import type { EntryOrigin, FileEntry, FileViewProps, MovingKind, SortKey, SortOrder } from "../../../types";
@@ -42,7 +27,7 @@ interface ColumnHeaderProps {
     sort: SortOrder;
     /** The column's label, in place of the key's own. */
     label?: string;
-    sx?: SxProps<Theme>;
+    className?: string;
     onSortChange: (sort: SortOrder) => void;
 }
 
@@ -80,191 +65,19 @@ interface FileRowProps
     dropTarget: boolean;
 }
 
-// `--columns` holds the tracks shared by the header and every row. It grows with the view:
-// name and menu button, then size and modified, then type as well. A search everywhere's results,
-// and the trash's root, have a Location column after the name, sharing its room. `--icon-size`,
-// set in `style`, is the icon's side as the zoom has it, which the rows grow with.
-// Text can't be selected anywhere in the list, or Shift-click would select it across rows.
-// Clipped down its length, so a row kept rendered far from view in a squeezed listbox, placed in
-// px of all the lines, doesn't lengthen what the panel scrolls (see `virtualization.md`); clipping
-// is no scroll container, so the column header still sticks.
-const listSx: SxProps<Theme> = {
-    "--columns": "minmax(0, 1fr) 2.5rem",
-    userSelect: "none",
-    overflowY: "clip",
-    px: 1,
-    pt: 1,
-    pb: 2,
-    [viewMedium]: {
-        "--columns": "minmax(0, 1fr) 6rem 9.5rem 2.5rem",
-        px: 3,
-        // The sticky column header takes over the top spacing.
-        pt: 0,
-        '&[data-located="true"]': { "--columns": "minmax(0, 3fr) minmax(0, 2fr) 6rem 9.5rem 2.5rem" },
-    },
-    [viewWide]: {
-        "--columns": "minmax(0, 1fr) 6rem 6rem 9.5rem 2.5rem",
-        '&[data-located="true"]': { "--columns": "minmax(0, 3fr) minmax(0, 2fr) 6rem 6rem 9.5rem 2.5rem" },
-    },
-};
-
-const headerRowSx: SxProps<Theme> = {
-    display: "none",
-    gridTemplateColumns: "var(--columns)",
-    alignItems: "center",
-    columnGap: 2,
-    position: "sticky",
-    top: 0,
-    zIndex: 1,
-    minHeight: 40,
-    px: 1.5,
-    mb: 0.5,
-    bgcolor: "background.paper",
-    color: "text.secondary",
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    [viewMedium]: { display: "grid" },
-};
-
-// Only the rows in or near view are rendered, each placed at its line, and the listbox is as tall
-// as all of them (`useVirtualLines`). It's a grid of one track for the hook to read, with the row
-// gap that spaces the lines.
-const rowsSx: SxProps<Theme> = {
-    position: "relative",
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr)",
-    rowGap: 0.5,
-    [viewMedium]: { rowGap: 1 },
-};
-
-// Placed at its line by `top`, set in `style`. Every row is as tall, since the list measures one
-// for them all: room for the icon, or narrow, for the size and date folded under the name too.
-const rowSx: SxProps<Theme> = (theme) => ({
-    position: "absolute",
-    insetInline: 0,
-    display: "grid",
-    gridTemplateColumns: "var(--columns)",
-    alignItems: "center",
-    columnGap: 2,
-    minHeight: "max(52px, calc(var(--icon-size) + 16px))",
-    px: 1.5,
-    borderRadius: 2,
-    cursor: "default",
-    // By the entry's place in the folder, since the rows rendered don't all follow each other.
-    '&[data-striped="true"]': { bgcolor: stripeBackground(theme) },
-    "&:hover": { bgcolor: hoverBackground(theme) },
-    '&[data-selected="true"]': { bgcolor: selectedBackground(theme) },
-    '&[data-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
-    // The menu button shows on hover, for the selected row and the row with keyboard focus; always
-    // on touch screens.
-    "& [data-menu-button]": { opacity: 0 },
-    '&:hover [data-menu-button], &[data-selected="true"] [data-menu-button], &:focus-visible [data-menu-button]': {
-        opacity: 1,
-    },
-    "@media (hover: none)": { "& [data-menu-button]": { opacity: 1 } },
-    // A row scrolled into view stops below the sticky column header rather than under it.
-    [viewMedium]: { minHeight: "calc(var(--icon-size) + 16px)", scrollMarginTop: "3rem" },
-    ...cutMarker,
-    ...movingMarker,
-    ...arrivedMarker(theme),
-    ...focusVisibleRing,
-    ...dragMarkers(theme),
-    [forcedColors]: { ...forcedSelected, ...forcedArrived },
-});
-
-// Only as wide as the icon and name, so a long name truncates within the column.
-const nameCellSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1.5,
-    justifySelf: "start",
-    maxWidth: "100%",
-    minWidth: 0,
-    "& > svg": { flexShrink: 0 },
-};
-
-// Lines the label up with the file names: the icon plus the 12px gap.
-const nameHeaderSx: SxProps<Theme> = {
-    paddingInlineStart: "calc(var(--icon-size) + 12px)",
-};
-
-// The arrow goes before the label here, so the label stays flush with the dates, aligned to the end.
-const modifiedHeaderSx: SxProps<Theme> = {
-    textAlign: "end",
-    "& > button": { flexDirection: "row-reverse" },
-};
-
-// Padded for the focus ring and hover area, and pulled back by as much so the label stays in line.
-const columnButtonSx: SxProps<Theme> = {
-    gap: 0.5,
-    mx: -0.75,
-    px: 0.75,
-    py: 0.25,
-    borderRadius: 1,
-    font: "inherit",
-    color: "inherit",
-    '&:hover, &[data-active="true"]': { color: "text.primary" },
-    ...focusRing,
-};
-
-const sortIconSx: SxProps<Theme> = {
-    fontSize: "0.875rem",
-};
-
-const nameTextSx: SxProps<Theme> = {
-    minWidth: 0,
-};
-
-/** Size and date folded under the name while there is no room for their columns. */
-const secondaryLineSx: SxProps<Theme> = {
-    display: "block",
-    color: "text.secondary",
-    [viewMedium]: { display: "none" },
-};
-
-const locationCellSx: SxProps<Theme> = {
-    display: "none",
-    [viewMedium]: { display: "block" },
-};
-
-const sizeCellSx: SxProps<Theme> = {
-    display: "none",
-    [viewMedium]: { display: "block" },
-};
-
-const typeCellSx: SxProps<Theme> = {
-    display: "none",
-    [viewWide]: { display: "block" },
-};
-
-const modifiedCellSx: SxProps<Theme> = {
-    display: "none",
-    textAlign: "end",
-    [viewMedium]: { display: "block" },
-};
-
-const menuCellSx: SxProps<Theme> = {
-    display: "flex",
-    justifyContent: "center",
-};
-
-const menuButtonSx: SxProps<Theme> = {
-    color: "text.secondary",
-};
-
 /**
  * A sortable column label: picks its key, or reverses the order when it already sorts by it. The
  * column sorting the list tells screen readers its direction, which the arrow only shows.
  */
-const ColumnHeader = ({ sortKey, sort, label, sx, onSortChange }: ColumnHeaderProps) => {
+const ColumnHeader = ({ sortKey, sort, label, className, onSortChange }: ColumnHeaderProps) => {
     const { text } = useLocale();
     const labels = SORT_LABELS[sortKey](text);
     const active = sortKey === sort.key;
 
     return (
-        <Box sx={sx}>
+        <div className={cx(className, fmClasses.listCell)} data-column={sortKey}>
             <ButtonBase
-                sx={columnButtonSx}
+                className={styles.columnButton}
                 data-active={active}
                 onClick={(event) => {
                     // The surface behind the list would take the click as one on empty space and clear the selection.
@@ -274,13 +87,13 @@ const ColumnHeader = ({ sortKey, sort, label, sx, onSortChange }: ColumnHeaderPr
             >
                 {label ?? labels.label}
                 {active && (
-                    <Box component="span" sx={visuallyHiddenSx}>
+                    <span className={util.visuallyHidden}>
                         {text.sortedColumn(labels[sort.direction])}
-                    </Box>
+                    </span>
                 )}
-                {active && <Icon name={sort.direction === "asc" ? "arrowUp" : "arrowDown"} sx={sortIconSx} />}
+                {active && <Icon name={sort.direction === "asc" ? "arrowUp" : "arrowDown"} className={styles.sortIcon} />}
             </ButtonBase>
-        </Box>
+        </div>
     );
 };
 
@@ -313,8 +126,17 @@ const FileRow = memo(
         const { text, describeListDate, describeSize, describeType } = useLocale();
 
         return (
-            <Box
-                sx={rowSx}
+            <div
+                className={cx(
+                    fmClasses.listRow,
+                    styles.row,
+                    marks.cut,
+                    marks.moving,
+                    marks.arrived,
+                    marks.focusRing,
+                    marks.drag,
+                    marks.forcedSelected,
+                )}
                 style={{ top }}
                 role="option"
                 aria-selected={selected}
@@ -350,45 +172,50 @@ const FileRow = memo(
                     }
                 }}
             >
-                <Box sx={nameCellSx}>
+                <div className={cx(styles.nameCell, fmClasses.listCell)} data-column="name">
                     <ItemIcon
                         entry={origin?.entry ?? entry}
                         size={iconSize}
                         adapter={origin?.adapter ?? adapter}
                         view="list"
                     />
-                    <Box sx={nameTextSx}>
-                        <Typography variant="body2" noWrap>
+                    <div className={styles.nameText}>
+                        <Text variant="body2" noWrap className={fmClasses.entryName}>
                             <DrawnName name={entry.name} />
-                        </Typography>
+                        </Text>
                         {/* A result says where it is here, rather than its size and date. */}
-                        <Typography variant="caption" noWrap sx={secondaryLineSx}>
+                        <Text variant="caption" noWrap className={styles.secondaryLine}>
                             {origin?.location ?? joinIsolated([describeSize(entry), describeListDate(entry)])}
-                        </Typography>
-                    </Box>
-                </Box>
+                        </Text>
+                    </div>
+                </div>
                 {origin && (
-                    <Typography variant="body2" color="text.secondary" noWrap sx={locationCellSx}>
+                    <Text variant="body2" color="secondary" noWrap className={cx(styles.locationCell, fmClasses.listCell)} data-column="location">
                         {origin.location}
-                    </Typography>
+                    </Text>
                 )}
-                <Typography variant="body2" color="text.secondary" noWrap sx={sizeCellSx}>
-                    {describeSize(entry)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" noWrap sx={typeCellSx}>
+                {/*
+                  * The size and the date run as their own letters do, so "3 items" and "10/2/26,
+                  * 1:27 PM" aren't turned round on a right-to-left page, while the cells still
+                  * line up as the page runs.
+                  */}
+                <Text variant="body2" color="secondary" noWrap className={cx(styles.sizeCell, fmClasses.listCell)} data-column="size">
+                    <bdi>{describeSize(entry)}</bdi>
+                </Text>
+                <Text variant="body2" color="secondary" noWrap className={cx(styles.typeCell, fmClasses.listCell)} data-column="type">
                     {describeType(entry)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" noWrap sx={modifiedCellSx}>
-                    {describeListDate(entry)}
-                </Typography>
-                <Box sx={menuCellSx}>
+                </Text>
+                <Text variant="body2" color="secondary" noWrap className={cx(styles.modifiedCell, fmClasses.listCell)} data-column="modified">
+                    <bdi>{describeListDate(entry)}</bdi>
+                </Text>
+                <div className={styles.menuCell}>
                     {hasActions && (
                         <IconButton
                             size="small"
                             tabIndex={-1}
                             aria-hidden
                             data-menu-button
-                            sx={menuButtonSx}
+                            className={styles.menuButton}
                             // Like a right-click: the menu decides whether it acts on the whole selection.
                             onClick={(event) => {
                                 event.stopPropagation();
@@ -399,8 +226,8 @@ const FileRow = memo(
                             <Icon name="more" fontSize="small" />
                         </IconButton>
                     )}
-                </Box>
-            </Box>
+                </div>
+            </div>
         );
     },
 );
@@ -439,9 +266,9 @@ const FileList = ({
     const iconSize = listIconSize(zoom);
 
     return (
-        <Box sx={listSx} style={{ "--icon-size": `${iconSize}rem` } as CSSProperties} data-located={!!origins}>
-            <Box sx={headerRowSx} role="group" aria-label={text.sortBy}>
-                <ColumnHeader sortKey="name" sort={sort} sx={nameHeaderSx} onSortChange={onSortChange} />
+        <div className={cx(styles.list, fmClasses.list)} style={{ "--icon-size": `${iconSize}rem` } as CSSProperties} data-located={!!origins}>
+            <div className={cx(styles.headerRow, fmClasses.listHeader)} role="group" aria-label={text.sortBy}>
+                <ColumnHeader sortKey="name" sort={sort} className={styles.nameHeader} onSortChange={onSortChange} />
                 {origins && (
                     <ColumnHeader
                         sortKey="location"
@@ -451,19 +278,19 @@ const FileList = ({
                     />
                 )}
                 <ColumnHeader sortKey="size" sort={sort} onSortChange={onSortChange} />
-                <ColumnHeader sortKey="type" sort={sort} sx={typeCellSx} onSortChange={onSortChange} />
+                <ColumnHeader sortKey="type" sort={sort} className={styles.typeCell} onSortChange={onSortChange} />
                 <ColumnHeader
                     sortKey="modified"
                     sort={sort}
                     label={trash ? text.sortTrashed : undefined}
-                    sx={modifiedHeaderSx}
+                    className={styles.modifiedHeader}
                     onSortChange={onSortChange}
                 />
-                <Box />
-            </Box>
-            <Box
+                <div />
+            </div>
+            <div
                 ref={lines.ref}
-                sx={rowsSx}
+                className={styles.rows}
                 style={{ height: lines.height }}
                 role="listbox"
                 aria-label={label}
@@ -498,8 +325,8 @@ const FileList = ({
                         />
                     );
                 })}
-            </Box>
-        </Box>
+            </div>
+        </div>
     );
 };
 

@@ -1,16 +1,14 @@
 import { useCallback, useState } from "react";
 import type { ReactNode, Ref } from "react";
 
-import Box from "@mui/material/Box";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useDragHold } from "../../../hooks/use-drop-target";
 import { useLocale } from "../../../hooks/use-locale";
 import { useLongPress } from "../../../hooks/use-long-press";
-import { HEADER_HEIGHT, rootMedium, rootWide } from "../../../styles/layout";
-import { forcedColors, forcedPressed } from "../../../styles/mixins";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
+import { fmClasses } from "../../../styles/classes";
+import { cx } from "../../../utils/cx";
+import styles from "./header-bar.module.css";
 import HistoryMenu from "./history-menu";
 import ViewMenu from "./view-menu";
 
@@ -82,102 +80,6 @@ interface HeaderBarProps {
     sidebarButtonRef?: Ref<HTMLButtonElement>;
 }
 
-// Narrow: the buttons on top and the path bar on a row of its own below them, just above the
-// content it describes, since beside the buttons it would only have room for one segment.
-// From `rootMedium` it moves between the buttons and stays centred while there is room, giving
-// way to the buttons when there isn't.
-const headerSx: SxProps<Theme> = {
-    display: "grid",
-    gridTemplateAreas: '"start . end" "path path path"',
-    gridTemplateColumns: "max-content minmax(0, 1fr) max-content",
-    gridTemplateRows: `${HEADER_HEIGHT}px auto`,
-    alignItems: "center",
-    columnGap: 1,
-    flexShrink: 0,
-    minHeight: HEADER_HEIGHT,
-    px: 1,
-    pb: 0.75,
-    [rootMedium]: {
-        gridTemplateAreas: '"start path end"',
-        gridTemplateColumns: "minmax(max-content, 1fr) minmax(0, 48rem) minmax(max-content, 1fr)",
-        gridTemplateRows: "auto",
-        pb: 0,
-    },
-};
-
-const startGroupSx: SxProps<Theme> = {
-    gridArea: "start",
-    display: "flex",
-    alignItems: "center",
-    gap: 0.25,
-};
-
-// The path bar, or the search field in its place, then the button that searches the open folder,
-// which stays beside either so it never moves.
-const pathSlotSx: SxProps<Theme> = {
-    gridArea: "path",
-    display: "flex",
-    alignItems: "center",
-    gap: 0.5,
-    minWidth: 0,
-};
-
-const pathSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-};
-
-const endGroupSx: SxProps<Theme> = {
-    gridArea: "end",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 0.25,
-};
-
-// A drag resting on the button that shows the sidebar opens it, and meanwhile the button shows as
-// hovered, which browsers don't show while dragging.
-const dragOverSx = {
-    '&[data-drag-over="true"]': { bgcolor: "action.hover" },
-    [forcedColors]: { '&[data-drag-over="true"]': { outline: "2px solid Highlight" } },
-};
-
-const sidebarButtonSx: SxProps<Theme> = dragOverSx;
-
-/**
- * Only while the sidebar is collapsed, or hidden: the button that shows it, and search everywhere,
- * which otherwise lives at the top of the sidebar.
- */
-const collapsedSidebarButtonSx: SxProps<Theme> = {
-    ...dragOverSx,
-    [rootWide]: { display: "none" },
-};
-
-const pressedSx: SxProps<Theme> = {
-    '&[aria-pressed="true"]': { color: "primary.main" },
-    [forcedColors]: forcedPressed,
-};
-
-const collapsedOnlyPressedSx: SxProps<Theme> = {
-    '&[aria-pressed="true"]': { color: "primary.main" },
-    [forcedColors]: forcedPressed,
-    [rootWide]: { display: "none" },
-};
-
-// Touch screens only, which have no Ctrl or Shift to select several entries with. This asks what
-// the input can do, not how wide the screen is, so it is a media query rather than a container one.
-const selectButtonSx: SxProps<Theme> = {
-    display: "none",
-    '&[aria-pressed="true"]': { color: "primary.main" },
-    "@media (hover: none)": { display: "inline-flex" },
-    [forcedColors]: forcedPressed,
-};
-
-const mediumUpSx: SxProps<Theme> = {
-    display: "none",
-    [rootMedium]: { display: "inline-flex" },
-};
-
 const HeaderBar = ({
     pathBar,
     canGoBack,
@@ -246,13 +148,13 @@ const HeaderBar = ({
     });
 
     return (
-        <Box sx={headerSx}>
-            <Box sx={startGroupSx} {...historyPress}>
+        <div className={cx(styles.header, fmClasses.header)}>
+            <div className={styles.startGroup} {...historyPress}>
                 <TooltipIconButton
                     ref={sidebarButtonRef}
                     label={text.showSidebar}
                     aria-keyshortcuts="F9"
-                    sx={sidebarHidden ? sidebarButtonSx : collapsedSidebarButtonSx}
+                    className={sidebarHidden ? styles.sidebarButton : styles.collapsedSidebarButton}
                     data-drag-over={sidebarHold.over}
                     onClick={onShowSidebar}
                     {...sidebarHold.handlers}
@@ -275,7 +177,7 @@ const HeaderBar = ({
                     label={text.forward}
                     disabled={!canGoForward}
                     data-history="forward"
-                    sx={mediumUpSx}
+                    className={styles.mediumUp}
                     onClick={onForward}
                     onContextMenu={(event) => {
                         event.preventDefault();
@@ -284,7 +186,7 @@ const HeaderBar = ({
                 >
                     <Icon name="arrowForward" fontSize="small" />
                 </TooltipIconButton>
-            </Box>
+            </div>
             {historyList && (
                 <HistoryMenu
                     open={historyList.open}
@@ -295,8 +197,8 @@ const HeaderBar = ({
                     onClose={closeHistory}
                 />
             )}
-            <Box sx={pathSlotSx}>
-                <Box sx={pathSx}>{pathBar}</Box>
+            <div className={styles.pathSlot}>
+                <div className={styles.path}>{pathBar}</div>
                 {/* Keeps the focus in an open search's field as it's pressed, which it closes or
                     switches to searching the folder. */}
                 <TooltipIconButton
@@ -304,19 +206,19 @@ const HeaderBar = ({
                     aria-pressed={searchScope === "folder"}
                     aria-keyshortcuts="Control+F Meta+F"
                     disabled={!hasFolder}
-                    sx={pressedSx}
+                    className={styles.pressed}
                     onMouseDown={(event) => searchScope && event.preventDefault()}
                     onClick={() => onSearch("folder")}
                 >
                     <Icon name="searchFolder" fontSize="small" />
                 </TooltipIconButton>
-            </Box>
-            <Box sx={endGroupSx}>
+            </div>
+            <div className={styles.endGroup}>
                 <TooltipIconButton
                     label={selecting ? text.doneSelecting : text.select}
                     aria-pressed={selecting}
                     disabled={!hasFolder}
-                    sx={selectButtonSx}
+                    className={styles.selectButton}
                     onClick={onToggleSelecting}
                 >
                     <Icon name="selectMode" fontSize="small" />
@@ -327,7 +229,7 @@ const HeaderBar = ({
                         label={text.searchEverywhere}
                         aria-pressed={searchScope === "everywhere"}
                         aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
-                        sx={sidebarHidden ? pressedSx : collapsedOnlyPressedSx}
+                        className={sidebarHidden ? styles.pressed : styles.collapsedOnlyPressed}
                         onMouseDown={(event) => searchScope && event.preventDefault()}
                         onClick={() => onSearch("everywhere")}
                     >
@@ -355,8 +257,8 @@ const HeaderBar = ({
                     onToggleProperties={onToggleProperties}
                     onOpenProperties={onOpenProperties}
                 />
-            </Box>
-        </Box>
+            </div>
+        </div>
     );
 };
 

@@ -1,0 +1,173 @@
+.pane {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    outline: none;
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+        border-radius: inherit;
+    }
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    min-height: 52px;
+    padding-inline-start: 16px;
+    padding-inline-end: 8px;
+}
+
+.backHeader {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    min-height: 52px;
+    padding-inline-start: 4px;
+    padding-inline-end: 8px;
+}
+
+.title {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.9375rem;
+    font-weight: 700;
+}
+
+.count {
+    margin-inline-start: 8px;
+    padding-inline: 6px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-pressed);
+    color: var(--_fm-text);
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 20px;
+
+    @media (forced-colors: active) {
+        outline: 1px solid CanvasText;
+    }
+}
+
+/* Only where the column is an overlay; docked, it's always there. */
+.close {
+    @container media-manager (min-width: 1040px) {
+        display: none;
+    }
+}
+
+.note {
+    flex-shrink: 0;
+    padding-inline: 16px;
+    padding-bottom: 8px;
+    color: var(--_fm-text-secondary);
+    font-size: 0.8125rem;
+}
+
+.empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex: 1;
+    padding-inline: 24px;
+    color: var(--_fm-text-secondary);
+    text-align: center;
+
+    & > svg {
+        font-size: 40px;
+        opacity: 0.6;
+    }
+}
+
+/* Choose across the column, with what holds it back above it. */
+.footer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 12px;
+    border-top: 1px solid;
+    border-color: var(--_fm-divider);
+}
+
+.held {
+    color: var(--_fm-text-secondary);
+    font-size: 0.8125rem;
+    text-align: center;
+}
+
+.details {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-inline: 16px;
+    padding-bottom: 16px;
+}
+
+.hero {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid;
+    border-color: var(--_fm-divider);
+}
+
+.picture {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 5.5rem;
+    height: 5.5rem;
+    border-radius: calc(var(--_fm-radius) * 2);
+    overflow: hidden;
+    background-color: var(--_fm-hover);
+    color: var(--_fm-text-secondary);
+
+    & > img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    @media (forced-colors: active) {
+        outline: 1px solid CanvasText;
+    }
+}
+
+.heroText {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+}
+
+.name {
+    max-width: 100%;
+    font-weight: 600;
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+}
+
+.library {
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+}
+
+.show {
+    margin-top: 4px;
+    margin-inline-start: -8px;
+}

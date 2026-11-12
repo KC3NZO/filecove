@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { SetStateAction } from "react";
 
-import { useControlled } from "@mui/material/utils";
+import { useControlled } from "./use-controlled";
 
 /** What's selected, in the order set, and where a Shift-click's range starts, which is never the app's. */
 export interface PicksState<P, A> {
@@ -9,8 +9,8 @@ export interface PicksState<P, A> {
     anchor: A | null;
 }
 
-interface PicksOptions<P, A, T, G> {
-    /** Names the component in MUI's warning about switching between controlled and not. */
+interface PicksOptions<P, T, G> {
+    /** Names the component in the warning about switching between controlled and not. */
     component: string;
     /** What's selected, when the app keeps it. */
     value: readonly G[] | undefined;
@@ -33,8 +33,7 @@ const sameList = <T>(a: readonly T[], b: readonly T[], same: (a: T, b: T) => boo
     a === b || (a.length === b.length && a.every((item, index) => same(item, b[index])));
 
 /**
- * What's selected in a media manager or a picker, which the app may keep, as MUI's controlled props
- * are: `value` while it's passed, or else kept here, starting at `defaultValue`. Its picks hold more
+ * What's selected in a media manager or a picker, which the app may keep, as a controlled prop is: `value` while it's passed, or else kept here, starting at `defaultValue`. Its picks hold more
  * than the app's list says (where each was picked, what's been listed of it since), so while the app
  * keeps it they're made from its list as it changes.
  *
@@ -52,7 +51,7 @@ export const usePicks = <P, A, T, G = T>({
     told,
     sameItem,
     keyOf,
-}: PicksOptions<P, A, T, G>) => {
+}: PicksOptions<P, T, G>) => {
     // Only for its warning: what's kept has more in it than the app's list.
     useControlled<readonly G[]>({ controlled: value, default: NO_LIST, name: component, state: "value" });
 

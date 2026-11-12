@@ -1,16 +1,16 @@
 import { useRef } from "react";
 import type { KeyboardEvent } from "react";
 
-import Box from "@mui/material/Box";
-import ButtonBase from "@mui/material/ButtonBase";
-import CircularProgress from "@mui/material/CircularProgress";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../../hooks/use-locale";
-import { focusRing, forcedColors, visuallyHiddenSx } from "../../../styles/mixins";
+import { fmClasses } from "../../../styles/classes";
+import { cx } from "../../../utils/cx";
+import util from "../../../styles/util.module.css";
 import { isolate } from "../../../utils/bidi";
 import { isRtl } from "../../../utils/dom";
 import Icon from "../../icons/icon";
+import ButtonBase from "../../ui/button-base";
+import CircularProgress from "../../ui/circular-progress";
+import styles from "./search-tabs.module.css";
 
 import type { SectionSearch } from "../../../types";
 
@@ -36,64 +36,6 @@ interface SearchTabsProps {
 
 /** The id of the tab at `index`, which names the panel while it's open. */
 export const tabId = (idPrefix: string, index: number) => `${idPrefix}-${index}`;
-
-// Scrolls sideways when the tabs don't fit, without a scrollbar, as the path bar does.
-const tablistSx: SxProps<Theme> = {
-    flexShrink: 0,
-    display: "flex",
-    gap: 0.5,
-    paddingInline: 1.5,
-    borderBottom: 1,
-    borderColor: "divider",
-    overflowX: "auto",
-    scrollbarWidth: "none",
-    "&::-webkit-scrollbar": { display: "none" },
-};
-
-// The open tab is underlined, by a bar drawn inside its edge, inset alike on both sides.
-const tabSx: SxProps<Theme> = {
-    flexShrink: 0,
-    position: "relative",
-    gap: 0.75,
-    height: 40,
-    px: 1.25,
-    borderRadius: 1,
-    color: "text.secondary",
-    fontSize: "0.875rem",
-    fontWeight: 500,
-    whiteSpace: "nowrap",
-    "&:hover": { color: "text.primary" },
-    "&::after": {
-        content: '""',
-        position: "absolute",
-        insetInline: "0.5rem",
-        bottom: 0,
-        height: 2,
-        borderRadius: 1,
-        bgcolor: "primary.main",
-        opacity: 0,
-    },
-    '&[aria-selected="true"]': { color: "text.primary" },
-    '&[aria-selected="true"]::after': { opacity: 1 },
-    [forcedColors]: { "&::after": { bgcolor: "Highlight" } },
-    ...focusRing,
-};
-
-const countSx: SxProps<Theme> = {
-    minWidth: "1.5rem",
-    px: 0.75,
-    borderRadius: 999,
-    bgcolor: "action.hover",
-    color: "text.secondary",
-    fontSize: "0.75rem",
-    lineHeight: "1.25rem",
-    textAlign: "center",
-};
-
-const errorSx: SxProps<Theme> = {
-    fontSize: "1rem",
-    color: "error.main",
-};
 
 /**
  * The tabs of a search everywhere's results: every section's, then each section's on its own. They
@@ -137,7 +79,7 @@ const SearchTabs = ({ tabs, value, idPrefix, panelId, onChange }: SearchTabsProp
     };
 
     return (
-        <Box role="tablist" aria-label={text.searchTabs} sx={tablistSx} onKeyDown={handleKeyDown}>
+        <div role="tablist" aria-label={text.searchTabs} className={cx(styles.tablist, fmClasses.searchTabs)} onKeyDown={handleKeyDown}>
             {tabs.map((tab, index) => (
                 <ButtonBase
                     key={tab.id ?? ""}
@@ -149,32 +91,32 @@ const SearchTabs = ({ tabs, value, idPrefix, panelId, onChange }: SearchTabsProp
                     aria-selected={index === open}
                     aria-controls={panelId}
                     tabIndex={index === open ? 0 : -1}
-                    sx={tabSx}
+                    className={cx(styles.tab, fmClasses.searchTab)}
                     onClick={() => onChange(tab.id)}
                 >
                     <bdi>{tab.label}</bdi>
                     {tab.status === "searching" && <CircularProgress size={12} aria-label={text.loading} />}
                     {tab.status === "error" && (
                         <>
-                            <Icon name="info" sx={errorSx} />
-                            <Box component="span" sx={visuallyHiddenSx}>
+                            <Icon name="info" className={styles.error} />
+                            <span className={util.visuallyHidden}>
                                 {text.searchFailed(isolate(tab.label))}
-                            </Box>
+                            </span>
                         </>
                     )}
                     {tab.status === "ready" && (
                         <>
-                            <Box component="span" sx={countSx} aria-hidden>
+                            <span className={styles.count} aria-hidden>
                                 {locale.formatNumber(tab.count)}
-                            </Box>
-                            <Box component="span" sx={visuallyHiddenSx}>
+                            </span>
+                            <span className={util.visuallyHidden}>
                                 {text.searchResultCount(tab.count)}
-                            </Box>
+                            </span>
                         </>
                     )}
                 </ButtonBase>
             ))}
-        </Box>
+        </div>
     );
 };
 

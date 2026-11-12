@@ -1,19 +1,16 @@
 import { Fragment, useContext, useId, useMemo, useRef } from "react";
 import type { KeyboardEvent } from "react";
 
-import Box from "@mui/material/Box";
-import Dialog from "@mui/material/Dialog";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
-import { dialogPaperSx, focusOutline, visuallyHiddenSx } from "../../../styles/mixins";
+import { fmClasses } from "../../../styles/classes";
+import util from "../../../styles/util.module.css";
 import { comboId, keyLabel, shortcutKeys, showsShortcuts } from "../../../utils/shortcut";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
+import Dialog, { DialogContent, DialogTitle } from "../../ui/dialog";
+import Text from "../../ui/text";
+import styles from "./shortcuts-dialog.module.css";
 
 import type { ActionGroup, FileManagerLocaleText, MainMenuGroup } from "../../../types";
 
@@ -222,124 +219,20 @@ const consumerRows = (actions: ActionGroup[][], mainMenu: MainMenuGroup[]) => {
     return rows;
 };
 
-const titleSx: SxProps<Theme> = {
-    paddingInlineEnd: 7,
-};
-
-const closeSx: SxProps<Theme> = {
-    position: "absolute",
-    top: 12,
-    insetInlineEnd: 12,
-};
-
-// The close button sits between the title and the content, so MUI's own rule taking the padding
-// off the content's top doesn't reach it.
-const contentSx: SxProps<Theme> = {
-    pt: 0,
-    outline: "none",
-    "&:focus-visible": focusOutline,
-};
-
-// As many columns as fit, each section kept whole. Inside the scrolling content rather than on it:
-// a multi-column box of limited height lays further columns out sideways, past its edge, rather
-// than growing down.
-const columnsSx: SxProps<Theme> = {
-    columnWidth: "20rem",
-    columnGap: 3,
-};
-
-const sectionSx: SxProps<Theme> = {
-    breakInside: "avoid",
-    pb: 2.5,
-};
-
-const headingSx: SxProps<Theme> = {
-    px: 1.5,
-    pb: 0.75,
-    color: "text.secondary",
-    fontWeight: 600,
-};
-
-// A view on paper inside the dialog, as the transfer picker's list is.
-const listSx: SxProps<Theme> = {
-    m: 0,
-    borderRadius: 2,
-    bgcolor: "background.paper",
-    overflow: "hidden",
-};
-
-const rowSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 2,
-    minHeight: 44,
-    px: 1.5,
-    py: 0.75,
-    "& + &": {
-        borderTop: 1,
-        borderColor: "divider",
-    },
-};
-
-const termSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-};
-
-const keysSx: SxProps<Theme> = {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 0.5,
-    flexShrink: 0,
-    maxWidth: "55%",
-    m: 0,
-};
-
-// Holds the arrows' visually hidden name, which would otherwise be placed against the dialog's
-// paper and, from far down the list, stretch the paper's own scrolling area.
-const keySx: SxProps<Theme> = {
-    position: "relative",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: "1.75rem",
-    height: "1.625rem",
-    px: 0.75,
-    border: 1,
-    borderBottomWidth: 2,
-    borderColor: "divider",
-    borderRadius: 1,
-    bgcolor: "background.default",
-    color: "text.primary",
-    fontFamily: "inherit",
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    lineHeight: 1,
-    whiteSpace: "nowrap",
-};
-
-const joinSx: SxProps<Theme> = {
-    color: "text.secondary",
-    fontSize: "0.75rem",
-};
-
 const Key = ({ name, text }: { name: string; text: FileManagerLocaleText }) =>
     name === ARROWS ? (
-        <Box component="kbd" sx={keySx}>
+        <kbd className={styles.key}>
             <span aria-hidden dir="ltr">
                 ←↑↓→
             </span>
-            <Box component="span" sx={visuallyHiddenSx}>
+            <span className={util.visuallyHidden}>
                 {text.keyArrows}
-            </Box>
-        </Box>
+            </span>
+        </kbd>
     ) : (
-        <Box component="kbd" sx={keySx}>
+        <kbd className={styles.key}>
             {keyLabel(name, text)}
-        </Box>
+        </kbd>
     );
 
 /**
@@ -417,18 +310,6 @@ const ShortcutsDialog = ({
         mainMenu,
     ]);
 
-    // The list takes the focus once the dialog has faded in, so the arrows and Page Down scroll it.
-    const slotProps = useMemo(
-        () => ({
-            paper: { sx: dialogPaperSx },
-            transition: {
-                onEntered: () => contentRef.current?.focus(),
-                onExited: onClosed,
-            },
-        }),
-        [onClosed],
-    );
-
     // Ctrl+? closes it as it opened it.
     const handleKeyDown = (event: KeyboardEvent) => {
         if (showsShortcuts(event)) {
@@ -443,65 +324,68 @@ const ShortcutsDialog = ({
             open={open}
             fullWidth
             maxWidth="md"
+            className={fmClasses.shortcutsDialog}
             aria-labelledby={`${id}-title`}
             disableRestoreFocus
-            slotProps={slotProps}
             onClose={onClose}
+            // The list takes the focus once the dialog has faded in, so the arrows and Page Down scroll it.
+            onEntered={() => contentRef.current?.focus()}
+            onExited={onClosed}
             onKeyDown={handleKeyDown}
         >
-            <DialogTitle id={`${id}-title`} sx={titleSx}>
+            <DialogTitle id={`${id}-title`} className={styles.title}>
                 {text.keyboardShortcuts}
             </DialogTitle>
-            <TooltipIconButton label={text.close} sx={closeSx} onClick={onClose}>
+            <TooltipIconButton label={text.close} className={styles.close} onClick={onClose}>
                 <Icon name="close" fontSize="small" />
             </TooltipIconButton>
-            <DialogContent ref={contentRef} tabIndex={0} sx={contentSx}>
-                <Box sx={columnsSx}>
+            <DialogContent ref={contentRef} tabIndex={0} className={styles.content}>
+                <div className={styles.columns}>
                     {sections.map((section, index) => (
-                        <Box key={section.title} component="section" aria-labelledby={`${id}-${index}`} sx={sectionSx}>
-                            <Typography id={`${id}-${index}`} component="h3" variant="body2" sx={headingSx}>
+                        <section key={section.title} aria-labelledby={`${id}-${index}`} className={styles.section}>
+                            <Text id={`${id}-${index}`} component="h3" variant="body2" className={styles.heading}>
                                 {section.title}
-                            </Typography>
-                            <Box component="dl" sx={listSx}>
+                            </Text>
+                            <dl className={styles.list}>
                                 {section.rows.map((row, rowIndex) => (
-                                    <Box key={`${rowIndex}:${row.label}`} sx={rowSx}>
-                                        <Typography component="dt" variant="body2" sx={termSx}>
+                                    <div key={`${rowIndex}:${row.label}`} className={styles.row}>
+                                        <Text component="dt" variant="body2" className={styles.term}>
                                             <bdi>{row.label}</bdi>
-                                        </Typography>
+                                        </Text>
                                         {/* Keys run as their names do: left to right for Latin ones, even
                                             on a right-to-left page, as "Ctrl+F" is written there. */}
-                                        <Box component="dd" dir="auto" sx={keysSx}>
+                                        <dd dir="auto" className={styles.keys}>
                                             {row.hint && (
-                                                <Typography component="span" variant="body2" color="text.secondary">
+                                                <Text component="span" variant="body2" color="secondary">
                                                     {row.hint}
-                                                </Typography>
+                                                </Text>
                                             )}
                                             {row.combos.map((combo, alternative) => (
                                                 <Fragment key={comboId(combo)}>
                                                     {alternative > 0 && (
-                                                        <Box component="span" sx={joinSx}>
+                                                        <span className={styles.join}>
                                                             /
-                                                        </Box>
+                                                        </span>
                                                     )}
                                                     {combo.map((key, place) => (
                                                         <Fragment key={place}>
                                                             {place > 0 && (
-                                                                <Box component="span" sx={joinSx}>
+                                                                <span className={styles.join}>
                                                                     +
-                                                                </Box>
+                                                                </span>
                                                             )}
                                                             <Key name={key} text={text} />
                                                         </Fragment>
                                                     ))}
                                                 </Fragment>
                                             ))}
-                                        </Box>
-                                    </Box>
+                                        </dd>
+                                    </div>
                                 ))}
-                            </Box>
-                        </Box>
+                            </dl>
+                        </section>
                     ))}
-                </Box>
+                </div>
             </DialogContent>
         </Dialog>
     );

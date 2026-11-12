@@ -1,8 +1,4 @@
-import CloudOutlined from "@mui/icons-material/CloudOutlined";
-import FileCopyOutlined from "@mui/icons-material/FileCopyOutlined";
-import FolderZipOutlined from "@mui/icons-material/FolderZipOutlined";
-import LanguageOutlined from "@mui/icons-material/LanguageOutlined";
-
+import { CloudOutlined, FileCopyOutlined, FolderZipOutlined, LanguageOutlined } from "../icons";
 import { downloadUrls, huge } from "../options";
 import { createMockAdapter, file, folder } from "./mock-adapter";
 

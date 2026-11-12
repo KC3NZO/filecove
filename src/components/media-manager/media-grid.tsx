@@ -1,21 +1,20 @@
 import { useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
-
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
-import LinearProgress from "@mui/material/LinearProgress";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
+import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
 
 import { useLocale } from "../../hooks/use-locale";
 import { useVirtualLines } from "../../hooks/use-virtual-lines";
 import { TILE_LAYOUTS } from "../../styles/media-layout";
-import { forcedBarSx } from "../../styles/mixins";
 import { isRtl } from "../../utils/dom";
 import { KIND_ICONS } from "../../utils/media";
 import Icon from "../icons/icon";
+import Button from "../ui/button";
+import CircularProgress from "../ui/circular-progress";
+import LinearProgress from "../ui/linear-progress";
+import Text from "../ui/text";
 import AssetOption from "./asset-option";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import styles from "./media-grid.module.css";
 import UploadTile from "./upload-tile";
 
 import type {
@@ -87,84 +86,20 @@ interface MediaGridProps {
     ref?: Ref<MediaGridHandle>;
 }
 
-// A column, so a state fills what a group's header leaves it.
-const rootSx: SxProps<Theme> = {
-    position: "relative",
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-    "& > *": { flexShrink: 0 },
-};
-
 /**
  * How long a level is only looked at once it's shown, in ms: the second click of a double click on a
  * group, which went in on the first, would otherwise land on whatever came under the pointer.
  */
 const SETTLING = 400;
 
-// How the assets are laid out: tiles in as many columns as fit, or rows in one, which the arrow keys
-// move along as the tiles' do. The uploads under way are laid out the same, before them, with no more
-// room between the two than the grid's gap. The listbox is as tall as all the lines, its assets placed
-// in them.
-const tilesOf = (min: number) =>
-    ({
-        display: "grid",
-        alignContent: "start",
-        gap: 0.5,
-        gridTemplateColumns: `repeat(auto-fill, minmax(${min}rem, 1fr))`,
-    }) as const;
+// The least width of each kind's tiles, for the grid's columns (`--tile-min`), made once.
+const TILE_MIN = Object.fromEntries(
+    (Object.keys(TILE_LAYOUTS) as MediaKind[]).map((kind) => [kind, `${TILE_LAYOUTS[kind].min}rem`]),
+) as Record<MediaKind, string>;
 
-const rowsOf = { display: "grid", alignContent: "start", gap: 0.25, gridTemplateColumns: "minmax(0, 1fr)" } as const;
-const uploadsOf = { m: 0, pb: 0, listStyle: "none" } as const;
-const listboxOf = { position: "relative", outline: "none" } as const;
-
-const TILE_UPLOADS_SX = {} as Record<MediaKind, SxProps<Theme>>;
-const TILE_LISTBOX_SX = {} as Record<MediaKind, SxProps<Theme>>;
-
-for (const kind of Object.keys(TILE_LAYOUTS) as MediaKind[]) {
-    TILE_UPLOADS_SX[kind] = { ...tilesOf(TILE_LAYOUTS[kind].min), ...uploadsOf, p: 1.5, pb: 0 };
-    TILE_LISTBOX_SX[kind] = { ...tilesOf(TILE_LAYOUTS[kind].min), ...listboxOf };
-}
-
-const ROW_UPLOADS_SX: SxProps<Theme> = { ...rowsOf, ...uploadsOf, p: 1, pb: 0 };
-const ROW_LISTBOX_SX: SxProps<Theme> = { ...rowsOf, ...listboxOf };
-
-// Around the listbox, its padding, and cutting off what's placed below its end, as an asset kept
-// rendered far from view in a squeezed list is, which would stretch the scroll (see
-// `virtualization.md`), without being a scroll container itself.
-const clipSx: SxProps<Theme> = {
-    overflowY: "clip",
-    p: 1.5,
-    '&[data-after-uploads="true"]': { pt: 0.5 },
-    // Kept while only uploads show, so the grid keeps its Tab stop, but not shown.
-    "&[hidden]": { display: "none" },
-};
-const rowsClipSx: SxProps<Theme> = { ...clipSx, p: 1, '&[data-after-uploads="true"]': { pt: 0.5 } };
-
-
-const barSx: SxProps<Theme> = {
-    position: "sticky",
-    top: 0,
-    zIndex: 1,
-    height: 2,
-    mb: "-2px",
-    ...forcedBarSx,
-};
-
-const stateSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 1.5,
-    flexGrow: 1,
-    p: 3,
-    color: "text.secondary",
-    textAlign: "center",
-    "& > svg": { fontSize: 56, opacity: 0.6 },
-};
+const UPLOADS_STYLES = Object.fromEntries(
+    (Object.keys(TILE_LAYOUTS) as MediaKind[]).map((kind) => [kind, { "--tile-min": TILE_MIN[kind] } as CSSProperties]),
+) as Record<MediaKind, CSSProperties>;
 
 // The arrow keys move the focus by a tile, or by a line; Left and Right swap right to left.
 const stepOf = (event: KeyboardEvent<HTMLElement>, columns: number) => {
@@ -397,60 +332,60 @@ const MediaGrid = ({
 
     if (status === "error") {
         return (
-            <Box sx={rootSx}>
+            <div className={cx(styles.root, fmClasses.mediaGrid)}>
                 {header}
-                <Box role="alert" sx={stateSx}>
+                <div role="alert" className={cx(styles.state, fmClasses.state)}>
                     <Icon name={KIND_ICONS[kind]} />
-                    <Typography variant="body1">{error ?? text.mediaLoadFailed}</Typography>
+                    <Text variant="body1">{error ?? text.mediaLoadFailed}</Text>
                     <Button color="inherit" variant="outlined" onClick={onRetry}>
                         {text.tryAgain}
                     </Button>
-                </Box>
-            </Box>
+                </div>
+            </div>
         );
     }
 
     if (status === "loading" && entries.length === 0 && uploads.length === 0) {
         return (
-            <Box sx={rootSx}>
+            <div className={cx(styles.root, fmClasses.mediaGrid)}>
                 {header}
-                <Box sx={stateSx}>
+                <div className={cx(styles.state, fmClasses.state)}>
                     <CircularProgress aria-label={text.loading} />
-                </Box>
-            </Box>
+                </div>
+            </div>
         );
     }
 
     if (entries.length === 0 && uploads.length === 0) {
         return (
-            <Box sx={rootSx}>
+            <div className={cx(styles.root, fmClasses.mediaGrid)}>
                 {header}
-                <Box role="status" sx={stateSx}>
+                <div role="status" className={cx(styles.state, fmClasses.state)}>
                     <Icon name={hasMedia ? "search" : KIND_ICONS[kind]} />
-                    <Typography variant="body1">{hasMedia ? text.mediaNoMatches : text.mediaEmpty}</Typography>
-                </Box>
-            </Box>
+                    <Text variant="body1">{hasMedia ? text.mediaNoMatches : text.mediaEmpty}</Text>
+                </div>
+            </div>
         );
     }
 
     return (
-        <Box sx={rootSx}>
-            {busy && <LinearProgress sx={barSx} aria-label={text.loading} />}
+        <div className={cx(styles.root, fmClasses.mediaGrid)}>
+            {busy && <LinearProgress className={styles.bar} aria-label={text.loading} />}
             {header}
             {uploads.length > 0 && (
-                <Box
-                    component="ul"
+                <ul
                     aria-label={text.mediaUploading}
                     data-part="uploads"
-                    sx={row ? ROW_UPLOADS_SX : TILE_UPLOADS_SX[kind]}
+                    className={row ? styles.rowUploads : styles.tileUploads}
+                    style={row ? undefined : UPLOADS_STYLES[kind]}
                 >
                     {uploads.map((item) => (
                         <UploadTile key={item.id} item={item} kind={kind} layout={layout} />
                     ))}
-                </Box>
+                </ul>
             )}
-            <Box hidden={entries.length === 0} data-after-uploads={uploads.length > 0} sx={row ? rowsClipSx : clipSx}>
-                <Box
+            <div hidden={entries.length === 0} data-after-uploads={uploads.length > 0} className={row ? styles.rowsClip : styles.clip}>
+                <div
                     ref={setList}
                     role="listbox"
                     aria-label={label}
@@ -458,8 +393,8 @@ const MediaGrid = ({
                     aria-busy={busy}
                     data-trails={trailed}
                     data-holds={held}
-                    sx={row ? ROW_LISTBOX_SX : TILE_LISTBOX_SX[kind]}
-                    style={{ height: lines.height }}
+                    className={row ? styles.rowListbox : styles.tileListbox}
+                    style={{ height: lines.height, "--tile-min": row ? undefined : TILE_MIN[kind] } as CSSProperties}
                 >
                     {lines.indexes.map((index) => {
                         const entry = entries[index];
@@ -495,9 +430,9 @@ const MediaGrid = ({
                             />
                         );
                     })}
-                </Box>
-            </Box>
-        </Box>
+                </div>
+            </div>
+        </div>
     );
 };
 

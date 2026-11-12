@@ -1,25 +1,10 @@
 import { Component, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
 import { useThumbnail } from "../../hooks/use-thumbnail";
-import { startIconSx } from "../../styles/direction";
-import {
-    ASSET_DETAILS_WIDTH,
-    ASSET_PICTURE,
-    ROW_PICTURE,
-    MEDIA_ASSET_CONTAINER,
-    TILE_LAYOUTS,
-    assetWide,
-} from "../../styles/media-layout";
+import { ASSET_PICTURE, ROW_PICTURE, TILE_LAYOUTS } from "../../styles/media-layout";
 import { sameEntry } from "../../store/folder-store";
-import { focusOutline, forcedColors, forcedPressed } from "../../styles/mixins";
 import { focusLost } from "../../utils/dom";
 import { KIND_ICONS } from "../../utils/media";
 import { readText } from "../../utils/preview";
@@ -27,8 +12,14 @@ import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
 import PropertiesPanel from "../properties/properties-panel";
+import Button from "../ui/button";
+import CircularProgress from "../ui/circular-progress";
+import Text from "../ui/text";
 import AssetDelete from "./asset-delete";
 import { HoldBar } from "./asset-hold";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import styles from "./media-asset.module.css";
 
 import type { PropertiesCache } from "../../store/properties-cache";
 import type {
@@ -84,135 +75,6 @@ interface MediaAssetProps {
     onUpdated: () => void;
     propertiesCache: PropertiesCache;
 }
-
-// Over the library, in its place, its grid kept underneath as it was, scrolled where it was.
-const rootSx: SxProps<Theme> = {
-    position: "absolute",
-    inset: 0,
-    zIndex: 1,
-    display: "flex",
-    flexDirection: "column",
-    bgcolor: "background.paper",
-    containerType: "inline-size",
-    containerName: MEDIA_ASSET_CONTAINER,
-    outline: "none",
-    "&:focus-visible": { ...focusOutline, borderRadius: "inherit" },
-    '&[data-covered="true"]': { visibility: "hidden" },
-};
-
-const headerSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 0.5,
-    flexShrink: 0,
-    minHeight: 52,
-    paddingInlineStart: 0.5,
-    paddingInlineEnd: 1.5,
-    borderBottom: 1,
-    borderColor: "divider",
-};
-
-const titleSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    px: 0.5,
-    fontSize: "0.9375rem",
-    fontWeight: 700,
-};
-
-// Under the header, across the view: what its backend is doing and how far along, or why it failed
-// or is refused, with a bar along its foot while it's processed.
-const noticeSx: SxProps<Theme> = {
-    position: "relative",
-    flexShrink: 0,
-    px: 2,
-    py: 1,
-    borderBottom: 1,
-    borderColor: "divider",
-};
-
-const noticeTextSx: SxProps<Theme> = {
-    fontSize: "0.8125rem",
-    '&[data-status="failed"]': { color: "error.main" },
-};
-
-const noticeDetailSx: SxProps<Theme> = {
-    color: "text.secondary",
-    fontSize: "0.8125rem",
-};
-
-const processSx: SxProps<Theme> = { flexShrink: 0, marginInlineStart: 0.5 };
-
-const selectSx: SxProps<Theme> = {
-    flexShrink: 0,
-    marginInlineStart: 1,
-    ...startIconSx,
-    [forcedColors]: { '&[aria-pressed="true"]': forcedPressed },
-};
-
-// Stacked, scrolling together, where it's narrow; the picture beside the details where there's
-// room, each scrolling on its own.
-const bodySx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-    [assetWide]: { flexDirection: "row", overflowY: "hidden" },
-};
-
-const stageSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    height: "min(60cqi, 22rem)",
-    m: 1.5,
-    borderRadius: 2,
-    overflow: "hidden",
-    bgcolor: "action.hover",
-    color: "text.secondary",
-    "& > img": { width: "100%", height: "100%", objectFit: "contain" },
-    "& > svg": { fontSize: `${ROW_PICTURE * 2}rem`, opacity: 0.6 },
-    [assetWide]: { flex: 1, flexShrink: 1, height: "auto", minWidth: 0 },
-    '&[data-previewer="true"]': { position: "relative", bgcolor: "transparent" },
-    [forcedColors]: { outline: "1px solid CanvasText" },
-};
-
-// A previewer of the app's own fills the stage, as the preview's body is filled.
-const previewSx: SxProps<Theme> = {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-};
-
-const previewStateSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 1,
-    px: 3,
-    color: "text.secondary",
-    fontSize: "0.875rem",
-    textAlign: "center",
-};
-
-const detailsSx: SxProps<Theme> = {
-    flexShrink: 0,
-    px: 2,
-    pb: 2,
-    [assetWide]: {
-        width: ASSET_DETAILS_WIDTH,
-        overflowY: "auto",
-        pt: 1.5,
-        borderInlineStart: 1,
-        borderColor: "divider",
-        // A group with no stage: its fields have the view, as wide as fields read well.
-        '&[data-alone="true"]': { flex: 1, width: "auto", maxWidth: "40rem", borderInlineStart: 0 },
-    },
-};
 
 /** What a previewer is handed as it's rendered, once it has loaded, or that it failed. */
 type Loaded =
@@ -355,19 +217,19 @@ const Preview = ({ entry, adapter, previewer }: PreviewProps) => {
 
     if (loaded.status === "error") {
         return (
-            <Box sx={previewSx}>
-                <Box role="alert" sx={previewStateSx}>
+            <div className={styles.preview}>
+                <div role="alert" className={styles.previewState}>
                     <bdi>{messageOf(loaded.error) ?? text.mediaPreviewFailed}</bdi>
                     <Button size="small" onClick={retry}>
                         {text.tryAgain}
                     </Button>
-                </Box>
-            </Box>
+                </div>
+            </div>
         );
     }
 
     return (
-        <Box sx={previewSx}>
+        <div className={styles.preview}>
             {loaded.status === "loading" ? (
                 <Spinner />
             ) : (
@@ -384,7 +246,7 @@ const Preview = ({ entry, adapter, previewer }: PreviewProps) => {
                     </Suspense>
                 </PreviewBoundary>
             )}
-        </Box>
+        </div>
     );
 };
 
@@ -436,13 +298,13 @@ const Stage = ({
     const previewer = previewerOf(previewers, entry, adapter);
 
     return (
-        <Box sx={stageSx} data-previewer={!!previewer}>
+        <div className={styles.stage} data-previewer={!!previewer}>
             {previewer ? (
                 <Preview key={previewer.id} entry={entry} adapter={adapter} previewer={previewer} />
             ) : (
                 <Picture entry={listed} section={section} layout={layout} adapter={adapter} />
             )}
-        </Box>
+        </div>
     );
 };
 
@@ -552,13 +414,12 @@ const MediaAsset = ({
     );
 
     return (
-        <Box
-            component="section"
+        <section
             ref={rootRef}
             tabIndex={-1}
             aria-labelledby={nameId}
             data-covered={covered}
-            sx={rootSx}
+            className={cx(styles.root, fmClasses.mediaAsset)}
             onKeyDown={(event) => {
                 if (event.key === "Escape" && !event.defaultPrevented) {
                     event.preventDefault();
@@ -567,13 +428,13 @@ const MediaAsset = ({
                 }
             }}
         >
-            <Box sx={headerSx}>
+            <div className={styles.header}>
                 <TooltipIconButton label={text.mediaBackToLibrary(backTo)} onClick={onBack}>
                     <Icon name="arrowBack" fontSize="small" />
                 </TooltipIconButton>
-                <Typography id={nameId} component="h2" noWrap sx={titleSx}>
+                <Text id={nameId} component="h2" noWrap className={styles.title}>
                     <bdi>{entry.name}</bdi>
-                </Typography>
+                </Text>
                 {!group && (
                     <>
                         <TooltipIconButton label={text.mediaPreviousAsset} disabled={!onPrevious} onClick={onPrevious}>
@@ -608,7 +469,7 @@ const MediaAsset = ({
                 {onEdit && (
                     <Button
                         color="inherit"
-                        sx={processSx}
+                        className={styles.process}
                         onClick={(event) => {
                             openerRef.current = event.currentTarget;
                             onEdit();
@@ -620,7 +481,7 @@ const MediaAsset = ({
                 {onProcess && (
                     <Button
                         color="inherit"
-                        sx={processSx}
+                        className={styles.process}
                         onClick={(event) => {
                             openerRef.current = event.currentTarget;
                             onProcess();
@@ -638,13 +499,13 @@ const MediaAsset = ({
                         disabled={!!hold && !selected}
                         aria-describedby={hold ? holdId : undefined}
                         startIcon={selected ? <Icon name="check" fontSize="small" /> : undefined}
-                        sx={selectSx}
+                        className={styles.select}
                         onClick={onToggleSelected}
                     >
                         {text.mediaSelectAsset}
                     </Button>
                 )}
-            </Box>
+            </div>
             {deletable && confirmingDelete && (
                 <AssetDelete
                     key={entry.id}
@@ -656,19 +517,19 @@ const MediaAsset = ({
                 />
             )}
             {standing && (
-                <Box id={holdId} sx={noticeSx}>
-                    <Typography data-status={standing.status} sx={noticeTextSx}>
+                <div id={holdId} className={styles.notice}>
+                    <Text data-status={standing.status} className={styles.noticeText}>
                         <bdi>{standing.text}</bdi>
-                    </Typography>
+                    </Text>
                     {standing.detail && (
-                        <Typography sx={noticeDetailSx}>
+                        <Text className={styles.noticeDetail}>
                             <bdi>{standing.detail}</bdi>
-                        </Typography>
+                        </Text>
                     )}
                     <HoldBar hold={standing} place="view" />
-                </Box>
+                </div>
             )}
-            <Box sx={bodySx}>
+            <div className={styles.body}>
                 {!alone && (
                     <Stage
                         key={entry.id}
@@ -680,7 +541,7 @@ const MediaAsset = ({
                         previewers={previewers}
                     />
                 )}
-                <Box sx={detailsSx} data-alone={alone}>
+                <div className={styles.details} data-alone={alone}>
                     <PropertiesPanel
                         items={items}
                         changes={0}
@@ -690,9 +551,9 @@ const MediaAsset = ({
                         ownRows={false}
                         definitions={definitions}
                     />
-                </Box>
-            </Box>
-        </Box>
+                </div>
+            </div>
+        </section>
     );
 };
 

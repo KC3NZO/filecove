@@ -1,14 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useFormSend } from "../../hooks/use-form-send";
 import { useLocale } from "../../hooks/use-locale";
 import { isolate } from "../../utils/bidi";
+import Button from "../ui/button";
+import Text from "../ui/text";
+import TextField from "../ui/text-field";
+import styles from "./group-create.module.css";
 import { FormFailure } from "./media-form";
 import { StepSend } from "./media-step";
 
@@ -24,28 +22,6 @@ interface GroupCreateProps {
     /** Left while the backend was being asked, which may have made it by then. */
     onLeft: () => void;
 }
-
-// Above what the level holds, across it, as what's asked before deleting is in the asset view.
-const rootSx: SxProps<Theme> = {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "flex-end",
-    gap: 1,
-    flexShrink: 0,
-    px: 2,
-    py: 1,
-    borderBottom: 1,
-    borderColor: "divider",
-};
-
-const nameSx: SxProps<Theme> = { flex: "1 1 14rem", minWidth: 0 };
-
-const labelSx: SxProps<Theme> = { display: "block", mb: 0.5, fontSize: "0.8125rem", fontWeight: 700 };
-
-// MUI aligns its helper text with `text-align: left`, which only its RTL plugin flips.
-const fieldSx: SxProps<Theme> = { "& .MuiFormHelperText-root": { textAlign: "start" } };
-
-const buttonsSx: SxProps<Theme> = { display: "flex", gap: 1, flexShrink: 0, marginInlineStart: "auto" };
 
 /**
  * Asks a new group's name, in the library rather than in a dialog of its own, as a picker is often in
@@ -110,11 +86,11 @@ const GroupCreate = ({ adapter, parentId, onCancel, onCreated, onLeft }: GroupCr
     };
 
     return (
-        <Box
+        <div
             role="group"
             aria-labelledby={labelId}
             aria-busy={sending}
-            sx={rootSx}
+            className={styles.root}
             onKeyDown={(event) => {
                 if (event.key === "Escape" && !event.nativeEvent.isComposing) {
                     event.preventDefault();
@@ -123,10 +99,10 @@ const GroupCreate = ({ adapter, parentId, onCancel, onCreated, onLeft }: GroupCr
                 }
             }}
         >
-            <Box sx={nameSx}>
-                <Typography id={labelId} component="label" htmlFor={fieldId} sx={labelSx}>
+            <div className={styles.name}>
+                <Text id={labelId} component="label" htmlFor={fieldId} className={styles.label}>
                     {text.mediaGroupName}
-                </Typography>
+                </Text>
                 <TextField
                     id={fieldId}
                     size="small"
@@ -135,8 +111,7 @@ const GroupCreate = ({ adapter, parentId, onCancel, onCreated, onLeft }: GroupCr
                     error={!!problem}
                     helperText={problem}
                     inputRef={inputRef}
-                    slotProps={{ htmlInput: { readOnly: sending, autoComplete: "off", dir: "auto" } }}
-                    sx={fieldSx}
+                    inputProps={{ readOnly: sending, autoComplete: "off", dir: "auto" }}
                     onChange={(event) => setName(event.target.value)}
                     onKeyDown={(event) => {
                         if (event.key === "Enter" && !event.nativeEvent.isComposing) {
@@ -146,16 +121,16 @@ const GroupCreate = ({ adapter, parentId, onCancel, onCreated, onLeft }: GroupCr
                     }}
                 />
                 {failure && trimmed === sentName && <FormFailure message={failure} />}
-            </Box>
-            <Box sx={buttonsSx}>
+            </div>
+            <div className={styles.buttons}>
                 <Button color="inherit" onClick={onCancel}>
                     {text.cancel}
                 </Button>
                 <StepSend held={held} describedBy={undefined} onClick={create}>
                     {text.create}
                 </StepSend>
-            </Box>
-        </Box>
+            </div>
+        </div>
     );
 };
 

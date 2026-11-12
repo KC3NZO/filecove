@@ -1,23 +1,13 @@
-import { useContext, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import Divider from "@mui/material/Divider";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
-import Menu from "@mui/material/Menu";
-import type { MenuProps } from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
-import { DirectionContext } from "../../../contexts/direction-context";
 import { useLocale } from "../../../hooks/use-locale";
-import { menuPaperSx } from "../../../styles/mixins";
 import { isRtl } from "../../../utils/dom";
 import { ariaShortcut, formatShortcut } from "../../../utils/shortcut";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
 import IconSlot from "../../icons/icon-slot";
+import Menu, { MenuDivider, MenuIcon, MenuItem, MenuShortcut, MenuText } from "../../ui/menu";
 
 import type { MainMenuGroup, UndoChange } from "../../../types";
 
@@ -42,34 +32,6 @@ const UNDO_KEYS = ["Ctrl", "Z"];
 const REDO_KEYS = ["Ctrl", "Shift", "Z"];
 const SHORTCUTS_KEYS = ["Ctrl", "?"];
 
-const slotProps: MenuProps["slotProps"] = {
-    paper: { sx: menuPaperSx },
-    list: { dense: true },
-};
-
-// Hangs from the button's end edge, since the button sits at the sidebar header's end: its right
-// edge, or its left edge right to left.
-const ORIGINS: Record<"ltr" | "rtl", Pick<MenuProps, "anchorOrigin" | "transformOrigin">> = {
-    ltr: {
-        anchorOrigin: { vertical: "bottom", horizontal: "right" },
-        transformOrigin: { vertical: "top", horizontal: "right" },
-    },
-    rtl: {
-        anchorOrigin: { vertical: "bottom", horizontal: "left" },
-        transformOrigin: { vertical: "top", horizontal: "left" },
-    },
-};
-
-// A label without an icon is inset, which MUI does with a `padding-left`.
-const itemSx: SxProps<Theme> = {
-    "& .MuiListItemText-inset": { paddingLeft: 0, paddingInlineStart: "36px" },
-};
-
-const shortcutSx: SxProps<Theme> = {
-    marginInlineStart: 3,
-    color: "text.secondary",
-};
-
 /**
  * The sidebar's main menu: Undo and Redo, as in GNOME Files, the consumer's items, for what belongs
  * to the app (preferences, help, about), then "Keyboard shortcuts". Picking an item closes the menu
@@ -80,7 +42,6 @@ const MainMenu = ({ groups, undo, onShowShortcuts }: MainMenuProps) => {
     const [rtl, setRtl] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const { text } = useLocale();
-    const dir = useContext(DirectionContext);
     const shown = groups.filter((group) => group.items.length > 0);
     // Labels without an icon are inset so they line up with the ones that have one.
     const hasIcons = shown.some((group) => group.items.some((item) => item.icon));
@@ -91,7 +52,6 @@ const MainMenu = ({ groups, undo, onShowShortcuts }: MainMenuProps) => {
         items.push(
             <MenuItem
                 key="undo"
-                sx={itemSx}
                 aria-keyshortcuts="Control+Z Meta+Z"
                 disabled={!undo.undo}
                 onClick={() => {
@@ -99,14 +59,11 @@ const MainMenu = ({ groups, undo, onShowShortcuts }: MainMenuProps) => {
                     undo.onUndo();
                 }}
             >
-                <ListItemText inset={hasIcons}>{undo.undo ? text.undoChange(undo.undo) : text.undo}</ListItemText>
-                <Typography variant="body2" sx={shortcutSx}>
-                    <bdi>{formatShortcut(UNDO_KEYS, text)}</bdi>
-                </Typography>
+                <MenuText inset={hasIcons}>{undo.undo ? text.undoChange(undo.undo) : text.undo}</MenuText>
+                <MenuShortcut>{formatShortcut(UNDO_KEYS, text)}</MenuShortcut>
             </MenuItem>,
             <MenuItem
                 key="redo"
-                sx={itemSx}
                 aria-keyshortcuts="Shift+Control+Z Shift+Meta+Z Control+Y Meta+Y"
                 disabled={!undo.redo}
                 onClick={() => {
@@ -114,12 +71,10 @@ const MainMenu = ({ groups, undo, onShowShortcuts }: MainMenuProps) => {
                     undo.onRedo();
                 }}
             >
-                <ListItemText inset={hasIcons}>{undo.redo ? text.redoChange(undo.redo) : text.redo}</ListItemText>
-                <Typography variant="body2" sx={shortcutSx}>
-                    <bdi>{formatShortcut(REDO_KEYS, text)}</bdi>
-                </Typography>
+                <MenuText inset={hasIcons}>{undo.redo ? text.redoChange(undo.redo) : text.redo}</MenuText>
+                <MenuShortcut>{formatShortcut(REDO_KEYS, text)}</MenuShortcut>
             </MenuItem>,
-            <Divider key="undo:divider" />,
+            <MenuDivider key="undo:divider" />,
         );
     }
 
@@ -128,8 +83,7 @@ const MainMenu = ({ groups, undo, onShowShortcuts }: MainMenuProps) => {
             items.push(
                 <MenuItem
                     key={`${group.id}:${item.id}`}
-                    sx={itemSx}
-                    aria-keyshortcuts={item.shortcut && ariaShortcut(item.shortcut)}
+                        aria-keyshortcuts={item.shortcut && ariaShortcut(item.shortcut)}
                     disabled={item.disabled}
                     onClick={() => {
                         close();
@@ -137,21 +91,17 @@ const MainMenu = ({ groups, undo, onShowShortcuts }: MainMenuProps) => {
                     }}
                 >
                     {item.icon && (
-                        <ListItemIcon>
+                        <MenuIcon>
                             <IconSlot icon={item.icon} />
-                        </ListItemIcon>
+                        </MenuIcon>
                     )}
-                    <ListItemText inset={hasIcons && !item.icon}>{item.label}</ListItemText>
-                    {item.shortcut && (
-                        <Typography variant="body2" sx={shortcutSx}>
-                            <bdi>{item.shortcut}</bdi>
-                        </Typography>
-                    )}
+                    <MenuText inset={hasIcons && !item.icon}>{item.label}</MenuText>
+                    {item.shortcut && <MenuShortcut>{item.shortcut}</MenuShortcut>}
                 </MenuItem>,
             );
         });
 
-        items.push(<Divider key={`${group.id}:divider`} />);
+        items.push(<MenuDivider key={`${group.id}:divider`} />);
     });
 
     return (
@@ -168,28 +118,19 @@ const MainMenu = ({ groups, undo, onShowShortcuts }: MainMenuProps) => {
             >
                 <Icon name="menu" fontSize="small" />
             </TooltipIconButton>
-            <Menu
-                dir={dir}
-                open={!!anchor}
-                anchorEl={anchor}
-                {...ORIGINS[rtl ? "rtl" : "ltr"]}
-                slotProps={slotProps}
-                onClose={close}
-            >
+            {/* Hangs from the button's end edge, since the button sits at the sidebar header's end. */}
+            <Menu open={!!anchor} anchor={anchor} rtl={rtl} align="end" onClose={close}>
                 {items}
                 {/* Ctrl only, not ⌘, as the key works. */}
                 <MenuItem
-                    sx={itemSx}
-                    aria-keyshortcuts="Control+?"
+                        aria-keyshortcuts="Control+?"
                     onClick={() => {
                         close();
                         onShowShortcuts(buttonRef.current);
                     }}
                 >
-                    <ListItemText inset={hasIcons}>{text.keyboardShortcuts}</ListItemText>
-                    <Typography variant="body2" sx={shortcutSx}>
-                        <bdi>{formatShortcut(SHORTCUTS_KEYS, text)}</bdi>
-                    </Typography>
+                    <MenuText inset={hasIcons}>{text.keyboardShortcuts}</MenuText>
+                    <MenuShortcut>{formatShortcut(SHORTCUTS_KEYS, text)}</MenuShortcut>
                 </MenuItem>
             </Menu>
         </>

@@ -1,7 +1,5 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import type { AssetState, FileAdapter, FileEntry } from "./adapter";
 import type { IconSource } from "./icon";
 import type { FilePreviewer } from "./previewer";
@@ -268,8 +266,8 @@ export interface MediaAssetLookProps extends Pick<MediaAssetParams, "asset" | "k
     badge?: ReactNode;
     /** In place of its thumbnail or icon, in the same box. */
     picture?: ReactNode;
-    /** Over the look's root. */
-    sx?: SxProps<Theme>;
+    /** A class of the app's for the look's root, after the look's own. */
+    className?: string;
 }
 
 /** `renderAsset` as a library's assets draw with it, its section already in hand (internal). */

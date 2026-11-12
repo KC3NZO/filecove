@@ -1,15 +1,15 @@
 import { useEffect, useId, useRef, useState } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useFormSend } from "../../hooks/use-form-send";
 import { useLocale } from "../../hooks/use-locale";
 import { isolate } from "../../utils/bidi";
 import { refusalOf } from "../../utils/field-errors";
+import Button from "../ui/button";
+import CircularProgress from "../ui/circular-progress";
 import { FormFailure, MediaFormBody } from "./media-form";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import styles from "./media-group.module.css";
 import MediaStep, { StepSend } from "./media-step";
 
 import type { FileAdapter, FileEntry, MediaGroupForm, MediaSection } from "../../types";
@@ -33,17 +33,6 @@ interface MediaGroupProps {
     /** Left while the backend was being asked, which may have done it by then. */
     onLeft: () => void;
 }
-
-const stateSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 1,
-    py: 3,
-    color: "text.secondary",
-    fontSize: "0.875rem",
-    textAlign: "center",
-};
 
 /**
  * The step making or editing a group, in the library's place: the library's group form, which holds
@@ -180,16 +169,16 @@ const MediaGroup = ({
             }
         >
             {loadFailure ? (
-                <Box role="alert" sx={stateSx}>
+                <div role="alert" className={cx(styles.state, fmClasses.state)}>
                     <bdi>{loadFailure}</bdi>
                     <Button size="small" onClick={() => setAttempt((count) => count + 1)}>
                         {text.tryAgain}
                     </Button>
-                </Box>
+                </div>
             ) : loading ? (
-                <Box sx={stateSx}>
+                <div className={cx(styles.state, fmClasses.state)}>
                     <CircularProgress size={28} aria-label={text.loading} />
-                </Box>
+                </div>
             ) : (
                 <>
                     {failure && <FormFailure message={failure} />}

@@ -1,0 +1,67 @@
+/*
+ * Below `mediaMedium` the app's actions don't show as buttons, and "More actions" holds them all
+ * (see `ToolbarActions`).
+ */
+.header {
+    --toolbar-buttons: none;
+    --toolbar-more: inline-flex;
+
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    padding-inline: 8px;
+    padding-bottom: 6px;
+
+    @container media-manager (min-width: 720px) {
+        --toolbar-buttons: flex;
+        --toolbar-more: none;
+    }
+}
+
+/* Written out from HEADER_HEIGHT (the styles' constants), which it follows. */
+.bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 52px;
+}
+
+.title {
+    flex-shrink: 1;
+    min-width: 0;
+    padding-inline: 8px;
+    font-size: 0.9375rem;
+    font-weight: 700;
+}
+
+/* Opens the drawer of libraries, where the list doesn't dock; from `mediaMedium` it's docked. */
+.librariesButton {
+    @container media-manager (min-width: 720px) {
+        display: none;
+    }
+}
+
+/* The name, or the search field in its place, filling the room up to the buttons, so they never move. */
+.nameSlot {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+/* The search's, and New group's: `primary` while what it opens is open. */
+.toggleButton {
+    &[aria-pressed="true"] {
+        color: var(--_fm-primary);
+    }
+
+    @media (forced-colors: active) {
+        &[aria-pressed="true"] {
+            color: Highlight;
+        }
+    }
+}
+
+.upload {
+    flex-shrink: 0;
+}

@@ -1,0 +1,31 @@
+/* Above what the level holds, across it, as what's asked before deleting is in the asset view. */
+.root {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+    padding-inline: 16px;
+    padding-block: 8px;
+    border-bottom: 1px solid;
+    border-color: var(--_fm-divider);
+}
+
+.name {
+    flex: 1 1 14rem;
+    min-width: 0;
+}
+
+.label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+}
+
+.buttons {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-inline-start: auto;
+}

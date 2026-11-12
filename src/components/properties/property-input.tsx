@@ -1,15 +1,13 @@
 import { useImperativeHandle, useState } from "react";
 import type { KeyboardEvent, MouseEvent, Ref } from "react";
 
-import Box from "@mui/material/Box";
-import Checkbox from "@mui/material/Checkbox";
-import Chip from "@mui/material/Chip";
-import TextField from "@mui/material/TextField";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
 import { isolate } from "../../utils/bidi";
 import { dateFromInput, dateInputValue, formatItem, optionsOf } from "../../utils/property-value";
+import Checkbox from "../ui/checkbox";
+import Chip from "../ui/chip";
+import TextField from "../ui/text-field";
+import styles from "./property-input.module.css";
 
 import type { PropertyDefinition, PropertyOption } from "../../types";
 
@@ -51,35 +49,6 @@ interface OptionsProps extends InputProps {
     options: readonly PropertyOption<unknown>[];
 }
 
-const tagsSx: SxProps<Theme> = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 0.5,
-    "&:empty": { display: "none" },
-};
-
-// A small chip's delete icon is spaced with a physical `margin-left` and `margin-right`, reset for
-// logical ones (see `rtl.md`).
-const chipSx: SxProps<Theme> = {
-    "& .MuiChip-deleteIcon": { marginLeft: 0, marginRight: 0, marginInlineStart: "-4px", marginInlineEnd: "4px" },
-};
-
-// A native select keeps room for its arrow with a physical `padding-right`, and places the arrow
-// with `right`, reset for logical ones (see `rtl.md`). MUI's rule for the padding is a triple class.
-const selectSx: SxProps<Theme> = {
-    "& .MuiNativeSelect-select.MuiNativeSelect-select.MuiNativeSelect-select.MuiInputBase-input": {
-        paddingRight: "14px",
-        paddingInlineEnd: "32px",
-    },
-    "& .MuiNativeSelect-icon": { right: "auto", insetInlineEnd: "7px" },
-};
-
-// The checkbox's own padding, kept small, so it sits in the row as a value does.
-const checkboxSx: SxProps<Theme> = {
-    p: 0.5,
-    marginInlineStart: "-4px",
-};
-
 // A press on a chip leaves the focus in the field it belongs to, so an editor doesn't take it as
 // the focus leaving, which saves; Safari doesn't focus what's pressed.
 const keepFocus = (event: MouseEvent) => event.preventDefault();
@@ -116,17 +85,15 @@ const TextInput = ({
             value={typeof value === "string" ? value : ""}
             placeholder={definition.placeholder}
             error={error}
-            slotProps={{
-                htmlInput: {
-                    "aria-labelledby": labelId,
-                    "aria-describedby": describedBy,
-                    "aria-required": definition.required || undefined,
-                    maxLength: definition.maxLength,
-                    lang: definition.lang,
-                    // A URL runs left to right in any language.
-                    dir: url ? "ltr" : (definition.dir ?? "auto"),
-                    readOnly: disabled,
-                },
+            inputProps={{
+                "aria-labelledby": labelId,
+                "aria-describedby": describedBy,
+                "aria-required": definition.required || undefined,
+                maxLength: definition.maxLength,
+                lang: definition.lang,
+                // A URL runs left to right in any language.
+                dir: url ? "ltr" : (definition.dir ?? "auto"),
+                readOnly: disabled,
             }}
             onChange={(event) => onChange(event.target.value)}
         />
@@ -166,16 +133,14 @@ const NumberInput = ({
             type="number"
             value={draft}
             error={error}
-            slotProps={{
-                htmlInput: {
-                    "aria-labelledby": labelId,
-                    "aria-describedby": describedBy,
-                    "aria-required": definition.required || undefined,
-                    min: definition.min,
-                    max: definition.max,
-                    step: definition.step,
-                    readOnly: disabled,
-                },
+            inputProps={{
+                "aria-labelledby": labelId,
+                "aria-describedby": describedBy,
+                "aria-required": definition.required || undefined,
+                min: definition.min,
+                max: definition.max,
+                step: definition.step,
+                readOnly: disabled,
             }}
             onChange={(event) => {
                 const typed = event.target.value;
@@ -215,13 +180,11 @@ const DateInput = ({
             type={time ? "datetime-local" : "date"}
             value={dateInputValue(value, time)}
             error={error}
-            slotProps={{
-                htmlInput: {
-                    "aria-labelledby": labelId,
-                    "aria-describedby": describedBy,
-                    "aria-required": definition.required || undefined,
-                    readOnly: disabled,
-                },
+            inputProps={{
+                "aria-labelledby": labelId,
+                "aria-describedby": describedBy,
+                "aria-required": definition.required || undefined,
+                readOnly: disabled,
             }}
             onChange={(event) => onChange(dateFromInput(event.target.value, time))}
         />
@@ -231,14 +194,13 @@ const DateInput = ({
 const BooleanInput = ({ value, onChange, id, labelId, disabled, error, describedBy }: InputProps) => (
     <Checkbox
         id={id}
-        size="small"
         checked={value === true}
         disabled={disabled}
-        slotProps={{
-            input: { "aria-labelledby": labelId, "aria-describedby": describedBy, "aria-invalid": error || undefined },
-        }}
-        sx={checkboxSx}
-        onChange={(event) => onChange(event.target.checked)}
+        aria-labelledby={labelId}
+        aria-describedby={describedBy}
+        aria-invalid={error || undefined}
+        className={styles.checkbox}
+        onCheckedChange={(checked) => onChange(checked)}
     />
 );
 
@@ -269,15 +231,11 @@ const SelectInput = ({
             value={index === -1 ? "" : String(index)}
             disabled={disabled}
             error={error}
-            slotProps={{
-                select: { native: true },
-                htmlInput: {
-                    "aria-labelledby": labelId,
-                    "aria-describedby": describedBy,
-                    "aria-required": definition.required || undefined,
-                },
+            inputProps={{
+                "aria-labelledby": labelId,
+                "aria-describedby": describedBy,
+                "aria-required": definition.required || undefined,
             }}
-            sx={selectSx}
             onChange={(event) =>
                 onChange(event.target.value === "" ? undefined : options[Number(event.target.value)]?.value)
             }
@@ -318,25 +276,22 @@ const ChoicesInput = ({
 
     return (
         <>
-            <Box sx={tagsSx}>
+            <div className={styles.tags}>
                 {chosen.map((item) => {
                     const label = options.find((option) => Object.is(option.value, item))?.label ?? String(item);
 
                     return (
                         <Chip
                             key={String(item)}
-                            size="small"
                             label={<bdi>{label}</bdi>}
                             aria-label={text.propertiesRemoveTag(isolate(label))}
                             disabled={disabled}
-                            sx={chipSx}
                             onMouseDown={keepFocus}
-                            onClick={() => remove(item)}
-                            onDelete={() => remove(item)}
+                            onRemove={() => remove(item)}
                         />
                     );
                 })}
-            </Box>
+            </div>
             {left.length > 0 && (
                 <TextField
                     id={id}
@@ -346,15 +301,11 @@ const ChoicesInput = ({
                     value=""
                     disabled={disabled}
                     error={error}
-                    slotProps={{
-                        select: { native: true },
-                        htmlInput: {
-                    "aria-labelledby": labelId,
-                    "aria-describedby": describedBy,
-                    "aria-required": definition.required || undefined,
-                },
-                    }}
-                    sx={selectSx}
+                    inputProps={{
+                "aria-labelledby": labelId,
+                "aria-describedby": describedBy,
+                "aria-required": definition.required || undefined,
+            }}
                     onChange={(event) => {
                         const picked = options[Number(event.target.value)];
 
@@ -427,7 +378,7 @@ const ListInput = ({ definition, value, onChange, id, labelId, disabled, off, er
 
     const remove = (item: unknown) => onChange(items.filter((each) => !Object.is(each, item)));
 
-    const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
         if (disabled) {
             return;
         }
@@ -446,25 +397,22 @@ const ListInput = ({ definition, value, onChange, id, labelId, disabled, off, er
 
     return (
         <>
-            <Box sx={tagsSx}>
+            <div className={styles.tags}>
                 {items.map((item) => {
                     const label = formatItem(definition, item, locale);
 
                     return (
                         <Chip
                             key={String(item)}
-                            size="small"
                             label={<bdi>{label}</bdi>}
                             aria-label={text.propertiesRemoveTag(isolate(label))}
                             disabled={disabled}
-                            sx={chipSx}
                             onMouseDown={keepFocus}
-                            onClick={() => remove(item)}
-                            onDelete={() => remove(item)}
+                            onRemove={() => remove(item)}
                         />
                     );
                 })}
-            </Box>
+            </div>
             <TextField
                 disabled={off}
                 id={id}
@@ -474,14 +422,12 @@ const ListInput = ({ definition, value, onChange, id, labelId, disabled, off, er
                 placeholder={definition.type === "string" ? prompt : undefined}
                 value={typed}
                 error={error}
-                slotProps={{
-                    htmlInput: {
-                        "aria-label": prompt,
-                        "aria-describedby": describedBy ? `${labelId} ${describedBy}` : labelId,
-                        "aria-required": definition.required || undefined,
-                        readOnly: disabled,
-                        dir: "auto",
-                    },
+                inputProps={{
+                    "aria-label": prompt,
+                    "aria-describedby": describedBy ? `${labelId} ${describedBy}` : labelId,
+                    "aria-required": definition.required || undefined,
+                    readOnly: disabled,
+                    dir: "auto",
                 }}
                 onChange={(event) => {
                     if (definition.type === "date") {

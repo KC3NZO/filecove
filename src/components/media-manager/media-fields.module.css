@@ -1,0 +1,90 @@
+/*
+ * The groups in a box of their own, so the first of them is its first child, whatever the pick's
+ * details put above it.
+ */
+.groups {
+    display: flex;
+    flex-direction: column;
+}
+
+/*
+ * Each group is set apart by a rule above it, as the properties' groups are, the first by the
+ * rule under the pick's own heading above it.
+ */
+.group {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-block: 16px;
+    border-top: 1px solid;
+    border-color: var(--_fm-divider);
+
+    &:first-child {
+        border-top: 0;
+        padding-top: 0;
+    }
+}
+
+.groupTitle {
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+}
+
+/* Above the field rather than on its edge, so a field of the app's own is labelled the same way. */
+.label {
+    width: fit-content;
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+}
+
+.errorLabel {
+    width: fit-content;
+    color: var(--_fm-error);
+    font-size: 0.75rem;
+}
+
+.disabledLabel {
+    width: fit-content;
+    color: var(--_fm-text-disabled);
+    font-size: 0.75rem;
+}
+
+.required {
+    color: var(--_fm-error);
+}
+
+/* Under the field, as a helper text is, each message on a line of its own. */
+.messages {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--_fm-error);
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+}
+
+/* The checkbox's own padding lines its box up with the labels above the other fields. */
+.checkRow {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+/* The app's own control takes the field's whole width. */
+.own {
+    align-self: stretch;
+    min-width: 0;
+}
+
+.value {
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+}

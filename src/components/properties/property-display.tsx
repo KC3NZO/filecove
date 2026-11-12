@@ -1,10 +1,10 @@
-import Box from "@mui/material/Box";
-import Chip from "@mui/material/Chip";
-import Link from "@mui/material/Link";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
 import { formatItem, safeHref } from "../../utils/property-value";
+import Chip from "../ui/chip";
+import Link from "../ui/link";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import styles from "./property-display.module.css";
 
 import type { PropertyDefinition } from "../../types";
 
@@ -19,19 +19,6 @@ interface UrlProps {
     value: unknown;
     label: string;
 }
-
-const tagsSx: SxProps<Theme> = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 0.5,
-};
-
-const linksSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0.25,
-    minWidth: 0,
-};
 
 /** A link opening in a new tab, or only its text when it's no address a page may open. */
 const Url = ({ value, label }: UrlProps) => {
@@ -62,17 +49,17 @@ const PropertyDisplay = ({ definition, value, formattedValue }: PropertyDisplayP
 
     if (Array.isArray(value)) {
         return url ? (
-            <Box sx={linksSx}>
+            <div className={cx(styles.links, fmClasses.propertyDisplay)}>
                 {value.map((item) => (
                     <Url key={String(item)} value={item} label={formatItem(definition, item, locale)} />
                 ))}
-            </Box>
+            </div>
         ) : (
-            <Box sx={tagsSx}>
+            <div className={cx(styles.tags, fmClasses.propertyDisplay)}>
                 {value.map((item) => (
-                    <Chip key={String(item)} size="small" label={<bdi>{formatItem(definition, item, locale)}</bdi>} />
+                    <Chip key={String(item)} label={<bdi>{formatItem(definition, item, locale)}</bdi>} />
                 ))}
-            </Box>
+            </div>
         );
     }
 

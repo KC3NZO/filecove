@@ -1,0 +1,57 @@
+.root {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* Its picture or cover, when the adapter has a thumbnail for it, or its icon, in a rounded square. */
+/* Written out from ROW_PICTURE (the styles' constants), which it follows. */
+.cover {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: calc(var(--_fm-radius) * 1.5);
+    overflow: hidden;
+    background-color: var(--_fm-hover);
+    color: var(--_fm-text-secondary);
+
+    & > img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* All of it but the bar of its processing. */
+    [data-held="true"] & > :not([role="progressbar"]) {
+        opacity: 0.55;
+    }
+
+    [data-limited="true"] & > * {
+        opacity: 0.7;
+    }
+}
+
+.text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.detail {
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+}
+
+.duration {
+    flex-shrink: 0;
+    color: var(--_fm-text-secondary);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+}

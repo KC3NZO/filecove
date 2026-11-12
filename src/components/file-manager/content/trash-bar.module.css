@@ -1,0 +1,30 @@
+/*
+ * Above the scrolling view, so it never scrolls away, along the content panel's top, as Finder's
+ * and GNOME's trash bars are. The button keeps its line, and the text wraps beside it.
+ */
+.bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    min-height: 48px;
+    padding-inline: 16px;
+    padding-block: 6px;
+    border-bottom: 1px solid;
+    border-color: var(--_fm-divider);
+    color: var(--_fm-text-secondary);
+}
+
+.icon {
+    flex-shrink: 0;
+}
+
+.hint {
+    flex: 1;
+    min-width: 0;
+}
+
+.button {
+    flex-shrink: 0;
+    white-space: nowrap;
+}

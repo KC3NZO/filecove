@@ -1,0 +1,115 @@
+.title {
+    padding-inline-end: 56px;
+}
+
+.close {
+    position: absolute;
+    top: 12px;
+    inset-inline-end: 12px;
+}
+
+/*
+ * The close button sits between the title and the content, so the kit's rule taking the padding
+ * off the top of a content right after a title doesn't reach it.
+ */
+.content {
+    padding-top: 0;
+    outline: none;
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+    }
+}
+
+/*
+ * As many columns as fit, each section kept whole. Inside the scrolling content rather than on it:
+ * a multi-column box of limited height lays further columns out sideways, past its edge, rather
+ * than growing down.
+ */
+.columns {
+    column-width: 20rem;
+    column-gap: 24px;
+}
+
+.section {
+    break-inside: avoid;
+    padding-bottom: 20px;
+}
+
+.heading {
+    padding-inline: 12px;
+    padding-bottom: 6px;
+    color: var(--_fm-text-secondary);
+    font-weight: 600;
+}
+
+/* A view on paper inside the dialog, as the transfer picker's list is. */
+.list {
+    margin: 0;
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-surface);
+    overflow: hidden;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 44px;
+    padding-inline: 12px;
+    padding-block: 6px;
+
+    & + & {
+        border-top: 1px solid;
+        border-color: var(--_fm-divider);
+    }
+}
+
+.term {
+    flex: 1;
+    min-width: 0;
+}
+
+.keys {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+    max-width: 55%;
+    margin: 0;
+}
+
+/*
+ * Holds the arrows' visually hidden name, which would otherwise be placed against the dialog's
+ * paper and, from far down the list, stretch the paper's own scrolling area.
+ */
+.key {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    height: 1.625rem;
+    padding-inline: 6px;
+    border: 1px solid;
+    border-bottom-width: 2px;
+    border-color: var(--_fm-divider);
+    border-radius: var(--_fm-radius);
+    background-color: var(--_fm-background);
+    color: var(--_fm-text);
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.join {
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+}

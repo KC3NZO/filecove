@@ -1,10 +1,8 @@
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { MediaFields } from "../src";
 import { ResponsivePicture } from "./media-assets";
 import { coverField, galleryField, posterField, teaserField } from "./media-relation";
+import { Text } from "./ui";
+import styles from "./media-groups.module.css";
 
 import type {
     FileEntry,
@@ -15,40 +13,20 @@ import type {
     PropertyDefinitionGroup,
 } from "../src";
 
-// Audio's group form, the playground's own: what a group is and has is this backend's, and the media
-// manager reads none of it. Images and Videos have none, so they make a group from a name alone, its
-// details opening next, to try both. A cover is a picture of Images and a teaser a video of Videos,
-// each chosen through `MediaPicker` and kept as the asset, which the backend hands back as it is now.
-
-const previewSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1.5,
-    p: 1,
-    borderRadius: 2,
-    bgcolor: "action.hover",
-};
-
-const previewCoverSx: SxProps<Theme> = { width: 72, height: 72, borderRadius: 1.5 };
-
-const previewNameSx: SxProps<Theme> = { fontWeight: 700, overflowWrap: "anywhere" };
-
-const previewTypeSx: SxProps<Theme> = { color: "text.secondary", fontSize: "0.8125rem" };
-
 /**
  * How the group will look, following the form as it's filled in: its cover drawn by the picture's own
  * sizes, and its name and type as they're typed.
  */
 const GroupPreview = ({ values }: MediaGroupFormParams) => (
-    <Box sx={previewSx}>
-        <ResponsivePicture entry={values.cover as FileEntry | undefined} sizes="72px" sx={previewCoverSx} />
+    <div className={styles.preview}>
+        <ResponsivePicture entry={values.cover as FileEntry | undefined} sizes="72px" className={styles.previewCover} />
         <div>
-            <Typography sx={previewNameSx}>
+            <Text className={styles.previewName}>
                 <bdi>{String(values.name ?? "").trim() || "Untitled"}</bdi>
-            </Typography>
-            <Typography sx={previewTypeSx}>{String(values.type ?? "")}</Typography>
+            </Text>
+            <Text className={styles.previewType}>{String(values.type ?? "")}</Text>
         </div>
-    </Box>
+    </div>
 );
 
 /** What can be made in a group, by what it is: a series holds seasons, a collection albums. */

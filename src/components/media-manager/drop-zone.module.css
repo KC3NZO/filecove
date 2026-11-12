@@ -1,0 +1,27 @@
+/* An outline inside the library's edge, and what a drop does, in its middle. */
+.root {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    border-radius: inherit;
+    background-color: var(--_fm-row-selected);
+    pointer-events: none;
+    outline: 2px solid;
+    outline-color: var(--_fm-primary);
+    outline-offset: -2px;
+}
+
+.label {
+    padding-inline: 16px;
+    padding-block: 8px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-surface);
+    box-shadow: var(--_fm-shadow-2);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-align: center;
+}

@@ -1,0 +1,15 @@
+.trail {
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+}
+
+/* Only taken while the grid shows results with trails (`data-trails`), so those without one are as tall. */
+.room {
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+    display: none;
+
+    [data-trails='true'] & {
+        display: block;
+    }
+}

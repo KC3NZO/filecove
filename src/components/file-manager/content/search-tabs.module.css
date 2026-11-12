@@ -1,0 +1,74 @@
+/* Scrolls sideways when the tabs don't fit, without a scrollbar, as the path bar does. */
+.tablist {
+    flex-shrink: 0;
+    display: flex;
+    gap: 4px;
+    padding-inline: 12px;
+    border-bottom: 1px solid;
+    border-color: var(--_fm-divider);
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+/* The open tab is underlined, by a bar drawn inside its edge, inset alike on both sides. */
+.tab {
+    flex-shrink: 0;
+    position: relative;
+    gap: 6px;
+    height: 40px;
+    padding-inline: 10px;
+    border-radius: var(--_fm-radius);
+    color: var(--_fm-text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+
+    &:hover {
+        color: var(--_fm-text);
+    }
+
+    &::after {
+        content: "";
+        position: absolute;
+        inset-inline: 0.5rem;
+        bottom: 0;
+        height: 2px;
+        border-radius: var(--_fm-radius);
+        background-color: var(--_fm-primary);
+        opacity: 0;
+    }
+
+    &[aria-selected="true"] {
+        color: var(--_fm-text);
+    }
+
+    &[aria-selected="true"]::after {
+        opacity: 1;
+    }
+
+    @media (forced-colors: active) {
+        &::after {
+            background-color: Highlight;
+        }
+    }
+}
+
+.count {
+    min-width: 1.5rem;
+    padding-inline: 6px;
+    border-radius: calc(var(--_fm-radius) * 999);
+    background-color: var(--_fm-hover);
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    text-align: center;
+}
+
+.error {
+    font-size: 1rem;
+    color: var(--_fm-error);
+}

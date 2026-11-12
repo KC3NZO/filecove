@@ -1,0 +1,187 @@
+/* Over the library, in its place, its grid kept underneath as it was, scrolled where it was. */
+.root {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--_fm-surface);
+    container-type: inline-size;
+    container-name: media-asset;
+    outline: none;
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+        border-radius: inherit;
+    }
+
+    &[data-covered="true"] {
+        visibility: hidden;
+    }
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    min-height: 52px;
+    padding-inline-start: 4px;
+    padding-inline-end: 12px;
+    border-bottom: 1px solid;
+    border-color: var(--_fm-divider);
+}
+
+.title {
+    flex: 1;
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 0.9375rem;
+    font-weight: 700;
+}
+
+/*
+ * Under the header, across the view: what its backend is doing and how far along, or why it failed
+ * or is refused, with a bar along its foot while it's processed.
+ */
+.notice {
+    position: relative;
+    flex-shrink: 0;
+    padding-inline: 16px;
+    padding-block: 8px;
+    border-bottom: 1px solid;
+    border-color: var(--_fm-divider);
+}
+
+.noticeText {
+    font-size: 0.8125rem;
+
+    &[data-status="failed"] {
+        color: var(--_fm-error);
+    }
+}
+
+.noticeDetail {
+    color: var(--_fm-text-secondary);
+    font-size: 0.8125rem;
+}
+
+.process {
+    flex-shrink: 0;
+    margin-inline-start: 4px;
+}
+
+.select {
+    flex-shrink: 0;
+    margin-inline-start: 8px;
+
+    @media (forced-colors: active) {
+        &[aria-pressed="true"] {
+            &[aria-pressed="true"] {
+                color: Highlight;
+            }
+        }
+    }
+}
+
+/*
+ * Stacked, scrolling together, where it's narrow; the picture beside the details where there's
+ * room, each scrolling on its own.
+ */
+.body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+
+    @container media-asset (min-width: 680px) {
+        flex-direction: row;
+        overflow-y: hidden;
+    }
+}
+
+/* Written out from ROW_PICTURE (the styles' constants), which it follows. */
+.stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    height: min(60cqi, 22rem);
+    margin: 12px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    overflow: hidden;
+    background-color: var(--_fm-hover);
+    color: var(--_fm-text-secondary);
+
+    & > img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    & > svg {
+        font-size: 5.5rem;
+        opacity: 0.6;
+    }
+
+    @container media-asset (min-width: 680px) {
+        flex: 1;
+        flex-shrink: 1;
+        height: auto;
+        min-width: 0;
+    }
+
+    &[data-previewer="true"] {
+        position: relative;
+        background-color: transparent;
+    }
+
+    @media (forced-colors: active) {
+        outline: 1px solid CanvasText;
+    }
+}
+
+/* A previewer of the app's own fills the stage, as the preview's body is filled. */
+.preview {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.previewState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-inline: 24px;
+    color: var(--_fm-text-secondary);
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+/* Written out from ASSET_DETAILS_WIDTH (the styles' constants), which it follows. */
+.details {
+    flex-shrink: 0;
+    padding-inline: 16px;
+    padding-bottom: 16px;
+
+    @container media-asset (min-width: 680px) {
+        width: 340px;
+        overflow-y: auto;
+        padding-top: 12px;
+        border-inline-start: 1px;
+        border-color: var(--_fm-divider);
+
+        &[data-alone="true"] {
+            flex: 1;
+            width: auto;
+            max-width: 40rem;
+            border-inline-start: 0;
+        }
+    }
+}

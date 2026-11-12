@@ -1,12 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent, RefObject } from "react";
 
-import Box from "@mui/material/Box";
-import type { SxProps, Theme } from "@mui/material/styles";
-
-import { forcedColors } from "../../styles/mixins";
 import { isRtl } from "../../utils/dom";
 import { clampWidth } from "../../utils/resize";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import styles from "./resize-edge.module.css";
 
 interface ResizeEdgeProps {
     /**
@@ -53,59 +52,6 @@ interface EdgeDrag {
     /** The width it's dragged to so far. */
     width: number;
 }
-
-// The edge of a docked panel, which resizes it: a strip along the panel's side, wider on a touch
-// screen, showing a grip as it's pointed at, held, dragged or focused. It sits over the gap beside
-// the panel, or on the boundary where there's none, so it hardly takes a scrollbar's place.
-const edgeStyle = {
-    position: "absolute",
-    zIndex: 1,
-    top: 0,
-    bottom: 0,
-    width: 10,
-    cursor: "col-resize",
-    touchAction: "none",
-    userSelect: "none",
-    outline: "none",
-    "&::after": {
-        content: '""',
-        position: "absolute",
-        top: "50%",
-        insetInlineStart: "calc(50% - 2px)",
-        width: 4,
-        height: 48,
-        translate: "0 -50%",
-        borderRadius: 2,
-        bgcolor: "text.disabled",
-        opacity: 0,
-        transition: "opacity 150ms, height 150ms",
-    },
-    "&:hover::after": { opacity: 1 },
-    '&:focus-visible::after, &[data-dragging="true"]::after': {
-        opacity: 1,
-        height: 72,
-        bgcolor: "primary.main",
-    },
-    [forcedColors]: {
-        "&::after": { backgroundColor: "CanvasText" },
-        '&:focus-visible::after, &[data-dragging="true"]::after': { backgroundColor: "Highlight" },
-    },
-} satisfies SxProps<Theme>;
-
-const startSx: SxProps<Theme> = {
-    ...edgeStyle,
-    insetInlineStart: -6,
-    "@media (hover: none)": { width: 22 },
-};
-
-// Centred on the boundary with the content, which touches the panel, a little over each side, so
-// it takes only a few pixels of the tree's scrollbar.
-const endSx: SxProps<Theme> = {
-    ...edgeStyle,
-    insetInlineEnd: -4,
-    width: 8,
-    "@media (hover: none)": { insetInlineEnd: -10, width: 20 },
-};
 
 /**
  * The edge that resizes a docked panel, the sidebar's or the properties': dragged with a mouse, a
@@ -331,7 +277,7 @@ const ResizeEdge = ({
     const handleDoubleClick = () => latest.current.onChange(clampWidth(latest.current.defaultWidth, min, max));
 
     return (
-        <Box
+        <div
             ref={edgeRef}
             role="separator"
             tabIndex={0}
@@ -341,7 +287,7 @@ const ResizeEdge = ({
             aria-valuenow={shown}
             aria-valuemin={min}
             aria-valuemax={most}
-            sx={placement === "start" ? startSx : endSx}
+            className={cx(placement === "start" ? styles.start : styles.end, fmClasses.resizeEdge)}
             onMouseDown={handleMouseDown}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}

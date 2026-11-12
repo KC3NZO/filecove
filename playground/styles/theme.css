@@ -1,0 +1,52 @@
+/*
+ * The dev host's own look, GNOME Files flavoured, as an app would have one: its colours as custom
+ * properties, light and dark following the system (`color-scheme`), and the file manager's public
+ * ones (`--fm-*`) set from them on `:root`, so they reach the menus and dialogs it portals to
+ * `<body>` too. The file manager brings no reset of the page: this is the page's own.
+ */
+:root {
+    color-scheme: light dark;
+
+    --app-primary: light-dark(#1a7f96, #27a1b9);
+    --app-primary-hover: light-dark(#156779, #4fb6ca);
+    --app-background: light-dark(#ebebef, #1a1b26);
+    --app-surface: light-dark(#fff, #22232e);
+    --app-text: light-dark(rgb(0 0 0 / 87%), #c6c7cf);
+    --app-text-secondary: light-dark(rgb(0 0 0 / 60%), #8b8c96);
+    --app-divider: light-dark(rgb(0 0 0 / 12%), #33343e);
+    --app-error: light-dark(#d32f2f, #f44336);
+    --app-hover: light-dark(rgb(0 0 0 / 4%), rgb(255 255 255 / 8%));
+    /* The desktop's own UI font: Ubuntu on Ubuntu, Cantarell or Adwaita Sans on GNOME. */
+    --app-font: system-ui, -apple-system, "Segoe UI", Ubuntu, Cantarell, sans-serif;
+
+    --fm-primary: var(--app-primary);
+    --fm-primary-hover: var(--app-primary-hover);
+    --fm-primary-contrast: #fff;
+    --fm-background: var(--app-background);
+    --fm-surface: var(--app-surface);
+    --fm-text: var(--app-text);
+    --fm-text-secondary: var(--app-text-secondary);
+    --fm-divider: var(--app-divider);
+    --fm-font-family: var(--app-font);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    background-color: var(--app-background);
+    color: var(--app-text);
+    font-family: var(--app-font);
+    font-size: 1rem;
+    line-height: 1.5;
+}

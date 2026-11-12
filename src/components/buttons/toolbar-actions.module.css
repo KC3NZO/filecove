@@ -1,0 +1,19 @@
+.buttons {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* Hidden where the header says it's narrow, where the menu holds every action instead. */
+.collapsing {
+    display: var(--toolbar-buttons, flex);
+}
+
+/* With nothing left over, "More actions" only shows where the buttons don't. */
+.spare {
+    display: var(--toolbar-more, none);
+}
+
+.destructive[data-destructive="true"] {
+    color: var(--_fm-error);
+}

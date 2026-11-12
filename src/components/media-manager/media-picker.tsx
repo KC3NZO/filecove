@@ -1,20 +1,19 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentPropsWithoutRef, Ref } from "react";
 
-import Box from "@mui/material/Box";
-import type { SxProps, Theme } from "@mui/material/styles";
-import { useForkRef } from "@mui/material/utils";
-
 import { DataContext } from "../../contexts/data-context";
-import { DirectionContext } from "../../contexts/direction-context";
 import { LocaleContext } from "../../contexts/locale-context";
+import { useForkRef } from "../../hooks/use-fork-ref";
 import { useLocaleValue } from "../../hooks/use-locale";
 import { useTextDirection } from "../../hooks/use-text-direction";
 import { createFolderStore } from "../../store/folder-store";
 import { createThumbnailCache } from "../../store/thumbnail-cache";
-import { MEDIA_CONTAINER } from "../../styles/media-layout";
-import { withSx } from "../../styles/sx";
+import { fmClasses } from "../../styles/classes";
+import theme from "../../styles/theme.module.css";
+import { cx } from "../../utils/cx";
 import { countLimit, delayLimit } from "../../utils/limits";
+import RootProviders from "../ui/root-providers";
+import styles from "./media-picker.module.css";
 import PickerFrame from "./picker-frame";
 import type { PickerFrameProps } from "./picker-frame";
 
@@ -29,7 +28,7 @@ import type {
     MediaSection,
 } from "../../types";
 
-// The root element's own attributes, which go on it as they do on a MUI component's root.
+// The root element's own attributes, which go on it as they are.
 type RootAttributes = Omit<ComponentPropsWithoutRef<"div">, "children" | "defaultValue" | "onChange">;
 
 export interface MediaPickerProps<V = Record<string, unknown>> extends RootAttributes {
@@ -131,18 +130,8 @@ export interface MediaPickerProps<V = Record<string, unknown>> extends RootAttri
     /** The root element, which fills the box it's placed in. */
     ref?: Ref<HTMLDivElement>;
     /** Styles the root element, over its own, e.g. to size it. It fills its container by default. */
-    sx?: SxProps<Theme>;
+    className?: string;
 }
-
-// The root only establishes the container, as the media manager's does. The consumer's `sx` goes over it.
-const rootSx = {
-    containerType: "inline-size",
-    containerName: MEDIA_CONTAINER,
-    position: "relative",
-    width: "100%",
-    height: "100%",
-    overflow: "hidden",
-} satisfies SxProps<Theme>;
 
 // A number for each adapter, so changing it can start the frame afresh by its `key`.
 const adapterNumbers = new WeakMap<FileAdapter, number>();
@@ -189,7 +178,7 @@ const MediaPicker = <V,>({
     localeText,
     locale,
     ref,
-    sx,
+    className,
     ...rootAttributes
 }: MediaPickerProps<V>) => {
     const localeValue = useLocaleValue(localeText, locale);
@@ -207,7 +196,6 @@ const MediaPicker = <V,>({
     const rootRef = useRef<HTMLDivElement>(null);
     const handleRootRef = useForkRef(rootRef, ref);
     const direction = useTextDirection(rootRef);
-    const rootStyle = useMemo(() => withSx(rootSx, sx), [sx]);
 
     // Set before the parts' own effects ask for anything as they mount.
     useLayoutEffect(() => store.setMaxKept(keptEntries), [store, keptEntries]);
@@ -220,9 +208,9 @@ const MediaPicker = <V,>({
 
     return (
         <LocaleContext value={localeValue}>
-            <DirectionContext value={direction}>
+            <RootProviders direction={direction}>
                 <DataContext value={data}>
-                    <Box {...rootAttributes} ref={handleRootRef} sx={rootStyle}>
+                    <div {...rootAttributes} ref={handleRootRef} className={cx(theme.theme, theme.root, styles.root, fmClasses.mediaPicker, className)}>
                         <PickerFrame
                             key={`${numberOf(section.adapter ?? adapter)}/${section.id}/${section.rootId}`}
                             section={section}
@@ -241,9 +229,9 @@ const MediaPicker = <V,>({
                             uploadLimit={countLimit(limits?.uploads, 1)}
                             searchDelay={delayLimit(limits?.searchDelay)}
                         />
-                    </Box>
+                    </div>
                 </DataContext>
-            </DirectionContext>
+            </RootProviders>
         </LocaleContext>
     );
 };

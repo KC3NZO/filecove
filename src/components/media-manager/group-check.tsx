@@ -1,7 +1,5 @@
 import type { MouseEvent } from "react";
 
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import Icon from "../icons/icon";
@@ -9,7 +7,7 @@ import Icon from "../icons/icon";
 interface GroupCheckProps {
     index: number;
     onCheck: (index: number, event: MouseEvent) => void;
-    sx?: SxProps<Theme>;
+    className?: string;
 }
 
 /**
@@ -17,7 +15,7 @@ interface GroupCheckProps {
  * selects it. Out of the Tab order and hidden from screen readers, as its Open button is, since Space on
  * the group does the same, which its `option` says by being selected or not.
  */
-const GroupCheck = ({ index, onCheck, sx }: GroupCheckProps) => {
+const GroupCheck = ({ index, onCheck, className }: GroupCheckProps) => {
     const { text } = useLocale();
 
     return (
@@ -26,7 +24,7 @@ const GroupCheck = ({ index, onCheck, sx }: GroupCheckProps) => {
             tabIndex={-1}
             aria-hidden
             label={text.mediaSelectAsset}
-            sx={sx}
+            className={className}
             onClick={(event) => {
                 event.stopPropagation();
                 onCheck(index, event);

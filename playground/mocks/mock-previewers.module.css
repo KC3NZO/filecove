@@ -1,0 +1,132 @@
+/* Each block runs the way its own letters do, so a Hebrew note reads right to left. */
+.document {
+    width: 100%;
+    max-width: 48rem;
+    margin-inline: auto;
+    padding-inline: 32px;
+    padding-block: 24px;
+    line-height: 1.65;
+
+    & > * {
+        unicode-bidi: plaintext;
+    }
+
+    & code {
+        padding-inline: 4px;
+        border-radius: 2px;
+        background-color: var(--app-hover);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.875em;
+    }
+
+    & pre {
+        padding: 12px;
+        border-radius: 4px;
+        background-color: var(--app-hover);
+        overflow-x: auto;
+
+        & code {
+            padding: 0;
+            background-color: transparent;
+        }
+    }
+
+    & blockquote {
+        margin: 0;
+        padding-inline-start: 16px;
+        border-inline-start: 4px;
+        border-color: var(--app-divider);
+        color: var(--app-text-secondary);
+    }
+}
+
+.heading {
+    margin-top: 16px;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.paragraph {
+    margin-bottom: 16px;
+}
+
+/* Wide tables scroll sideways themselves, so a swipe there doesn't step to another file. */
+.tableBox {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.table {
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+
+    & th,
+    & td {
+        padding-inline: 12px;
+        padding-block: 6px;
+        border-bottom: 1px solid;
+        border-color: var(--app-divider);
+        text-align: start;
+        white-space: nowrap;
+    }
+
+    & th {
+        position: sticky;
+        top: 0;
+        background-color: var(--app-surface);
+        font-weight: 600;
+    }
+}
+
+.caption {
+    padding-inline: 12px;
+    padding-block: 6px;
+    color: var(--app-text-secondary);
+}
+
+.zipList {
+    margin: 0;
+    padding: 8px;
+    list-style: none;
+}
+
+.zipRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-inline: 12px;
+    padding-block: 4px;
+    border-radius: 4px;
+    font-size: 0.875rem;
+
+    &:hover {
+        background-color: var(--app-hover);
+    }
+}
+
+.zipName {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zipMeta {
+    flex-shrink: 0;
+    color: var(--app-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.loading {
+    margin: auto;
+}
+
+/* A row's icon, a folder's or a file's, in the secondary colour. */
+.rowIcon {
+    flex-shrink: 0;
+    color: var(--app-text-secondary);
+    font-size: 1.25rem;
+}

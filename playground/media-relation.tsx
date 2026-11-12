@@ -1,14 +1,10 @@
 import { useState } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { MediaFields, MediaPicker, MediaPicture } from "../src";
 import { imageUploadForm, videoUploadForm } from "./media-uploads";
 import { noOverlap, oneGroup, selectGroups } from "./options";
+import { Button, Dialog, Text } from "./ui";
+import styles from "./media-relation.module.css";
 
 import type {
     FileAdapter,
@@ -87,16 +83,6 @@ const CAPTION_FORM: MediaPickForm = {
 
 const captionForm = () => CAPTION_FORM;
 
-const rowSx: SxProps<Theme> = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 };
-
-const listSx: SxProps<Theme> = { display: "flex", flexDirection: "column", gap: 1 };
-
-const pictureSx: SxProps<Theme> = { width: 72, aspectRatio: "16 / 9" };
-
-const nameSx: SxProps<Theme> = { flex: "1 1 6rem", minWidth: 0, overflowWrap: "anywhere" };
-
-const dialogSx: SxProps<Theme> = { "& .MuiDialog-paper": { height: "min(85dvh, 760px)" } };
-
 interface ChosenProps {
     entry: FileEntry;
     adapter: FileAdapter;
@@ -106,15 +92,15 @@ interface ChosenProps {
 
 const Chosen = ({ entry, adapter, caption }: ChosenProps) => (
     <>
-        <MediaPicture entry={entry} adapter={adapter} sx={pictureSx} />
-        <Typography component="div" variant="body2" sx={nameSx}>
+        <MediaPicture entry={entry} adapter={adapter} className={styles.picture} />
+        <Text component="div" variant="body2" className={styles.name}>
             <bdi>{entry.name}</bdi>
             {caption && (
-                <Typography variant="caption" color="text.secondary" component="div">
+                <Text variant="caption" color="secondary" component="div">
                     <bdi>{caption}</bdi>
-                </Typography>
+                </Text>
             )}
-        </Typography>
+        </Text>
     </>
 );
 
@@ -128,7 +114,7 @@ const RelationField = ({ section, value, onChange, adapter, labelId, disabled }:
     const [open, setOpen] = useState(false);
 
     return (
-        <Box sx={rowSx}>
+        <div className={styles.row}>
             {chosen && <Chosen entry={chosen} adapter={adapter} />}
             <Button size="small" variant="outlined" color="inherit" disabled={disabled} onClick={() => setOpen(true)}>
                 {chosen ? "Change" : `Choose from ${section.label}`}
@@ -140,10 +126,9 @@ const RelationField = ({ section, value, onChange, adapter, labelId, disabled }:
             )}
             <Dialog
                 open={open}
-                fullWidth
                 maxWidth="md"
                 aria-labelledby={labelId}
-                sx={dialogSx}
+                className={styles.dialog}
                 onClose={() => setOpen(false)}
             >
                 <MediaPicker
@@ -159,7 +144,7 @@ const RelationField = ({ section, value, onChange, adapter, labelId, disabled }:
                     }}
                 />
             </Dialog>
-        </Box>
+        </div>
     );
 };
 
@@ -178,9 +163,9 @@ const RelationsField = ({ section, maxChoices, value, onChange, adapter, labelId
     const [open, setOpen] = useState(false);
 
     return (
-        <Box sx={listSx}>
+        <div className={styles.list}>
             {chosen.map(({ asset, values }) => (
-                <Box key={asset.id} sx={rowSx}>
+                <div key={asset.id} className={styles.row}>
                     <Chosen entry={asset} adapter={adapter} caption={String(values?.caption ?? "")} />
                     <Button
                         size="small"
@@ -194,9 +179,9 @@ const RelationsField = ({ section, maxChoices, value, onChange, adapter, labelId
                     >
                         Remove
                     </Button>
-                </Box>
+                </div>
             ))}
-            <Box sx={rowSx}>
+            <div className={styles.row}>
                 <Button
                     size="small"
                     variant="outlined"
@@ -206,13 +191,12 @@ const RelationsField = ({ section, maxChoices, value, onChange, adapter, labelId
                 >
                     {chosen.length > 0 ? "Change" : `Choose from ${section.label}`}
                 </Button>
-            </Box>
+            </div>
             <Dialog
                 open={open}
-                fullWidth
                 maxWidth="lg"
                 aria-labelledby={labelId}
-                sx={dialogSx}
+                className={styles.dialog}
                 onClose={() => setOpen(false)}
             >
                 <MediaPicker
@@ -232,7 +216,7 @@ const RelationsField = ({ section, maxChoices, value, onChange, adapter, labelId
                     }}
                 />
             </Dialog>
-        </Box>
+        </div>
     );
 };
 
@@ -242,9 +226,9 @@ const relation = (field: string, label: string, section: MediaSection): Property
     label,
     render: ({ value, adapter }) =>
         value ? (
-            <Box sx={rowSx}>
+            <div className={styles.row}>
                 <Chosen entry={value as FileEntry} adapter={adapter} />
-            </Box>
+            </div>
         ) : null,
     renderEdit: (params) => <RelationField {...params} section={section} />,
 });
@@ -257,13 +241,13 @@ const relations = (field: string, label: string, section: MediaSection, maxChoic
         const chosen = (value as MediaPickerValue[] | undefined) ?? [];
 
         return chosen.length > 0 ? (
-            <Box sx={listSx}>
+            <div className={styles.list}>
                 {chosen.map(({ asset, values }) => (
-                    <Box key={asset.id} sx={rowSx}>
+                    <div key={asset.id} className={styles.row}>
                         <Chosen entry={asset} adapter={adapter} caption={String(values?.caption ?? "")} />
-                    </Box>
+                    </div>
                 ))}
-            </Box>
+            </div>
         ) : null;
     },
     renderEdit: (params) => <RelationsField {...params} section={section} maxChoices={maxChoices} />,

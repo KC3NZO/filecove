@@ -1,15 +1,14 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, RefObject } from "react";
 
-import Box from "@mui/material/Box";
-import CircularProgress from "@mui/material/CircularProgress";
-import InputBase from "@mui/material/InputBase";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../../hooks/use-locale";
-import { headerFieldSx, headerInputSx } from "../../../styles/header-field";
+import { fmClasses } from "../../../styles/classes";
+import headerField from "../../../styles/header-field.module.css";
+import { cx } from "../../../utils/cx";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
+import CircularProgress from "../../ui/circular-progress";
+import styles from "./path-field.module.css";
 
 interface PathFieldProps {
     /** The path it starts with, the open folder's. */
@@ -25,42 +24,6 @@ interface PathFieldProps {
     /** The focus going elsewhere, where it stays. */
     onDismiss: () => void;
 }
-
-// The message hangs under the pill, over the content, rather than making the header taller.
-const wrapperSx: SxProps<Theme> = {
-    position: "relative",
-    minWidth: 0,
-};
-
-// The error outline wins over the focus ring, which the field has whenever it shows one: the second
-// selector is as specific as the ring's `:has()` and comes after it.
-const fieldSx: SxProps<Theme> = {
-    ...headerFieldSx,
-    '&[data-invalid="true"], &[data-invalid="true"]:has(input:focus)': {
-        outline: "2px solid",
-        outlineColor: "error.main",
-        outlineOffset: "-2px",
-    },
-};
-
-// Its border keeps it apart from the content under it where forced colors drop the background.
-const problemSx: SxProps<Theme> = {
-    position: "absolute",
-    top: "100%",
-    insetInline: 0,
-    zIndex: 2,
-    mt: 0.5,
-    px: 1.5,
-    py: 0.75,
-    border: 1,
-    borderColor: "error.main",
-    borderRadius: 2,
-    bgcolor: "background.paper",
-    color: "error.main",
-    fontSize: "0.8125rem",
-    boxShadow: 3,
-    pointerEvents: "none",
-};
 
 /**
  * The path field, shown in the path bar's place to type a path in and go there. It starts with the
@@ -143,31 +106,27 @@ const PathField = ({ initial, inputRef, onGo, onClose, onDismiss }: PathFieldPro
     };
 
     return (
-        <Box sx={wrapperSx}>
-            <Box
-                sx={fieldSx}
+        <div className={styles.wrapper}>
+            <div
+                className={cx(styles.field, headerField.field, fmClasses.pathField)}
                 data-invalid={problem !== null}
                 aria-busy={busy || undefined}
                 onKeyDown={handleFieldKeyDown}
                 onBlur={handleBlur}
             >
                 <Icon name="folderOpen" fontSize="small" />
-                <InputBase
-                    inputRef={inputRef}
+                <input
+                    ref={inputRef}
                     value={typed}
                     placeholder={text.pathPlaceholder}
                     autoComplete="off"
                     spellCheck={false}
                     readOnly={busy}
-                    sx={headerInputSx}
-                    slotProps={{
-                        input: {
-                            "aria-label": text.editPath,
-                            "aria-invalid": problem !== null,
-                            "aria-describedby": problem === null ? undefined : problemId,
-                            autoCapitalize: "off",
-                        },
-                    }}
+                    className={headerField.input}
+                    aria-label={text.editPath}
+                    aria-invalid={problem !== null}
+                    aria-describedby={problem === null ? undefined : problemId}
+                    autoCapitalize="off"
                     onChange={(event) => {
                         setTyped(event.target.value);
                         setProblem(null);
@@ -185,13 +144,13 @@ const PathField = ({ initial, inputRef, onGo, onClose, onDismiss }: PathFieldPro
                 >
                     <Icon name="close" fontSize="small" />
                 </TooltipIconButton>
-            </Box>
+            </div>
             {problem !== null && (
-                <Box id={problemId} role="alert" sx={problemSx}>
+                <div id={problemId} role="alert" className={styles.problem}>
                     {problem}
-                </Box>
+                </div>
             )}
-        </Box>
+        </div>
     );
 };
 

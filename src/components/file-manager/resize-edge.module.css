@@ -1,0 +1,115 @@
+/*
+ * The edge of a docked panel, which resizes it: a strip along the panel's side, wider on a touch
+ * screen, showing a grip as it's pointed at, held, dragged or focused. It sits over the gap beside
+ * the panel, or on the boundary where there's none, so it hardly takes a scrollbar's place.
+ */
+.start {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    bottom: 0;
+    width: 10px;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+    outline: none;
+    inset-inline-start: -6px;
+
+    &::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        inset-inline-start: calc(50% - 2px);
+        width: 4px;
+        height: 48px;
+        translate: 0 -50%;
+        border-radius: calc(var(--_fm-radius) * 2);
+        background-color: var(--_fm-text-disabled);
+        opacity: 0;
+        transition: opacity 150ms, height 150ms;
+    }
+
+    &:hover::after {
+        opacity: 1;
+    }
+
+    &:focus-visible::after,
+    &[data-dragging="true"]::after {
+        opacity: 1;
+        height: 72px;
+        background-color: var(--_fm-primary);
+    }
+
+    @media (forced-colors: active) {
+        &::after {
+            background-color: CanvasText;
+        }
+
+        &:focus-visible::after,
+        &[data-dragging="true"]::after {
+            background-color: Highlight;
+        }
+    }
+
+    @media (hover: none) {
+        width: 22px;
+    }
+}
+
+/*
+ * Centred on the boundary with the content, which touches the panel, a little over each side, so
+ * it takes only a few pixels of the tree's scrollbar.
+ */
+.end {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+    outline: none;
+    inset-inline-end: -4px;
+
+    &::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        inset-inline-start: calc(50% - 2px);
+        width: 4px;
+        height: 48px;
+        translate: 0 -50%;
+        border-radius: calc(var(--_fm-radius) * 2);
+        background-color: var(--_fm-text-disabled);
+        opacity: 0;
+        transition: opacity 150ms, height 150ms;
+    }
+
+    &:hover::after {
+        opacity: 1;
+    }
+
+    &:focus-visible::after,
+    &[data-dragging="true"]::after {
+        opacity: 1;
+        height: 72px;
+        background-color: var(--_fm-primary);
+    }
+
+    @media (forced-colors: active) {
+        &::after {
+            background-color: CanvasText;
+        }
+
+        &:focus-visible::after,
+        &[data-dragging="true"]::after {
+            background-color: Highlight;
+        }
+    }
+
+    @media (hover: none) {
+        inset-inline-end: -10px;
+        width: 20px;
+    }
+}

@@ -1,14 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, MouseEvent } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
 import { NO_ERRORS } from "../../utils/field-errors";
 import { formatValue, sameValue } from "../../utils/property-value";
+import Button from "../ui/button";
+import Text from "../ui/text";
+import styles from "./property-editor.module.css";
 import PropertyInput from "./property-input";
 
 import type { FileAdapter, FileEntry, PropertyDefinition, PropertyEditParams, PropertySave } from "../../types";
@@ -30,24 +28,6 @@ interface PropertyEditorProps {
     /** Leaves the property as it was, also as the value saved is what it was. */
     onCancel: () => void;
 }
-
-const editorSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-    width: "100%",
-};
-
-const errorSx: SxProps<Theme> = {
-    color: "error.main",
-    fontSize: "0.75rem",
-};
-
-const buttonsSx: SxProps<Theme> = {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 1,
-};
 
 // What a press or Enter acts on itself, which Enter doesn't save from.
 const CONTROLS = "button, a, [role='button'], [role='radio'], [role='checkbox'], [role='option']";
@@ -182,7 +162,7 @@ const PropertyEditor = ({
     };
 
     return (
-        <Box ref={editorRef} sx={editorSx} onKeyDown={handleKeyDown} onBlur={handleBlur}>
+        <div ref={editorRef} className={styles.editor} onKeyDown={handleKeyDown} onBlur={handleBlur}>
             {definition.renderEdit ? (
                 definition.renderEdit(params)
             ) : (
@@ -198,11 +178,11 @@ const PropertyEditor = ({
                 />
             )}
             {failure !== undefined && (
-                <Typography role="alert" sx={errorSx}>
+                <Text role="alert" className={styles.error}>
                     <bdi>{messageOf(failure) ?? text.propertiesSaveFailed(definition.label)}</bdi>
-                </Typography>
+                </Text>
             )}
-            <Box sx={buttonsSx}>
+            <div className={styles.buttons}>
                 <Button size="small" color="inherit" disabled={saving} onMouseDown={keepFocus} onClick={onCancel}>
                     {text.propertiesCancel}
                 </Button>
@@ -215,8 +195,8 @@ const PropertyEditor = ({
                 >
                     {text.propertiesSave}
                 </Button>
-            </Box>
-        </Box>
+            </div>
+        </div>
     );
 };
 

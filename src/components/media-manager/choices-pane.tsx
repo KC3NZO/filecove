@@ -1,23 +1,22 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
 import { useThumbnail } from "../../hooks/use-thumbnail";
-import { mediaWide } from "../../styles/media-layout";
-import { focusOutline, forcedColors, visuallyHiddenSx } from "../../styles/mixins";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import util from "../../styles/util.module.css";
 import { isolate } from "../../utils/bidi";
 import { focusLost } from "../../utils/dom";
 import { KIND_ICONS } from "../../utils/media";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
+import Button from "../ui/button";
+import Text from "../ui/text";
 import { HoldLine } from "./asset-hold";
 import ChoiceList, { choiceKey } from "./choice-list";
+import styles from "./choices-pane.module.css";
 
 import type { AssetHold, FileAdapter, MediaChoice } from "../../types";
 
@@ -67,152 +66,6 @@ interface ChoiceDetailsProps {
     onShowInLibrary: (() => void) | undefined;
 }
 
-const paneSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    minHeight: 0,
-    outline: "none",
-    "&:focus-visible": { ...focusOutline, borderRadius: "inherit" },
-};
-
-const headerSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 0.5,
-    flexShrink: 0,
-    minHeight: 52,
-    paddingInlineStart: 2,
-    paddingInlineEnd: 1,
-};
-
-const backHeaderSx: SxProps<Theme> = {
-    ...headerSx,
-    paddingInlineStart: 0.5,
-};
-
-const titleSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    fontSize: "0.9375rem",
-    fontWeight: 700,
-};
-
-const countSx: SxProps<Theme> = {
-    marginInlineStart: 1,
-    px: 0.75,
-    borderRadius: 2,
-    bgcolor: "action.selected",
-    color: "text.primary",
-    fontSize: "0.75rem",
-    fontWeight: 700,
-    lineHeight: "20px",
-    [forcedColors]: { outline: "1px solid CanvasText" },
-};
-
-// Only where the column is an overlay; docked, it's always there.
-const closeSx: SxProps<Theme> = {
-    [mediaWide]: { display: "none" },
-};
-
-const noteSx: SxProps<Theme> = {
-    flexShrink: 0,
-    px: 2,
-    pb: 1,
-    color: "text.secondary",
-    fontSize: "0.8125rem",
-};
-
-const emptySx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 1.5,
-    flex: 1,
-    px: 3,
-    color: "text.secondary",
-    textAlign: "center",
-    "& > svg": { fontSize: 40, opacity: 0.6 },
-};
-
-// Choose across the column, with what holds it back above it.
-const footerSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-    flexShrink: 0,
-    p: 1.5,
-    borderTop: 1,
-    borderColor: "divider",
-};
-
-const heldSx: SxProps<Theme> = {
-    color: "text.secondary",
-    fontSize: "0.8125rem",
-    textAlign: "center",
-};
-
-const detailsSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-    px: 2,
-    pb: 2,
-};
-
-const heroSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1.5,
-    pb: 2,
-    mb: 2,
-    borderBottom: 1,
-    borderColor: "divider",
-};
-
-const pictureSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    width: "5.5rem",
-    height: "5.5rem",
-    borderRadius: 2,
-    overflow: "hidden",
-    bgcolor: "action.hover",
-    color: "text.secondary",
-    "& > img": { width: "100%", height: "100%", objectFit: "cover" },
-    [forcedColors]: { outline: "1px solid CanvasText" },
-};
-
-const heroTextSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: 0.25,
-    minWidth: 0,
-};
-
-const nameSx: SxProps<Theme> = {
-    maxWidth: "100%",
-    fontWeight: 600,
-    fontSize: "0.875rem",
-    overflowWrap: "anywhere",
-};
-
-const librarySx: SxProps<Theme> = {
-    color: "text.secondary",
-    fontSize: "0.75rem",
-};
-
-const showSx: SxProps<Theme> = {
-    mt: 0.5,
-    marginInlineStart: -1,
-};
-
 /** One pick's details: what it is, a way to the asset itself, and the app's own form for this use of it. */
 const ChoiceDetails = ({ choice, adapter, hold, children, onShowInLibrary }: ChoiceDetailsProps) => {
     const { text } = useLocale();
@@ -220,9 +73,9 @@ const ChoiceDetails = ({ choice, adapter, hold, children, onShowInLibrary }: Cho
     const thumbnail = useThumbnail(asset, section.adapter ?? adapter, "grid", 5.5);
 
     return (
-        <Box sx={detailsSx}>
-            <Box sx={heroSx}>
-                <Box sx={pictureSx}>
+        <div className={styles.details}>
+            <div className={styles.hero}>
+                <div className={styles.picture}>
                     {thumbnail ? (
                         <img src={thumbnail} alt="" draggable={false} />
                     ) : asset.kind === "folder" ? (
@@ -232,24 +85,24 @@ const ChoiceDetails = ({ choice, adapter, hold, children, onShowInLibrary }: Cho
                     ) : (
                         <FileTypeIcon fileName={asset.name} size="50%" />
                     )}
-                </Box>
-                <Box sx={heroTextSx}>
-                    <Typography component="p" sx={nameSx}>
+                </div>
+                <div className={styles.heroText}>
+                    <Text component="p" className={styles.name}>
                         <bdi>{asset.name}</bdi>
-                    </Typography>
-                    <Typography variant="caption" sx={librarySx}>
+                    </Text>
+                    <Text variant="caption" className={styles.library}>
                         {section.label}
-                    </Typography>
+                    </Text>
                     {hold && <HoldLine hold={hold} />}
                     {onShowInLibrary && (
-                        <Button size="small" sx={showSx} onClick={onShowInLibrary}>
+                        <Button size="small" className={styles.show} onClick={onShowInLibrary}>
                             {text.mediaShowInLibrary}
                         </Button>
                     )}
-                </Box>
-            </Box>
+                </div>
+            </div>
             {children}
-        </Box>
+        </div>
     );
 };
 
@@ -330,12 +183,11 @@ const ChoicesPane = ({
     };
 
     return (
-        <Box
-            component="section"
+        <section
             ref={paneRef}
             tabIndex={-1}
             aria-labelledby={titleId}
-            sx={paneSx}
+            className={cx(styles.pane, fmClasses.mediaChosen)}
             onKeyDown={(event) => {
                 if (event.key === "Escape" && open && !event.defaultPrevented) {
                     event.preventDefault();
@@ -346,17 +198,17 @@ const ChoicesPane = ({
         >
             {open && renderDetails ? (
                 <>
-                    <Box sx={backHeaderSx}>
+                    <div className={styles.backHeader}>
                         <TooltipIconButton ref={backRef} label={text.mediaChoicesBack} onClick={closeDetails}>
                             <Icon name="arrowBack" fontSize="small" />
                         </TooltipIconButton>
-                        <Typography id={titleId} component="h2" noWrap sx={titleSx}>
+                        <Text id={titleId} component="h2" noWrap className={styles.title}>
                             {text.mediaChoiceDetails(isolate(open.asset.name))}
-                        </Typography>
-                        <TooltipIconButton label={text.mediaCloseChosen} sx={closeSx} onClick={onClose}>
+                        </Text>
+                        <TooltipIconButton label={text.mediaCloseChosen} className={styles.close} onClick={onClose}>
                             <Icon name="close" fontSize="small" />
                         </TooltipIconButton>
-                    </Box>
+                    </div>
                     <ChoiceDetails
                         key={detailsKey}
                         choice={open}
@@ -369,28 +221,28 @@ const ChoicesPane = ({
                 </>
             ) : (
                 <>
-                    <Box sx={headerSx}>
-                        <Typography id={titleId} component="h2" noWrap sx={titleSx}>
+                    <div className={styles.header}>
+                        <Text id={titleId} component="h2" noWrap className={styles.title}>
                             {text.mediaChosen}
                             {badge && (
-                                <Box component="span" sx={countSx} aria-hidden>
+                                <span className={styles.count} aria-hidden>
                                     {badge}
-                                </Box>
+                                </span>
                             )}
-                        </Typography>
+                        </Text>
                         {count > 0 && (
                             <Button size="small" color="inherit" onClick={onClear}>
                                 {text.mediaClearSelection}
                             </Button>
                         )}
-                        <TooltipIconButton label={text.mediaCloseChosen} sx={closeSx} onClick={onClose}>
+                        <TooltipIconButton label={text.mediaCloseChosen} className={styles.close} onClick={onClose}>
                             <Icon name="close" fontSize="small" />
                         </TooltipIconButton>
-                    </Box>
+                    </div>
                     {note && (
-                        <Typography component="p" sx={noteSx}>
+                        <Text component="p" className={styles.note}>
                             {note}
-                        </Typography>
+                        </Text>
                     )}
                     {only ? (
                         <ChoiceDetails
@@ -415,19 +267,19 @@ const ChoicesPane = ({
                             holdOf={holdOf}
                         />
                     ) : (
-                        <Box sx={emptySx}>
+                        <div className={styles.empty}>
                             <Icon name="selectAll" />
-                            <Typography variant="body2">{text.mediaNothingChosen}</Typography>
-                        </Box>
+                            <Text variant="body2">{text.mediaNothingChosen}</Text>
+                        </div>
                     )}
                 </>
             )}
             {onChoose && (
-                <Box sx={footerSx}>
+                <div className={styles.footer}>
                     {held && (
-                        <Typography id={heldId} variant="body2" sx={heldSx}>
+                        <Text id={heldId} variant="body2" className={styles.held}>
                             {held}
-                        </Typography>
+                        </Text>
                     )}
                     <Button
                         variant="contained"
@@ -438,12 +290,12 @@ const ChoicesPane = ({
                     >
                         {text.mediaChoose}
                     </Button>
-                </Box>
+                </div>
             )}
-            <Box role="status" sx={visuallyHiddenSx}>
+            <div role="status" className={util.visuallyHidden}>
                 {count > 0 ? selectedText : ""}
-            </Box>
-        </Box>
+            </div>
+        </section>
     );
 };
 

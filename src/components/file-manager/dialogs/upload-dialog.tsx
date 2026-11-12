@@ -1,26 +1,20 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { DirectionContext } from "../../../contexts/direction-context";
 import { useData, useFolder } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
-import { dialogActionsSx } from "../../../styles/direction";
-import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { acceptsFile, uploadPatterns } from "../../../utils/files";
 import { freeName } from "../../../utils/names";
 import { folderOf } from "../../../utils/navigation";
 import { replaceable } from "../../../utils/permissions";
 import { findClashes } from "../../../utils/transfer";
+import Button from "../../ui/button";
+import Dialog, { DialogActions, DialogContent, DialogTitle } from "../../ui/dialog";
+import Text from "../../ui/text";
 import { ConflictChoices, ConflictMessage } from "./conflict-step";
+import { fmClasses } from "../../../styles/classes";
+import styles from "./upload-dialog.module.css";
 
 import type {
     Clash,
@@ -58,20 +52,6 @@ interface UploadDialogProps {
     /** Called once nothing is left to ask, with the files and folders to upload and how to settle clashes. */
     onUpload: (request: UploadRequest, files: File[], folders: FolderUpload[], conflict: ConflictPolicy) => void;
 }
-
-const slotProps = {
-    paper: { sx: dialogPaperSx },
-};
-
-const contentSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-};
-
-const spacerSx: SxProps<Theme> = {
-    flex: 1,
-};
 
 /**
  * Checks files and folders about to be uploaded into a folder before they're queued. Most uploads
@@ -202,7 +182,7 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                 open={open && !!conflicts}
                 fullWidth
                 maxWidth="xs"
-                slotProps={slotProps}
+                className={fmClasses.uploadDialog}
                 onClose={onClose}
             >
                 <DialogTitle>
@@ -213,28 +193,28 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                           )
                         : text.uploadFoldersFailedTitle(leftOut.length, isolate(leftOut[0]?.name ?? ""))}
                 </DialogTitle>
-                <DialogContent sx={contentSx}>
+                <DialogContent className={styles.content}>
                     {leftOut.length > 0 && (
-                        <Typography variant="body2" color="text.secondary">
+                        <Text variant="body2" color="secondary">
                             {text.uploadFoldersOnly}
-                        </Typography>
+                        </Text>
                     )}
                     {refused.length > 0 && (
-                        <Typography variant="body2" color="text.secondary">
+                        <Text variant="body2" color="secondary">
                             {text.uploadTypesOnly(isolate(section.label), types)}
-                        </Typography>
+                        </Text>
                     )}
                     {misnamed.length > 0 && (
-                        <Typography variant="body2" color="text.secondary">
+                        <Text variant="body2" color="secondary">
                             {text.uploadNamesRefused(
                                 misnamed.length,
                                 isolate(misnamed[0].name),
                                 isolate(misnamed[0].reason),
                             )}
-                        </Typography>
+                        </Text>
                     )}
                 </DialogContent>
-                <DialogActions sx={dialogActionsSx}>
+                <DialogActions>
                     <Button variant="contained" onClick={onClose}>
                         {text.close}
                     </Button>
@@ -244,7 +224,7 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
     }
 
     return (
-        <Dialog dir={dir} open={open && !!conflicts} fullWidth maxWidth="xs" slotProps={slotProps} onClose={onClose}>
+        <Dialog dir={dir} open={open && !!conflicts} fullWidth maxWidth="xs" className={fmClasses.uploadDialog} onClose={onClose}>
             <DialogTitle>
                 {text.uploadTitle(
                     files.length + folders.length,
@@ -252,42 +232,42 @@ const UploadDialog = ({ open, request, onClose, onUpload }: UploadDialogProps) =
                     isolate(target.name),
                 )}
             </DialogTitle>
-            <DialogContent sx={contentSx}>
+            <DialogContent className={styles.content}>
                 {conflicts && conflicts.length > 0 && (
                     <ConflictMessage clashes={conflicts} folderName={target.name} />
                 )}
                 {leftOut.length > 0 && (
-                    <Typography variant="body2" color="text.secondary">
+                    <Text variant="body2" color="secondary">
                         {text.uploadFoldersLeftOut(leftOut.length, isolate(leftOut[0].name))}
-                    </Typography>
+                    </Text>
                 )}
                 {refused.length > 0 && (
-                    <Typography variant="body2" color="text.secondary">
+                    <Text variant="body2" color="secondary">
                         {text.uploadTypesLeftOut(
                             refused.length,
                             isolate(refused[0].name),
                             isolate(section.label),
                             types,
                         )}
-                    </Typography>
+                    </Text>
                 )}
                 {misnamed.length > 0 && (
-                    <Typography variant="body2" color="text.secondary">
+                    <Text variant="body2" color="secondary">
                         {text.uploadNamesRefused(
                             misnamed.length,
                             isolate(misnamed[0].name),
                             isolate(misnamed[0].reason),
                         )}
-                    </Typography>
+                    </Text>
                 )}
             </DialogContent>
-            <DialogActions sx={dialogActionsSx}>
+            <DialogActions>
                 <Button color="inherit" onClick={onClose}>
                     {text.cancel}
                 </Button>
                 {conflicts && conflicts.length > 0 ? (
                     <>
-                        <Box sx={spacerSx} />
+                        <div className={styles.spacer} />
                         <ConflictChoices clashes={conflicts} pending={null} onChoose={upload} />
                     </>
                 ) : (

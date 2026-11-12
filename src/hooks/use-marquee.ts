@@ -143,8 +143,8 @@ export const useMarquee = ({ enabled, entriesIn, drift, onStart, onChange }: Mar
                 const marquee = marqueeRef.current;
 
                 // Measured from the surface's left edge, right to left too, so it's placed by
-                // `left` in its inline style, which Emotion's RTL plugin doesn't see to flip. It's
-                // drawn within the surface; the entries it covers go by the whole box.
+                // `left` in its inline style, as geometry measured on the screen is. It's drawn
+                // within the surface; the entries it covers go by the whole box.
                 if (marquee) {
                     const top = clamp(box.top, 0, surface.offsetHeight);
 

@@ -1,0 +1,4 @@
+/* Long names are cut short rather than widening the menu. */
+.item {
+    max-width: min(24rem, 90vw);
+}

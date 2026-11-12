@@ -1,21 +1,14 @@
 import { memo, useCallback, useId, useMemo, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { AssetLookContext } from "../../contexts/asset-look-context";
 import { useThumbnail } from "../../hooks/use-thumbnail";
 import { ROW_PICTURE, TILE_LAYOUTS } from "../../styles/media-layout";
-import {
-    focusOutline,
-    forcedColors,
-    hoverBackground,
-    selectedBackground,
-    selectedHoverBackground,
-} from "../../styles/mixins";
 import Icon from "../icons/icon";
 import { HoldSlot } from "./asset-hold";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import styles from "./asset-option.module.css";
 import AssetTrail, { TrailRoom } from "./asset-trail";
 import GroupCheck from "./group-check";
 import MediaRow from "./media-row";
@@ -74,176 +67,6 @@ interface AssetBodyProps {
     draw: MediaAssetDraw;
     params: Parameters<MediaAssetDraw>[0];
 }
-
-// The room between a tile's edge and what's in it, which the check and the Open button go by.
-const TILE_PADDING = 0.75;
-
-// Placed by `top` and `gridColumn`, set in `style`: an absolutely positioned child of a grid takes the
-// grid area it's placed in as its box, so it fills its column's width (see `virtualization.md`).
-const TILE_SX: SxProps<Theme> = (theme) => ({
-    position: "absolute",
-    insetInline: 0,
-    display: "flex",
-    flexDirection: "column",
-    minWidth: 0,
-    p: TILE_PADDING,
-    borderRadius: 3,
-    cursor: "pointer",
-    userSelect: "none",
-    outline: "none",
-    WebkitTapHighlightColor: "transparent",
-    "&:hover": { bgcolor: hoverBackground(theme) },
-    '&[aria-selected="true"]': { bgcolor: selectedBackground(theme) },
-    '&[aria-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
-    "&:focus-visible": focusOutline,
-    '&[aria-disabled="true"]': { cursor: "default" },
-    [forcedColors]: { '&[aria-selected="true"]': { bgcolor: "Highlight", color: "HighlightText" } },
-});
-
-const ROW_SX: SxProps<Theme> = (theme) => ({
-    position: "absolute",
-    insetInline: 0,
-    display: "flex",
-    alignItems: "center",
-    gap: 1.5,
-    minWidth: 0,
-    px: 1,
-    py: 0.75,
-    borderRadius: 2,
-    cursor: "pointer",
-    userSelect: "none",
-    outline: "none",
-    WebkitTapHighlightColor: "transparent",
-    "&:hover": { bgcolor: hoverBackground(theme) },
-    '&[aria-selected="true"]': { bgcolor: selectedBackground(theme) },
-    '&[aria-selected="true"]:hover': { bgcolor: selectedHoverBackground(theme) },
-    "&:focus-visible": focusOutline,
-    '&[aria-disabled="true"]': { cursor: "default" },
-    [forcedColors]: { '&[aria-selected="true"]': { bgcolor: "Highlight", color: "HighlightText" } },
-});
-
-// What the app drew, and under it why it can't be chosen now, as nothing it drew says so.
-const contentSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    gap: 0.5,
-    minWidth: 0,
-    "[data-layout='tile'] > & > [data-status], [data-layout='tile'] > & > [data-part='hold'] > *": {
-        textAlign: "center",
-    },
-};
-
-// What the app drew entirely itself is faded as the media manager's own pictures are, which fade
-// themselves, by the same marks.
-const drawnSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    '[data-held="true"] > * > &[data-own="true"]': { opacity: 0.55 },
-    '[data-limited="true"] > * > &[data-own="true"]': { opacity: 0.7 },
-};
-
-// The check at a tile's top end corner, over its picture's, shown while it's selected.
-const tileCheckSx: SxProps<Theme> = {
-    position: "absolute",
-    top: (theme) => `calc(${theme.spacing(TILE_PADDING)} + 6px)`,
-    insetInlineEnd: (theme) => `calc(${theme.spacing(TILE_PADDING)} + 6px)`,
-    display: "none",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 22,
-    height: 22,
-    borderRadius: "50%",
-    bgcolor: "primary.main",
-    color: "primary.contrastText",
-    boxShadow: 1,
-    "& > svg": { fontSize: 16 },
-    "[aria-selected='true'] > &": { display: "flex" },
-    [forcedColors]: { bgcolor: "Highlight", color: "HighlightText", outline: "1px solid HighlightText" },
-};
-
-// The check at a row's end, shown while it's selected.
-const rowCheckSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    width: 22,
-    height: 22,
-    borderRadius: "50%",
-    bgcolor: "primary.main",
-    color: "primary.contrastText",
-    visibility: "hidden",
-    "& > svg": { fontSize: 16 },
-    "[aria-selected='true'] > &": { visibility: "visible" },
-    [forcedColors]: { bgcolor: "Highlight", color: "HighlightText", outline: "1px solid HighlightText" },
-};
-
-// A group's own check, always shown, as it's the one way a pointer selects it: empty on the panel's
-// surface, filled while it's selected.
-const groupCheckSx = {
-    width: 22,
-    height: 22,
-    p: 0,
-    bgcolor: "background.paper",
-    color: "transparent",
-    outline: "2px solid",
-    outlineColor: "text.secondary",
-    outlineOffset: "-2px",
-    "& svg": { fontSize: 16 },
-    "&:hover": { bgcolor: "background.paper", outlineColor: "primary.main" },
-    "[aria-selected='true'] > &, [aria-selected='true'] > &:hover": {
-        bgcolor: "primary.main",
-        color: "primary.contrastText",
-        outlineColor: "primary.main",
-    },
-    [forcedColors]: {
-        outlineColor: "CanvasText",
-        "[aria-selected='true'] > &, [aria-selected='true'] > &:hover": {
-            bgcolor: "Highlight",
-            color: "HighlightText",
-            outlineColor: "HighlightText",
-        },
-    },
-} satisfies SxProps<Theme>;
-
-const tileGroupCheckSx: SxProps<Theme> = {
-    ...groupCheckSx,
-    position: "absolute",
-    top: (theme) => `calc(${theme.spacing(TILE_PADDING)} + 6px)`,
-    insetInlineEnd: (theme) => `calc(${theme.spacing(TILE_PADDING)} + 6px)`,
-    boxShadow: 1,
-};
-
-const rowGroupCheckSx: SxProps<Theme> = { ...groupCheckSx, flexShrink: 0 };
-
-// The button opening the asset, at a tile's top start corner, on the panel's own surface, shown as
-// the pointer is over it or the focus is on it, and always on a touch screen.
-const tileOpenSx: SxProps<Theme> = {
-    position: "absolute",
-    top: (theme) => `calc(${theme.spacing(TILE_PADDING)} + 4px)`,
-    insetInlineStart: (theme) => `calc(${theme.spacing(TILE_PADDING)} + 4px)`,
-    width: 28,
-    height: 28,
-    bgcolor: "background.paper",
-    boxShadow: 1,
-    opacity: 0,
-    "& svg": { fontSize: 18 },
-    "&:hover": { bgcolor: "background.paper" },
-    "[role='option']:hover > &, [role='option']:focus-visible > &": { opacity: 1 },
-    "@media (hover: none)": { opacity: 1 },
-    [forcedColors]: { opacity: 1, outline: "1px solid CanvasText" },
-};
-
-// The button opening it, before a row's check, shown the same way.
-const rowOpenSx: SxProps<Theme> = {
-    flexShrink: 0,
-    opacity: 0,
-    "& svg": { fontSize: 18 },
-    "[role='option']:hover > &, [role='option']:focus-visible > &": { opacity: 1 },
-    "@media (hover: none)": { opacity: 1 },
-    [forcedColors]: { opacity: 1 },
-};
 
 /**
  * What the app's `renderAsset` returns, drawn as a component of its own, so hooks in it belong to
@@ -318,7 +141,7 @@ const AssetOption = memo(
         const Look = row ? MediaRow : MediaTile;
 
         return (
-            <Box
+            <div
                 role="option"
                 // A group that can't be selected says so by having none of this.
                 aria-selected={group && !checkable ? undefined : selected}
@@ -334,7 +157,7 @@ const AssetOption = memo(
                 data-layout={row ? "row" : "tile"}
                 data-held={!!hold && !group}
                 data-limited={limited}
-                sx={row ? ROW_SX : TILE_SX}
+                className={cx(row ? styles.row : styles.tile, fmClasses.mediaOption)}
                 style={{ top, gridColumn: `${column + 1} / span 1` }}
                 onClick={(event) => onPress(index, event)}
                 onDoubleClick={() => onActivate(index)}
@@ -342,15 +165,15 @@ const AssetOption = memo(
                 onKeyDown={onKeyDown}
             >
                 {drawn ? (
-                    <Box id={contentId} sx={contentSx}>
-                        <Box data-own={own} sx={drawnSx}>
+                    <div id={contentId} className={styles.content}>
+                        <div data-own={own} className={styles.drawn}>
                             <AssetLookContext value={claim}>
                                 <AssetBody draw={drawn} params={params} />
                             </AssetLookContext>
-                        </Box>
+                        </div>
                         {own && <HoldSlot hold={standing} />}
                         {own && (trail && trail.length > 0 ? <AssetTrail trail={trail} /> : <TrailRoom />)}
-                    </Box>
+                    </div>
                 ) : (
                     <Look asset={entry} kind={kind} thumbnail={thumbnail} hold={standing} trail={trail} />
                 )}
@@ -360,17 +183,17 @@ const AssetOption = memo(
                         group={group}
                         index={index}
                         onOpen={onOpen}
-                        sx={row ? rowOpenSx : tileOpenSx}
+                        className={row ? styles.rowOpen : styles.tileOpen}
                     />
                 )}
                 {checkable ? (
-                    <GroupCheck index={index} onCheck={onCheck} sx={row ? rowGroupCheckSx : tileGroupCheckSx} />
+                    <GroupCheck index={index} onCheck={onCheck} className={row ? styles.rowGroupCheck : styles.tileGroupCheck} />
                 ) : (
-                    <Box component="span" sx={row ? rowCheckSx : tileCheckSx} aria-hidden>
+                    <span className={row ? styles.rowCheck : styles.tileCheck} aria-hidden>
                         <Icon name="check" />
-                    </Box>
+                    </span>
                 )}
-            </Box>
+            </div>
         );
     },
 );

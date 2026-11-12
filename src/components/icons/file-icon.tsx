@@ -3,7 +3,7 @@ import type { SVGProps } from "react";
 import { DefaultFolderOpenedIcon, FileIcon, FolderIcon } from "@react-symbols/icons/utils";
 
 // The react-symbols SVGs ship with a viewBox but no width/height, so without a
-// default size they stretch to fill their container. 1.5rem matches MUI's SvgIcon.
+// default size they stretch to fill their container. 1.5rem matches `Icon`'s.
 const DEFAULT_SIZE = "1.5rem";
 
 interface TypeIconProps extends Omit<SVGProps<SVGSVGElement>, "ref"> {

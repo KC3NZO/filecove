@@ -1,0 +1,167 @@
+/*
+ * The component's colours, shape and type.
+ *
+ * An app sets the public custom properties, `--fm-*`, on the component or on anything above it,
+ * `:root` included, and every one it leaves out takes the default here. Styles never read those:
+ * they read the private ones, `--_fm-*`, which `.theme` works out from them. So an app's value
+ * set on any ancestor reaches the component, where a default declared on the component itself
+ * would hide it.
+ *
+ * `.theme` goes on each root (`FileManager`, `MediaManager`, `MediaPicker`) and on whatever
+ * portals out of one, the menus, the dialogs, the tooltips and the drag image, since those hang
+ * from `<body>`, out of the root's reach. An app's values set on `:root` or `<body>` reach them
+ * too.
+ *
+ * Light and dark follow the element's `color-scheme` (`light-dark()`), so a page that sets
+ * `color-scheme: light dark` follows the system, and one that sets `dark` on an element gets a
+ * dark component inside it. Without one, it's light.
+ */
+.theme {
+    /* The accent: selection, focus rings, the main button of a dialog. */
+    --_fm-primary: var(--fm-primary, light-dark(#1976d2, #90caf9));
+    --_fm-primary-hover: var(--fm-primary-hover, light-dark(#1565c0, #42a5f5));
+    --_fm-primary-contrast: var(--fm-primary-contrast, light-dark(#fff, rgb(0 0 0 / 87%)));
+
+    --_fm-error: var(--fm-error, light-dark(#d32f2f, #f44336));
+    --_fm-error-hover: var(--fm-error-hover, light-dark(#c62828, #d32f2f));
+    --_fm-error-contrast: var(--fm-error-contrast, #fff);
+
+    --_fm-success: var(--fm-success, light-dark(#2e7d32, #66bb6a));
+    --_fm-success-contrast: var(--fm-success-contrast, light-dark(#fff, rgb(0 0 0 / 87%)));
+
+    --_fm-text: var(--fm-text, light-dark(rgb(0 0 0 / 87%), #fff));
+    --_fm-text-secondary: var(--fm-text-secondary, light-dark(rgb(0 0 0 / 60%), rgb(255 255 255 / 70%)));
+    --_fm-text-disabled: var(--fm-text-disabled, light-dark(rgb(0 0 0 / 38%), rgb(255 255 255 / 50%)));
+
+    /* The window and the sidebar. */
+    --_fm-background: var(--fm-background, light-dark(#fff, #121212));
+    /* The content panel, and a view inside a dialog. */
+    --_fm-surface: var(--fm-surface, light-dark(#fff, #121212));
+    /* Menus, a step lighter than the surface in the dark, where a shadow doesn't show. */
+    --_fm-menu: var(--fm-menu, light-dark(var(--_fm-surface), color-mix(in srgb, var(--_fm-surface), #fff 12%)));
+    --_fm-divider: var(--fm-divider, light-dark(rgb(0 0 0 / 12%), rgb(255 255 255 / 12%)));
+
+    /* Icons and icon buttons at rest. */
+    --_fm-icon: var(--fm-icon, light-dark(rgb(0 0 0 / 54%), #fff));
+    /* A hovered button, menu item or field, and a pressed one. */
+    --_fm-hover: var(--fm-hover, light-dark(rgb(0 0 0 / 4%), rgb(255 255 255 / 8%)));
+    --_fm-pressed: var(--fm-pressed, light-dark(rgb(0 0 0 / 8%), rgb(255 255 255 / 16%)));
+    --_fm-disabled: var(--fm-disabled, light-dark(rgb(0 0 0 / 26%), rgb(255 255 255 / 30%)));
+    --_fm-disabled-background: var(--fm-disabled-background, light-dark(rgb(0 0 0 / 12%), rgb(255 255 255 / 12%)));
+    --_fm-field-border: var(--fm-field-border, light-dark(rgb(0 0 0 / 23%), rgb(255 255 255 / 23%)));
+    --_fm-chip: var(--fm-chip, light-dark(rgb(0 0 0 / 8%), rgb(255 255 255 / 16%)));
+
+    /*
+     * Rows, tiles and tree rows. A hovered one is clearly stronger than the list's stripe, a
+     * selected one takes the accent, and a selected one under the pointer a step more.
+     */
+    --_fm-row-stripe: var(--fm-row-stripe, color-mix(in srgb, var(--_fm-text) 3%, transparent));
+    --_fm-row-hover: var(
+        --fm-row-hover,
+        light-dark(
+            color-mix(in srgb, var(--_fm-text) 8%, transparent),
+            color-mix(in srgb, var(--_fm-text) 12%, transparent)
+        )
+    );
+    --_fm-row-selected: var(
+        --fm-row-selected,
+        light-dark(
+            color-mix(in srgb, var(--_fm-primary) 20%, transparent),
+            color-mix(in srgb, var(--_fm-primary) 28%, transparent)
+        )
+    );
+    --_fm-row-selected-hover: var(
+        --fm-row-selected-hover,
+        light-dark(
+            color-mix(in srgb, var(--_fm-primary) 24%, transparent),
+            color-mix(in srgb, var(--_fm-primary) 36%, transparent)
+        )
+    );
+    /* The tint an entry just uploaded, or just found, fades out of. */
+    --_fm-row-arrived: var(
+        --fm-row-arrived,
+        light-dark(
+            color-mix(in srgb, var(--_fm-primary) 32%, transparent),
+            color-mix(in srgb, var(--_fm-primary) 40%, transparent)
+        )
+    );
+
+    --_fm-backdrop: var(--fm-backdrop, rgb(0 0 0 / 50%));
+    --_fm-tooltip: var(--fm-tooltip, rgb(97 97 97 / 92%));
+    --_fm-tooltip-text: var(--fm-tooltip-text, #fff);
+    /* The notice over the content, set against the window. */
+    --_fm-notice: var(--fm-notice, light-dark(#323232, #fafafa));
+    --_fm-notice-text: var(--fm-notice-text, light-dark(#fff, rgb(0 0 0 / 87%)));
+
+    /* One step of the corners' roundness; parts take a few of them. */
+    --_fm-radius: var(--fm-radius, 4px);
+
+    --_fm-shadow-1: var(
+        --fm-shadow-1,
+        0 2px 1px -1px rgb(0 0 0 / 20%),
+        0 1px 1px 0 rgb(0 0 0 / 14%),
+        0 1px 3px 0 rgb(0 0 0 / 12%)
+    );
+    --_fm-shadow-2: var(
+        --fm-shadow-2,
+        0 3px 1px -2px rgb(0 0 0 / 20%),
+        0 2px 2px 0 rgb(0 0 0 / 14%),
+        0 1px 5px 0 rgb(0 0 0 / 12%)
+    );
+    --_fm-shadow-3: var(
+        --fm-shadow-3,
+        0 3px 3px -2px rgb(0 0 0 / 20%),
+        0 3px 4px 0 rgb(0 0 0 / 14%),
+        0 1px 8px 0 rgb(0 0 0 / 12%)
+    );
+    --_fm-shadow-6: var(
+        --fm-shadow-6,
+        0 3px 5px -1px rgb(0 0 0 / 20%),
+        0 6px 10px 0 rgb(0 0 0 / 14%),
+        0 1px 18px 0 rgb(0 0 0 / 12%)
+    );
+    --_fm-shadow-8: var(
+        --fm-shadow-8,
+        0 5px 5px -3px rgb(0 0 0 / 20%),
+        0 8px 10px 1px rgb(0 0 0 / 14%),
+        0 3px 14px 2px rgb(0 0 0 / 12%)
+    );
+    --_fm-shadow-24: var(
+        --fm-shadow-24,
+        0 11px 15px -7px rgb(0 0 0 / 20%),
+        0 24px 38px 3px rgb(0 0 0 / 14%),
+        0 9px 46px 8px rgb(0 0 0 / 12%)
+    );
+
+    /* The type is the page's own unless the app names one. */
+    --_fm-font-family: var(--fm-font-family, inherit);
+
+    /* What portals out of the component: dialogs and menus, then tooltips over them. */
+    --_fm-z-popup: var(--fm-z-popup, 1300);
+    --_fm-z-tooltip: var(--fm-z-tooltip, 1500);
+}
+
+/*
+ * Sizes inside the component count their padding and border, whatever the page's own reset does,
+ * as its styles are written for. Weightless (`:where`), so any rule of a part's, or of an app's
+ * for what it draws inside, still says otherwise.
+ */
+:where(.theme),
+:where(.theme) *,
+:where(.theme) *::before,
+:where(.theme) *::after {
+    box-sizing: border-box;
+}
+
+/*
+ * A root's own type and colour, so text that sets none reads the same on any page. What portals
+ * out takes `.theme` alone, and sets its own.
+ */
+.root {
+    color: var(--_fm-text);
+    font-family: var(--_fm-font-family);
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    letter-spacing: 0.00938em;
+}

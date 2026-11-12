@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
-
-import Box from "@mui/material/Box";
-import LinearProgress from "@mui/material/LinearProgress";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
+import type { CSSProperties } from "react";
 
 import { useLocale } from "../../hooks/use-locale";
-import { mirroredBarSx } from "../../styles/direction";
-import { ROW_PICTURE, TILE_LAYOUTS } from "../../styles/media-layout";
-import { forcedBarSx } from "../../styles/mixins";
+import { TILE_LAYOUTS } from "../../styles/media-layout";
 import { isolate } from "../../utils/bidi";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
+import LinearProgress from "../ui/linear-progress";
+import Text from "../ui/text";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import styles from "./upload-tile.module.css";
 
 import type { FileUploadItem, MediaKind, MediaLayout } from "../../types";
 
@@ -23,98 +22,10 @@ interface UploadTileProps {
     layout: MediaLayout;
 }
 
-const tileSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0.75,
-    minWidth: 0,
-    p: 0.75,
-};
-
-const rowSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1.5,
-    minWidth: 0,
-    px: 1,
-    py: 0.75,
-};
-
-// The picture being sent, or the file's icon, faded, in the kind's shape, the bar along its foot.
-const frameSx = (ratio: string): SxProps<Theme> => ({
-    position: "relative",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    aspectRatio: ratio,
-    borderRadius: 2,
-    overflow: "hidden",
-    bgcolor: "action.hover",
-    "& > img": {
-        position: "absolute",
-        inset: 0,
-        width: "100%",
-        height: "100%",
-        objectFit: "cover",
-        opacity: 0.55,
-    },
-    "& > svg": { opacity: 0.55 },
-});
-
-const FRAME_SX: Record<MediaKind, SxProps<Theme>> = {
-    image: frameSx(TILE_LAYOUTS.image.ratio),
-    video: frameSx(TILE_LAYOUTS.video.ratio),
-    document: frameSx(TILE_LAYOUTS.document.ratio),
-    audio: frameSx(TILE_LAYOUTS.audio.ratio),
-};
-
-const coverSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    width: `${ROW_PICTURE}rem`,
-    height: `${ROW_PICTURE}rem`,
-    borderRadius: 1.5,
-    overflow: "hidden",
-    bgcolor: "action.hover",
-    color: "text.secondary",
-    "& > img": { width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 },
-    "& > svg": { opacity: 0.55 },
-};
-
-const frameBarSx: SxProps<Theme> = [
-    { position: "absolute", insetInline: 0, bottom: 0, height: 4 },
-    mirroredBarSx,
-    forcedBarSx,
-];
-
-const rowBarSx: SxProps<Theme> = [{ mt: 0.5, height: 3, borderRadius: 1.5 }, mirroredBarSx, forcedBarSx];
-
-const textSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    minWidth: 0,
-    px: 0.25,
-    textAlign: "center",
-};
-
-const rowTextSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minWidth: 0,
-};
-
-const nameSx: SxProps<Theme> = {
-    color: "text.secondary",
-    fontSize: "0.8125rem",
-};
-
-const statusSx: SxProps<Theme> = {
-    color: "text.secondary",
-    fontSize: "0.75rem",
-};
+// The frame's shape, the kind's own (`TILE_LAYOUTS`), handed to its stylesheet as `--ratio`.
+const FRAME_STYLES = Object.fromEntries(
+    (Object.keys(TILE_LAYOUTS) as MediaKind[]).map((kind) => [kind, { "--ratio": TILE_LAYOUTS[kind].ratio } as CSSProperties]),
+) as Record<MediaKind, CSSProperties>;
 
 /**
  * A file being uploaded into the open library, shown before its assets as they are, as a tile of the
@@ -155,14 +66,14 @@ const UploadTile = ({ item, kind, layout }: UploadTileProps) => {
             variant={status === "done" || progress !== undefined ? "determinate" : "indeterminate"}
             value={status === "done" ? 100 : (progress ?? 0) * 100}
             aria-label={text.mediaUploadingFile(isolate(file.name))}
-            sx={row ? rowBarSx : frameBarSx}
+            className={row ? styles.rowBar : styles.frameBar}
         />
     );
 
     if (row) {
         return (
-            <Box component="li" sx={rowSx}>
-                <Box sx={coverSx}>
+            <li className={cx(styles.row, fmClasses.mediaUpload)}>
+                <div className={styles.cover}>
                     {url ? (
                         <img src={url} alt="" draggable={false} onError={() => setUrl(undefined)} />
                     ) : kind === "audio" ? (
@@ -170,39 +81,39 @@ const UploadTile = ({ item, kind, layout }: UploadTileProps) => {
                     ) : (
                         <FileTypeIcon fileName={file.name} size="60%" />
                     )}
-                </Box>
-                <Box sx={rowTextSx}>
-                    <Typography variant="body2" noWrap sx={nameSx}>
+                </div>
+                <div className={styles.rowText}>
+                    <Text variant="body2" noWrap className={styles.name}>
                         {file.name}
-                    </Typography>
+                    </Text>
                     {bar}
-                </Box>
-                <Typography component="span" sx={statusSx}>
+                </div>
+                <Text component="span" className={styles.status}>
                     <bdi>{statusText}</bdi>
-                </Typography>
-            </Box>
+                </Text>
+            </li>
         );
     }
 
     return (
-        <Box component="li" sx={tileSx}>
-            <Box sx={FRAME_SX[kind]}>
+        <li className={cx(styles.tile, fmClasses.mediaUpload)}>
+            <div className={styles.frame} style={FRAME_STYLES[kind]}>
                 {url ? (
                     <img src={url} alt="" draggable={false} onError={() => setUrl(undefined)} />
                 ) : (
                     <FileTypeIcon fileName={file.name} size={kind === "video" ? "30%" : "42%"} />
                 )}
                 {bar}
-            </Box>
-            <Box sx={textSx}>
-                <Typography variant="body2" noWrap sx={nameSx}>
+            </div>
+            <div className={styles.text}>
+                <Text variant="body2" noWrap className={styles.name}>
                     {file.name}
-                </Typography>
-                <Typography variant="caption" noWrap sx={statusSx}>
+                </Text>
+                <Text variant="caption" noWrap className={styles.status}>
                     <bdi>{statusText}</bdi>
-                </Typography>
-            </Box>
-        </Box>
+                </Text>
+            </div>
+        </li>
     );
 };
 

@@ -1,0 +1,32 @@
+/*
+ * The zoom row under its subheader, across the menu: Zoom out, the size, which puts it back, and
+ * Zoom in, as browsers' menus have it.
+ */
+.zoomRow {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-inline: 8px;
+    padding-bottom: 4px;
+}
+
+/* Menu items, so the arrow keys reach them, shaped as round icon buttons. */
+.zoomButton {
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+}
+
+.zoomValue {
+    flex: 1;
+    justify-content: center;
+    min-width: 3.5rem;
+    height: 32px;
+    min-height: 0;
+    padding-inline: 8px;
+    border-radius: calc(var(--_fm-radius) * 4);
+    font-variant-numeric: tabular-nums;
+}

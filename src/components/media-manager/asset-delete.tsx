@@ -1,13 +1,11 @@
 import { useEffect, useId, useRef } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useFormSend } from "../../hooks/use-form-send";
 import { useLocale } from "../../hooks/use-locale";
 import { isolate } from "../../utils/bidi";
+import Button from "../ui/button";
+import Text from "../ui/text";
+import styles from "./asset-delete.module.css";
 import { FormFailure } from "./media-form";
 
 import type { FileAdapter, FileEntry } from "../../types";
@@ -21,27 +19,6 @@ interface AssetDeleteProps {
     /** Left while the backend was being asked, which may have deleted it by then. */
     onLeft: () => void;
 }
-
-// Under the view's header, across it, as what's said of the asset's processing is.
-const rootSx: SxProps<Theme> = {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 1,
-    flexShrink: 0,
-    px: 2,
-    py: 1,
-    borderBottom: 1,
-    borderColor: "divider",
-};
-
-const textSx: SxProps<Theme> = { flex: "1 1 14rem", minWidth: 0, overflowWrap: "anywhere" };
-
-const titleSx: SxProps<Theme> = { fontSize: "0.8125rem", fontWeight: 700 };
-
-const warningSx: SxProps<Theme> = { color: "text.secondary", fontSize: "0.8125rem" };
-
-const buttonsSx: SxProps<Theme> = { display: "flex", gap: 1, flexShrink: 0, marginInlineStart: "auto" };
 
 /**
  * Asks before deleting the asset or group shown, in the view rather than in a dialog of its own, as a picker is
@@ -75,12 +52,12 @@ const AssetDelete = ({ entry, adapter, onCancel, onDeleted, onLeft }: AssetDelet
     );
 
     return (
-        <Box
+        <div
             role="group"
             aria-labelledby={titleId}
             aria-describedby={warningId}
             aria-busy={sending}
-            sx={rootSx}
+            className={styles.root}
             onKeyDown={(event) => {
                 if (event.key === "Escape") {
                     event.preventDefault();
@@ -89,16 +66,16 @@ const AssetDelete = ({ entry, adapter, onCancel, onDeleted, onLeft }: AssetDelet
                 }
             }}
         >
-            <Box sx={textSx}>
-                <Typography id={titleId} sx={titleSx}>
+            <div className={styles.text}>
+                <Text id={titleId} className={styles.title}>
                     {text.deleteTitle(1, isolate(entry.name))}
-                </Typography>
-                <Typography id={warningId} sx={warningSx}>
+                </Text>
+                <Text id={warningId} className={styles.warning}>
                     {text.deleteWarning(1, entry.kind === "folder")}
-                </Typography>
+                </Text>
                 {failure && <FormFailure message={failure} />}
-            </Box>
-            <Box sx={buttonsSx}>
+            </div>
+            <div className={styles.buttons}>
                 <Button ref={cancelRef} color="inherit" onClick={onCancel}>
                     {text.cancel}
                 </Button>
@@ -122,8 +99,8 @@ const AssetDelete = ({ entry, adapter, onCancel, onDeleted, onLeft }: AssetDelet
                 >
                     {text.delete}
                 </Button>
-            </Box>
-        </Box>
+            </div>
+        </div>
     );
 };
 

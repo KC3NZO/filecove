@@ -1,0 +1,99 @@
+.frame {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: var(--_fm-background);
+    color: var(--_fm-text);
+}
+
+/*
+ * The library with the selected column beside it, or over it, placed by this so its foot stays
+ * reachable under the overlay, Choose and Cancel staying where they are.
+ */
+.body {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+/* The library, an inset panel as the media manager's is. Positioned, so the upload step covers it. */
+.panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    margin-inline: 6px;
+    border-radius: calc(var(--_fm-radius) * 3);
+    overflow: hidden;
+    background-color: var(--_fm-surface);
+
+    @container media-manager (min-width: 1040px) {
+        [data-column="true"] & {
+            margin-bottom: 6px;
+        }
+    }
+}
+
+.grid {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+
+    &[data-covered="true"] {
+        visibility: hidden;
+    }
+}
+
+.uploads {
+    flex-shrink: 0;
+    margin-inline: 6px;
+    margin-top: 6px;
+
+    @container media-manager (min-width: 1040px) {
+        [data-column="true"] & {
+            margin-top: 0;
+            margin-bottom: 6px;
+        }
+    }
+}
+
+.foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    min-height: 52px;
+    padding-inline: 12px;
+    padding-block: 6px;
+}
+
+.count {
+    color: var(--_fm-text-secondary);
+    font-size: 0.8125rem;
+}
+
+/* Only where the selected column doesn't dock; beside it, there's nothing to open. */
+.opener {
+    @container media-manager (min-width: 1040px) {
+        display: none;
+    }
+}
+
+/* What holds Choose back, or that there's no room, pushing the buttons to the end side. */
+.note {
+    flex: 1 1 8rem;
+    min-width: 0;
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+}

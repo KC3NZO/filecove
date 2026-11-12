@@ -1,0 +1,231 @@
+/*
+ * `--columns` holds the tracks shared by the header and every row. It grows with the view:
+ * name and menu button, then size and modified, then type as well. A search everywhere's results,
+ * and the trash's root, have a Location column after the name, sharing its room. `--icon-size`,
+ * set in `style`, is the icon's side as the zoom has it, which the rows grow with.
+ * Text can't be selected anywhere in the list, or Shift-click would select it across rows.
+ * Clipped down its length, so a row kept rendered far from view in a squeezed listbox, placed in
+ * px of all the lines, doesn't lengthen what the panel scrolls (see `virtualization.md`); clipping
+ * is no scroll container, so the column header still sticks.
+ */
+.list {
+    --columns: minmax(0, 1fr) 2.5rem;
+    user-select: none;
+    overflow-y: clip;
+    padding-inline: 8px;
+    padding-top: 8px;
+    padding-bottom: 16px;
+
+    @container file-manager-view (min-width: 540px) {
+        --columns: minmax(0, 1fr) 6rem 9.5rem 2.5rem;
+        padding-inline: 24px;
+        padding-top: 0;
+
+        &[data-located="true"] {
+            --columns: minmax(0, 3fr) minmax(0, 2fr) 6rem 9.5rem 2.5rem;
+        }
+    }
+
+    @container file-manager-view (min-width: 760px) {
+        --columns: minmax(0, 1fr) 6rem 6rem 9.5rem 2.5rem;
+
+        &[data-located="true"] {
+            --columns: minmax(0, 3fr) minmax(0, 2fr) 6rem 6rem 9.5rem 2.5rem;
+        }
+    }
+}
+
+.headerRow {
+    display: none;
+    grid-template-columns: var(--columns);
+    align-items: center;
+    column-gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    min-height: 40px;
+    padding-inline: 12px;
+    margin-bottom: 4px;
+    background-color: var(--_fm-surface);
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+
+    @container file-manager-view (min-width: 540px) {
+        display: grid;
+    }
+}
+
+/*
+ * Only the rows in or near view are rendered, each placed at its line, and the listbox is as tall
+ * as all of them (`useVirtualLines`). It's a grid of one track for the hook to read, with the row
+ * gap that spaces the lines.
+ */
+.rows {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 4px;
+
+    @container file-manager-view (min-width: 540px) {
+        row-gap: 8px;
+    }
+}
+
+/*
+ * Placed at its line by `top`, set in `style`. Every row is as tall, since the list measures one
+ * for them all: room for the icon, or narrow, for the size and date folded under the name too.
+ */
+.row {
+    position: absolute;
+    inset-inline: 0;
+    display: grid;
+    grid-template-columns: var(--columns);
+    align-items: center;
+    column-gap: 16px;
+    min-height: max(52px, calc(var(--icon-size) + 16px));
+    padding-inline: 12px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    cursor: default;
+
+    &[data-striped="true"] {
+        background-color: var(--_fm-row-stripe);
+    }
+
+    &:hover {
+        background-color: var(--_fm-row-hover);
+    }
+
+    &[data-selected="true"] {
+        background-color: var(--_fm-row-selected);
+    }
+
+    &[data-selected="true"]:hover {
+        background-color: var(--_fm-row-selected-hover);
+    }
+
+    & [data-menu-button] {
+        opacity: 0;
+    }
+
+    &:hover [data-menu-button],
+    &[data-selected="true"] [data-menu-button],
+    &:focus-visible [data-menu-button] {
+        opacity: 1;
+    }
+
+    @media (hover: none) {
+        & [data-menu-button] {
+            opacity: 1;
+        }
+    }
+
+    @container file-manager-view (min-width: 540px) {
+        min-height: calc(var(--icon-size) + 16px);
+        scroll-margin-top: 3rem;
+    }
+}
+
+/* Only as wide as the icon and name, so a long name truncates within the column. */
+.nameCell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-self: start;
+    max-width: 100%;
+    min-width: 0;
+
+    & > svg {
+        flex-shrink: 0;
+    }
+}
+
+/* Lines the label up with the file names: the icon plus the 12px gap. */
+.nameHeader {
+    padding-inline-start: calc(var(--icon-size) + 12px);
+}
+
+/* The arrow goes before the label here, so the label stays flush with the dates, aligned to the end. */
+.modifiedHeader {
+    text-align: end;
+
+    & > button {
+        flex-direction: row-reverse;
+    }
+}
+
+/* Padded for the focus ring and hover area, and pulled back by as much so the label stays in line. */
+.columnButton {
+    gap: 4px;
+    margin-inline: -6px;
+    padding-inline: 6px;
+    padding-block: 2px;
+    border-radius: var(--_fm-radius);
+    font: inherit;
+    color: inherit;
+
+    &:hover,
+    &[data-active="true"] {
+        color: var(--_fm-text);
+    }
+}
+
+.sortIcon {
+    font-size: 0.875rem;
+}
+
+.nameText {
+    min-width: 0;
+}
+
+/* Size and date folded under the name while there is no room for their columns. */
+.secondaryLine {
+    display: block;
+    color: var(--_fm-text-secondary);
+
+    @container file-manager-view (min-width: 540px) {
+        display: none;
+    }
+}
+
+.locationCell {
+    display: none;
+
+    @container file-manager-view (min-width: 540px) {
+        display: block;
+    }
+}
+
+.sizeCell {
+    display: none;
+
+    @container file-manager-view (min-width: 540px) {
+        display: block;
+    }
+}
+
+.typeCell {
+    display: none;
+
+    @container file-manager-view (min-width: 760px) {
+        display: block;
+    }
+}
+
+.modifiedCell {
+    display: none;
+    text-align: end;
+
+    @container file-manager-view (min-width: 540px) {
+        display: block;
+    }
+}
+
+.menuCell {
+    display: flex;
+    justify-content: center;
+}
+
+.menuButton {
+    color: var(--_fm-text-secondary);
+}

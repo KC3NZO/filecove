@@ -1,29 +1,19 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import CircularProgress from "@mui/material/CircularProgress";
-import Collapse from "@mui/material/Collapse";
-import LinearProgress from "@mui/material/LinearProgress";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
-import {
-    panelBarSx,
-    panelHeaderSx,
-    panelListSx,
-    panelRowSx,
-    panelSlotSx,
-    panelSx,
-    panelTextSx,
-    panelTitleSx,
-    panelToggleIconSx,
-} from "../../styles/panel";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import panel from "../../styles/panel.module.css";
 import { isolate, joinIsolated } from "../../utils/bidi";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon, FolderTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
+import CircularProgress from "../ui/circular-progress";
+import Collapse from "../ui/collapse";
+import LinearProgress from "../ui/linear-progress";
+import Text from "../ui/text";
+import styles from "./upload-panel.module.css";
 
 import type {
     FileUploadItem,
@@ -57,51 +47,6 @@ interface UploadRowProps {
     /** Shows the finished upload in its folder; missing when it can't be. */
     onShow?: (item: UploadItem) => void;
 }
-
-// The same width as a small IconButton, so a done row's check lines up with the other rows' buttons.
-const doneSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    width: 30,
-    color: "primary.main",
-};
-
-// Points down while what failed is folded away, to unfold it, and up while it shows.
-const failuresToggleIconSx: SxProps<Theme> = {
-    transition: "transform 150ms",
-    '[aria-expanded="true"] > &': { transform: "rotate(180deg)" },
-};
-
-// Laid out as a row is, with an empty slot for the icon, so the list lines up with the row's name.
-const failureAreaSx: SxProps<Theme> = {
-    display: "flex",
-    gap: 1.5,
-    paddingInlineStart: 2,
-    paddingInlineEnd: 2,
-    paddingBlockEnd: 1,
-};
-
-const failureListSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    m: 0,
-    p: 0,
-    listStyle: "none",
-};
-
-const failureSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1,
-    py: 0.25,
-};
-
-const failureIconSx: SxProps<Theme> = {
-    display: "flex",
-    flexShrink: 0,
-};
 
 const isActive = (item: UploadItem) => item.status === "queued" || item.status === "uploading";
 
@@ -188,42 +133,42 @@ const FailureList = ({ item, id }: { item: FolderUploadItem; id: string }) => {
     const { text } = useLocale();
 
     return (
-        <Box sx={failureAreaSx}>
-            <Box sx={panelSlotSx} />
-            <Box component="ul" id={id} aria-label={text.uploadFailures(isolate(item.name))} sx={failureListSx}>
+        <div className={styles.failureArea}>
+            <div className={panel.slot} />
+            <ul id={id} aria-label={text.uploadFailures(isolate(item.name))} className={styles.failureList}>
                 {item.failures.map((failure, index) => {
                     const name = failure.path[failure.path.length - 1];
 
                     return (
                         // Only ever added to, and emptied as the folder is tried again.
-                        <Box component="li" key={index} sx={failureSx}>
-                            <Box sx={failureIconSx}>
+                        <li key={index} className={styles.failure}>
+                            <div className={styles.failureIcon}>
                                 {failure.kind === "file" ? (
                                     <FileTypeIcon fileName={name} size="1rem" />
                                 ) : (
                                     <FolderTypeIcon folderName={name} size="1rem" />
                                 )}
-                            </Box>
-                            <Box sx={panelTextSx}>
-                                <Typography variant="body2" noWrap>
+                            </div>
+                            <div className={panel.text}>
+                                <Text variant="body2" noWrap>
                                     <bdi>{joinIsolated(failure.path, " / ")}</bdi>
-                                </Typography>
-                                <Typography variant="caption" color="error" noWrap>
+                                </Text>
+                                <Text variant="caption" color="error" noWrap>
                                     {describeFailure(failure, text)}
-                                </Typography>
-                            </Box>
-                        </Box>
+                                </Text>
+                            </div>
+                        </li>
                     );
                 })}
                 {item.moreFailures > 0 && (
-                    <Box component="li" sx={failureSx}>
-                        <Typography variant="caption" color="text.secondary">
+                    <li className={styles.failure}>
+                        <Text variant="caption" color="secondary">
                             {text.uploadFailuresMore(item.moreFailures)}
-                        </Typography>
-                    </Box>
+                        </Text>
+                    </li>
                 )}
-            </Box>
-        </Box>
+            </ul>
+        </div>
     );
 };
 
@@ -278,9 +223,9 @@ const UploadRow = ({ item, onCancel, onRetry, onShow }: UploadRowProps) => {
                         <Icon name="folderOpen" fontSize="small" />
                     </TooltipIconButton>
                 )}
-                <Box sx={doneSx}>
-                    <Icon name="check" fontSize="small" titleAccess={text.uploadDone} />
-                </Box>
+                <div className={styles.done}>
+                    <Icon name="check" fontSize="small" label={text.uploadDone} />
+                </div>
             </>
         );
     } else {
@@ -292,26 +237,26 @@ const UploadRow = ({ item, onCancel, onRetry, onShow }: UploadRowProps) => {
     }
 
     return (
-        <Box component="li">
-            <Box sx={panelRowSx}>
-                <Box sx={panelSlotSx}>
+        <li>
+            <div className={cx(panel.row, fmClasses.taskRow)}>
+                <div className={panel.slot}>
                     {item.kind === "file" ? <FileTypeIcon fileName={name} /> : <FolderTypeIcon folderName={name} />}
-                </Box>
-                <Box sx={panelTextSx}>
-                    <Typography variant="body2" noWrap>
+                </div>
+                <div className={panel.text}>
+                    <Text variant="body2" noWrap>
                         <bdi>{name}</bdi>
-                    </Typography>
+                    </Text>
                     {status === "uploading" && (
                         <LinearProgress
                             variant={progress === undefined ? "indeterminate" : "determinate"}
                             value={(progress ?? 0) * 100}
-                            sx={panelBarSx}
+                            className={panel.bar}
                         />
                     )}
-                    <Typography variant="caption" color={status === "failed" ? "error" : "text.secondary"} noWrap>
+                    <Text variant="caption" color={status === "failed" ? "error" : "secondary"} noWrap>
                         {item.kind === "file" ? describeFile(item, locale) : describeFolder(item, locale)}
-                    </Typography>
-                </Box>
+                    </Text>
+                </div>
                 {failures.length > 0 && (
                     <TooltipIconButton
                         size="small"
@@ -324,17 +269,17 @@ const UploadRow = ({ item, onCancel, onRetry, onShow }: UploadRowProps) => {
                         aria-controls={failuresId}
                         onClick={() => setShowFailures((prev) => !prev)}
                     >
-                        <Icon name="expand" fontSize="small" sx={failuresToggleIconSx} />
+                        <Icon name="expand" fontSize="small" className={styles.failuresToggleIcon} />
                     </TooltipIconButton>
                 )}
                 {action}
-            </Box>
+            </div>
             {item.kind === "folder" && (
                 <Collapse in={showFailures && failures.length > 0}>
                     <FailureList item={item} id={failuresId} />
                 </Collapse>
             )}
-        </Box>
+        </li>
     );
 };
 
@@ -389,25 +334,25 @@ const UploadPanel = ({ items, onCancel, onRetry, onShow, canShow, onCancelAll, o
     }
 
     return (
-        <Box component="section" sx={panelSx} aria-label={text.uploads}>
-            <Box sx={panelHeaderSx}>
-                <Box sx={panelSlotSx}>{status}</Box>
-                <Box sx={panelTextSx}>
-                    <Typography variant="body2" noWrap sx={panelTitleSx} aria-live="polite">
+        <section className={cx(panel.panel, fmClasses.taskPanel, fmClasses.uploadPanel)} aria-label={text.uploads}>
+            <div className={panel.header}>
+                <div className={panel.slot}>{status}</div>
+                <div className={panel.text}>
+                    <Text variant="body2" noWrap className={panel.title} aria-live="polite">
                         {title}
-                    </Typography>
+                    </Text>
                     {detail && (
-                        <Typography variant="caption" color="text.secondary" noWrap>
+                        <Text variant="caption" color="secondary" noWrap>
                             {detail}
-                        </Typography>
+                        </Text>
                     )}
-                </Box>
+                </div>
                 <TooltipIconButton
                     label={expanded ? text.uploadsHide : text.uploadsShow}
                     aria-expanded={expanded}
                     onClick={() => setExpanded((prev) => !prev)}
                 >
-                    <Icon name="expand" fontSize="small" sx={panelToggleIconSx} />
+                    <Icon name="expand" fontSize="small" className={panel.toggleIcon} />
                 </TooltipIconButton>
                 <TooltipIconButton
                     label={busy ? text.uploadsCancelAll : text.uploadsClose}
@@ -415,9 +360,9 @@ const UploadPanel = ({ items, onCancel, onRetry, onShow, canShow, onCancelAll, o
                 >
                     <Icon name="close" fontSize="small" />
                 </TooltipIconButton>
-            </Box>
+            </div>
             <Collapse in={expanded}>
-                <Box component="ul" sx={panelListSx}>
+                <ul className={panel.list}>
                     {items.map((item) => (
                         <UploadRow
                             key={item.id}
@@ -427,9 +372,9 @@ const UploadPanel = ({ items, onCancel, onRetry, onShow, canShow, onCancelAll, o
                             onShow={onShow && (!canShow || canShow(item)) ? onShow : undefined}
                         />
                     ))}
-                </Box>
+                </ul>
             </Collapse>
-        </Box>
+        </section>
     );
 };
 

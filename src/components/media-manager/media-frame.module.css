@@ -1,0 +1,112 @@
+/* Positioned, so the selected column's overlay and its backdrop are placed by it. */
+.frame {
+    position: relative;
+    display: flex;
+    height: 100%;
+    background-color: var(--_fm-background);
+    color: var(--_fm-text);
+}
+
+.main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+/*
+ * The library sits as an inset, rounded panel on the window background, as the file manager's
+ * content does; beside the docked list of libraries, which has its own inset, it takes no margin.
+ * Positioned, so the asset view covers it. Without the choose bar under it, as where the selected
+ * column docks, it keeps a margin of its own below.
+ */
+.panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    margin-inline: 6px;
+    border-radius: calc(var(--_fm-radius) * 3);
+    overflow: hidden;
+    background-color: var(--_fm-surface);
+
+    @container media-manager (min-width: 720px) {
+        [data-libraries="true"] & {
+            margin-inline-start: 0;
+        }
+    }
+
+    [data-choosing="false"] & {
+        margin-bottom: 6px;
+    }
+
+    @container media-manager (min-width: 1040px) {
+        margin-bottom: 6px;
+    }
+}
+
+/*
+ * The grid stays under the asset view, hidden but laid out, so it's scrolled where it was and
+ * keeps its Tab stop when the view goes back to it.
+ */
+.grid {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+
+    &[data-covered="true"] {
+        visibility: hidden;
+    }
+}
+
+/*
+ * Under the library, an inset panel as it is, above the choose bar; where the library has no
+ * margin of its own below, as above the choose bar, it takes one above.
+ */
+.uploads {
+    flex-shrink: 0;
+    margin-inline: 6px;
+    margin-bottom: 6px;
+
+    @container media-manager (min-width: 720px) {
+        [data-libraries="true"] & {
+            margin-inline-start: 0;
+        }
+    }
+
+    [data-choosing="true"] & {
+        margin-top: 6px;
+    }
+
+    @container media-manager (min-width: 1040px) {
+        [data-choosing="true"] & {
+            margin-top: 0;
+        }
+    }
+}
+
+.librariesBackdrop {
+    position: absolute;
+    z-index: 2;
+
+    @container media-manager (min-width: 720px) {
+        display: none;
+    }
+}
+
+.noLibraries {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex: 1;
+    color: var(--_fm-text-secondary);
+
+    & > svg {
+        font-size: 56px;
+        opacity: 0.6;
+    }
+}

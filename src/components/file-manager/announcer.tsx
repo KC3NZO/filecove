@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import Box from "@mui/material/Box";
 
-import { visuallyHiddenSx } from "../../styles/mixins";
+import util from "../../styles/util.module.css";
 
 import type { Announcement } from "../../hooks/use-announcer";
 
@@ -66,9 +65,9 @@ const Announcer = ({ announcement }: AnnouncerProps) => {
     }, [announcement]);
 
     return (
-        <Box ref={regionRef} sx={visuallyHiddenSx} role="status">
+        <div ref={regionRef} className={util.visuallyHidden} role="status">
             {said && <span key={said.id}>{said.message}</span>}
-        </Box>
+        </div>
     );
 };
 

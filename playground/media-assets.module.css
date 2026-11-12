@@ -1,0 +1,105 @@
+/*
+ * How the playground draws assets of two libraries itself, as an app would, one each way: a little
+ * changed, from the media manager's own look, and entirely its own; and its groups, with what each has
+ * of its own above what it holds, by the delivery of the assets it points at.
+ */
+.stock {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.stockPicture {
+    aspect-ratio: 4 / 3;
+    border-radius: 4px;
+    background-color: var(--app-hover);
+    overflow: hidden;
+
+    & > img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+}
+
+.credit {
+    color: var(--app-text-secondary);
+    font-size: 0.75rem;
+}
+
+.picture {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    background-color: color-mix(in srgb, var(--app-text) 8%, transparent);
+    color: var(--app-text-secondary);
+    font-size: 0.75rem;
+
+    & > img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+}
+
+.groupHeader {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px;
+    padding-inline: 20px;
+    padding-top: 16px;
+}
+
+.headerCover {
+    width: 8rem;
+    aspect-ratio: 1;
+    border-radius: 8px;
+}
+
+.headerText {
+    flex: 1 1 12rem;
+    min-width: 0;
+}
+
+.headerType {
+    color: var(--app-text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.headerName {
+    font-weight: 700;
+    font-size: 1.25rem;
+    overflow-wrap: anywhere;
+}
+
+.headerDescription {
+    color: var(--app-text-secondary);
+    font-size: 0.875rem;
+    margin-top: 4px;
+}
+
+.teaser {
+    flex: 0 1 16rem;
+    margin: 0;
+
+    & > video {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border-radius: 8px;
+        background-color: #000;
+    }
+}
+
+.teaserCaption {
+    color: var(--app-text-secondary);
+    font-size: 0.75rem;
+    margin-top: 4px;
+}

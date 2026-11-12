@@ -1,0 +1,156 @@
+/* Written out from SIDEBAR_MIN_WIDTH, SIDEBAR_WIDTH (the styles' constants), which it follows. */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    background-color: var(--_fm-background);
+    outline: none;
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    bottom: 0;
+    inset-inline-start: 0;
+    width: min(280px, 85%);
+    box-shadow: var(--_fm-shadow-8);
+    --closed-shift: -100%;
+    translate: var(--closed-shift);
+    visibility: hidden;
+    transition: translate 225ms cubic-bezier(0.0, 0, 0.2, 1), visibility 225ms cubic-bezier(0.0, 0, 0.2, 1);
+
+    & > [role="separator"] {
+        display: none;
+    }
+
+    &:dir(rtl) {
+        --closed-shift: 100%;
+    }
+
+    &[data-open="true"] {
+        translate: none;
+        visibility: visible;
+    }
+
+    @container file-manager (min-width: 900px) {
+        position: relative;
+        z-index: auto;
+        flex-shrink: 1;
+        width: var(--sidebar-width, 248px);
+        min-width: 200px;
+        box-shadow: none;
+        translate: none;
+        visibility: visible;
+        transition: none;
+
+        &[data-hidden="true"] {
+            display: none;
+        }
+
+        &[data-hidden="true"][data-peek="true"] {
+            display: flex;
+            position: absolute;
+            z-index: 2;
+            width: min(280px, 85%);
+            box-shadow: var(--_fm-shadow-8);
+        }
+
+        & > [role="separator"] {
+            display: block;
+        }
+
+        &[data-hidden="true"][data-peek="true"] > [role="separator"] {
+            display: none;
+        }
+    }
+}
+
+/* Written out from HEADER_HEIGHT (the styles' constants), which it follows. */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    min-height: 52px;
+    padding-inline: 8px;
+}
+
+.searchButton {
+    &[aria-pressed="true"] {
+        color: var(--_fm-primary);
+    }
+
+    @media (forced-colors: active) {
+        &[aria-pressed="true"] {
+            color: Highlight;
+        }
+    }
+}
+
+.title {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    font-size: 0.9375rem;
+    font-weight: 700;
+}
+
+.nav {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-inline: 8px;
+    padding-bottom: 8px;
+}
+
+/* Placed by the tree, like the rows. */
+.groupTitle {
+    position: absolute;
+    inset-inline: 0;
+    display: flex;
+    align-items: center;
+    padding-inline: 12px;
+    color: var(--_fm-text-secondary);
+    font-weight: 600;
+}
+
+.rule {
+    position: absolute;
+    inset-inline: 0;
+}
+
+.divider {
+    margin-inline: 10px;
+    margin-block: 8px;
+}
+
+/*
+ * Only renders the rows in or near view, each placed where it goes, and is as tall as all of them.
+ * Only shows a ring while it has nothing to hand the focus to, such as a single section still loading.
+ */
+.tree {
+    position: relative;
+    border-radius: calc(var(--_fm-radius) * 2);
+    outline: none;
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+    }
+}
+
+/*
+ * Clips the tree down its length, so a row kept rendered far from view in a squeezed tree, placed
+ * in px of all the rows, doesn't lengthen what the sidebar scrolls (see `virtualization.md`).
+ */
+.treeClip {
+    overflow-y: clip;
+}
+
+/*
+ * Holds rows placed in the tree, so it takes no room itself. The section groups are still lists,
+ * so each is a `group` of the tree.
+ */
+.list {
+    margin: 0;
+    padding: 0;
+}

@@ -1,0 +1,37 @@
+/* The message hangs under the pill, over the content, rather than making the header taller. */
+.wrapper {
+    position: relative;
+    min-width: 0;
+}
+
+/*
+ * The error outline wins over the focus ring, which the field has whenever it shows one: the second
+ * selector is as specific as the ring's `:has()` and comes after it.
+ */
+.field {
+    &[data-invalid="true"],
+    &[data-invalid="true"]:has(input:focus) {
+        outline: 2px solid;
+        outline-color: var(--_fm-error);
+        outline-offset: -2px;
+    }
+}
+
+/* Its border keeps it apart from the content under it where forced colors drop the background. */
+.problem {
+    position: absolute;
+    top: 100%;
+    inset-inline: 0;
+    z-index: 2;
+    margin-top: 4px;
+    padding-inline: 12px;
+    padding-block: 6px;
+    border: 1px solid;
+    border-color: var(--_fm-error);
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-surface);
+    color: var(--_fm-error);
+    font-size: 0.8125rem;
+    box-shadow: var(--_fm-shadow-3);
+    pointer-events: none;
+}

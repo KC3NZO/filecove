@@ -1,21 +1,18 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import ButtonBase from "@mui/material/ButtonBase";
-import CircularProgress from "@mui/material/CircularProgress";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useFolder } from "../../hooks/use-folder";
 import { useLocale } from "../../hooks/use-locale";
-import { focusRing } from "../../styles/mixins";
 import { isolate } from "../../utils/bidi";
 import { isHidden } from "../../utils/hidden";
 import { groupRule } from "../../utils/media";
 import { allows } from "../../utils/permissions";
 import Icon from "../icons/icon";
+import Button from "../ui/button";
+import ButtonBase from "../ui/button-base";
+import CircularProgress from "../ui/circular-progress";
+import Text from "../ui/text";
 import GroupPath from "./group-path";
+import styles from "./media-move.module.css";
 import MediaStep, { StepSend } from "./media-step";
 
 import type { FileEntry, MediaSection } from "../../types";
@@ -32,41 +29,6 @@ interface MediaMoveProps {
     /** Moves it into the level with these groups open. */
     onMove: (to: readonly FileEntry[]) => void;
 }
-
-const pathRowSx: SxProps<Theme> = { display: "flex", flexShrink: 0, minWidth: 0 };
-
-const levelSx: SxProps<Theme> = { outline: "none" };
-
-const listSx: SxProps<Theme> = { m: 0, p: 0, listStyle: "none" };
-
-const rowSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    gap: 1,
-    width: "100%",
-    px: 1,
-    py: 0.75,
-    borderRadius: 1.5,
-    textAlign: "start",
-    "&:hover": { bgcolor: "action.hover" },
-    ...focusRing,
-};
-
-const rowNameSx: SxProps<Theme> = { flex: 1, minWidth: 0, fontSize: "0.875rem" };
-
-const rowIconSx: SxProps<Theme> = { flexShrink: 0, color: "text.secondary" };
-
-const stateSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 1,
-    py: 3,
-    color: "text.secondary",
-    fontSize: "0.875rem",
-    textAlign: "center",
-};
 
 /**
  * Where an asset or group goes, a step in the library's place: a level at a time through its library's
@@ -137,24 +99,24 @@ const MediaMove = ({ entry, section, from, movingIds, onCancel, onMove }: MediaM
                 </>
             }
         >
-            <Box sx={pathRowSx}>
+            <div className={styles.pathRow}>
                 <GroupPath
                     label={section.label}
                     trail={trail}
                     heading={false}
                     onGoToLevel={(depth) => setTrail(trail.slice(0, depth))}
                 />
-            </Box>
-            <Box
+            </div>
+            <div
                 ref={levelRef}
                 role="group"
                 tabIndex={-1}
                 aria-label={text.mediaInGroup(isolate(levelName))}
                 aria-busy={state?.status === "loading"}
-                sx={levelSx}
+                className={styles.level}
             >
                 {state?.status === "error" ? (
-                    <Box role="alert" sx={stateSx}>
+                    <div role="alert" className={styles.state}>
                         <bdi>
                             {state.error instanceof Error && state.error.message
                                 ? state.error.message
@@ -165,29 +127,29 @@ const MediaMove = ({ entry, section, from, movingIds, onCancel, onMove }: MediaM
                         <Button size="small" onClick={() => reload()}>
                             {text.tryAgain}
                         </Button>
-                    </Box>
+                    </div>
                 ) : groups.length > 0 ? (
-                    <Box component="ul" sx={listSx}>
+                    <ul className={styles.list}>
                         {groups.map((group) => (
                             <li key={group.id}>
-                                <ButtonBase sx={rowSx} onClick={() => setTrail([...trail, group])}>
-                                    <Icon name="folder" fontSize="small" sx={rowIconSx} />
-                                    <Typography noWrap sx={rowNameSx}>
+                                <ButtonBase className={styles.row} onClick={() => setTrail([...trail, group])}>
+                                    <Icon name="folder" fontSize="small" className={styles.rowIcon} />
+                                    <Text noWrap className={styles.rowName}>
                                         <bdi>{group.name}</bdi>
-                                    </Typography>
-                                    <Icon name="chevronRight" fontSize="small" sx={rowIconSx} />
+                                    </Text>
+                                    <Icon name="chevronRight" fontSize="small" className={styles.rowIcon} />
                                 </ButtonBase>
                             </li>
                         ))}
-                    </Box>
+                    </ul>
                 ) : state?.status === "ready" ? (
-                    <Typography sx={stateSx}>{text.mediaMoveNoGroups}</Typography>
+                    <Text className={styles.state}>{text.mediaMoveNoGroups}</Text>
                 ) : (
-                    <Box sx={stateSx}>
+                    <div className={styles.state}>
                         <CircularProgress size={28} aria-label={text.loading} />
-                    </Box>
+                    </div>
                 )}
-            </Box>
+            </div>
         </MediaStep>
     );
 };

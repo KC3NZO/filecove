@@ -1,0 +1,214 @@
+/* Placed by `placeStyle`. The item takes the focus, but the row inside it shows the ring. */
+.item {
+    position: absolute;
+    inset-inline: 0;
+    list-style: none;
+    outline: none;
+}
+
+.row {
+    position: relative;
+    height: 100%;
+    border-radius: calc(var(--_fm-radius) * 2);
+    color: var(--_fm-text);
+
+    &:hover {
+        background-color: var(--_fm-row-hover);
+    }
+
+    &[data-selected="true"] {
+        background-color: var(--_fm-row-selected);
+    }
+
+    &[data-selected="true"]:hover {
+        background-color: var(--_fm-row-selected-hover);
+    }
+
+    &[data-open="true"] {
+        color: var(--_fm-primary);
+    }
+
+    [role="treeitem"]:focus-visible > & {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+    }
+
+    @media (forced-colors: active) {
+        &[data-open="true"] {
+            color: Highlight;
+        }
+    }
+}
+
+/*
+ * Tree geometry, in px. Each row and guide line sets `--depth` in its `style`, and every offset is
+ * derived from it: 12px in, then 16px a level, and a chevron 20px wide. A level's guide line runs
+ * through the centre of its parent's chevron, or through the section icon for the first level, so
+ * the tree visibly hangs from the section it belongs to.
+ */
+
+/*
+ * The row's main part, which a click opens or selects. It's no button: the item around it takes
+ * the focus and the keys.
+ */
+.sectionButton,
+.folderButton {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    cursor: pointer;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sectionButton {
+    gap: 12px;
+    padding-inline: 12px 36px;
+}
+
+/* After its chevron, with 4px between. */
+.folderButton {
+    gap: 8px;
+    padding-inline: calc(36px + var(--depth) * 16px) 8px;
+
+    & > svg {
+        flex-shrink: 0;
+    }
+}
+
+.sectionLabel {
+    min-width: 0;
+    font-size: 0.875rem;
+}
+
+.folderLabel {
+    min-width: 0;
+    font-size: 0.8125rem;
+}
+
+/*
+ * The chevrons are for pointers; the keyboard expands and collapses with Right and Left. Expanded,
+ * a chevron turns to point down: clockwise from pointing right, or anticlockwise right to left,
+ * where the icon is mirrored to point left (`Icon`).
+ */
+.sectionToggle,
+.folderToggle {
+    --chevron-turn: 90deg;
+
+    position: absolute;
+    top: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-50%);
+    border-radius: var(--_fm-radius);
+    color: var(--_fm-text-secondary);
+    cursor: pointer;
+
+    &:dir(rtl) {
+        --chevron-turn: -90deg;
+    }
+
+    &:hover {
+        background-color: var(--_fm-hover);
+        color: var(--_fm-text);
+    }
+
+    &[data-expanded="true"] > svg {
+        rotate: var(--chevron-turn);
+    }
+}
+
+/*
+ * Sections keep the plain GNOME look, so their toggle only shows on hover, on keyboard focus,
+ * while expanded, or always on touch screens where there is no hover.
+ */
+.sectionToggle {
+    inset-inline-end: 6px;
+    width: 24px;
+    height: 24px;
+    opacity: 0;
+    transition: opacity 120ms;
+
+    *:hover > &,
+    [role="treeitem"]:focus-visible > * > &,
+    &[data-expanded="true"] {
+        opacity: 1;
+    }
+
+    @media (hover: none) {
+        opacity: 1;
+    }
+
+    & > svg {
+        font-size: 1.125rem;
+        transition: rotate 150ms;
+    }
+}
+
+.folderToggle {
+    inset-inline-start: calc(12px + var(--depth) * 16px);
+    width: 20px;
+    height: 20px;
+
+    & > svg {
+        font-size: 1rem;
+        transition: rotate 150ms;
+    }
+}
+
+/* Along the folders below an expanded row, placed by the tree like a row, behind the rows. */
+.guide {
+    position: absolute;
+    inset-inline-start: calc(22px + var(--depth) * 16px);
+    width: 1px;
+    background-color: var(--_fm-divider);
+    pointer-events: none;
+}
+
+/* A row in place of folders: a load error, or the single section tree's loading and empty states. */
+.statusRow {
+    position: absolute;
+    inset-inline: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-inline-start: calc(36px + var(--depth) * 16px);
+    border-radius: calc(var(--_fm-radius) * 2);
+    outline: none;
+    color: var(--_fm-text-secondary);
+    font-size: 0.8125rem;
+    list-style: none;
+
+    &[data-error="true"] {
+        color: var(--_fm-error);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--_fm-primary);
+        outline-offset: -2px;
+    }
+}
+
+/* Holds a folder's icon and the check badge the touch selection mode puts at its corner. */
+.folderIcon {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+}
+
+.retry {
+    padding-inline: 6px;
+    border-radius: var(--_fm-radius);
+    color: var(--_fm-text-secondary);
+    cursor: pointer;
+    text-decoration: underline;
+
+    &:hover {
+        color: var(--_fm-text);
+    }
+}

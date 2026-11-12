@@ -1,0 +1,119 @@
+/*
+ * Text can't be selected anywhere in the grid, or Shift-click would select it across tiles.
+ * Clipped down its length, as the list is, so a tile kept rendered far from view in a squeezed
+ * listbox doesn't lengthen what the panel scrolls.
+ */
+.grid {
+    user-select: none;
+    overflow-y: clip;
+    padding: 8px;
+
+    @container file-manager-view (min-width: 540px) {
+        padding: 24px;
+    }
+}
+
+/*
+ * Only the tiles in or near view are rendered, each placed at its line and in its column, and the
+ * listbox is as tall as all the lines (`useVirtualLines`). The columns are still the grid's own,
+ * as many as fit, which the hook reads, as narrow as the zoom lets them be (`--column` and
+ * `--wide-column`, set in `style`).
+ */
+.tiles {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--column), 1fr));
+    gap: 4px;
+
+    @container file-manager-view (min-width: 540px) {
+        grid-template-columns: repeat(auto-fill, minmax(var(--wide-column), 1fr));
+        gap: 8px;
+    }
+}
+
+/*
+ * Placed by `top` and `gridColumn`, set in `style`: an absolutely positioned child of a grid takes
+ * the grid area it's placed in as its box, so it fills its column's width.
+ */
+.tile {
+    position: absolute;
+    inset-inline: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding-inline: 8px;
+    padding-top: 12px;
+    padding-bottom: 8px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    text-align: center;
+    cursor: default;
+
+    &:hover {
+        background-color: var(--_fm-row-hover);
+    }
+
+    &[data-selected="true"] {
+        background-color: var(--_fm-row-selected);
+    }
+
+    &[data-selected="true"]:hover {
+        background-color: var(--_fm-row-selected-hover);
+    }
+
+    & > svg {
+        flex-shrink: 0;
+    }
+}
+
+/*
+ * Two lines tall even for a short name, so every tile is as tall, since the grid measures one for
+ * them all.
+ */
+.name {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    min-height: 2.7em;
+}
+
+/*
+ * A search everywhere's result says where it is in an outlined pill under its name, a folder icon
+ * and the location in smaller, fainter text, so it reads as where the entry is rather than as more
+ * of its name. The text takes two lines as the name does, and the pill is as tall with one, so
+ * every tile is still as tall. An outline rather than a fill, which forced colors would drop.
+ */
+.location {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    min-height: calc(2.6em + 10px);
+    padding-inline: 8px;
+    padding-block: 4px;
+    border: 1px solid;
+    border-color: var(--_fm-divider);
+    border-radius: calc(var(--_fm-radius) * 2);
+    color: var(--_fm-text-secondary);
+    font-size: 0.6875rem;
+    line-height: 1.3;
+}
+
+.locationIcon {
+    flex-shrink: 0;
+    font-size: 0.875rem;
+}
+
+.locationText {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}

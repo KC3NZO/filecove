@@ -1,0 +1,174 @@
+/* One under the other, scrolling once they're taller than the column. */
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    padding-inline: 8px;
+    padding-block: 4px;
+    list-style: none;
+    overflow-y: auto;
+
+    &[data-dragging="true"] {
+        cursor: grabbing;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        & > li {
+            transition: none !important;
+        }
+    }
+}
+
+/*
+ * While one is dragged, the others slide to make room for it; with no drag, they don't, so the
+ * order changing as it's dropped doesn't slide. Each row says so itself, its transform and its
+ * slide changing together: moving the focused row's element makes the browser work out the styles
+ * partway through React's changes, when a row has lost its transform but the list would still say
+ * it's dragging.
+ */
+.row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 2px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    background-color: var(--_fm-surface);
+
+    &:hover {
+        background-color: var(--_fm-row-hover);
+    }
+
+    &[data-sliding="true"] {
+        transition: transform 150ms ease-out;
+    }
+
+    &[data-dragged="true"] {
+        z-index: 1;
+        box-shadow: var(--_fm-shadow-6);
+    }
+
+    &[data-dragged="true"],
+    &[data-dragged="true"]:hover {
+        background-color: var(--_fm-surface);
+    }
+
+    @media (forced-colors: active) {
+        &[data-dragged="true"] {
+            outline: 2px solid Highlight;
+        }
+    }
+}
+
+/* The row's main part: what it is, which drags it, and opens its details. */
+.handle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    padding: 6px;
+    border-radius: calc(var(--_fm-radius) * 2);
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+    }
+
+    &[data-lifted="true"] {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+    }
+
+    [data-dragged="true"] > & {
+        cursor: grabbing;
+    }
+
+    @media (forced-colors: active) {
+        &[data-lifted="true"] {
+            outline: 2px solid Highlight;
+        }
+    }
+}
+
+/* Written out from CHOICE_THUMBNAIL (the styles' constants), which it follows. */
+.thumbnail {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 3rem;
+    height: 3rem;
+    border-radius: calc(var(--_fm-radius) * 1.5);
+    overflow: hidden;
+    background-color: var(--_fm-hover);
+    color: var(--_fm-text-secondary);
+
+    & > img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        pointer-events: none;
+    }
+
+    @media (forced-colors: active) {
+        outline: 1px solid CanvasText;
+    }
+}
+
+.text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.name {
+    font-size: 0.8125rem;
+}
+
+.library {
+    color: var(--_fm-text-secondary);
+    font-size: 0.75rem;
+}
+
+.problems {
+    color: var(--_fm-error);
+    font-size: 0.75rem;
+}
+
+/* Out of the Tab order: Enter opens the details, Delete takes one out. */
+.button {
+    flex-shrink: 0;
+
+    & svg {
+        font-size: 18px;
+    }
+
+    [data-dragging="true"] & {
+        visibility: hidden;
+    }
+}
+
+.lastButton {
+    flex-shrink: 0;
+    margin-inline-end: 2px;
+
+    & svg {
+        font-size: 18px;
+    }
+
+    [data-dragging="true"] & {
+        visibility: hidden;
+    }
+}

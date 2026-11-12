@@ -1,10 +1,9 @@
 import { useId, useState } from "react";
 
-import Button from "@mui/material/Button";
-
 import { useFormSend } from "../../hooks/use-form-send";
 import { useLocale } from "../../hooks/use-locale";
 import { isolate } from "../../utils/bidi";
+import Button from "../ui/button";
 import { FormFailure, MediaFormBody } from "./media-form";
 import MediaStep, { StepSend } from "./media-step";
 

@@ -1,0 +1,40 @@
+.notes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.file {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding-block: 6px;
+}
+
+.fileName {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.875rem;
+}
+
+.fileSize {
+    flex-shrink: 0;
+    color: var(--_fm-text-secondary);
+    font-size: 0.8125rem;
+}
+
+/* The form under the files, set apart by a rule, as a pick's form is under its heading. */
+.fields {
+    padding-top: 16px;
+    border-top: 1px solid;
+    border-color: var(--_fm-divider);
+}

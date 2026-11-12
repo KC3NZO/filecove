@@ -1,22 +1,17 @@
 import type { FocusEvent, KeyboardEvent, Ref, RefObject } from "react";
 
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import InputBase from "@mui/material/InputBase";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
-import { startIconSx } from "../../styles/direction";
-import { headerFieldSx, headerInputSx } from "../../styles/header-field";
-import { HEADER_HEIGHT } from "../../styles/layout";
-import { mediaMedium } from "../../styles/media-layout";
-import { forcedColors, forcedPressed } from "../../styles/mixins";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import headerField from "../../styles/header-field.module.css";
 import { isolate } from "../../utils/bidi";
 import ToolbarActions from "../buttons/toolbar-actions";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import Icon from "../icons/icon";
+import Button from "../ui/button";
+import Text from "../ui/text";
 import GroupPath from "./group-path";
+import styles from "./media-header.module.css";
 
 import type { FileEntry, MediaLayout, MediaSection, ToolbarGroup } from "../../types";
 
@@ -75,53 +70,6 @@ interface MediaHeaderProps {
 const INLINE_ACTIONS = 2;
 
 const NO_ACTIONS: readonly ToolbarGroup[] = [];
-
-const headerSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    flexShrink: 0,
-    px: 1,
-    pb: 0.75,
-};
-
-const barSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1,
-    minHeight: HEADER_HEIGHT,
-};
-
-const titleSx: SxProps<Theme> = {
-    flexShrink: 1,
-    minWidth: 0,
-    px: 1,
-    fontSize: "0.9375rem",
-    fontWeight: 700,
-};
-
-// Opens the drawer of libraries, where the list doesn't dock; from `mediaMedium` it's docked.
-const librariesButtonSx: SxProps<Theme> = {
-    [mediaMedium]: { display: "none" },
-};
-
-// The name, or the search field in its place, filling the room up to the buttons, so they never move.
-const nameSlotSx: SxProps<Theme> = {
-    flex: 1,
-    display: "flex",
-    alignItems: "center",
-    minWidth: 0,
-};
-
-// The search's, and New group's: `primary` while what it opens is open.
-const toggleButtonSx: SxProps<Theme> = {
-    '&[aria-pressed="true"]': { color: "primary.main" },
-    [forcedColors]: forcedPressed,
-};
-
-const uploadSx: SxProps<Theme> = {
-    flexShrink: 0,
-    ...startIconSx,
-};
 
 /**
  * Above the library: the button opening the libraries where they don't dock, its name, or the path
@@ -199,32 +147,32 @@ const MediaHeader = ({
     };
 
     return (
-        <Box component="header" sx={headerSx}>
-            <Box sx={barSx}>
+        <header className={cx(styles.header, fmClasses.mediaHeader)}>
+            <div className={styles.bar}>
                 {several && (
                     <TooltipIconButton
                         ref={librariesOpenerRef}
                         label={text.mediaChooseLibrary}
-                        sx={librariesButtonSx}
+                        className={styles.librariesButton}
                         aria-expanded={librariesOpen}
                         onClick={onOpenLibraries}
                     >
                         <Icon name="menu" fontSize="small" />
                     </TooltipIconButton>
                 )}
-                <Box sx={nameSlotSx}>
+                <div className={styles.nameSlot}>
                     {searching && section ? (
-                        <Box role="search" sx={headerFieldSx} onKeyDown={handleFieldKeyDown} onBlur={handleFieldBlur}>
+                        <div role="search" className={cx(headerField.field, fmClasses.searchField)} onKeyDown={handleFieldKeyDown} onBlur={handleFieldBlur}>
                             <Icon name="search" fontSize="small" />
-                            <InputBase
-                                inputRef={searchInputRef}
+                            <input
+                                ref={searchInputRef}
                                 type="search"
                                 value={query}
                                 placeholder={text.searchIn(isolate(levelName))}
                                 autoComplete="off"
                                 spellCheck={false}
-                                slotProps={{ input: { "aria-label": text.search } }}
-                                sx={headerInputSx}
+                                aria-label={text.search}
+                                className={headerField.input}
                                 onChange={(event) => onQueryChange(event.target.value)}
                                 onKeyDown={handleInputKeyDown}
                             />
@@ -246,15 +194,15 @@ const MediaHeader = ({
                             >
                                 <Icon name="close" fontSize="small" />
                             </TooltipIconButton>
-                        </Box>
+                        </div>
                     ) : inGroup && section ? (
                         <GroupPath label={section.label} trail={trail} onGoToLevel={onGoToLevel} />
                     ) : (
-                        <Typography component="h2" noWrap sx={titleSx}>
+                        <Text component="h2" noWrap className={styles.title}>
                             {section?.label}
-                        </Typography>
+                        </Text>
                     )}
-                </Box>
+                </div>
                 {/* Keeps the focus in an open search's field as it's pressed, which closes it. */}
                 {searchable && (
                     <TooltipIconButton
@@ -262,7 +210,7 @@ const MediaHeader = ({
                         label={text.search}
                         aria-pressed={searching}
                         aria-keyshortcuts="Control+F Meta+F"
-                        sx={toggleButtonSx}
+                        className={styles.toggleButton}
                         onMouseDown={(event) => searching && event.preventDefault()}
                         onClick={onToggleSearch}
                     >
@@ -291,7 +239,7 @@ const MediaHeader = ({
                         ref={newGroupRef}
                         label={newGroupLabel}
                         aria-pressed={creatingGroup}
-                        sx={toggleButtonSx}
+                        className={styles.toggleButton}
                         onClick={onNewGroup}
                     >
                         <Icon name="newFolder" fontSize="small" />
@@ -301,21 +249,21 @@ const MediaHeader = ({
                     groups={actions}
                     moreLabel={text.mediaMoreActions}
                     inline={INLINE_ACTIONS}
-                    wide={mediaMedium}
+                    collapses
                 />
                 {onUpload && (
                     <Button
                         ref={uploadRef}
                         color="inherit"
                         startIcon={<Icon name="upload" fontSize="small" />}
-                        sx={uploadSx}
+                        className={styles.upload}
                         onClick={onUpload}
                     >
                         {text.upload}
                     </Button>
                 )}
-            </Box>
-        </Box>
+            </div>
+        </header>
     );
 };
 

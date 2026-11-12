@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
 
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
 import { useThumbnail } from "../../hooks/use-thumbnail";
 import { CHOICE_THUMBNAIL } from "../../styles/media-layout";
-import { focusOutline, forcedColors, hoverBackground, visuallyHiddenSx } from "../../styles/mixins";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import util from "../../styles/util.module.css";
 import { isolate } from "../../utils/bidi";
 import { KIND_ICONS } from "../../utils/media";
 import TooltipIconButton from "../buttons/tooltip-icon-button";
 import { FileTypeIcon } from "../icons/file-icon";
 import Icon from "../icons/icon";
+import Text from "../ui/text";
 import { HoldLine } from "./asset-hold";
+import styles from "./choice-list.module.css";
 
 import type { AssetHold, FileAdapter, MediaChoice } from "../../types";
 
@@ -106,110 +106,6 @@ const SCROLL_STEP = 10;
 
 export const choiceKey = ({ asset, section }: MediaChoice) => `${section.id}\u0000${asset.id}`;
 
-// One under the other, scrolling once they're taller than the column.
-const listSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0.25,
-    flex: 1,
-    minHeight: 0,
-    m: 0,
-    px: 1,
-    py: 0.5,
-    listStyle: "none",
-    overflowY: "auto",
-    '&[data-dragging="true"]': { cursor: "grabbing" },
-    "@media (prefers-reduced-motion: reduce)": { "& > li": { transition: "none !important" } },
-};
-
-// While one is dragged, the others slide to make room for it; with no drag, they don't, so the
-// order changing as it's dropped doesn't slide. Each row says so itself, its transform and its
-// slide changing together: moving the focused row's element makes the browser work out the styles
-// partway through React's changes, when a row has lost its transform but the list would still say
-// it's dragging.
-const rowSx: SxProps<Theme> = (theme) => ({
-    position: "relative",
-    display: "flex",
-    alignItems: "center",
-    flexShrink: 0,
-    gap: 0.25,
-    borderRadius: 2,
-    bgcolor: "background.paper",
-    "&:hover": { bgcolor: hoverBackground(theme) },
-    '&[data-sliding="true"]': { transition: "transform 150ms ease-out" },
-    '&[data-dragged="true"]': { zIndex: 1, boxShadow: 6 },
-    '&[data-dragged="true"], &[data-dragged="true"]:hover': { bgcolor: "background.paper" },
-    [forcedColors]: { '&[data-dragged="true"]': { outline: "2px solid Highlight" } },
-});
-
-// The row's main part: what it is, which drags it, and opens its details.
-const handleSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 1.25,
-    flex: 1,
-    minWidth: 0,
-    p: 0.75,
-    borderRadius: 2,
-    cursor: "grab",
-    userSelect: "none",
-    WebkitUserSelect: "none",
-    WebkitTouchCallout: "none",
-    WebkitTapHighlightColor: "transparent",
-    outline: "none",
-    "&:focus-visible": focusOutline,
-    '&[data-lifted="true"]': { outline: "2px solid", outlineColor: "primary.main", outlineOffset: "-2px" },
-    '[data-dragged="true"] > &': { cursor: "grabbing" },
-    [forcedColors]: { '&[data-lifted="true"]': { outline: "2px solid Highlight" } },
-};
-
-const thumbnailSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    width: `${CHOICE_THUMBNAIL}rem`,
-    height: `${CHOICE_THUMBNAIL}rem`,
-    borderRadius: 1.5,
-    overflow: "hidden",
-    bgcolor: "action.hover",
-    color: "text.secondary",
-    "& > img": { width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" },
-    [forcedColors]: { outline: "1px solid CanvasText" },
-};
-
-const textSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    minWidth: 0,
-};
-
-const nameSx: SxProps<Theme> = {
-    fontSize: "0.8125rem",
-};
-
-const librarySx: SxProps<Theme> = {
-    color: "text.secondary",
-    fontSize: "0.75rem",
-};
-
-const problemsSx: SxProps<Theme> = {
-    ...librarySx,
-    color: "error.main",
-};
-
-// Out of the Tab order: Enter opens the details, Delete takes one out.
-const buttonSx: SxProps<Theme> = {
-    flexShrink: 0,
-    "& svg": { fontSize: 18 },
-    '[data-dragging="true"] &': { visibility: "hidden" },
-};
-
-const lastButtonSx: SxProps<Theme> = {
-    ...buttonSx,
-    marginInlineEnd: 0.25,
-};
-
 /** One asset selected: its thumbnail, or its type's icon, its name and library, to drag or move, its details and a button taking it out. */
 const ChoiceRow = ({
     choice,
@@ -239,15 +135,14 @@ const ChoiceRow = ({
     const name = isolate(asset.name);
 
     return (
-        <Box
-            component="li"
+        <li
             data-choice-index={index}
             data-dragged={dragged}
             data-sliding={sliding}
-            sx={rowSx}
+            className={cx(styles.row, fmClasses.mediaChoice)}
             style={shift ? { transform: `translateY(${shift}px)` } : undefined}
         >
-            <Box
+            <div
                 role="button"
                 tabIndex={tabStop ? 0 : -1}
                 data-handle
@@ -257,14 +152,14 @@ const ChoiceRow = ({
                 aria-describedby={
                     hold ? `${holdId} ${describedBy}` : problems > 0 ? `${problemsId} ${describedBy}` : describedBy
                 }
-                sx={handleSx}
+                className={styles.handle}
                 onKeyDown={(event) => onKeyDown(event, index)}
                 onFocus={() => onFocus(index)}
                 onBlur={() => onBlur(index)}
                 onClick={(event) => onClick(event, index)}
                 onContextMenu={(event) => event.preventDefault()}
             >
-                <Box sx={thumbnailSx}>
+                <div className={styles.thumbnail}>
                     {thumbnail ? (
                         <img src={thumbnail} alt="" draggable={false} />
                     ) : asset.kind === "folder" ? (
@@ -274,30 +169,30 @@ const ChoiceRow = ({
                     ) : (
                         <FileTypeIcon fileName={asset.name} size="60%" />
                     )}
-                </Box>
-                <Box sx={textSx} aria-hidden>
-                    <Typography variant="body2" noWrap sx={nameSx}>
+                </div>
+                <div className={styles.text} aria-hidden>
+                    <Text variant="body2" noWrap className={styles.name}>
                         {asset.name}
-                    </Typography>
+                    </Text>
                     {hold ? (
                         <HoldLine hold={hold} id={holdId} />
                     ) : problems > 0 ? (
-                        <Typography id={problemsId} variant="caption" noWrap sx={problemsSx}>
+                        <Text id={problemsId} variant="caption" noWrap className={styles.problems}>
                             {text.mediaChoiceProblems(problems)}
-                        </Typography>
+                        </Text>
                     ) : (
-                        <Typography variant="caption" noWrap sx={librarySx}>
+                        <Text variant="caption" noWrap className={styles.library}>
                             {section.label}
-                        </Typography>
+                        </Text>
                     )}
-                </Box>
-            </Box>
+                </div>
+            </div>
             {hasDetails && (
                 <TooltipIconButton
                     size="small"
                     tabIndex={-1}
                     label={text.mediaChoiceDetails(name)}
-                    sx={buttonSx}
+                    className={styles.button}
                     onClick={(event) => onClick(event, index)}
                 >
                     <Icon name="edit" />
@@ -307,13 +202,13 @@ const ChoiceRow = ({
                 size="small"
                 tabIndex={-1}
                 label={text.mediaRemoveChoice(name)}
-                sx={lastButtonSx}
+                className={styles.lastButton}
                 data-remove
                 onClick={() => onRemove(index)}
             >
                 <Icon name="close" />
             </TooltipIconButton>
-        </Box>
+        </li>
     );
 };
 
@@ -734,12 +629,11 @@ const ChoiceList = ({
 
     return (
         <>
-            <Box
-                component="ul"
+            <ul
                 ref={listRef}
                 aria-label={text.mediaChosen}
                 data-dragging={!!drag}
-                sx={listSx}
+                className={styles.list}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={() => endPress(true)}
@@ -769,16 +663,16 @@ const ChoiceList = ({
                         onRemove={remove}
                     />
                 ))}
-            </Box>
-            <Box component="span" id={hintId} sx={visuallyHiddenSx}>
+            </ul>
+            <span id={hintId} className={util.visuallyHidden}>
                 {text.mediaChoicesHint}
-            </Box>
-            <Box component="span" id={detailsHintId} sx={visuallyHiddenSx}>
+            </span>
+            <span id={detailsHintId} className={util.visuallyHidden}>
                 {text.mediaChoicesDetailsHint}
-            </Box>
-            <Box component="span" role="status" sx={visuallyHiddenSx}>
+            </span>
+            <span role="status" className={util.visuallyHidden}>
                 {said && <span key={said.id}>{said.message}</span>}
-            </Box>
+            </span>
         </>
     );
 };

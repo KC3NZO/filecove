@@ -1,0 +1,72 @@
+/*
+ * Fills the scroll panel even when the folder is short, so its empty space takes clicks,
+ * right-clicks, marquee drags and drops. Positioned so the marquee is placed in content coordinates.
+ * On touch, a long-press selects, so iOS's callout and the tap flash are turned off, and a double
+ * tap doesn't zoom.
+ */
+.surface {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    outline: none;
+
+    &:focus-visible {
+        outline: 2px solid;
+        outline-color: var(--_fm-primary);
+        outline-offset: -2px;
+        border-radius: calc(var(--_fm-radius) * 3);
+    }
+}
+
+/* Placed and sized in its inline style, which `useMarquee` sets while dragging. */
+.marquee {
+    display: none;
+    position: absolute;
+    z-index: 3;
+    border: 1px solid;
+    border-color: var(--_fm-primary);
+    border-radius: calc(var(--_fm-radius) * 0.5);
+    background-color: var(--_fm-row-selected);
+    pointer-events: none;
+
+    &[data-active="true"] {
+        display: block;
+    }
+}
+
+/*
+ * Overlays the top edge while a loaded folder refreshes, without pushing the content down, and runs
+ * from the start side.
+ */
+.progress {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin-bottom: -4px;
+}
+
+.state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    text-align: center;
+    color: var(--_fm-text-secondary);
+}
+
+.stateIcon {
+    font-size: 3rem;
+    opacity: 0.6;
+}
+
+.stateTitle {
+    color: var(--_fm-text);
+    font-weight: 600;
+}

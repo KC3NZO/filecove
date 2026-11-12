@@ -1,0 +1,28 @@
+/*
+ * Sticks to the bottom of the scroll panel, within thumb reach, and sits at the bottom of short
+ * folders too because the surface is a column at least as tall as the panel.
+ */
+.bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 52px;
+    margin-inline: 8px;
+    margin-bottom: 8px;
+    padding-inline: 4px;
+    border-radius: calc(var(--_fm-radius) * 3);
+    border: 1px solid;
+    border-color: var(--_fm-divider);
+    background-color: var(--_fm-surface);
+    box-shadow: var(--_fm-shadow-6);
+}
+
+.count {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+}

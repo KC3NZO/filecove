@@ -1,9 +1,9 @@
 import { isValidElement, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
+import Text from "../ui/text";
+
+import styles from "./media-form.module.css";
 
 interface MediaFormBodyProps<P> {
     form: { render(params: P): ReactNode };
@@ -19,19 +19,6 @@ interface FormFailureProps {
     /** Why the backend refused what the form holds. */
     message: string;
 }
-
-// Each message on a line of its own, marked by a rule at their start side, which forced colors keep.
-const ownMessagesSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0.5,
-    mb: 2,
-    paddingInlineStart: 1.25,
-    borderInlineStart: "3px solid",
-    color: "error.main",
-    fontSize: "0.8125rem",
-    overflowWrap: "anywhere",
-};
 
 let warnedOfInnerComponent = false;
 
@@ -65,11 +52,11 @@ export const MediaFormBody = <P,>({ form, params }: MediaFormBodyProps<P>) => {
 /** A pick's own errors, above its form. */
 export const ChoiceMessages = ({ messages }: ChoiceMessagesProps) =>
     messages.length > 0 && (
-        <Box sx={ownMessagesSx}>
+        <div className={styles.ownMessages}>
             {messages.map((message, place) => (
                 <bdi key={place}>{message}</bdi>
             ))}
-        </Box>
+        </div>
     );
 
 /** Why an upload's or a process form was refused, over it, brought into view as the form may be scrolled. */
@@ -81,8 +68,8 @@ export const FormFailure = ({ message }: FormFailureProps) => {
     }, [message]);
 
     return (
-        <Typography ref={ref} role="alert" variant="body2" color="error.main">
+        <Text ref={ref} role="alert" variant="body2" color="error">
             <bdi>{message}</bdi>
-        </Typography>
+        </Text>
     );
 };

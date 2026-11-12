@@ -1,16 +1,16 @@
 import { useId, useLayoutEffect, useMemo, useRef } from "react";
 import type { KeyboardEvent } from "react";
 
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../hooks/use-locale";
 import { NO_ERRORS, NO_MESSAGES, fieldMessages } from "../../utils/field-errors";
 import { uploadStandIn } from "../../utils/media";
 import { formatValue, hasBuiltInEditor, isEmptyValue, readValue } from "../../utils/property-value";
 import PropertyDisplay from "../properties/property-display";
 import PropertyInput from "../properties/property-input";
+import Text from "../ui/text";
+import { fmClasses } from "../../styles/classes";
+import { cx } from "../../utils/cx";
+import styles from "./media-fields.module.css";
 
 import type { FieldErrors, FileAdapter, FileEntry, PropertyDefinition, PropertyDefinitionGroup } from "../../types";
 
@@ -66,88 +66,6 @@ interface LabelProps {
     disabled: boolean;
 }
 
-// The groups in a box of their own, so the first of them is its first child, whatever the pick's
-// details put above it.
-const groupsSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-};
-
-// Each group is set apart by a rule above it, as the properties' groups are, the first by the
-// rule under the pick's own heading above it.
-const groupSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    py: 2,
-    borderTop: 1,
-    borderColor: "divider",
-    "&:first-child": { borderTop: 0, pt: 0 },
-};
-
-const groupTitleSx: SxProps<Theme> = {
-    fontSize: "0.8125rem",
-    fontWeight: 600,
-};
-
-const fieldSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: 0.75,
-    minWidth: 0,
-    "& > .MuiFormControl-fullWidth": { alignSelf: "stretch" },
-};
-
-// Above the field rather than floating in it, whose placement is physical (see `rtl.md`).
-const labelSx: SxProps<Theme> = {
-    width: "fit-content",
-    color: "text.secondary",
-    fontSize: "0.75rem",
-};
-
-const errorLabelSx: SxProps<Theme> = {
-    ...labelSx,
-    color: "error.main",
-};
-
-const disabledLabelSx: SxProps<Theme> = {
-    ...labelSx,
-    color: "text.disabled",
-};
-
-const requiredSx: SxProps<Theme> = {
-    color: "error.main",
-};
-
-// Under the field, as a helper text is, each message on a line of its own.
-const messagesSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 0.25,
-    color: "error.main",
-    fontSize: "0.75rem",
-    overflowWrap: "anywhere",
-};
-
-// The checkbox's own padding lines its box up with the labels above the other fields.
-const checkRowSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 0.25,
-};
-
-// The app's own control takes the field's whole width.
-const ownSx: SxProps<Theme> = {
-    alignSelf: "stretch",
-    minWidth: 0,
-};
-
-const valueSx: SxProps<Theme> = {
-    fontSize: "0.875rem",
-    overflowWrap: "anywhere",
-};
-
 /** Enter in a field on one line goes no further, so it doesn't submit a form the app has around it. */
 const keepEnter = (event: KeyboardEvent) => {
     if (event.key === "Enter" && !event.defaultPrevented && event.target instanceof HTMLInputElement) {
@@ -160,23 +78,23 @@ const Label = ({ definition, labelId, htmlFor, error, disabled }: LabelProps) =>
         <>
             {definition.label}
             {definition.required && (
-                <Box component="span" aria-hidden sx={requiredSx}>
+                <span aria-hidden className={styles.required}>
                     {" *"}
-                </Box>
+                </span>
             )}
         </>
     );
 
-    const sx = error ? errorLabelSx : disabled ? disabledLabelSx : labelSx;
+    const className = error ? styles.errorLabel : disabled ? styles.disabledLabel : styles.label;
 
     return htmlFor ? (
-        <Typography component="label" htmlFor={htmlFor} id={labelId} sx={sx}>
+        <Text component="label" htmlFor={htmlFor} id={labelId} className={className}>
             {content}
-        </Typography>
+        </Text>
     ) : (
-        <Typography id={labelId} sx={sx}>
+        <Text id={labelId} className={className}>
             {content}
-        </Typography>
+        </Text>
     );
 };
 
@@ -214,11 +132,11 @@ const Field = ({
             <>
                 <Label definition={definition} labelId={labelId} error={error} disabled={off} />
                 {definition.render ? (
-                    <Box sx={ownSx}>{definition.render({ ...base, saving: false, error })}</Box>
+                    <div className={styles.own}>{definition.render({ ...base, saving: false, error })}</div>
                 ) : (
-                    <Box sx={valueSx}>
+                    <div className={styles.value}>
                         <PropertyDisplay definition={definition} value={value} formattedValue={formattedValue} />
-                    </Box>
+                    </div>
                 )}
             </>
         );
@@ -228,7 +146,7 @@ const Field = ({
         return (
             <>
                 <Label definition={definition} labelId={labelId} error={error} disabled={off} />
-                <Box sx={ownSx}>
+                <div className={styles.own}>
                     {definition.renderEdit({
                         ...base,
                         id,
@@ -236,14 +154,14 @@ const Field = ({
                         disabled,
                         error,
                     })}
-                </Box>
+                </div>
             </>
         );
     }
 
     if (definition.type === "boolean") {
         return (
-            <Box sx={checkRowSx}>
+            <div className={styles.checkRow}>
                 <PropertyInput
                     definition={definition}
                     value={value}
@@ -255,16 +173,16 @@ const Field = ({
                     error={error}
                     describedBy={errorId}
                 />
-                <Typography
+                <Text
                     component="label"
                     htmlFor={id}
                     id={labelId}
                     variant="body2"
-                    color={error ? "error" : off ? "text.disabled" : undefined}
+                    color={error ? "error" : off ? "disabled" : undefined}
                 >
                     {definition.label}
-                </Typography>
-            </Box>
+                </Text>
+            </div>
         );
     }
 
@@ -292,7 +210,7 @@ const Field = ({
         <>
             <Label definition={definition} labelId={labelId} error={error} disabled={off} />
             {definition.render && (
-                <Box sx={ownSx}>
+                <div className={styles.own}>
                     {definition.render({
                         ...base,
                         save: disabled
@@ -305,7 +223,7 @@ const Field = ({
                         saving: false,
                         error,
                     })}
-                </Box>
+                </div>
             )}
         </>
     );
@@ -342,7 +260,7 @@ const MediaFields = <V,>({
     });
 
     return (
-        <Box sx={groupsSx} onKeyDown={keepEnter}>
+        <div className={cx(styles.groups, fmClasses.mediaFields)} onKeyDown={keepEnter}>
             {groups.map((group, groupIndex) => {
                 const fields = group.properties.flatMap((definition, index) => {
                     const value = readValue(definition, held, entry);
@@ -356,7 +274,7 @@ const MediaFields = <V,>({
                     }
 
                     return [
-                        <Box key={definition.field} sx={fieldSx}>
+                        <div key={definition.field} className={cx(styles.field, fmClasses.mediaField)}>
                             <Field
                                 definition={definition}
                                 value={value}
@@ -377,35 +295,35 @@ const MediaFields = <V,>({
                                 }}
                             />
                             {errorId && (
-                                <Box id={errorId} sx={messagesSx}>
+                                <div id={errorId} className={styles.messages}>
                                     {messages.map((message, place) => (
                                         <bdi key={place}>{message}</bdi>
                                     ))}
-                                </Box>
+                                </div>
                             )}
-                        </Box>,
+                        </div>,
                     ];
                 });
 
                 return (
                     fields.length > 0 && (
-                        <Box
+                        <div
                             key={group.id}
                             role="group"
                             aria-labelledby={group.title ? `${baseId}-${groupIndex}` : undefined}
-                            sx={groupSx}
+                            className={styles.group}
                         >
                             {group.title && (
-                                <Typography id={`${baseId}-${groupIndex}`} component="h3" sx={groupTitleSx}>
+                                <Text id={`${baseId}-${groupIndex}`} component="h3" className={styles.groupTitle}>
                                     {group.title}
-                                </Typography>
+                                </Text>
                             )}
                             {fields}
-                        </Box>
+                        </div>
                     )
                 );
             })}
-        </Box>
+        </div>
     );
 };
 

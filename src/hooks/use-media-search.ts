@@ -5,7 +5,7 @@ import { useSetting } from "./use-setting";
 import type { MediaSearch } from "../types";
 
 interface MediaSearchOptions {
-    /** Names the component in MUI's warnings about switching between controlled and not. */
+    /** Names the component in the warnings about switching between controlled and not. */
     component: string;
     /** The app's search, when it keeps it: null while closed. */
     value?: MediaSearch | null;

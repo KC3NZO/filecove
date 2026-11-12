@@ -1,24 +1,19 @@
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
-
-import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
+import { useContext, useEffect, useRef, useState } from "react";
 
 import { DirectionContext } from "../../../contexts/direction-context";
 import { MovingContext } from "../../../contexts/moving-context";
 import { useData } from "../../../hooks/use-folder";
 import { useLocale } from "../../../hooks/use-locale";
 import { listingOf } from "../../../store/folder-store";
-import { dialogActionsSx } from "../../../styles/direction";
-import { dialogPaperSx } from "../../../styles/mixins";
 import { isolate } from "../../../utils/bidi";
 import { groupedEntries } from "../../../utils/groups";
 import { folderOf } from "../../../utils/navigation";
 import { movingThrough } from "../../../utils/transfer";
+import Button from "../../ui/button";
+import Dialog, { DialogActions, DialogContent, DialogTitle } from "../../ui/dialog";
+import Text from "../../ui/text";
+import { fmClasses } from "../../../styles/classes";
+import styles from "./delete-dialog.module.css";
 
 import type { EntryGroup, FileAdapter } from "../../../types";
 
@@ -64,12 +59,6 @@ interface DeleteDialogProps {
     onDone: (request: DeleteRequest) => void;
 }
 
-const contentSx: SxProps<Theme> = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-};
-
 /**
  * Asks to confirm deleting entries, then has the adapter delete them, a folder's at a time, as it
  * takes entries sharing a folder, each through its own section's adapter. Deleting can't be undone,
@@ -95,17 +84,6 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
     const deleted = useRef<DeleteGroup[]>([]);
 
     useEffect(() => () => controller.current?.abort(), []);
-
-    // Delete is focused once the dialog has faded in, so Enter confirms and Escape cancels. The
-    // context menu hands focus back to where it was opened from as it closes, which would win over
-    // `autoFocus`.
-    const slotProps = useMemo(
-        () => ({
-            paper: { sx: dialogPaperSx },
-            transition: { onEntered: () => confirmRef.current?.focus() },
-        }),
-        [],
-    );
 
     // Each adapter's folders, listed again together.
     const refresh = () =>
@@ -231,19 +209,30 @@ const DeleteDialog = ({ open, request, onClose, onChanged, onDone }: DeleteDialo
     }
 
     return (
-        <Dialog dir={dir} open={open} fullWidth maxWidth="xs" slotProps={slotProps} onClose={close}>
+        <Dialog
+            dir={dir}
+            open={open}
+            fullWidth
+            maxWidth="xs"
+            className={fmClasses.deleteDialog}
+            onClose={close}
+            // Delete is focused once the dialog has faded in, so Enter confirms and Escape cancels.
+            // The context menu hands focus back to where it was opened from as it closes, which
+            // would win over anything sooner.
+            onEntered={() => confirmRef.current?.focus()}
+        >
             <DialogTitle>{title}</DialogTitle>
-            <DialogContent sx={contentSx}>
-                <Typography variant="body2" color="text.secondary">
+            <DialogContent className={styles.content}>
+                <Text variant="body2" color="secondary">
                     {warning}
-                </Typography>
+                </Text>
                 {failure && (
-                    <Typography variant="body2" color="error">
+                    <Text variant="body2" color="error">
                         {failure}
-                    </Typography>
+                    </Text>
                 )}
             </DialogContent>
-            <DialogActions sx={dialogActionsSx}>
+            <DialogActions>
                 <Button color="inherit" onClick={close}>
                     {text.cancel}
                 </Button>

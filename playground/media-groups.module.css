@@ -1,0 +1,30 @@
+/*
+ * Audio's group form, the playground's own: what a group is and has is this backend's, and the media
+ * manager reads none of it. Images and Videos have none, so they make a group from a name alone, its
+ * details opening next, to try both. A cover is a picture of Images and a teaser a video of Videos,
+ * each chosen through `MediaPicker` and kept as the asset, which the backend hands back as it is now.
+ */
+.preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 8px;
+    background-color: var(--app-hover);
+}
+
+.previewCover {
+    width: 72px;
+    height: 72px;
+    border-radius: 6px;
+}
+
+.previewName {
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.previewType {
+    color: var(--app-text-secondary);
+    font-size: 0.8125rem;
+}

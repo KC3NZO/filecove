@@ -1,0 +1,15 @@
+.tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+
+    &:empty {
+        display: none;
+    }
+}
+
+/* The checkbox's own padding, kept small, so it sits in the row as a value does. */
+.checkbox {
+    padding: 4px;
+    margin-inline-start: -4px;
+}

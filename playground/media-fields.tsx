@@ -1,11 +1,8 @@
 import { useState } from "react";
 
-import Box from "@mui/material/Box";
-import ButtonBase from "@mui/material/ButtonBase";
-import TextField from "@mui/material/TextField";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { MediaFields } from "../src";
+import { ButtonBase, TextField } from "./ui";
+import styles from "./media-fields.module.css";
 
 import type {
     FileEntry,
@@ -41,41 +38,6 @@ type Language = (typeof LANGUAGES)[number]["code"];
 
 const POINTS = ["top-start", "top", "top-end", "start", "center", "end", "bottom-start", "bottom", "bottom-end"];
 
-const pointsSx: SxProps<Theme> = {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 2rem)",
-    gap: 0.5,
-};
-
-const pointSx: SxProps<Theme> = {
-    height: "2rem",
-    borderRadius: 1,
-    border: 1,
-    borderColor: "divider",
-    "&[aria-checked='true']": { bgcolor: "primary.main", borderColor: "primary.main" },
-    "&.Mui-focusVisible": { outline: 2, outlineColor: "primary.main", outlineOffset: 1 },
-    "[aria-invalid='true'] > &": { borderColor: "error.main" },
-};
-
-const languagesSx: SxProps<Theme> = {
-    display: "flex",
-    gap: 0.5,
-    mb: 1,
-};
-
-const languageSx: SxProps<Theme> = {
-    px: 1,
-    py: 0.25,
-    borderRadius: 1,
-    border: 1,
-    borderColor: "divider",
-    color: "text.secondary",
-    fontSize: "0.75rem",
-    "&[aria-pressed='true']": { bgcolor: "action.selected", color: "text.primary" },
-    "&[data-error='true']": { borderColor: "error.main", color: "error.main" },
-    "&.Mui-focusVisible": { outline: 2, outlineColor: "primary.main", outlineOffset: 1 },
-};
-
 /** The request's key for a pick's field, as the playground's backend names it: `media.0.focus`. */
 const keyOf =
     (field: string) =>
@@ -92,7 +54,7 @@ const translationKey = (index: number, code: Language, name: string) => `media.$
  * the message.
  */
 const FocalPoint = ({ value, save, labelId, error, errorId }: PropertyRenderParams) => (
-    <Box role="radiogroup" aria-labelledby={labelId} aria-invalid={error} aria-describedby={errorId} sx={pointsSx}>
+    <div role="radiogroup" aria-labelledby={labelId} aria-invalid={error} aria-describedby={errorId} className={styles.points}>
         {POINTS.map((point) => (
             <ButtonBase
                 key={point}
@@ -100,11 +62,11 @@ const FocalPoint = ({ value, save, labelId, error, errorId }: PropertyRenderPara
                 aria-checked={(value ?? "center") === point}
                 aria-label={point}
                 disabled={!save}
-                sx={pointSx}
+                className={styles.point}
                 onClick={() => save?.(point)}
             />
         ))}
-    </Box>
+    </div>
 );
 
 interface TranslatedTextProps extends PropertyEditParams {
@@ -126,7 +88,7 @@ const TranslatedText = ({ name, value, onChange, id, labelId, errors, index, err
 
     return (
         <>
-            <Box sx={languagesSx}>
+            <div className={styles.languages}>
                 {LANGUAGES.map(({ code, label }) => (
                     <ButtonBase
                         key={code}
@@ -134,28 +96,22 @@ const TranslatedText = ({ name, value, onChange, id, labelId, errors, index, err
                         lang={code}
                         aria-pressed={shown === code}
                         data-error={failing(code)}
-                        sx={languageSx}
+                        className={styles.language}
                         onClick={() => setShown(code)}
                     >
                         {label}
                     </ButtonBase>
                 ))}
-            </Box>
+            </div>
             <TextField
                 id={id}
-                size="small"
-                fullWidth
                 value={texts[shown] ?? ""}
                 error={failing(shown)}
                 onChange={(event) => onChange({ ...texts, [shown]: event.target.value })}
-                slotProps={{
-                    htmlInput: {
-                        lang: shown,
-                        dir: language.dir,
-                        "aria-labelledby": `${labelId} ${id}-${shown}`,
-                        "aria-describedby": errorId,
-                    },
-                }}
+                lang={shown}
+                dir={language.dir}
+                aria-labelledby={`${labelId} ${id}-${shown}`}
+                aria-describedby={errorId}
             />
         </>
     );

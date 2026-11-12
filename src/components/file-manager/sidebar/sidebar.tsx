@@ -1,13 +1,8 @@
 import { Fragment, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent, FocusEvent, KeyboardEvent, Ref } from "react";
 
-import Box from "@mui/material/Box";
-import Divider from "@mui/material/Divider";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-import { useForkRef } from "@mui/material/utils";
-
 import { DragContext } from "../../../contexts/drag-context";
+import { useForkRef } from "../../../hooks/use-fork-ref";
 import { useFound } from "../../../hooks/use-found";
 import { useLocale } from "../../../hooks/use-locale";
 import { useTreeRows } from "../../../hooks/use-tree-rows";
@@ -15,26 +10,23 @@ import { useTreeSelection } from "../../../hooks/use-tree-selection";
 import { useTypeAhead } from "../../../hooks/use-type-ahead";
 import { useVirtualRows } from "../../../hooks/use-virtual-rows";
 import { folderKey } from "../../../store/folder-store";
-import {
-    HEADER_HEIGHT,
-    RESIZE_STEP,
-    SIDEBAR_MAX_WIDTH,
-    SIDEBAR_MIN_WIDTH,
-    SIDEBAR_WIDTH,
-    rootWide,
-} from "../../../styles/layout";
-import { focusOutline, forcedColors, forcedPressed } from "../../../styles/mixins";
+import { RESIZE_STEP, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH } from "../../../styles/layout";
 import { focusLost, isRtl } from "../../../utils/dom";
 import { isTypingKey, matchName } from "../../../utils/keyboard";
 import { belowElement } from "../../../utils/menu-position";
 import { clampWidth } from "../../../utils/resize";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
+import Divider from "../../ui/divider";
+import Text from "../../ui/text";
 import FindLayer from "../find-layer";
 import ResizeEdge from "../resize-edge";
 import SelectionBar from "../selection-bar";
 import TreeRowItem, { GuideLine } from "./location-item";
 import MainMenu from "./main-menu";
+import { fmClasses } from "../../../styles/classes";
+import { cx } from "../../../utils/cx";
+import styles from "./sidebar.module.css";
 
 import type {
     FileManagerLocation,
@@ -108,139 +100,6 @@ interface SidebarProps {
     onPasteFiles: PasteFiles;
     onClose: () => void;
 }
-
-const sidebarSx: SxProps<Theme> = (theme) => ({
-    display: "flex",
-    flexDirection: "column",
-    flexShrink: 0,
-    bgcolor: "background.default",
-    outline: "none",
-    // Only a docked sidebar's edge resizes it.
-    '& > [role="separator"]': { display: "none" },
-
-    // Collapsed: an overlay drawer that slides in over the content from the start side, the left
-    // or, right to left, the right. It stays inside the file manager rather than portalling to
-    // <body>, so an embedded instance overlays only itself. It slides by `translate` rather than
-    // `transform`, which Emotion's RTL plugin would flip a second time.
-    position: "absolute",
-    zIndex: 2,
-    top: 0,
-    bottom: 0,
-    insetInlineStart: 0,
-    width: `min(${SIDEBAR_WIDTH + 32}px, 85%)`,
-    boxShadow: 8,
-    "--closed-shift": "-100%",
-    "&:dir(rtl)": { "--closed-shift": "100%" },
-    translate: "var(--closed-shift)",
-    // Hidden, not just off-screen, so its buttons drop out of the tab order while closed.
-    visibility: "hidden",
-    transition: theme.transitions.create(["translate", "visibility"], {
-        duration: theme.transitions.duration.enteringScreen,
-        easing: theme.transitions.easing.easeOut,
-    }),
-    '&[data-open="true"]': {
-        translate: "none",
-        visibility: "visible",
-    },
-
-    // Docked beside the content, unless it's hidden, as wide as the user made it
-    // (`--sidebar-width`), and narrower, down to its least width, while the content needs the room
-    // (the main part's `min-width`).
-    [rootWide]: {
-        position: "relative",
-        zIndex: "auto",
-        flexShrink: 1,
-        width: `var(--sidebar-width, ${SIDEBAR_WIDTH}px)`,
-        minWidth: SIDEBAR_MIN_WIDTH,
-        boxShadow: "none",
-        translate: "none",
-        visibility: "visible",
-        transition: "none",
-        '&[data-hidden="true"]': { display: "none" },
-        '&[data-hidden="true"][data-peek="true"]': {
-            display: "flex",
-            position: "absolute",
-            zIndex: 2,
-            width: `min(${SIDEBAR_WIDTH + 32}px, 85%)`,
-            boxShadow: 8,
-        },
-        '& > [role="separator"]': { display: "block" },
-        '&[data-hidden="true"][data-peek="true"] > [role="separator"]': { display: "none" },
-    },
-});
-
-const headerSx: SxProps<Theme> = {
-    display: "flex",
-    alignItems: "center",
-    gap: 0.5,
-    flexShrink: 0,
-    minHeight: HEADER_HEIGHT,
-    px: 1,
-};
-
-const searchButtonSx: SxProps<Theme> = {
-    '&[aria-pressed="true"]': { color: "primary.main" },
-    [forcedColors]: forcedPressed,
-};
-
-const titleSx: SxProps<Theme> = {
-    flex: 1,
-    minWidth: 0,
-    textAlign: "center",
-    fontSize: "0.9375rem",
-    fontWeight: 700,
-};
-
-const navSx: SxProps<Theme> = {
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-    px: 1,
-    pb: 1,
-};
-
-// Placed by the tree, like the rows.
-const groupTitleSx: SxProps<Theme> = {
-    position: "absolute",
-    insetInline: 0,
-    display: "flex",
-    alignItems: "center",
-    px: 1.5,
-    color: "text.secondary",
-    fontWeight: 600,
-};
-
-const ruleSx: SxProps<Theme> = {
-    position: "absolute",
-    insetInline: 0,
-};
-
-const dividerSx: SxProps<Theme> = {
-    mx: 1.25,
-    my: 1,
-};
-
-// Only renders the rows in or near view, each placed where it goes, and is as tall as all of them.
-// Only shows a ring while it has nothing to hand the focus to, such as a single section still loading.
-const treeSx: SxProps<Theme> = {
-    position: "relative",
-    borderRadius: 2,
-    outline: "none",
-    "&:focus-visible": focusOutline,
-};
-
-// Clips the tree down its length, so a row kept rendered far from view in a squeezed tree, placed
-// in px of all the rows, doesn't lengthen what the sidebar scrolls (see `virtualization.md`).
-const treeClipSx: SxProps<Theme> = {
-    overflowY: "clip",
-};
-
-// Holds rows placed in the tree, so it takes no room itself. The section groups are still lists,
-// so each is a `group` of the tree.
-const listSx: SxProps<Theme> = {
-    m: 0,
-    p: 0,
-};
 
 const placeStyle = (row: TreeRow): CSSProperties => ({ top: row.top, height: row.height });
 
@@ -667,11 +526,11 @@ const Sidebar = ({
         // Focusable but not tabbable, so a press on its empty space keeps the focus in the sidebar:
         // the keys work anywhere in the file manager, F6 goes on to the content, and the overlay
         // stays open.
-        <Box
+        <div
             ref={forkedRef}
             id={sidebarId}
             tabIndex={-1}
-            sx={sidebarSx}
+            className={cx(styles.sidebar, fmClasses.sidebar)}
             style={{ "--sidebar-width": `${asked}px` } as CSSProperties}
             data-open={open}
             data-hidden={hidden}
@@ -679,7 +538,7 @@ const Sidebar = ({
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
         >
-            <Box sx={headerSx}>
+            <div className={cx(styles.header, fmClasses.sidebarHeader)}>
                 {/* Keeps the focus in an open search's field as it's pressed, which it closes or
                     switches to searching everywhere. */}
                 {canSearchEverywhere && (
@@ -687,22 +546,22 @@ const Sidebar = ({
                         label={text.searchEverywhere}
                         aria-pressed={searchScope === "everywhere"}
                         aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
-                        sx={searchButtonSx}
+                        className={styles.searchButton}
                         onMouseDown={(event) => searchScope && event.preventDefault()}
                         onClick={onSearchEverywhere}
                     >
                         <Icon name="search" fontSize="small" />
                     </TooltipIconButton>
                 )}
-                <Typography component="span" noWrap sx={titleSx}>
+                <Text component="span" noWrap className={styles.title}>
                     {title}
-                </Typography>
+                </Text>
                 <MainMenu groups={mainMenu} undo={undoItems} onShowShortcuts={onShowShortcuts} />
-            </Box>
-            <Box component="nav" aria-label={text.sidebar} sx={navSx}>
+            </div>
+            <nav aria-label={text.sidebar} className={styles.nav}>
                 <FindLayer names={names} onFound={handleFound} />
-                <Box sx={treeClipSx}>
-                    <Box
+                <div className={styles.treeClip}>
+                    <div
                         ref={treeElement}
                         role="tree"
                         aria-label={tree ? tree.label : text.sections}
@@ -711,7 +570,7 @@ const Sidebar = ({
                         data-selecting={selecting}
                         // With no section, there's nothing in it to tab to.
                         tabIndex={focusInside || !rows.some(isItem) ? -1 : 0}
-                        sx={treeSx}
+                        className={cx(styles.tree, fmClasses.tree)}
                         style={{ height }}
                         onFocus={handleTreeFocus}
                         onBlur={handleTreeBlur}
@@ -732,9 +591,9 @@ const Sidebar = ({
                                 />
                             ))}
                         {tree && (
-                            <Box component="ul" role="none" sx={listSx}>
+                            <ul role="none" className={styles.list}>
                                 {shown.filter(isListed).map(renderItem)}
-                            </Box>
+                            </ul>
                         )}
                         {/* Each group is a `group` of the tree, named by its title, which is hidden from screen
                             readers so it isn't read twice. */}
@@ -748,39 +607,39 @@ const Sidebar = ({
                                         {inGroup.map((row) => {
                                             if (row.kind === "divider") {
                                                 return (
-                                                    <Box key={row.id} sx={ruleSx} style={placeStyle(row)} aria-hidden>
-                                                        <Divider sx={dividerSx} />
-                                                    </Box>
+                                                    <div key={row.id} className={styles.rule} style={placeStyle(row)} aria-hidden>
+                                                        <Divider className={styles.divider} />
+                                                    </div>
                                                 );
                                             }
 
                                             if (row.kind === "caption") {
                                                 return (
-                                                    <Typography
+                                                    <Text
                                                         key={row.id}
                                                         variant="caption"
-                                                        sx={groupTitleSx}
+                                                        className={cx(styles.groupTitle, fmClasses.treeGroupTitle)}
                                                         style={placeStyle(row)}
                                                         aria-hidden
                                                     >
                                                         {row.title}
-                                                    </Typography>
+                                                    </Text>
                                                 );
                                             }
 
                                             return null;
                                         })}
                                         {items.length > 0 && (
-                                            <Box component="ul" role="group" aria-label={group.title} sx={listSx}>
+                                            <ul role="group" aria-label={group.title} className={styles.list}>
                                                 {items.map(renderItem)}
-                                            </Box>
+                                            </ul>
                                         )}
                                     </Fragment>
                                 );
                             })}
-                    </Box>
-                </Box>
-            </Box>
+                    </div>
+                </div>
+            </nav>
             {selecting && (
                 <SelectionBar
                     count={selectedFolders.length}
@@ -807,7 +666,7 @@ const Sidebar = ({
                 widest={widest}
                 onChange={onWidthChange}
             />
-        </Box>
+        </div>
     );
 };
 

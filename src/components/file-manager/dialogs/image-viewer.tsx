@@ -1,16 +1,13 @@
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, Ref, SyntheticEvent } from "react";
 
-import Box from "@mui/material/Box";
-import CircularProgress from "@mui/material/CircularProgress";
-import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
-
 import { useLocale } from "../../../hooks/use-locale";
-import { PREVIEW_IMAGE_CONTAINER, previewImageWide } from "../../../styles/layout";
 import { pressedKeys } from "../../../utils/shortcut";
 import TooltipIconButton from "../../buttons/tooltip-icon-button";
 import Icon from "../../icons/icon";
+import CircularProgress from "../../ui/circular-progress";
+import Text from "../../ui/text";
+import styles from "./image-viewer.module.css";
 
 import type { Room } from "../../../hooks/use-swipe";
 
@@ -269,97 +266,6 @@ const between = (from: Placement, to: Placement, progress: number, anchor?: Poin
         scale,
         angle,
     };
-};
-
-// A container, so the toolbar fits its buttons to the room the image has.
-const viewerSx: SxProps<Theme> = {
-    position: "relative",
-    alignSelf: "stretch",
-    flex: 1,
-    minWidth: 0,
-    containerType: "inline-size",
-    containerName: PREVIEW_IMAGE_CONTAINER,
-};
-
-// The browser's own touch gestures are off, so a pinch zooms the image rather than the page.
-const stageSx: SxProps<Theme> = {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    touchAction: "none",
-    userSelect: "none",
-    '&[data-zoomed="true"]': { cursor: "grab" },
-    '&[data-zoomed="true"]:active': { cursor: "grabbing" },
-};
-
-// Shrunk to fit, never stretched past its own size.
-const fittedImageSx: SxProps<Theme> = {
-    display: "block",
-    maxWidth: `calc(100% - ${2 * GAP}px)`,
-    maxHeight: `calc(100% - ${2 * GAP}px)`,
-};
-
-// Placed, sized, moved and turned through `style`, from the zoom.
-const zoomedImageSx: SxProps<Theme> = {
-    display: "block",
-    position: "absolute",
-    maxWidth: "none",
-    maxHeight: "none",
-};
-
-// Where the image will be once it has loaded: fitted the same way, its own size when that's known,
-// with the small picture drawn into that box, or else as large as the view allows.
-const placeholderSx: SxProps<Theme> = {
-    position: "absolute",
-    inset: 0,
-    m: "auto",
-    width: "100%",
-    height: "100%",
-    maxWidth: `calc(100% - ${2 * GAP}px)`,
-    maxHeight: `calc(100% - ${2 * GAP}px)`,
-    objectFit: "contain",
-    pointerEvents: "none",
-};
-
-const spinnerSx: SxProps<Theme> = {
-    position: "absolute",
-    inset: 0,
-    m: "auto",
-};
-
-const toolbarSx: SxProps<Theme> = {
-    position: "absolute",
-    bottom: 12,
-    insetInlineEnd: 12,
-    display: "flex",
-    alignItems: "center",
-    gap: 0.25,
-    p: 0.5,
-    border: 1,
-    borderColor: "divider",
-    borderRadius: "999px",
-    bgcolor: "background.default",
-    boxShadow: 2,
-};
-
-const ruleSx: SxProps<Theme> = {
-    alignSelf: "stretch",
-    width: "1px",
-    my: 0.5,
-    mx: 0.25,
-    bgcolor: "divider",
-};
-
-// Left out where the image has little room, so the buttons still fit on a phone.
-const percentSx: SxProps<Theme> = {
-    display: "none",
-    minWidth: "3.5em",
-    textAlign: "center",
-    fontVariantNumeric: "tabular-nums",
-    [previewImageWide]: { display: "block" },
 };
 
 /**
@@ -974,9 +880,9 @@ const ImageViewer = ({ ref, src, alt, placeholder, expected, onLoad, onError }: 
     const placed: CSSProperties | undefined =
         placement && image
             ? {
-                  // From the view's top left, right to left too: the zoom is worked out from the
-                  // pointer's place on the screen, and a style set inline isn't flipped by Emotion's
-                  // RTL plugin. Turned about its centre, which the translation puts in place.
+                  // From the view's top left, right to left too, as the zoom is worked out from the
+                  // pointer's place on the screen. Turned about its centre, which the translation
+                  // puts in place.
                   top: 0,
                   left: 0,
                   width: image.width * placement.scale,
@@ -989,10 +895,10 @@ const ImageViewer = ({ ref, src, alt, placeholder, expected, onLoad, onError }: 
             : undefined;
 
     return (
-        <Box sx={viewerSx}>
-            <Box
+        <div className={styles.viewer}>
+            <div
                 ref={stageRef}
-                sx={stageSx}
+                className={styles.stage}
                 data-zoomed={!!zoom}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
@@ -1002,30 +908,28 @@ const ImageViewer = ({ ref, src, alt, placeholder, expected, onLoad, onError }: 
                 onDoubleClick={handleDoubleClick}
             >
                 {!loaded && placeholder && (
-                    <Box
-                        component="img"
+                    <img
                         src={placeholder}
                         alt=""
                         draggable={false}
-                        sx={placeholderSx}
+                        className={styles.placeholder}
                         style={expected}
                     />
                 )}
-                <Box
+                <img
                     ref={imageRef}
-                    component="img"
                     src={src}
                     alt={alt}
                     draggable={false}
-                    sx={placed ? zoomedImageSx : fittedImageSx}
+                    className={placed ? styles.zoomedImage : styles.fittedImage}
                     style={placed}
                     onLoad={handleLoad}
                     onError={onError}
                 />
-                {!loaded && <CircularProgress size={28} aria-label={text.loading} sx={spinnerSx} />}
-            </Box>
+                {!loaded && <CircularProgress size={28} aria-label={text.loading} className={styles.spinner} />}
+            </div>
             {box && view && (
-                <Box sx={toolbarSx}>
+                <div className={styles.toolbar}>
                     <TooltipIconButton
                         size="small"
                         label={text.zoomOut}
@@ -1035,9 +939,9 @@ const ImageViewer = ({ ref, src, alt, placeholder, expected, onLoad, onError }: 
                     >
                         <Icon name="zoomOut" fontSize="small" />
                     </TooltipIconButton>
-                    <Typography variant="body2" color="text.secondary" sx={percentSx}>
+                    <Text variant="body2" color="secondary" className={styles.percent}>
                         {formatPercent(scale)}
-                    </Typography>
+                    </Text>
                     <TooltipIconButton
                         size="small"
                         label={text.zoomIn}
@@ -1056,7 +960,7 @@ const ImageViewer = ({ ref, src, alt, placeholder, expected, onLoad, onError }: 
                     >
                         <Icon name="zoomFit" fontSize="small" />
                     </TooltipIconButton>
-                    <Box sx={ruleSx} />
+                    <div className={styles.rule} />
                     {/* Turning is the same either way the page runs, so the icons aren't mirrored. */}
                     <TooltipIconButton
                         size="small"
@@ -1074,9 +978,9 @@ const ImageViewer = ({ ref, src, alt, placeholder, expected, onLoad, onError }: 
                     >
                         <Icon name="rotateRight" fontSize="small" />
                     </TooltipIconButton>
-                </Box>
+                </div>
             )}
-        </Box>
+        </div>
     );
 };
 
