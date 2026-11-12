@@ -8,7 +8,7 @@ paths:
   - "src/types/download.ts"
   - "src/types/adapter.ts"
   - "src/types/action.ts"
-  - "src/styles/panel.ts"
+  - "src/styles/panel.module.css"
   - "playground/mocks/mock-adapter.ts"
   - "playground/mocks/mock-zip.ts"
 ---
@@ -55,11 +55,11 @@ Three optional members, and a single file prefers the first:
 
 ## The panel
 
-`components/downloads/download-panel.tsx` shows the queue's shown items, and knows nothing of where it's shown. `FileManager` places it as an inset panel under the content, below the transfer panel and above the upload panel when they show (`taskPanelSx`), only while it has items. Its look is the upload panel's, from `styles/panel.ts`, which both use.
+`components/downloads/download-panel.tsx` shows the queue's shown items, and knows nothing of where it's shown. `FileManager` places it as an inset panel under the content, below the transfer panel and above the upload panel when they show (`styles.taskPanel`), only while it has items. Its look is the upload panel's, from `styles/panel.module.css`, which both use.
 
 - The summary has a status icon (a ring while any is waiting or being prepared, filling with the bytes come of those totals once every one of them has reported progress, and spinning until then, the download icon while some are ready, an error otherwise), a title ("Preparing 2 downloads", "A download is ready", "A download failed", announced politely), and the counts the title leaves out ("1 ready · 1 failed").
 - The chevron folds the list away. The ✕ cancels everything waiting or being prepared; once nothing is, it forgets the rest and the panel goes.
-- Each row has the entry's type icon (a folder's or a file's, or the copy icon for several), its name or "3 items", a progress bar while it's being prepared (filling once the adapter reports progress, sweeping until then, and from the start side, `panelBarSx`), and its status ("Waiting", "Preparing…" or "1.5 MB of 4 MB" once it reports, "Ready to download", or the adapter's error, `downloadFailed` without one). Waiting and preparing rows can be cancelled, failed ones tried again, and ready ones started with a download button in the primary color.
+- Each row has the entry's type icon (a folder's or a file's, or the copy icon for several), its name or "3 items", a progress bar while it's being prepared (filling once the adapter reports progress, sweeping until then, and from the start side, `panel.bar`), and its status ("Waiting", "Preparing…" or "1.5 MB of 4 MB" once it reports, "Ready to download", or the adapter's error, `downloadFailed` without one). Waiting and preparing rows can be cancelled, failed ones tried again, and ready ones started with a download button in the primary color.
 - Its text is `DownloadLocaleText` (`types/locale.ts`), kept apart as the upload panel's is (see `locale.md`).
 
 ## From outside

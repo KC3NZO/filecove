@@ -65,7 +65,7 @@ What's loaded is kept by `previewKey` (the id, size and date modified), so a fil
 
 ## The header
 
-`dialogs/preview-dialog.tsx`, a large modal like the other dialogs (portalled, `dialogPaperSx`), sized `min(72rem, 100% - 2rem)` by `min(54rem, 100% - 2rem)`. The header has the file's type icon, its name, a line with its type, size and, once loaded, an image's or video's dimensions, the stepper, the app's actions, Download, Full screen and Close. It's a container of its own (`PREVIEW_HEADER_CONTAINER`, `styles/layout.ts`), as the preview portals out of the root's: the stepper's "3 / 12" shows from 480px (`previewHeaderMedium`), and the actions as buttons from 640px (`previewHeaderWide`). The file sits on `background.paper` inside, as the folder view does in the window.
+`dialogs/preview-dialog.tsx`, a large modal like the other dialogs (the kit's `Dialog`, portalled), sized `min(72rem, 100% - 2rem)` by `min(54rem, 100% - 2rem)`. The header has the file's type icon, its name, a line with its type, size and, once loaded, an image's or video's dimensions, the stepper, the app's actions, Download, Full screen and Close. It's a container of its own (`PREVIEW_HEADER_CONTAINER`, `styles/layout.ts`), as the preview portals out of the root's: the stepper's "3 / 12" shows from 480px (`previewHeaderMedium`), and the actions as buttons from 640px (`previewHeaderWide`). The file sits on `--_fm-surface` inside, as the folder view does in the window.
 
 ### The app's actions
 
@@ -157,7 +157,7 @@ The file shown is kept by its id, its adapter and its place (`Shown`): when it g
 
 - +, -, 0 and 1 zoom an image, R and Shift+R turn it, and the arrows pan it while it's zoomed in (see "Images"). 0, 1 and R are the keys printed with them on any layout, so AZERTY's digit row works without Shift (see "Keyboard layouts" in `keyboard.md`).
 - Left and Right, Home and End step (see "Stepping through files"), F fills the screen, and Escape closes, and so does Space, as in GNOME's and macOS's previewers, except on a button, link or player, and not when it's a key held down from opening the preview (`event.repeat`). The app's actions' shortcuts come after these. None of them is taken from a field a previewer types in (`typesInField`), and a key a previewer prevents is left alone.
-- Opened from the content (`focusInContent`, shared with `leaveFor`, which counts the context menu opened from the content), the dialog doesn't hand the focus back itself (`disableRestoreFocus`). Once it has faded out (`onExited`), `focusContent` gives it to the content's focused entry, which is the file shown last when the selection followed, unless it closed for the properties, which take it. Opened from anywhere else, MUI hands it back.
+- Opened from the content (`focusInContent`, shared with `leaveFor`, which counts the context menu opened from the content), the dialog doesn't hand the focus back itself (`disableRestoreFocus`). Once it has faded out (`onExited`), `focusContent` gives it to the content's focused entry, which is the file shown last when the selection followed, unless it closed for the properties, which take it. Opened from anywhere else, the dialog hands it back.
 - While the preview is open, what the file manager announces (a cut, a copy, a delete or rename made from its header) is said from a live region inside it (`AnnouncerRegion` "preview", in `use-announcer.ts`, read as each message is announced), since the modal hides the root's from screen readers (see "Announcements" in `keyboard.md`).
 
 ## The playground

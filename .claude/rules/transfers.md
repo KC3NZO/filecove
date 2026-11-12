@@ -12,7 +12,7 @@ paths:
   - "src/components/file-manager/dialogs/transfer-dialog.tsx"
   - "src/components/file-manager/dialogs/paste-dialog.tsx"
   - "src/types/adapter.ts"
-  - "src/styles/panel.ts"
+  - "src/styles/panel.module.css"
   - "playground/mocks/mock-adapter.ts"
 ---
 
@@ -61,11 +61,11 @@ Ids only mean something to the adapter they came from, and two backends don't kn
 
 ## The panel
 
-`components/transfers/transfer-panel.tsx` shows the shown items, and knows nothing of where it's shown. `FileManager` places it as an inset panel under the content, above the download and upload panels (`taskPanelSx`), only while it has items. Its look is theirs, from `styles/panel.ts`.
+`components/transfers/transfer-panel.tsx` shows the shown items, and knows nothing of where it's shown. `FileManager` places it as an inset panel under the content, above the download and upload panels (`styles.taskPanel`), only while it has items. Its look is theirs, from `styles/panel.module.css`.
 
 - The summary has a status icon (a ring while any wait or run, filling with the bytes done of their totals once every one of them has reported, spinning until then, an error otherwise), a title counting entries, not transfers ("Copying 3 items", "Moving 1 item", "Copying 3 items and moving 2 items", "Couldn't copy 3 items"; `transfersActive` and `transfersFailed` take both counts, as one sentence), the entries a failed one reported gone left out of what couldn't be, announced politely, and under it the bytes done of the total and how many failed (`transfersFailedCount`).
 - The chevron folds the list away. The ✕ cancels everything waiting or under way; once nothing is, it forgets the failed ones and the panel goes.
-- Each row has the entry's type icon (or the copy or move icon for several), its name or "3 items", a bar while it runs (filling with the bytes once the adapter reports them, else with the entries gone once it reports any, sweeping until then, from the start side, `panelBarSx`), and its status: "Waiting to copy to “Photos”", "Copying to “Photos”" with "1.5 MB of 4 MB" once it reports, or "2 of 5 items" (`transferItemsDone`) when it reports entries but no bytes, or the adapter's error (`transferCopyFailed` without one), with "2 of 5 items copied" (`transferCopiedSome`, `transferMovedSome`) when some went first. A failed row names what's left of it (`leftOf`), which Try again goes for. Waiting and running rows can be cancelled, and failed ones tried again, when the host's `canRetry` takes them.
+- Each row has the entry's type icon (or the copy or move icon for several), its name or "3 items", a bar while it runs (filling with the bytes once the adapter reports them, else with the entries gone once it reports any, sweeping until then, from the start side, `panel.bar`), and its status: "Waiting to copy to “Photos”", "Copying to “Photos”" with "1.5 MB of 4 MB" once it reports, or "2 of 5 items" (`transferItemsDone`) when it reports entries but no bytes, or the adapter's error (`transferCopyFailed` without one), with "2 of 5 items copied" (`transferCopiedSome`, `transferMovedSome`) when some went first. A failed row names what's left of it (`leftOf`), which Try again goes for. Waiting and running rows can be cancelled, and failed ones tried again, when the host's `canRetry` takes them.
 - Its text is `TransferLocaleText` (`types/locale.ts`), kept apart as the other panels' is (see `locale.md`).
 
 ## In the file manager

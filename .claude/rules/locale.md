@@ -49,8 +49,8 @@ Adding a text means adding its key to the interface, with a comment when its use
 
 `useLocaleValue` makes the `Locale` afresh only when `locale` or one of the texts changes, compared key by key, since every row rendered reads it, and memoized rows render again with a new one. A `localeText` object written inline is fine; functions written inline are new each render and defeat it, which the prop's comment says.
 
-Text direction is not the locale's: it comes from the page's `dir`, as in MUI (see `rtl.md`).
+Text direction is not the locale's: it comes from the page's `dir` (see `rtl.md`).
 
 ## Not yet
 
-Translations shipped with the package, taking `localeText` from the theme as MUI's own components do (part of theme `defaultProps`, under packaging in the roadmap), and a playground page in another language (`?locale=` only sets the formats).
+Translations shipped with the package (under packaging in the roadmap), and a playground page in another language (`?locale=` only sets the formats).
