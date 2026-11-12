@@ -250,7 +250,7 @@ None.
 - [ ] `index.html` still has the repo name as its title, and the repo name mentions Pigment.
 - [ ] **new:** Development warnings for misuse an app (or an AI assistant writing it) would otherwise have to find by trial: the stylesheet not loaded, the root with no height, `adapter` a new object every render, a slot component made while rendering. Only the controlled props and a media form's `render` warn now.
 - [x] A CHANGELOG, started on the day of the first release, its first entry that release (0.1.0, as below 1.0 says the API may still change), not a history of the work before it: the user's call, 2026-11-12. *Done 2026-11-12: `CHANGELOG.md`, shipped; version 0.1.0, `private` off, `description`, `keywords` and `prepublishOnly`; the packed package tried again in a scratch app (strict type-check, Vite build, server render).*
-- [ ] **new:** `repository`, `homepage` (the docs) and `bugs` in `package.json`, with the repo's new name, so npm's page links the docs and resolves the README's relative links.
+- [x] **new:** `repository`, `homepage` (the docs) and `bugs` in `package.json`, with the repo's new name, so npm's page links the docs and resolves the README's relative links. *Done 2026-11-12: the repo is `github.com/KC3NZO/filecove`, so no rename was needed, and the links went in before 0.1.0.*
 - [x] There's no LICENSE. *Done 2026-11-12: MIT, as the user wanted anyone free to clone, change and use it, the license React, Base UI and `@react-symbols/icons` have too; `LICENSE` at the root, `"license": "MIT"` in `package.json`. The Material icons' Apache License stays in `THIRD_PARTY_NOTICES.md` beside it.*
 
 #### Optional

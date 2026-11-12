@@ -41,8 +41,8 @@ The code doesn't put its CSS in the page: an app imports one of two files itself
 - `exports`: `"."` (`types` first, then `import`), `"./icons/filled"`, `"./icons/outlined"`, `"./icons/rounded"`, `"./icons/sharp"` and `"./icons/two-tone"` (each `dist/icon-sets/<style>`, `types` first), `"./styles.css"`, `"./styles.layer.css"` and `"./package.json"`. Listed one by one rather than as `"./icons/*"`, so no other path under `dist/icon-sets/` is reachable. ESM only, with `module` and `types` for older tools.
 - `sideEffects: ["**/*.css"]`, so a bundler keeps the stylesheet an app imports and shakes the rest.
 - `files`: `dist`, `docs` (the consumer docs, so an app's `node_modules/filecove/docs/` matches the version it installed; see "The consumer docs") and `THIRD_PARTY_NOTICES.md` (the Material Icons' license; see `icons.md`). `package.json`, the README and `LICENSE` (MIT) go anyway.
-- Named `filecove` (the user's pick, 2026-11-12), so an app imports `filecove`, `filecove/icons/<style>` and `filecove/styles.css`. `private` came off for 0.1.0 (2026-11-12), with a `description`, `keywords`, `CHANGELOG.md` in `files`, and `prepublishOnly` running `build:lib`, so a stale `dist/` never goes out. `repository`, `homepage` and `bugs` wait for the repo's new name.
-- **Publishing** is `bun publish` (npm is broken on the user's machine), signed in by a granular token in `~/.npmrc` and the account's two-factor code; `bun publish --dry-run` lists what goes. Later releases are planned from CI with npm's trusted publishing.
+- Named `filecove` (the user's pick, 2026-11-12), so an app imports `filecove`, `filecove/icons/<style>` and `filecove/styles.css`. `private` came off for 0.1.0 (2026-11-12), with a `description`, `keywords`, `CHANGELOG.md` in `files`, and `prepublishOnly` running `build:lib`, so a stale `dist/` never goes out. `repository`, `homepage` (the docs) and `bugs` point at `github.com/KC3NZO/filecove`, the repo pushed 2026-11-12.
+- **Publishing** is `bun publish` (npm is broken on the user's machine), signed in by a granular token in the repo's own `.npmrc`, never the global `~/.npmrc` (the user's call), which `.gitignore` keeps out of git, as the repo is public, and `files` out of the package, and the account's two-factor code; `bun publish --dry-run` lists what goes. Later releases are planned from CI with npm's trusted publishing.
 
 ## The consumer docs
 
@@ -70,4 +70,4 @@ Done 2026-11-12, all passing, and again for 0.1.0 the same day with slots, `slot
 ## Not yet
 
 - The declarations are one file per module, imported without extensions, which an app's TypeScript resolves with `moduleResolution` `bundler` (Vite's and Next.js's own) but not `node16` or `nodenext`; bundling them into one `index.d.ts` would cover both.
-- The rest of the roadmap's packaging: `index.html`'s title, the repo's name with `repository` and `homepage`, and development warnings.
+- The rest of the roadmap's packaging: `index.html`'s title and development warnings.

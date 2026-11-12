@@ -24,3 +24,6 @@ dist-playground
 *.njsproj
 *.sln
 *.sw?
+
+# npm token for publishing, never committed
+.npmrc

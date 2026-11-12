@@ -13,6 +13,14 @@
     "uploader"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KC3NZO/filecove.git"
+  },
+  "homepage": "https://github.com/KC3NZO/filecove/tree/main/docs#readme",
+  "bugs": {
+    "url": "https://github.com/KC3NZO/filecove/issues"
+  },
   "type": "module",
   "files": [
     "dist",
