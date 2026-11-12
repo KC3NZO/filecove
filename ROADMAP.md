@@ -244,8 +244,8 @@ None.
 #### Necessary
 - [ ] `package.json` is private and uses the repo's name, which the layer's name (`fm`) and the import paths follow. Choosing a name is the user's.
 - [ ] **new:** The declarations are a `.d.ts` per module, imported without extensions, which an app resolves with `moduleResolution` `bundler` (Vite's, Next.js's) but not `node16`/`nodenext`; bundling them into one file would cover both (see `packaging.md`).
-- [ ] **new:** `icon-sets/registry.ts` imports all five icon styles, so every app ships five copies of every icon, whichever style it uses.
-- [ ] The size of `@react-symbols/icons` hasn't been checked.
+- [x] **new:** `icon-sets/registry.ts` imports all five icon styles, so every app ships five copies of every icon, whichever style it uses. *Done 2026-11-12: each style is its own module, exported as `icons/<style>` (`roundedIcons`…), and `IconProvider` takes the set (`icons`) in place of a name (`variant`), Outlined the default; an app ships only what it imports (see "The Material icons' styles" in `icons.md`).*
+- [x] The size of `@react-symbols/icons` hasn't been checked. *Done 2026-11-12: measured at 540 KB minified, about 210 KB gzipped, a third of the playground's bundle, as picking icons by name keeps them all. It's loaded with a dynamic `import()` as a root mounts, the plain file and folder icons standing in until it comes, and `IconProvider`'s `typeIcons={false}` never loads it; the playground's first download went from 492 KB to 330 KB gzipped (see "The coloured file and folder icons" in `icons.md`).*
 - [ ] The README is still Vite's template, there's no LICENSE or CHANGELOG, `index.html` still has the repo name as its title, and the repo name mentions Pigment.
 
 #### Optional

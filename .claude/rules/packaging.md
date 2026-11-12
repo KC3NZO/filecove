@@ -17,7 +17,9 @@ paths:
 
 `build:lib` runs three steps:
 
-1. **`vite build -c vite.lib.config.ts`**, Vite's library mode on `src/index.ts`: one ES module, `dist/index.js` (with its source map), unminified, since the app's build minifies it, and one stylesheet, `dist/styles.css` (`cssCodeSplit: false`, `cssFileName: "styles"`).
+1. **`vite build -c vite.lib.config.ts`**, Vite's library mode on `src/index.ts`: the entry, `dist/index.js` (with its source map), unminified, since the app's build minifies it, and one stylesheet, `dist/styles.css` (`cssCodeSplit: false`, `cssFileName: "styles"`).
+   - **The icons' styles are entries too** (`ICON_STYLES`): `src/icon-sets/<style>.ts` built as `dist/icon-sets/<style>.js`, beside the declarations `tsc` writes there, sharing `createIcon` through a chunk of its own (`create-icon-….js`). The entry imports Outlined's file, its default, and none of the others, so an app ships only the styles it imports (see "The Material icons' styles" in `icons.md`).
+   - **`@react-symbols/icons` stays a dynamic `import()`** in `index.js`, which an app's bundler makes a chunk of its own, loaded after the component mounts (see "The coloured file and folder icons" in `icons.md`). Nothing may import it statically, or every app downloads it with the rest.
    - **What stays an import**: every dependency and peer dependency in `package.json`, and their subpaths (`react/jsx-runtime`, `@base-ui/react/menu`), read from `package.json` so a dependency added there is never bundled. React must be one copy in the page, so it's a peer dependency (`^19.0.0`; the code needs 19, as `<Context value>` does), kept in `devDependencies` for the playground.
    - **`"use client";`** heads `index.js` (the output's `banner`), as every export is a client component, which Next.js's App Router asks to be marked.
    - **Dev-only checks** read `process.env.NODE_ENV`, never `import.meta.env.DEV`, which library mode replaces as it builds, so the warnings would be gone for good; `process.env.NODE_ENV` is left for the app's bundler (`use-controlled.ts`).
@@ -36,7 +38,7 @@ The code doesn't put its CSS in the page: an app imports one of two files itself
 
 ## package.json
 
-- `exports`: `"."` (`types` first, then `import`), `"./styles.css"`, `"./styles.layer.css"` and `"./package.json"`. ESM only, with `module` and `types` for older tools.
+- `exports`: `"."` (`types` first, then `import`), `"./icons/filled"`, `"./icons/outlined"`, `"./icons/rounded"`, `"./icons/sharp"` and `"./icons/two-tone"` (each `dist/icon-sets/<style>`, `types` first), `"./styles.css"`, `"./styles.layer.css"` and `"./package.json"`. Listed one by one rather than as `"./icons/*"`, so no other path under `dist/icon-sets/` is reachable. ESM only, with `module` and `types` for older tools.
 - `sideEffects: ["**/*.css"]`, so a bundler keeps the stylesheet an app imports and shakes the rest.
 - `files`: `dist` and `THIRD_PARTY_NOTICES.md` (the Material Icons' license; see `icons.md`). `package.json` and the README go anyway.
 - Still `private`, with the repo's name, until a name is chosen: it can be packed and installed, not published.
@@ -59,4 +61,4 @@ Done 2026-11-12, all passing. An app linking the repo instead (`bun link`, a `fi
 ## Not yet
 
 - The declarations are one file per module, imported without extensions, which an app's TypeScript resolves with `moduleResolution` `bundler` (Vite's and Next.js's own) but not `node16` or `nodenext`; bundling them into one `index.d.ts` would cover both.
-- The rest of the roadmap's packaging: the name, the README, LICENSE and CHANGELOG, and the icons' size.
+- The rest of the roadmap's packaging: the name, the README, LICENSE and CHANGELOG.
