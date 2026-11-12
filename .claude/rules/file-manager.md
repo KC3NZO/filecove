@@ -386,6 +386,7 @@ The list and the grid each zoom, as in GNOME Files, by steps from the size they 
 
 ## The parts
 
+- The sidebar has its header (the search everywhere button, the title, the main menu), the tree, the app's `slots.sidebarFooter` under it while there's one (see `slots.md`), the touch selection bar and its edge.
 - The sidebar tree is flat: `hooks/use-tree-rows.ts` turns the sections and the listings of the expanded folders into the rows the tree shows, each placed where it goes, and lists a folder once the tree comes to show its folders. `sidebar/location-item.tsx` renders one row each: a section, a folder, a folder that couldn't be listed or a single section's status (`TreeItem` is the shared `treeitem`), and the guide lines along expanded folders. Only the rows in or near view are rendered (see `virtualization.md`). A section with `showFolders: false` is a plain GNOME-style place: no chevron, no tree, and it never starts expanded. The default is `true`.
 
 ## Single section
@@ -397,7 +398,7 @@ The list and the grid each zoom, as in GNOME Files, by steps from the size they 
 - With `showFolders: false`, the single section falls back to its plain row, so the sidebar isn't empty.
 
 The playground shows this mode with `?single` in the URL.
-- `header-bar/` holds back/forward, the path bar, the search field and the path field that take its place while searching (see "Search") and typing a path (see "Going to a path"), and the view buttons. Below `rootMedium` the path bar gets a full-width row under the buttons; from `rootMedium` up, it sits centred between them.
+- `header-bar/` holds back/forward, the path bar, the search field and the path field that take its place while searching (see "Search") and typing a path (see "Going to a path"), the app's `headerActions` and the view buttons (see `slots.md`). Below `rootMedium` the path bar gets a full-width row under the buttons; from `rootMedium` up, it sits centred between them.
 - `content/folder-view.tsx` loads the open folder and shows the loading, empty and error states around the list view (`file-list.tsx`, a `--columns` grid template) or the grid view (`file-grid.tsx`), which render only the entries in or near view (see `virtualization.md`). It highlights for a moment what uploads just put in the folder (`arrivals`, `data-arrived`), and scrolls to what "Show in folder" asks for, never selecting it (see "Showing what arrived" in `uploads.md`).
 - Under the header bar, a row holds the content with the transfer, download and upload panels under it, and the properties pane (`properties-pane.tsx`), docked on its end side from `rootExtraWide` or an overlay below it (see `properties.md`).
 - `content/trash-bar.tsx` sits above the trash's root in the content panel, with its button emptying it (see `trash.md`).
